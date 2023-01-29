@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "csharp_wasmbrowser": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:9000;http://localhost:8000",
+      "inspectUri": "{wsProtocol}://{url.hostname}:{url.port}/debug?browser={browserInspectUri}"
+    }
+  }
+}
