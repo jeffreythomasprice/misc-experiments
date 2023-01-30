@@ -1,19 +1,17 @@
 using System;
 using System.Runtime.InteropServices.JavaScript;
+using Experiments.Dom;
 
-Console.WriteLine("Hello, Browser!");
+var canvas = Document.CreateElement("canvas");
+var canvasStyle = canvas.GetPropertyAsJSObject("style");
+canvasStyle!.SetProperty("position", "absolute");
+canvasStyle.SetProperty("width", "100%");
+canvasStyle.SetProperty("height", "100%");
+canvasStyle.SetProperty("left", "0");
+canvasStyle.SetProperty("top", "0");
+Body.ReplaceChildren(new[] { canvas });
 
-public partial class Foobar
+var context = Canvas.GetContext(canvas, "webgl2", new WebGLContextAttributes
 {
-	[JSExport]
-	internal static void Main()
-	{
-		Console.WriteLine("TODO JEFF here");
-		// TODO leaking, should dispose?
-		var div = CreateElement("div");
-		Console.WriteLine($"TODO JEFF div = {div}");
-	}
-
-	[JSImport("document.createElement", "main.js")]
-	internal static partial JSObject CreateElement(string tagName);
-}
+	PowerPreference = WebGLContextAttributes.PowerPreferenceType.HighPerformance,
+});
