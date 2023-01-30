@@ -15,3 +15,9 @@ var context = Canvas.GetContext(canvas, "webgl2", new WebGLContextAttributes
 {
 	PowerPreference = WebGLContextAttributes.PowerPreferenceType.HighPerformance,
 });
+
+Utils.OnAnimate += (time) =>
+{
+	// TODO do some animation
+};
+Utils.StartAnimation();

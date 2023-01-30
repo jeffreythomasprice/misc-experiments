@@ -8,10 +8,35 @@ const { setModuleImports, getAssemblyExports, getConfig } = await dotnet
 	.withApplicationArgumentsFromQuery()
 	.create();
 
+const config = getConfig();
+const exports = await getAssemblyExports(config.mainAssemblyName);
+
+let animating = false;
+let lastAnimationFrame = null;
+
+function animate(time) {
+	if (!animating) {
+		return;
+	}
+	exports.Experiments.Dom.Utils.Animate(time);
+	lastAnimationFrame = requestAnimationFrame(animate);
+}
+
 setModuleImports("main.js", {
 	utils: {
-		createObject: () => {
-			return {};
+		startAnimation: () => {
+			if (animating) {
+				return;
+			}
+			animating = true;
+			lastAnimationFrame = requestAnimationFrame(animate);
+		},
+		stopAnimation: () => {
+			animating = false;
+			if (lastAnimationFrame) {
+				cancelAnimationFrame(lastAnimationFrame);
+				lastAnimationFrame = null;
+			}
 		},
 	},
 	document: {
@@ -35,9 +60,5 @@ setModuleImports("main.js", {
 		}
 	}
 });
-
-// const config = getConfig();
-// const exports = await getAssemblyExports(config.mainAssemblyName);
-// exports.Foobar.Main();
 
 await dotnet.run();
