@@ -5,7 +5,8 @@ project(emscripten_experiment)
 file(GLOB_RECURSE sources "*.cpp" "*.h")
 add_executable(client ${sources})
 set_property(TARGET client PROPERTY CXX_STANDARD 20)
-target_link_options(client PRIVATE "--bind")
+target_compile_options(client PRIVATE "-s" "FETCH=1")
+target_link_options(client PRIVATE "--bind" "-s" "FETCH=1")
 
 add_custom_command(
 	OUTPUT "${CMAKE_BINARY_DIR}/.notARealFile"
