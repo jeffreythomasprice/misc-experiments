@@ -1,6 +1,14 @@
 {
-	"C_Cpp.default.cppStandard": "c++20",
-	"C_Cpp.default.systemIncludePath": [
-		"/home/jeff/emscripten/emsdk/emscripten/main/system/lib/libcxx/include"
-	]
+	"files.associations": {
+		"iostream": "cpp"
+	}
+	"files.exclude": {
+		"**/.git": true,
+		"**/.svn": true,
+		"**/.hg": true,
+		"**/CVS": true,
+		"**/.DS_Store": true,
+		"**/Thumbs.db": true,
+		"build": true
+	}
 }
