@@ -11,7 +11,8 @@ function cleanup {
 }
 trap cleanup EXIT
 
-python3 -m http.server 8000 &
+emrun index.html --port 8000 --no_browser &
+# python3 -m http.server 8000 &
 serverPid=$!
 echo "http server pid $serverPid"
 

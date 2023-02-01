@@ -1,6 +1,14 @@
+#include "App.h"
+#include "AppState.h"
+
+// TODO clean includes
+
 #include <iostream>
 #include <chrono>
 #include <optional>
+#include <cmath>
+#include <sstream>
+#include <thread>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -11,148 +19,75 @@
 
 #include <GL/gl.h>
 
-class AppState : public std::enable_shared_from_this<AppState>
+std::string emscriptenResultToString(int result)
+{
+	switch (result)
+	{
+	case EMSCRIPTEN_RESULT_SUCCESS:
+		return "EMSCRIPTEN_RESULT_SUCCESS";
+	case EMSCRIPTEN_RESULT_DEFERRED:
+		return "EMSCRIPTEN_RESULT_DEFERRED";
+	case EMSCRIPTEN_RESULT_NOT_SUPPORTED:
+		return "EMSCRIPTEN_RESULT_NOT_SUPPORTED";
+	case EMSCRIPTEN_RESULT_FAILED_NOT_DEFERRED:
+		return "EMSCRIPTEN_RESULT_FAILED_NOT_DEFERRED";
+	case EMSCRIPTEN_RESULT_INVALID_TARGET:
+		return "EMSCRIPTEN_RESULT_INVALID_TARGET";
+	case EMSCRIPTEN_RESULT_UNKNOWN_TARGET:
+		return "EMSCRIPTEN_RESULT_UNKNOWN_TARGET";
+	case EMSCRIPTEN_RESULT_INVALID_PARAM:
+		return "EMSCRIPTEN_RESULT_INVALID_PARAM";
+	case EMSCRIPTEN_RESULT_FAILED:
+		return "EMSCRIPTEN_RESULT_FAILED";
+	case EMSCRIPTEN_RESULT_NO_DATA:
+		return "EMSCRIPTEN_RESULT_NO_DATA";
+	case EMSCRIPTEN_RESULT_TIMED_OUT:
+		return "EMSCRIPTEN_RESULT_TIMED_OUT";
+	default:
+		std::stringstream ss;
+		ss << "unknown EMSCRIPTEN_RESULT_ enum " << result;
+		return ss.str();
+	}
+}
+
+class DownloadManager
 {
 public:
-	virtual void activate() {}
-	virtual void deactivate() {}
-	virtual void resize(int width, int height) {}
-	virtual void render() {}
-	virtual std::shared_ptr<AppState> update(const std::chrono::milliseconds &d)
-	{
-		return shared_from_this();
-	}
-};
+	typedef std::function<void(const std::string &)> OnSuccessCallback;
+	typedef std::function<void(unsigned short, const std::string &)> OnErrorCallback;
+	typedef std::function<void(uint64_t, uint64_t)> OnProgressCallback;
 
-class App
-{
 private:
-	std::shared_ptr<AppState> currentState;
-	std::optional<std::chrono::system_clock::time_point> lastUpdate;
-	EMSCRIPTEN_WEBGL_CONTEXT_HANDLE context;
+	struct Callbacks
+	{
+		emscripten_fetch_t *fetch;
+		OnSuccessCallback onSuccess;
+		OnErrorCallback onError;
+		OnProgressCallback onProgress;
+	};
+
+	std::vector<std::shared_ptr<Callbacks>> callbacks;
 
 public:
-	App(std::shared_ptr<AppState> initialState);
-	~App();
+	void makeGetRequest(
+		const std::string &url,
+		OnSuccessCallback onSuccess,
+		OnErrorCallback onError = nullptr,
+		OnProgressCallback onProgress = nullptr);
 
-	void resize();
-	void renderAndUpdate();
-
-	static EM_BOOL emscriptenWindowResize(int eventType, const EmscriptenUiEvent *uiEvent, void *userData);
-	static void emscriptenMainLoop(void *userData);
+private:
+	static void fetchOnSuccess(emscripten_fetch_t *fetch);
+	static void fetchOnError(emscripten_fetch_t *fetch);
+	static void fetchOnProgress(emscripten_fetch_t *fetch);
+	static std::shared_ptr<Callbacks> getCallbacks(emscripten_fetch_t *fetch);
+	static void removeCallbacks(std::shared_ptr<DownloadManager::Callbacks> callbacks);
 };
 
-App::App(std::shared_ptr<AppState> initialState) : currentState(initialState)
-{
-	auto document = emscripten::val::global("document");
-	auto body = document["body"];
-
-	auto canvas = document.call<emscripten::val>("createElement", std::string("canvas"));
-	canvas.set("id", "canvas");
-	canvas["style"].set("position", "absolute");
-	canvas["style"].set("width", "100%");
-	canvas["style"].set("height", "100%");
-	canvas["style"].set("left", "0");
-	canvas["style"].set("top", "0");
-	body.call<void>("replaceChildren", canvas);
-
-	EmscriptenWebGLContextAttributes contextAttributes;
-	emscripten_webgl_init_context_attributes(&contextAttributes);
-	contextAttributes.powerPreference = EM_WEBGL_POWER_PREFERENCE_HIGH_PERFORMANCE;
-	context = emscripten_webgl_create_context(canvas["id"].as<std::string>().c_str(), &contextAttributes);
-	emscripten_webgl_make_context_current(context);
-
-	currentState->activate();
-
-	resize();
-
-	auto x = emscripten_set_resize_callback(
-		EMSCRIPTEN_EVENT_TARGET_WINDOW,
-		// user data
-		this,
-		// use capture
-		false,
-		emscriptenWindowResize);
-
-	emscripten_set_main_loop_arg(
-		emscriptenMainLoop,
-		// user data
-		this,
-		// desired FPS, 0 means requestAnimationFrame
-		0,
-		// simulate infinite loop, i.e. never return
-		true);
-}
-
-App::~App()
-{
-	emscripten_html5_remove_all_event_listeners();
-	emscripten_cancel_main_loop();
-	emscripten_webgl_destroy_context(context);
-}
-
-void App::resize()
-{
-	auto window = emscripten::val::global("window");
-	currentState->resize(window["innerWidth"].as<int>(), window["innerHeight"].as<int>());
-}
-
-void App::renderAndUpdate()
-{
-	emscripten_webgl_make_context_current(context);
-	currentState->render();
-
-	// TODO use real duration
-	auto now = std::chrono::system_clock::now();
-	if (lastUpdate.has_value())
-	{
-		auto newState = currentState->update(std::chrono::duration_cast<std::chrono::milliseconds>(now - lastUpdate.value()));
-		if (newState && newState != currentState)
-		{
-			currentState->deactivate();
-			newState->activate();
-			currentState = newState;
-			resize();
-		}
-	}
-	lastUpdate = now;
-}
-
-EM_BOOL App::emscriptenWindowResize(int eventType, const EmscriptenUiEvent *uiEvent, void *userData)
-{
-	auto app = (App *)userData;
-	app->resize();
-	return EM_FALSE;
-}
-
-void App::emscriptenMainLoop(void *userData)
-{
-	auto app = (App *)userData;
-	app->renderAndUpdate();
-}
-
-void fetchOnSuccess(emscripten_fetch_t *fetch)
-{
-	std::cout << "TODO JEFF on success" << std::endl;
-	emscripten_fetch_close(fetch);
-}
-
-void fetchOnError(emscripten_fetch_t *fetch)
-{
-	std::cout << "TODO JEFF on error" << std::endl;
-	emscripten_fetch_close(fetch);
-}
-
-void fetchOnProgress(emscripten_fetch_t *fetch)
-{
-	std::cout << "TODO JEFF on progress, numBytes = " << fetch->numBytes << ", totalBytes = " << fetch->totalBytes << std::endl;
-}
-
-//   void (*onsuccess)(struct emscripten_fetch_t *fetch);
-//   void (*onerror)(struct emscripten_fetch_t *fetch);
-//   void (*onprogress)(struct emscripten_fetch_t *fetch);
-
-std::optional<std::string> fetchString(const std::string &url, const std::optional<std::chrono::milliseconds> &timeout = std::nullopt)
+void DownloadManager::makeGetRequest(
+	const std::string &url,
+	OnSuccessCallback onSuccess,
+	OnErrorCallback onError,
+	OnProgressCallback onProgress)
 {
 	emscripten_fetch_attr_t attributes;
 	emscripten_fetch_attr_init(&attributes);
@@ -161,31 +96,98 @@ std::optional<std::string> fetchString(const std::string &url, const std::option
 	attributes.onsuccess = fetchOnSuccess;
 	attributes.onerror = fetchOnError;
 	attributes.onprogress = fetchOnProgress;
-	if (timeout.has_value())
+	attributes.userData = this;
+
+	// TODO support a timeout
+
+	auto c = std::make_shared<Callbacks>();
+	// TODO lock?
+	callbacks.push_back(c);
+	c->fetch = emscripten_fetch(&attributes, url.c_str());
+	c->onSuccess = onSuccess;
+	c->onError = onError;
+	c->onProgress = onProgress;
+}
+
+void DownloadManager::fetchOnSuccess(emscripten_fetch_t *fetch)
+{
+	auto callbacks = getCallbacks(fetch);
+	if (callbacks && callbacks->onSuccess)
 	{
-		attributes.timeoutMSecs = timeout.value().count();
+		removeCallbacks(callbacks);
+		callbacks->onSuccess(std::string(fetch->data, fetch->data + fetch->numBytes));
 	}
-	std::cout << "TODO JEFF calling emscripten_fetch" << std::endl;
-	auto fetch = emscripten_fetch(&attributes, url.c_str());
-	std::cout << "TODO JEFF emscripten_fetch returned, status = " << fetch->statusText << std::endl;
-	// TODO JEFF actually read data
-	return std::nullopt;
+}
+
+void DownloadManager::fetchOnError(emscripten_fetch_t *fetch)
+{
+	auto callbacks = getCallbacks(fetch);
+	if (callbacks && callbacks->onError)
+	{
+		removeCallbacks(callbacks);
+		callbacks->onError(fetch->status, fetch->statusText);
+	}
+}
+
+void DownloadManager::fetchOnProgress(emscripten_fetch_t *fetch)
+{
+	auto callbacks = getCallbacks(fetch);
+	if (callbacks && callbacks->onProgress)
+	{
+		callbacks->onProgress(fetch->numBytes, fetch->totalBytes);
+	}
+}
+
+std::shared_ptr<DownloadManager::Callbacks> DownloadManager::getCallbacks(emscripten_fetch_t *fetch)
+{
+	auto manager = (DownloadManager *)fetch->userData;
+	// TODO lock?
+	for (auto &c : manager->callbacks)
+	{
+		if (c->fetch == fetch)
+		{
+			return c;
+		}
+	}
+	return nullptr;
+}
+
+void DownloadManager::removeCallbacks(std::shared_ptr<DownloadManager::Callbacks> callbacks)
+{
+	auto manager = (DownloadManager *)callbacks->fetch->userData;
+	// TODO lock?
+	for (auto i = manager->callbacks.begin(); i != manager->callbacks.end(); i++)
+	{
+		if (*i == callbacks)
+		{
+			manager->callbacks.erase(i);
+			return;
+		}
+	}
 }
 
 class DemoState : public AppState
 {
+private:
+	DownloadManager downloadManager;
+
 public:
 	void activate() override
 	{
-		auto result = fetchString("index.html");
-		if (result.has_value())
-		{
-			std::cout << "TODO JEFF fetch result = " << result.value() << std::endl;
-		}
-		else
-		{
-			std::cout << "TODO JEFF fetch had no result" << std::endl;
-		}
+		downloadManager.makeGetRequest(
+			"index.html",
+			[](const std::string &data)
+			{
+				std::cout << "TODO JEFF success " << data << std::endl;
+			},
+			[](unsigned short httpStatusCode, const std::string &httpStatusMessage)
+			{
+				std::cout << "TODO JEFF error " << httpStatusCode << ", " << httpStatusMessage << std::endl;
+			},
+			[](uint64_t numBytes, uint64_t totalBytes)
+			{
+				std::cout << "TODO JEFF progress " << numBytes << " " << totalBytes << std::endl;
+			});
 	}
 
 	void resize(int width, int height) override

@@ -5,8 +5,22 @@ project(emscripten_experiment)
 file(GLOB_RECURSE sources "*.cpp" "*.h")
 add_executable(client ${sources})
 set_property(TARGET client PROPERTY CXX_STANDARD 20)
-target_compile_options(client PRIVATE "-s" "FETCH=1")
-target_link_options(client PRIVATE "--bind" "-s" "FETCH=1")
+target_compile_options(
+	client
+	PRIVATE
+	"-fexceptions"
+	"-pthread"
+	"-sFETCH"
+)
+target_link_options(
+	client
+	PRIVATE
+	"--bind"
+	"-fexceptions"
+	"-pthread"
+	"-sPTHREAD_POOL_SIZE=Math.max(navigator.hardwareConcurrency, 4)"
+	"-sFETCH"
+)
 
 add_custom_command(
 	OUTPUT "${CMAKE_BINARY_DIR}/.notARealFile"

@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices.JavaScript;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Experiments.Dom;
+
+[JsonSerializable(typeof(WebGLContextAttributes))]
+public partial class WebGLContextAttributesJsonSerializerContext : JsonSerializerContext
+{
+}
 
 public class WebGLContextAttributes
 {

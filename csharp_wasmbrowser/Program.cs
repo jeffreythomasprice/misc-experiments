@@ -2,6 +2,11 @@ using System;
 using System.Runtime.InteropServices.JavaScript;
 using Experiments.Dom;
 
+if (!OperatingSystem.IsBrowser())
+{
+	throw new Exception("expected to be a browser app");
+}
+
 var canvas = Document.CreateElement("canvas");
 var canvasStyle = canvas.GetPropertyAsJSObject("style");
 canvasStyle!.SetProperty("position", "absolute");
