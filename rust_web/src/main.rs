@@ -1,0 +1,105 @@
+use std::{cell::RefCell, rc::Rc};
+
+use gloo_console::log;
+use wasm_bindgen::prelude::*;
+
+fn main() {
+    run().unwrap()
+}
+
+fn run() -> Result<(), JsValue> {
+    log!("Hello, World!");
+
+    let window = web_sys::window().ok_or("failed to get window")?;
+    let document = window.document().ok_or("failed to get document")?;
+    let body = document.body().ok_or("failed to get body")?;
+
+    let canvas = document
+        .create_element("canvas")?
+        .dyn_into::<web_sys::HtmlCanvasElement>()?;
+
+    canvas.style().set_property("position", "absolute")?;
+    canvas.style().set_property("width", "100%")?;
+    canvas.style().set_property("height", "100%")?;
+    canvas.style().set_property("left", "0")?;
+    canvas.style().set_property("top", "0")?;
+
+    while body.has_child_nodes() {
+        body.remove_child(&body.first_child().unwrap())?;
+    }
+    body.append_child(&canvas)?;
+
+    let resize_fn = {
+        let window = window.clone();
+        let canvas = canvas.clone();
+        move || {
+            // TODO error handling
+            let width = window.inner_width().unwrap().as_f64().unwrap() as u32;
+            let height = window.inner_height().unwrap().as_f64().unwrap() as u32;
+            canvas.set_width(width);
+            canvas.set_height(height);
+            log!(format!("resize {width} x {height}"));
+        }
+    };
+    resize_fn();
+    let resize_closure = Closure::<dyn Fn()>::new(resize_fn);
+    window.add_event_listener_with_callback("resize", resize_closure.as_ref().unchecked_ref())?;
+    // intentionally leak so the callback works after the function returns
+    resize_closure.forget();
+
+    let context = canvas
+        .get_context("2d")?
+        .ok_or("failed to create canvas context")?
+        .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
+
+    let animate_closure = Rc::new(RefCell::<Option<Closure<_>>>::new(None));
+    let animate_fn = {
+        let window = window.clone();
+        let canvas = canvas.clone();
+        let context = context.clone();
+        let animate_closure = animate_closure.clone();
+        move || {
+            let gradient = context.create_linear_gradient(
+                0f64,
+                0f64,
+                canvas.width() as f64,
+                canvas.height() as f64,
+            );
+            // TODO error handling
+            gradient.add_color_stop(0f32, "red").unwrap();
+            gradient.add_color_stop(0.5f32, "green").unwrap();
+            gradient.add_color_stop(1f32, "blue").unwrap();
+            context.set_fill_style(&gradient);
+            context.fill_rect(0f64, 0f64, canvas.width() as f64, canvas.height() as f64);
+
+            // TODO error handling
+            window
+                .request_animation_frame(
+                    animate_closure
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .as_ref()
+                        .unchecked_ref(),
+                )
+                .unwrap();
+        }
+    };
+    {
+        let animate_closure = animate_closure.clone();
+        *animate_closure.borrow_mut() = Some(Closure::<dyn Fn()>::new(animate_fn));
+    }
+    {
+        let animate_closure = animate_closure.clone();
+        window.request_animation_frame(
+            animate_closure
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unchecked_ref(),
+        )?;
+    }
+
+    Ok(())
+}
