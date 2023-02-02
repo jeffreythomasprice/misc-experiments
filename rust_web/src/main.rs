@@ -1,18 +1,22 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, future::Future, rc::Rc};
 
+use async_std::{prelude::*, task};
 use gloo_console::log;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{Document, HtmlElement, Request, RequestInit, Response, Window};
 
-fn main() {
+#[async_std::main]
+async fn main() {
     run().unwrap()
 }
 
 fn run() -> Result<(), JsValue> {
     log!("Hello, World!");
 
-    let window = web_sys::window().ok_or("failed to get window")?;
-    let document = window.document().ok_or("failed to get document")?;
-    let body = document.body().ok_or("failed to get body")?;
+    let window = window()?;
+    let document = document()?;
+    let body = body()?;
 
     let canvas = document
         .create_element("canvas")?
@@ -101,5 +105,39 @@ fn run() -> Result<(), JsValue> {
         )?;
     }
 
+    task::block_on(async {
+        log!("in task");
+        //TODO error handling
+        let result = fetch_string("assets/test.txt").await.unwrap();
+        log!("result", result);
+        log!("task complete");
+    });
+
     Ok(())
+}
+
+async fn fetch_string(url: &str) -> Result<JsValue, JsValue> {
+    let request = Request::new_with_str_and_init(
+        url,
+        RequestInit::new()
+            .method("GET")
+            .mode(web_sys::RequestMode::Cors),
+    )?;
+    let response = JsFuture::from(window()?.fetch_with_request(&request))
+        .await?
+        .dyn_into::<Response>()?;
+    let response_body = JsFuture::from(response.text()?).await?;
+    Ok(response_body)
+}
+
+fn window() -> Result<Window, &'static str> {
+    web_sys::window().ok_or("failed to get window")
+}
+
+fn document() -> Result<Document, &'static str> {
+    window()?.document().ok_or("failed to get window")
+}
+
+fn body() -> Result<HtmlElement, &'static str> {
+    document()?.body().ok_or("failed to get body")
 }
