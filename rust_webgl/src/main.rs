@@ -1,0 +1,232 @@
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
+
+use async_std::task;
+use gloo_console::log;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{
+    Document, HtmlElement, Request, RequestInit, Response, WebGl2RenderingContext,
+    WebGlContextAttributes, Window,
+};
+
+#[derive(Debug)]
+enum AppError {
+    JsError(JsValue),
+}
+
+type AppResult<T> = std::result::Result<T, AppError>;
+
+type AppStateHandle = Rc<RefCell<Box<dyn AppState>>>;
+
+trait AppState {
+    fn activate(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()>;
+    fn deactivate(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()>;
+    fn resize(&mut self, gl: &WebGl2RenderingContext, width: i32, height: i32) -> AppResult<()>;
+    fn render(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()>;
+    fn update(
+        &mut self,
+        gl: &WebGl2RenderingContext,
+        time: Duration,
+    ) -> AppResult<Option<AppStateHandle>>;
+}
+
+struct DemoState {}
+
+impl DemoState {
+    fn new() -> DemoState {
+        DemoState {}
+    }
+}
+
+impl AppState for DemoState {
+    fn activate(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn deactivate(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()> {
+        Ok(())
+    }
+
+    fn resize(&mut self, gl: &WebGl2RenderingContext, width: i32, height: i32) -> AppResult<()> {
+        gl.viewport(0, 0, width, height);
+        Ok(())
+    }
+
+    fn render(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()> {
+        gl.clear_color(0.5f32, 0.75f32, 0.25f32, 1.0f32);
+        gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        Ok(())
+    }
+
+    fn update(
+        &mut self,
+        gl: &WebGl2RenderingContext,
+        time: Duration,
+    ) -> AppResult<Option<AppStateHandle>> {
+        // TODO test actually switching states
+        Ok(None)
+    }
+}
+
+#[async_std::main]
+async fn main() {
+    // TODO error handling
+    run().unwrap()
+}
+
+fn run() -> Result<(), JsValue> {
+    log!("Hello, World!");
+
+    let window = window()?;
+    let document = document()?;
+    let body = body()?;
+
+    let canvas = document
+        .create_element("canvas")?
+        .dyn_into::<web_sys::HtmlCanvasElement>()?;
+
+    canvas.style().set_property("position", "absolute")?;
+    canvas.style().set_property("width", "100%")?;
+    canvas.style().set_property("height", "100%")?;
+    canvas.style().set_property("left", "0")?;
+    canvas.style().set_property("top", "0")?;
+
+    while body.has_child_nodes() {
+        body.remove_child(&body.first_child().unwrap())?;
+    }
+    body.append_child(&canvas)?;
+
+    let context = canvas
+        .get_context_with_context_options(
+            "webgl2",
+            &WebGlContextAttributes::new()
+                .power_preference(web_sys::WebGlPowerPreference::HighPerformance),
+        )?
+        .ok_or("failed to create canvas context")?
+        .dyn_into::<web_sys::WebGl2RenderingContext>()?;
+
+    let current_state: AppStateHandle = Rc::new(RefCell::new(Box::new(DemoState::new())));
+    // TODO error handling
+    current_state.borrow_mut().activate(&context).unwrap();
+
+    let resize_fn = {
+        let window = window.clone();
+        let canvas = canvas.clone();
+        let context = context.clone();
+        let current_state = current_state.clone();
+        move || {
+            // TODO error handling
+            let width = window.inner_width().unwrap().as_f64().unwrap() as i32;
+            let height = window.inner_height().unwrap().as_f64().unwrap() as i32;
+            log!(format!("resize {width} x {height}"));
+            canvas.set_width(width as u32);
+            canvas.set_height(height as u32);
+            current_state
+                .borrow_mut()
+                .resize(&context, width, height)
+                .unwrap();
+        }
+    };
+    resize_fn();
+    let resize_closure = Closure::<dyn Fn()>::new(resize_fn);
+    window.add_event_listener_with_callback("resize", resize_closure.as_ref().unchecked_ref())?;
+    // intentionally leak so the callback works after the function returns
+    resize_closure.forget();
+
+    let animate_closure = Rc::new(RefCell::<Option<Closure<_>>>::new(None));
+    let animate_fn = {
+        let window = window.clone();
+        let context = context.clone();
+        let animate_closure = animate_closure.clone();
+        let current_state = current_state.clone();
+        let last_time = Rc::new(RefCell::new(None));
+        move |time: JsValue| {
+            // TODO error handling
+            current_state.borrow_mut().render(&context).unwrap();
+
+            // TODO error handling
+            let now = time.as_f64().unwrap();
+            if let Some(last) = *last_time.borrow() {
+                // TODO error handling
+                let new_state = current_state
+                    .borrow_mut()
+                    .update(&context, Duration::from_secs_f64((now - last) / 1000f64))
+                    .unwrap();
+                if let Some(new_state) = new_state {
+                    // TODO error handling
+                    new_state.borrow_mut().activate(&context).unwrap();
+                    current_state.borrow_mut().deactivate(&context).unwrap();
+                    // TODO JEFF how to copy new state into current state?
+                }
+            }
+            *last_time.borrow_mut() = Some(now);
+
+            // TODO error handling
+            window
+                .request_animation_frame(
+                    animate_closure
+                        .borrow()
+                        .as_ref()
+                        .unwrap()
+                        .as_ref()
+                        .unchecked_ref(),
+                )
+                .unwrap();
+        }
+    };
+    {
+        let animate_closure = animate_closure.clone();
+        *animate_closure.borrow_mut() = Some(Closure::<dyn Fn(JsValue)>::new(animate_fn));
+    }
+    {
+        let animate_closure = animate_closure.clone();
+        window.request_animation_frame(
+            animate_closure
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unchecked_ref(),
+        )?;
+    }
+
+    task::block_on(async {
+        log!("in task");
+        //TODO error handling
+        let result = fetch_string("assets/test.txt").await.unwrap();
+        log!("result", result);
+        log!("task complete");
+    });
+
+    Ok(())
+}
+
+async fn fetch_string(url: &str) -> Result<JsValue, JsValue> {
+    let request = Request::new_with_str_and_init(
+        url,
+        RequestInit::new()
+            .method("GET")
+            .mode(web_sys::RequestMode::Cors),
+    )?;
+    let response = JsFuture::from(window()?.fetch_with_request(&request))
+        .await?
+        .dyn_into::<Response>()?;
+    let response_body = JsFuture::from(response.text()?).await?;
+    Ok(response_body)
+}
+
+fn window() -> Result<Window, &'static str> {
+    web_sys::window().ok_or("failed to get window")
+}
+
+fn document() -> Result<Document, &'static str> {
+    window()?.document().ok_or("failed to get window")
+}
+
+fn body() -> Result<HtmlElement, &'static str> {
+    document()?.body().ok_or("failed to get body")
+}
