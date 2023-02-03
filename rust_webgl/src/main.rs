@@ -1,8 +1,4 @@
-use std::{
-    cell::RefCell,
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::{borrow::BorrowMut, cell::RefCell, rc::Rc, time::Duration};
 
 use async_std::task;
 use gloo_console::log;
@@ -20,7 +16,7 @@ enum AppError {
 
 type AppResult<T> = std::result::Result<T, AppError>;
 
-type AppStateHandle = Rc<RefCell<Box<dyn AppState>>>;
+type AppStateHandle = Rc<RefCell<dyn AppState>>;
 
 trait AppState {
     fn activate(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()>;
@@ -57,7 +53,7 @@ impl AppState for DemoState {
     }
 
     fn render(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()> {
-        gl.clear_color(0.5f32, 0.75f32, 0.25f32, 1.0f32);
+        gl.clear_color(0.25f32, 0.5f32, 0.75f32, 1.0f32);
         gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
         Ok(())
     }
@@ -67,7 +63,7 @@ impl AppState for DemoState {
         gl: &WebGl2RenderingContext,
         time: Duration,
     ) -> AppResult<Option<AppStateHandle>> {
-        // TODO test actually switching states
+        // TODO JEFF test actually switching states
         Ok(None)
     }
 }
@@ -109,10 +105,21 @@ fn run() -> Result<(), JsValue> {
         .ok_or("failed to create canvas context")?
         .dyn_into::<web_sys::WebGl2RenderingContext>()?;
 
-    let current_state: AppStateHandle = Rc::new(RefCell::new(Box::new(DemoState::new())));
-    // TODO error handling
-    current_state.borrow_mut().activate(&context).unwrap();
-
+    // two layers of Rc<RefCell<_>>
+    // outer layer is because we have to share a mutable reference to the current state in multiple closures
+    // inner layer is because each state might create or share references to other states, and so will return ref counted instances when asked for next state
+    let current_state: Rc<RefCell<AppStateHandle>> =
+        Rc::new(RefCell::new(Rc::new(RefCell::new(DemoState::new()))));
+    {
+        let current_state = current_state.clone();
+        let current_state = (*current_state).borrow_mut();
+        // TODO error handling
+        current_state
+            .as_ref()
+            .borrow_mut()
+            .activate(&context)
+            .unwrap();
+    }
     let resize_fn = {
         let window = window.clone();
         let canvas = canvas.clone();
@@ -122,10 +129,16 @@ fn run() -> Result<(), JsValue> {
             // TODO error handling
             let width = window.inner_width().unwrap().as_f64().unwrap() as i32;
             let height = window.inner_height().unwrap().as_f64().unwrap() as i32;
+
             log!(format!("resize {width} x {height}"));
+
             canvas.set_width(width as u32);
             canvas.set_height(height as u32);
+
+            let current_state = (*current_state).borrow_mut();
+            // TODO error handling
             current_state
+                .as_ref()
                 .borrow_mut()
                 .resize(&context, width, height)
                 .unwrap();
@@ -145,25 +158,35 @@ fn run() -> Result<(), JsValue> {
         let current_state = current_state.clone();
         let last_time = Rc::new(RefCell::new(None));
         move |time: JsValue| {
+            let mut current_state = (*current_state).borrow_mut();
             // TODO error handling
-            current_state.borrow_mut().render(&context).unwrap();
+            current_state
+                .as_ref()
+                .borrow_mut()
+                .render(&context)
+                .unwrap();
 
             // TODO error handling
             let now = time.as_f64().unwrap();
             if let Some(last) = *last_time.borrow() {
                 // TODO error handling
                 let new_state = current_state
+                    .as_ref()
                     .borrow_mut()
                     .update(&context, Duration::from_secs_f64((now - last) / 1000f64))
                     .unwrap();
                 if let Some(new_state) = new_state {
                     // TODO error handling
-                    new_state.borrow_mut().activate(&context).unwrap();
-                    current_state.borrow_mut().deactivate(&context).unwrap();
-                    // TODO JEFF how to copy new state into current state?
+                    new_state.as_ref().borrow_mut().activate(&context).unwrap();
+                    current_state
+                        .as_ref()
+                        .borrow_mut()
+                        .deactivate(&context)
+                        .unwrap();
+                    *current_state = new_state.clone();
                 }
             }
-            *last_time.borrow_mut() = Some(now);
+            last_time.replace(Some(now));
 
             // TODO error handling
             window
@@ -180,7 +203,7 @@ fn run() -> Result<(), JsValue> {
     };
     {
         let animate_closure = animate_closure.clone();
-        *animate_closure.borrow_mut() = Some(Closure::<dyn Fn(JsValue)>::new(animate_fn));
+        animate_closure.replace(Some(Closure::<dyn Fn(JsValue)>::new(animate_fn)));
     }
     {
         let animate_closure = animate_closure.clone();
