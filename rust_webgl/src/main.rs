@@ -1,8 +1,10 @@
 mod app_states;
+mod buffer;
 mod dom_utils;
 mod fetch_utils;
 mod futures_app_state;
-mod shaders;
+mod shader;
+mod vertex_array;
 
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
@@ -12,13 +14,13 @@ use js_sys::Float32Array;
 use rand::{rngs::ThreadRng, Rng};
 use std::panic;
 use web_sys::WebGl2RenderingContext;
-use web_sys::WebGlBuffer;
-use web_sys::WebGlVertexArrayObject;
 
 use crate::app_states::*;
+use crate::buffer::*;
 use crate::fetch_utils::*;
 use crate::futures_app_state::*;
-use crate::shaders::*;
+use crate::shader::*;
+use crate::vertex_array::*;
 
 struct Data {
 	random: ThreadRng,
@@ -39,8 +41,8 @@ struct DemoState {
 	color: (f32, f32, f32),
 	remaining_time: Duration,
 	gl: Option<Rc<WebGl2RenderingContext>>,
-	buffer: Option<WebGlBuffer>,
-	vertex_array: Option<WebGlVertexArrayObject>,
+	buffer: Option<Buffer>,
+	vertex_array: Option<VertexArray>,
 }
 
 impl DemoState {
@@ -78,8 +80,8 @@ impl AppState for DemoState {
 			.get_attrib_location("positionAttribute")
 			.ok_or("can't find attribute")?;
 
-		let buffer = gl.create_buffer().ok_or("failed to create buffer")?;
-		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+		let buffer = Buffer::new(gl.clone(), BufferTarget::Array)?;
+		buffer.bind();
 		unsafe {
 			let data = Float32Array::view(&[-0.5f32, -0.5f32, 0.5f32, -0.5f32, 0.0f32, 0.5f32]);
 			gl.buffer_data_with_array_buffer_view(
@@ -89,13 +91,11 @@ impl AppState for DemoState {
 			);
 		}
 		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
-		self.buffer = Some(buffer.clone());
+		buffer.bind_none();
 
-		let vertex_array = gl
-			.create_vertex_array()
-			.ok_or("failed to create vertex array")?;
-		gl.bind_vertex_array(Some(&vertex_array));
-		gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+		let vertex_array = VertexArray::new(gl.clone())?;
+		vertex_array.bind();
+		buffer.bind();
 		gl.enable_vertex_attrib_array(position_attrib_location);
 		gl.vertex_attrib_pointer_with_i32(
 			position_attrib_location,
@@ -105,22 +105,16 @@ impl AppState for DemoState {
 			0,
 			0,
 		);
-		gl.bind_vertex_array(None);
+		buffer.bind_none();
+		vertex_array.bind_none();
+
+		self.buffer = Some(buffer);
 		self.vertex_array = Some(vertex_array);
 
 		Ok(())
 	}
 
 	fn deactivate(&mut self) -> AppResult<()> {
-		let gl = self.gl.clone().unwrap();
-
-		if let Some(buffer) = &self.buffer {
-			gl.delete_buffer(Some(buffer));
-		}
-		if let Some(vertex_array) = &self.vertex_array {
-			gl.delete_vertex_array(Some(vertex_array));
-		}
-
 		Ok(())
 	}
 
@@ -140,9 +134,9 @@ impl AppState for DemoState {
 		let shader = &self.data.borrow().shader;
 		shader.bind();
 		if let Some(vertex_array) = &self.vertex_array {
-			gl.bind_vertex_array(Some(vertex_array));
+			vertex_array.bind();
 			gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
-			gl.bind_vertex_array(None);
+			vertex_array.bind_none();
 		}
 		shader.bind_none();
 

@@ -71,7 +71,11 @@ where
 			.get_context_with_context_options(
 				"webgl2",
 				&WebGlContextAttributes::new()
-					.power_preference(web_sys::WebGlPowerPreference::HighPerformance),
+					.power_preference(web_sys::WebGlPowerPreference::HighPerformance)
+					.antialias(true)
+					.depth(false)
+					.stencil(false)
+					.alpha(true),
 			)?
 			.ok_or("failed to create canvas context")?
 			.dyn_into::<web_sys::WebGl2RenderingContext>()

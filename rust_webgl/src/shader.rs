@@ -14,7 +14,7 @@ impl Shader {
 		gl: Rc<WebGl2RenderingContext>,
 		vertex_source: &str,
 		fragment_source: &str,
-	) -> Result<Shader, AppError> {
+	) -> Result<Self, AppError> {
 		let vertex_shader =
 			compile_shader(&gl, vertex_source, WebGl2RenderingContext::VERTEX_SHADER)?;
 
@@ -53,7 +53,7 @@ impl Shader {
 			gl.delete_program(Some(&program));
 			Err(log.into())
 		} else {
-			Ok(Shader {
+			Ok(Self {
 				gl: gl.clone(),
 				program,
 			})
