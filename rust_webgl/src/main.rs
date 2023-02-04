@@ -1,17 +1,30 @@
-use std::{borrow::BorrowMut, cell::RefCell, rc::Rc, time::Duration};
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use async_std::task;
-use gloo_console::log;
+use gloo_console::{error, log};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    Document, HtmlElement, Request, RequestInit, Response, WebGl2RenderingContext,
-    WebGlContextAttributes, Window,
+    Document, HtmlCanvasElement, HtmlElement, Request, RequestInit, Response,
+    WebGl2RenderingContext, WebGlContextAttributes, Window,
 };
 
 #[derive(Debug)]
 enum AppError {
-    JsError(JsValue),
+    Message(String),
+    JsValue(JsValue),
+}
+
+impl From<JsValue> for AppError {
+    fn from(value: JsValue) -> Self {
+        AppError::JsValue(value)
+    }
+}
+
+impl From<&str> for AppError {
+    fn from(value: &str) -> Self {
+        AppError::Message(value.into())
+    }
 }
 
 type AppResult<T> = std::result::Result<T, AppError>;
@@ -70,11 +83,12 @@ impl AppState for DemoState {
 
 #[async_std::main]
 async fn main() {
-    // TODO error handling
-    run().unwrap()
+    if let Err(e) = run() {
+        error!(format!("fatal {e:?}"))
+    }
 }
 
-fn run() -> Result<(), JsValue> {
+fn run() -> Result<(), AppError> {
     log!("Hello, World!");
 
     let window = window()?;
@@ -83,7 +97,8 @@ fn run() -> Result<(), JsValue> {
 
     let canvas = document
         .create_element("canvas")?
-        .dyn_into::<web_sys::HtmlCanvasElement>()?;
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .or(Err("failed to cast into the right type"))?;
 
     canvas.style().set_property("position", "absolute")?;
     canvas.style().set_property("width", "100%")?;
@@ -103,7 +118,8 @@ fn run() -> Result<(), JsValue> {
                 .power_preference(web_sys::WebGlPowerPreference::HighPerformance),
         )?
         .ok_or("failed to create canvas context")?
-        .dyn_into::<web_sys::WebGl2RenderingContext>()?;
+        .dyn_into::<web_sys::WebGl2RenderingContext>()
+        .or(Err("failed to cast into the right type"))?;
 
     // two layers of Rc<RefCell<_>>
     // outer layer is because we have to share a mutable reference to the current state in multiple closures
@@ -113,35 +129,41 @@ fn run() -> Result<(), JsValue> {
     {
         let current_state = current_state.clone();
         let current_state = (*current_state).borrow_mut();
-        // TODO error handling
-        current_state
-            .as_ref()
-            .borrow_mut()
-            .activate(&context)
-            .unwrap();
+        current_state.as_ref().borrow_mut().activate(&context)?;
     }
     let resize_fn = {
-        let window = window.clone();
-        let canvas = canvas.clone();
-        let context = context.clone();
-        let current_state = current_state.clone();
-        move || {
-            // TODO error handling
-            let width = window.inner_width().unwrap().as_f64().unwrap() as i32;
-            let height = window.inner_height().unwrap().as_f64().unwrap() as i32;
+        fn f(
+            window: &Window,
+            canvas: &HtmlCanvasElement,
+            context: &WebGl2RenderingContext,
+            current_state: &Rc<RefCell<AppStateHandle>>,
+        ) -> Result<(), AppError> {
+            let width = window.inner_width()?.as_f64().ok_or("not a number")? as i32;
+            let height = window.inner_height()?.as_f64().ok_or("not a number")? as i32;
 
             log!(format!("resize {width} x {height}"));
 
             canvas.set_width(width as u32);
             canvas.set_height(height as u32);
 
-            let current_state = (*current_state).borrow_mut();
-            // TODO error handling
+            let current_state = (**current_state).borrow_mut();
+
             current_state
                 .as_ref()
                 .borrow_mut()
-                .resize(&context, width, height)
-                .unwrap();
+                .resize(context, width, height)?;
+
+            Ok(())
+        }
+
+        let window = window.clone();
+        let canvas = canvas.clone();
+        let context = context.clone();
+        let current_state = current_state.clone();
+        move || {
+            if let Err(e) = f(&window, &canvas, &context, &current_state) {
+                error!(format!("error in resize callback: {e:?}"));
+            }
         }
     };
     resize_fn();
@@ -152,53 +174,52 @@ fn run() -> Result<(), JsValue> {
 
     let animate_closure = Rc::new(RefCell::<Option<Closure<_>>>::new(None));
     let animate_fn = {
+        fn f(
+            context: &WebGl2RenderingContext,
+            current_state: &Rc<RefCell<AppStateHandle>>,
+            time: JsValue,
+            last_time: &Rc<RefCell<Option<f64>>>,
+        ) -> Result<(), AppError> {
+            let mut current_state = (*current_state).borrow_mut();
+            current_state.as_ref().borrow_mut().render(&context)?;
+
+            let now = time.as_f64().ok_or("not a number")?;
+            if let Some(last) = *last_time.borrow() {
+                let new_state = current_state
+                    .as_ref()
+                    .borrow_mut()
+                    .update(&context, Duration::from_secs_f64((now - last) / 1000f64))?;
+                if let Some(new_state) = new_state {
+                    new_state.as_ref().borrow_mut().activate(&context)?;
+                    current_state.as_ref().borrow_mut().deactivate(&context)?;
+                    *current_state = new_state.clone();
+                }
+            }
+            last_time.replace(Some(now));
+
+            Ok(())
+        }
+
         let window = window.clone();
         let context = context.clone();
         let animate_closure = animate_closure.clone();
         let current_state = current_state.clone();
         let last_time = Rc::new(RefCell::new(None));
         move |time: JsValue| {
-            let mut current_state = (*current_state).borrow_mut();
-            // TODO error handling
-            current_state
-                .as_ref()
-                .borrow_mut()
-                .render(&context)
-                .unwrap();
-
-            // TODO error handling
-            let now = time.as_f64().unwrap();
-            if let Some(last) = *last_time.borrow() {
-                // TODO error handling
-                let new_state = current_state
-                    .as_ref()
-                    .borrow_mut()
-                    .update(&context, Duration::from_secs_f64((now - last) / 1000f64))
-                    .unwrap();
-                if let Some(new_state) = new_state {
-                    // TODO error handling
-                    new_state.as_ref().borrow_mut().activate(&context).unwrap();
-                    current_state
-                        .as_ref()
-                        .borrow_mut()
-                        .deactivate(&context)
-                        .unwrap();
-                    *current_state = new_state.clone();
-                }
+            if let Err(e) = f(&context, &current_state, time, &last_time) {
+                error!(format!("error doing animate: {e:?}"));
             }
-            last_time.replace(Some(now));
 
-            // TODO error handling
-            window
-                .request_animation_frame(
-                    animate_closure
-                        .borrow()
-                        .as_ref()
-                        .unwrap()
-                        .as_ref()
-                        .unchecked_ref(),
-                )
-                .unwrap();
+            if let Err(e) = window.request_animation_frame(
+                animate_closure
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .as_ref()
+                    .unchecked_ref(),
+            ) {
+                error!(format!("error scheduling next animation: {e:?}"));
+            }
         }
     };
     {
@@ -217,12 +238,17 @@ fn run() -> Result<(), JsValue> {
         )?;
     }
 
-    task::block_on(async {
+    async fn load_stuff() -> Result<(), AppError> {
         log!("in task");
-        //TODO error handling
-        let result = fetch_string("assets/test.txt").await.unwrap();
+        let result = fetch_string("assets/test.txt").await?;
         log!("result", result);
         log!("task complete");
+        Ok(())
+    }
+    task::block_on(async {
+        if let Err(e) = load_stuff().await {
+            error!(format!("error loading resources: {e:?}"))
+        }
     });
 
     Ok(())
