@@ -11,6 +11,8 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 use futures::try_join;
 use gloo_console::*;
 use js_sys::Float32Array;
+use js_sys::Uint8Array;
+use memoffset::offset_of;
 use rand::{rngs::ThreadRng, Rng};
 use std::panic;
 use web_sys::WebGl2RenderingContext;
@@ -34,6 +36,40 @@ impl Data {
 			shader,
 		})
 	}
+}
+
+struct Vector2<T> {
+	pub x: T,
+	pub y: T,
+}
+
+impl<T> Vector2<T> {
+	fn new(x: T, y: T) -> Vector2<T> {
+		Vector2 { x, y }
+	}
+}
+
+struct RGBA<T> {
+	pub red: T,
+	pub green: T,
+	pub blue: T,
+	pub alpha: T,
+}
+
+impl<T> RGBA<T> {
+	fn new(red: T, green: T, blue: T, alpha: T) -> RGBA<T> {
+		RGBA {
+			red,
+			green,
+			blue,
+			alpha,
+		}
+	}
+}
+
+struct VertexPos2RGBA<T> {
+	pub pos: Vector2<T>,
+	pub color: RGBA<T>,
 }
 
 struct DemoState {
@@ -73,20 +109,47 @@ impl AppState for DemoState {
 		let gl = gl.clone();
 		self.gl = Some(gl.clone());
 
+		// TODO helper for getting attributes by name?
 		let position_attrib_location = self
 			.data
 			.borrow()
 			.shader
 			.get_attrib_location("positionAttribute")
 			.ok_or("can't find attribute")?;
+		let color_attrib_location = self
+			.data
+			.borrow()
+			.shader
+			.get_attrib_location("colorAttribute")
+			.ok_or("can't find attribute")?;
 
 		let buffer = Buffer::new(gl.clone(), BufferTarget::Array)?;
 		buffer.bind();
 		unsafe {
-			let data = Float32Array::view(&[-0.5f32, -0.5f32, 0.5f32, -0.5f32, 0.0f32, 0.5f32]);
+			// TODO helper for turning array or slice or vec into buffer_data
+			let data: [VertexPos2RGBA<f32>; 3] = [
+				VertexPos2RGBA {
+					pos: Vector2::new(-0.5f32, 0.5f32),
+					color: RGBA::new(1.0f32, 0.0f32, 0.0f32, 1.0f32),
+				},
+				VertexPos2RGBA {
+					pos: Vector2::new(0.5f32, 0.5f32),
+					color: RGBA::new(0.0f32, 1.0f32, 0.0f32, 1.0f32),
+				},
+				VertexPos2RGBA {
+					pos: Vector2::new(0.0f32, -0.5f32),
+					color: RGBA::new(0.0f32, 0.0f32, 1.0f32, 1.0f32),
+				},
+			];
+			let data_ptr =
+				std::mem::transmute::<*const VertexPos2RGBA<f32>, *mut u8>(data.as_ptr());
+			let data_jsarray = Uint8Array::view_mut_raw(
+				data_ptr,
+				std::mem::size_of::<VertexPos2RGBA<f32>>() * data.len(),
+			);
 			gl.buffer_data_with_array_buffer_view(
 				WebGl2RenderingContext::ARRAY_BUFFER,
-				&data,
+				&data_jsarray,
 				WebGl2RenderingContext::STATIC_DRAW,
 			);
 		}
@@ -102,8 +165,17 @@ impl AppState for DemoState {
 			2,
 			WebGl2RenderingContext::FLOAT,
 			false,
-			0,
-			0,
+			std::mem::size_of::<VertexPos2RGBA<f32>>() as i32,
+			offset_of!(VertexPos2RGBA<f32>, pos) as i32,
+		);
+		gl.enable_vertex_attrib_array(color_attrib_location);
+		gl.vertex_attrib_pointer_with_i32(
+			color_attrib_location,
+			4,
+			WebGl2RenderingContext::FLOAT,
+			false,
+			std::mem::size_of::<VertexPos2RGBA<f32>>() as i32,
+			offset_of!(VertexPos2RGBA<f32>, color) as i32,
 		);
 		buffer.bind_none();
 		vertex_array.bind_none();
