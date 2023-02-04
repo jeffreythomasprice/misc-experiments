@@ -2,6 +2,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use async_std::task;
 use gloo_console::{error, log};
+use rand::{rngs::ThreadRng, Rng};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -43,11 +44,30 @@ trait AppState {
     ) -> AppResult<Option<AppStateHandle>>;
 }
 
-struct DemoState {}
+struct DemoState {
+    random: Rc<RefCell<ThreadRng>>,
+    color: (f32, f32, f32),
+    remaining_time: Duration,
+}
 
 impl DemoState {
-    fn new() -> DemoState {
-        DemoState {}
+    fn new(random: Rc<RefCell<ThreadRng>>) -> DemoState {
+        let x = random.borrow_mut().gen_range(0.0f32..=1.0f32);
+        let color = {
+            let random = random.clone();
+            let mut r = random.borrow_mut();
+            (
+                r.gen_range(0.0f32..=1.0f32),
+                r.gen_range(0.0f32..=1.0f32),
+                r.gen_range(0.0f32..=1.0f32),
+            )
+        };
+        let remaining_time = random.borrow_mut().gen_range(3.0..=5.0);
+        DemoState {
+            random,
+            color,
+            remaining_time: Duration::from_secs_f64(remaining_time),
+        }
     }
 }
 
@@ -66,7 +86,8 @@ impl AppState for DemoState {
     }
 
     fn render(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()> {
-        gl.clear_color(0.25f32, 0.5f32, 0.75f32, 1.0f32);
+        let (red, green, blue) = self.color;
+        gl.clear_color(red, green, blue, 1.0f32);
         gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
         Ok(())
     }
@@ -76,8 +97,14 @@ impl AppState for DemoState {
         gl: &WebGl2RenderingContext,
         time: Duration,
     ) -> AppResult<Option<AppStateHandle>> {
-        // TODO JEFF test actually switching states
-        Ok(None)
+        self.remaining_time -= time;
+        if self.remaining_time > Duration::ZERO {
+            Ok(None)
+        } else {
+            Ok(Some(Rc::new(RefCell::new(DemoState::new(
+                self.random.clone(),
+            )))))
+        }
     }
 }
 
@@ -124,8 +151,9 @@ fn run() -> Result<(), AppError> {
     // two layers of Rc<RefCell<_>>
     // outer layer is because we have to share a mutable reference to the current state in multiple closures
     // inner layer is because each state might create or share references to other states, and so will return ref counted instances when asked for next state
-    let current_state: Rc<RefCell<AppStateHandle>> =
-        Rc::new(RefCell::new(Rc::new(RefCell::new(DemoState::new()))));
+    let current_state: Rc<RefCell<AppStateHandle>> = Rc::new(RefCell::new(Rc::new(RefCell::new(
+        DemoState::new(Rc::new(RefCell::new(rand::thread_rng()))),
+    ))));
     {
         let current_state = current_state.clone();
         let current_state = (*current_state).borrow_mut();
@@ -190,6 +218,7 @@ fn run() -> Result<(), AppError> {
                     .borrow_mut()
                     .update(&context, Duration::from_secs_f64((now - last) / 1000f64))?;
                 if let Some(new_state) = new_state {
+                    log!("TODO JEFF going to new state");
                     new_state.as_ref().borrow_mut().activate(&context)?;
                     current_state.as_ref().borrow_mut().deactivate(&context)?;
                     *current_state = new_state.clone();
