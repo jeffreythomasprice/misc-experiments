@@ -4,7 +4,7 @@ use web_sys::{Request, RequestInit, Response};
 
 use crate::dom_utils::*;
 
-pub async fn fetch_string(url: &str) -> Result<JsValue, JsValue> {
+pub async fn fetch_string(url: &str) -> Result<String, JsValue> {
 	let request = Request::new_with_str_and_init(
 		url,
 		RequestInit::new()
@@ -14,6 +14,6 @@ pub async fn fetch_string(url: &str) -> Result<JsValue, JsValue> {
 	let response = JsFuture::from(window()?.fetch_with_request(&request))
 		.await?
 		.dyn_into::<Response>()?;
-	let response_body = JsFuture::from(response.text()?).await?;
+	let response_body = JsFuture::from(response.text()?).await?.as_string().unwrap();
 	Ok(response_body)
 }

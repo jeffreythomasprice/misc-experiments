@@ -24,20 +24,22 @@ impl From<&str> for AppError {
 	}
 }
 
+impl From<String> for AppError {
+	fn from(value: String) -> Self {
+		AppError::Message(value.into())
+	}
+}
+
 pub type AppResult<T> = std::result::Result<T, AppError>;
 
 pub type AppStateHandle = Rc<RefCell<dyn AppState>>;
 
 pub trait AppState {
-	fn activate(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()>;
-	fn deactivate(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()>;
-	fn resize(&mut self, gl: &WebGl2RenderingContext, width: i32, height: i32) -> AppResult<()>;
-	fn render(&mut self, gl: &WebGl2RenderingContext) -> AppResult<()>;
-	fn update(
-		&mut self,
-		gl: &WebGl2RenderingContext,
-		time: Duration,
-	) -> AppResult<Option<AppStateHandle>>;
+	fn activate(&mut self, gl: Rc<WebGl2RenderingContext>) -> AppResult<()>;
+	fn deactivate(&mut self) -> AppResult<()>;
+	fn resize(&mut self, width: i32, height: i32) -> AppResult<()>;
+	fn render(&mut self) -> AppResult<()>;
+	fn update(&mut self, time: Duration) -> AppResult<Option<AppStateHandle>>;
 }
 
 pub fn run_state_machine<F>(initial_state_factory: F) -> Result<(), AppError>
@@ -64,15 +66,17 @@ where
 	}
 	body.append_child(&canvas)?;
 
-	let context = canvas
-		.get_context_with_context_options(
-			"webgl2",
-			&WebGlContextAttributes::new()
-				.power_preference(web_sys::WebGlPowerPreference::HighPerformance),
-		)?
-		.ok_or("failed to create canvas context")?
-		.dyn_into::<web_sys::WebGl2RenderingContext>()
-		.or(Err("failed to cast into the right type"))?;
+	let context = Rc::new(
+		canvas
+			.get_context_with_context_options(
+				"webgl2",
+				&WebGlContextAttributes::new()
+					.power_preference(web_sys::WebGlPowerPreference::HighPerformance),
+			)?
+			.ok_or("failed to create canvas context")?
+			.dyn_into::<web_sys::WebGl2RenderingContext>()
+			.or(Err("failed to cast into the right type"))?,
+	);
 
 	// two layers of Rc<RefCell<_>>
 	// outer layer is because we have to share a mutable reference to the current state in multiple closures
@@ -82,13 +86,15 @@ where
 	{
 		let current_state = current_state.clone();
 		let current_state = (*current_state).borrow_mut();
-		current_state.as_ref().borrow_mut().activate(&context)?;
+		current_state
+			.as_ref()
+			.borrow_mut()
+			.activate(context.clone())?;
 	}
 	let resize_fn = {
 		fn f(
 			window: &Window,
 			canvas: &HtmlCanvasElement,
-			context: &WebGl2RenderingContext,
 			current_state: &Rc<RefCell<AppStateHandle>>,
 		) -> Result<(), AppError> {
 			let width = window.inner_width()?.as_f64().ok_or("not a number")? as i32;
@@ -100,21 +106,16 @@ where
 			canvas.set_height(height as u32);
 
 			let current_state = (**current_state).borrow_mut();
-
-			current_state
-				.as_ref()
-				.borrow_mut()
-				.resize(context, width, height)?;
+			current_state.as_ref().borrow_mut().resize(width, height)?;
 
 			Ok(())
 		}
 
 		let window = window.clone();
 		let canvas = canvas.clone();
-		let context = context.clone();
 		let current_state = current_state.clone();
 		move || {
-			if let Err(e) = f(&window, &canvas, &context, &current_state) {
+			if let Err(e) = f(&window, &canvas, &current_state) {
 				error!(format!("error in resize callback: {e:?}"));
 			}
 		}
@@ -128,23 +129,23 @@ where
 	let animate_closure = Rc::new(RefCell::<Option<Closure<_>>>::new(None));
 	let animate_fn = {
 		fn f(
-			context: &WebGl2RenderingContext,
+			context: Rc<WebGl2RenderingContext>,
 			current_state: &Rc<RefCell<AppStateHandle>>,
 			time: JsValue,
 			last_time: &Rc<RefCell<Option<f64>>>,
 		) -> Result<(), AppError> {
 			let mut current_state = (*current_state).borrow_mut();
-			current_state.as_ref().borrow_mut().render(&context)?;
+			current_state.as_ref().borrow_mut().render()?;
 
 			let now = time.as_f64().ok_or("not a number")?;
 			if let Some(last) = *last_time.borrow() {
 				let new_state = current_state
 					.as_ref()
 					.borrow_mut()
-					.update(&context, Duration::from_secs_f64((now - last) / 1000f64))?;
+					.update(Duration::from_secs_f64((now - last) / 1000f64))?;
 				if let Some(new_state) = new_state {
-					new_state.as_ref().borrow_mut().activate(&context)?;
-					current_state.as_ref().borrow_mut().deactivate(&context)?;
+					new_state.as_ref().borrow_mut().activate(context.clone())?;
+					current_state.as_ref().borrow_mut().deactivate()?;
 					*current_state = new_state.clone();
 				}
 			}
@@ -159,7 +160,7 @@ where
 		let current_state = current_state.clone();
 		let last_time = Rc::new(RefCell::new(None));
 		move |time: JsValue| {
-			if let Err(e) = f(&context, &current_state, time, &last_time) {
+			if let Err(e) = f(context.clone(), &current_state, time, &last_time) {
 				error!(format!("error doing animate: {e:?}"));
 			}
 
