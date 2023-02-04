@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 use async_std::task;
 use gloo_console::{error, log};
 use rand::{rngs::ThreadRng, Rng};
+use std::panic;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
@@ -97,19 +98,20 @@ impl AppState for DemoState {
         gl: &WebGl2RenderingContext,
         time: Duration,
     ) -> AppResult<Option<AppStateHandle>> {
-        self.remaining_time -= time;
-        if self.remaining_time > Duration::ZERO {
-            Ok(None)
-        } else {
+        if time > self.remaining_time {
             Ok(Some(Rc::new(RefCell::new(DemoState::new(
                 self.random.clone(),
             )))))
+        } else {
+            self.remaining_time -= time;
+            Ok(None)
         }
     }
 }
 
 #[async_std::main]
 async fn main() {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
     if let Err(e) = run() {
         error!(format!("fatal {e:?}"))
     }
@@ -218,7 +220,6 @@ fn run() -> Result<(), AppError> {
                     .borrow_mut()
                     .update(&context, Duration::from_secs_f64((now - last) / 1000f64))?;
                 if let Some(new_state) = new_state {
-                    log!("TODO JEFF going to new state");
                     new_state.as_ref().borrow_mut().activate(&context)?;
                     current_state.as_ref().borrow_mut().deactivate(&context)?;
                     *current_state = new_state.clone();
