@@ -9,6 +9,7 @@ console_error_panic_hook = "0.1.7"
 gloo-console = "0.2.3"
 wasm-bindgen-futures = "0.4.34"
 rand = "0.8.5"
+futures = "0.3.26"
 
 [dependencies.getrandom]
 version = "0.2.8"
