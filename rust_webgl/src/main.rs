@@ -14,6 +14,10 @@ use gloo_console::*;
 use memoffset::offset_of;
 use rand::{rngs::ThreadRng, Rng};
 use std::panic;
+use vek::FrustumPlanes;
+use vek::Mat4;
+use vek::Rgba;
+use vek::Vec2;
 use web_sys::WebGl2RenderingContext;
 
 use crate::app_states::*;
@@ -38,42 +42,14 @@ impl Data {
 	}
 }
 
-struct Vector2<T> {
-	pub x: T,
-	pub y: T,
-}
-
-impl<T> Vector2<T> {
-	fn new(x: T, y: T) -> Vector2<T> {
-		Vector2 { x, y }
-	}
-}
-
-struct RGBA<T> {
-	pub red: T,
-	pub green: T,
-	pub blue: T,
-	pub alpha: T,
-}
-
-impl<T> RGBA<T> {
-	fn new(red: T, green: T, blue: T, alpha: T) -> RGBA<T> {
-		RGBA {
-			red,
-			green,
-			blue,
-			alpha,
-		}
-	}
-}
-
 struct VertexPos2RGBA<T> {
-	pub pos: Vector2<T>,
-	pub color: RGBA<T>,
+	pub pos: Vec2<T>,
+	pub color: Rgba<T>,
 }
 
 struct DemoState {
 	data: Rc<RefCell<Data>>,
+	ortho_matrix: Mat4<f32>,
 	color: (f32, f32, f32),
 	remaining_time: Duration,
 	gl: Option<Rc<WebGl2RenderingContext>>,
@@ -87,14 +63,15 @@ impl DemoState {
 			let data = data.clone();
 			let r = &mut data.borrow_mut().random;
 			(
-				r.gen_range(0.0f32..=1.0f32),
-				r.gen_range(0.0f32..=1.0f32),
-				r.gen_range(0.0f32..=1.0f32),
+				r.gen_range(0f32..=1f32),
+				r.gen_range(0f32..=1f32),
+				r.gen_range(0f32..=1f32),
 			)
 		};
 		let remaining_time = data.borrow_mut().random.gen_range(3.0..=5.0);
 		DemoState {
 			data,
+			ortho_matrix: Mat4::identity(),
 			color,
 			remaining_time: Duration::from_secs_f64(remaining_time),
 			gl: None,
@@ -110,24 +87,24 @@ impl AppState for DemoState {
 		self.gl = Some(gl.clone());
 
 		let shader = &self.data.borrow().shader;
-		let position_attribute = &shader.get_attributes_by_name()["positionAttribute"];
-		let color_attribute = &shader.get_attributes_by_name()["colorAttribute"];
+		let position_attribute = &shader.get_attributes_by_name()["position_attribute"];
+		let color_attribute = &shader.get_attributes_by_name()["color_attribute"];
 
 		let buffer = Buffer::new(gl.clone(), BufferTarget::Array)?;
 		buffer.bind();
 		unsafe {
 			let data = vec![
 				VertexPos2RGBA {
-					pos: Vector2::new(-0.5f32, 0.5f32),
-					color: RGBA::new(1.0f32, 0.0f32, 0.0f32, 1.0f32),
+					pos: Vec2::new(50f32, 50f32),
+					color: Rgba::new(1f32, 0f32, 0f32, 1f32),
 				},
 				VertexPos2RGBA {
-					pos: Vector2::new(0.5f32, 0.5f32),
-					color: RGBA::new(0.0f32, 1.0f32, 0.0f32, 1.0f32),
+					pos: Vec2::new(300f32, 50f32),
+					color: Rgba::new(0f32, 1f32, 0f32, 1f32),
 				},
 				VertexPos2RGBA {
-					pos: Vector2::new(0.0f32, -0.5f32),
-					color: RGBA::new(0.0f32, 0.0f32, 1.0f32, 1.0f32),
+					pos: Vec2::new(50f32, 300f32),
+					color: Rgba::new(0f32, 0f32, 1f32, 1f32),
 				},
 			];
 			gl.buffer_data_with_array_buffer_view(
@@ -175,7 +152,18 @@ impl AppState for DemoState {
 
 	fn resize(&mut self, width: i32, height: i32) -> AppResult<()> {
 		let gl = self.gl.clone().unwrap();
+
 		gl.viewport(0, 0, width, height);
+
+		self.ortho_matrix = Mat4::<f32>::orthographic_rh_zo(FrustumPlanes {
+			left: 0f32,
+			right: width as f32,
+			bottom: height as f32,
+			top: 0f32,
+			near: -1f32,
+			far: 1f32,
+		});
+
 		Ok(())
 	}
 
@@ -183,11 +171,28 @@ impl AppState for DemoState {
 		let gl = self.gl.clone().unwrap();
 
 		let (red, green, blue) = self.color;
-		gl.clear_color(red, green, blue, 1.0f32);
+		gl.clear_color(red, green, blue, 1f32);
 		gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
 		let shader = &self.data.borrow().shader;
 		shader.bind();
+
+		let projection_matrix_uniform = &shader.get_uniforms_by_name()["projection_matrix_uniform"];
+		gl.uniform_matrix4fv_with_f32_array(
+			Some(&projection_matrix_uniform.location),
+			false,
+			&self.ortho_matrix.into_col_array(),
+		);
+
+		let modelview_matrix_uniform = &shader.get_uniforms_by_name()["modelview_matrix_uniform"];
+		gl.uniform_matrix4fv_with_f32_array(
+			Some(&modelview_matrix_uniform.location),
+			false,
+			&Mat4::identity()
+				.translated_2d(Vec2::new(50f32, 300f32))
+				.into_col_array(),
+		);
+
 		if let Some(vertex_array) = &self.vertex_array {
 			vertex_array.bind();
 			gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);

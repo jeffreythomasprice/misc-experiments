@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
+use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
 use crate::app_states::*;
 
@@ -12,13 +12,20 @@ pub struct AttributeInfo {
 	pub gl_type: u32,
 }
 
-// TODO uniform attrib too
+#[derive(Debug, Clone)]
+pub struct UniformInfo {
+	pub location: WebGlUniformLocation,
+	pub name: String,
+	pub size: i32,
+	pub gl_type: u32,
+}
 
 pub struct Shader {
 	gl: Rc<WebGl2RenderingContext>,
 	program: WebGlProgram,
 	attributes_by_location: HashMap<i32, AttributeInfo>,
 	attributes_by_name: HashMap<String, AttributeInfo>,
+	uniforms_by_name: HashMap<String, UniformInfo>,
 }
 
 impl Shader {
@@ -77,22 +84,43 @@ impl Shader {
 				"expected attribute at index {} given that there are {} attributes",
 				i, active_attributes
 			))?;
-			let location = gl.get_attrib_location(&program, &gl_info.name());
+			let name = gl_info.name();
+			let location = gl.get_attrib_location(&program, &name);
 			if location < 0 {
-				Err(format!(
-					"failed to get attribute location for {}",
-					gl_info.name()
-				))?;
+				Err(format!("failed to get attribute location for {}", name))?;
 			}
 			let info = AttributeInfo {
 				location: location as u32,
-				name: gl_info.name(),
+				name: name.clone(),
 				size: gl_info.size(),
 				gl_type: gl_info.type_(),
 			};
-			let name = &info.name;
 			attributes_by_location.insert(location, info.clone());
-			attributes_by_name.insert(name.clone(), info);
+			attributes_by_name.insert(name, info);
+		}
+
+		let mut uniforms_by_name = HashMap::new();
+		let active_uniforms = gl
+			.get_program_parameter(&program, WebGl2RenderingContext::ACTIVE_UNIFORMS)
+			.as_f64()
+			.unwrap() as u32;
+		for i in 0..active_uniforms {
+			let gl_info = gl.get_active_uniform(&program, i).ok_or(format!(
+				"expected uniform at index {} given that there are {} uniforms",
+				i, active_uniforms
+			))?;
+			let name = gl_info.name();
+			let location = match gl.get_uniform_location(&program, &gl_info.name()) {
+				Some(location) => location,
+				None => Err(format!("failed to get uniform location for {}", name))?,
+			};
+			let info = UniformInfo {
+				location,
+				name: name.clone(),
+				size: gl_info.size(),
+				gl_type: gl_info.type_(),
+			};
+			uniforms_by_name.insert(name, info);
 		}
 
 		Ok(Self {
@@ -100,6 +128,7 @@ impl Shader {
 			program,
 			attributes_by_location,
 			attributes_by_name,
+			uniforms_by_name,
 		})
 	}
 
@@ -117,6 +146,10 @@ impl Shader {
 
 	pub fn get_attributes_by_name(&self) -> &HashMap<String, AttributeInfo> {
 		&self.attributes_by_name
+	}
+
+	pub fn get_uniforms_by_name(&self) -> &HashMap<String, UniformInfo> {
+		&self.uniforms_by_name
 	}
 }
 

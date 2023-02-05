@@ -37,6 +37,7 @@ pub type AppStateHandle = Rc<RefCell<dyn AppState>>;
 pub trait AppState {
 	fn activate(&mut self, gl: Rc<WebGl2RenderingContext>) -> AppResult<()>;
 	fn deactivate(&mut self) -> AppResult<()>;
+	// TODO resize should be Extent2<u32>
 	fn resize(&mut self, width: i32, height: i32) -> AppResult<()>;
 	fn render(&mut self) -> AppResult<()>;
 	fn update(&mut self, time: Duration) -> AppResult<Option<AppStateHandle>>;
@@ -133,6 +134,7 @@ where
 	let animate_closure = Rc::new(RefCell::<Option<Closure<_>>>::new(None));
 	let animate_fn = {
 		fn f(
+			canvas: HtmlCanvasElement,
 			context: Rc<WebGl2RenderingContext>,
 			current_state: &Rc<RefCell<AppStateHandle>>,
 			time: JsValue,
@@ -151,6 +153,10 @@ where
 					new_state.as_ref().borrow_mut().activate(context.clone())?;
 					current_state.as_ref().borrow_mut().deactivate()?;
 					*current_state = new_state.clone();
+					new_state
+						.as_ref()
+						.borrow_mut()
+						.resize(canvas.width() as i32, canvas.height() as i32)?;
 				}
 			}
 			last_time.replace(Some(now));
@@ -159,12 +165,19 @@ where
 		}
 
 		let window = window.clone();
+		let canvas = canvas.clone();
 		let context = context.clone();
 		let animate_closure = animate_closure.clone();
 		let current_state = current_state.clone();
 		let last_time = Rc::new(RefCell::new(None));
 		move |time: JsValue| {
-			if let Err(e) = f(context.clone(), &current_state, time, &last_time) {
+			if let Err(e) = f(
+				canvas.clone(),
+				context.clone(),
+				&current_state,
+				time,
+				&last_time,
+			) {
 				error!(format!("error doing animate: {e:?}"));
 			}
 
