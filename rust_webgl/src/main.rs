@@ -3,6 +3,7 @@ mod buffer;
 mod dom_utils;
 mod fetch_utils;
 mod futures_app_state;
+mod jsarray_utils;
 mod shader;
 mod vertex_array;
 
@@ -10,8 +11,6 @@ use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use futures::try_join;
 use gloo_console::*;
-use js_sys::Float32Array;
-use js_sys::Uint8Array;
 use memoffset::offset_of;
 use rand::{rngs::ThreadRng, Rng};
 use std::panic;
@@ -21,6 +20,7 @@ use crate::app_states::*;
 use crate::buffer::*;
 use crate::fetch_utils::*;
 use crate::futures_app_state::*;
+use crate::jsarray_utils::*;
 use crate::shader::*;
 use crate::vertex_array::*;
 
@@ -126,8 +126,7 @@ impl AppState for DemoState {
 		let buffer = Buffer::new(gl.clone(), BufferTarget::Array)?;
 		buffer.bind();
 		unsafe {
-			// TODO helper for turning array or slice or vec into buffer_data
-			let data: [VertexPos2RGBA<f32>; 3] = [
+			let data = vec![
 				VertexPos2RGBA {
 					pos: Vector2::new(-0.5f32, 0.5f32),
 					color: RGBA::new(1.0f32, 0.0f32, 0.0f32, 1.0f32),
@@ -141,15 +140,9 @@ impl AppState for DemoState {
 					color: RGBA::new(0.0f32, 0.0f32, 1.0f32, 1.0f32),
 				},
 			];
-			let data_ptr =
-				std::mem::transmute::<*const VertexPos2RGBA<f32>, *mut u8>(data.as_ptr());
-			let data_jsarray = Uint8Array::view_mut_raw(
-				data_ptr,
-				std::mem::size_of::<VertexPos2RGBA<f32>>() * data.len(),
-			);
 			gl.buffer_data_with_array_buffer_view(
 				WebGl2RenderingContext::ARRAY_BUFFER,
-				&data_jsarray,
+				&data.as_uint8array(),
 				WebGl2RenderingContext::STATIC_DRAW,
 			);
 		}
