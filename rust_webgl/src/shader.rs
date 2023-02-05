@@ -1,12 +1,24 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
 
 use crate::app_states::*;
 
+#[derive(Debug, Clone)]
+pub struct AttributeInfo {
+	pub location: u32,
+	pub name: String,
+	pub size: i32,
+	pub gl_type: u32,
+}
+
+// TODO uniform attrib too
+
 pub struct Shader {
 	gl: Rc<WebGl2RenderingContext>,
 	program: WebGlProgram,
+	attributes_by_location: HashMap<i32, AttributeInfo>,
+	attributes_by_name: HashMap<String, AttributeInfo>,
 }
 
 impl Shader {
@@ -51,13 +63,44 @@ impl Shader {
 		{
 			let log = gl.get_program_info_log(&program).unwrap();
 			gl.delete_program(Some(&program));
-			Err(log.into())
-		} else {
-			Ok(Self {
-				gl: gl.clone(),
-				program,
-			})
+			Err(log)?;
 		}
+
+		let mut attributes_by_location = HashMap::new();
+		let mut attributes_by_name = HashMap::new();
+		let active_attributes = gl
+			.get_program_parameter(&program, WebGl2RenderingContext::ACTIVE_ATTRIBUTES)
+			.as_f64()
+			.unwrap() as usize;
+		for i in 0..active_attributes {
+			let gl_info = gl.get_active_attrib(&program, i as u32).ok_or(format!(
+				"expected attribute at index {} given that there are {} attributes",
+				i, active_attributes
+			))?;
+			let location = gl.get_attrib_location(&program, &gl_info.name());
+			if location < 0 {
+				Err(format!(
+					"failed to get attribute location for {}",
+					gl_info.name()
+				))?;
+			}
+			let info = AttributeInfo {
+				location: location as u32,
+				name: gl_info.name(),
+				size: gl_info.size(),
+				gl_type: gl_info.type_(),
+			};
+			let name = &info.name;
+			attributes_by_location.insert(location, info.clone());
+			attributes_by_name.insert(name.clone(), info);
+		}
+
+		Ok(Self {
+			gl: gl.clone(),
+			program,
+			attributes_by_location,
+			attributes_by_name,
+		})
 	}
 
 	pub fn bind(&self) {
@@ -68,13 +111,12 @@ impl Shader {
 		self.gl.use_program(None);
 	}
 
-	pub fn get_attrib_location(&self, name: &str) -> Option<u32> {
-		let result = self.gl.get_attrib_location(&self.program, name);
-		if result >= 0 {
-			Some(result as u32)
-		} else {
-			None
-		}
+	pub fn get_attributes_by_location(&self) -> &HashMap<i32, AttributeInfo> {
+		&self.attributes_by_location
+	}
+
+	pub fn get_attributes_by_name(&self) -> &HashMap<String, AttributeInfo> {
+		&self.attributes_by_name
 	}
 }
 

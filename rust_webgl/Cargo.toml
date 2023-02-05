@@ -32,6 +32,7 @@ features = [
 	"WebGlPowerPreference",
 	"WebGlShader",
 	"WebGlProgram",
+	"WebGlActiveInfo",
 	"WebGlVertexArrayObject",
 	"WebGlBuffer",
 	"Headers",

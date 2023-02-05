@@ -109,19 +109,9 @@ impl AppState for DemoState {
 		let gl = gl.clone();
 		self.gl = Some(gl.clone());
 
-		// TODO helper for getting attributes by name?
-		let position_attrib_location = self
-			.data
-			.borrow()
-			.shader
-			.get_attrib_location("positionAttribute")
-			.ok_or("can't find attribute")?;
-		let color_attrib_location = self
-			.data
-			.borrow()
-			.shader
-			.get_attrib_location("colorAttribute")
-			.ok_or("can't find attribute")?;
+		let shader = &self.data.borrow().shader;
+		let position_attribute = &shader.get_attributes_by_name()["positionAttribute"];
+		let color_attribute = &shader.get_attributes_by_name()["colorAttribute"];
 
 		let buffer = Buffer::new(gl.clone(), BufferTarget::Array)?;
 		buffer.bind();
@@ -152,18 +142,18 @@ impl AppState for DemoState {
 		let vertex_array = VertexArray::new(gl.clone())?;
 		vertex_array.bind();
 		buffer.bind();
-		gl.enable_vertex_attrib_array(position_attrib_location);
+		gl.enable_vertex_attrib_array(position_attribute.location);
 		gl.vertex_attrib_pointer_with_i32(
-			position_attrib_location,
+			position_attribute.location,
 			2,
 			WebGl2RenderingContext::FLOAT,
 			false,
 			std::mem::size_of::<VertexPos2RGBA<f32>>() as i32,
 			offset_of!(VertexPos2RGBA<f32>, pos) as i32,
 		);
-		gl.enable_vertex_attrib_array(color_attrib_location);
+		gl.enable_vertex_attrib_array(color_attribute.location);
 		gl.vertex_attrib_pointer_with_i32(
-			color_attrib_location,
+			color_attribute.location,
 			4,
 			WebGl2RenderingContext::FLOAT,
 			false,
