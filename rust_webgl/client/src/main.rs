@@ -1,12 +1,3 @@
-mod app_states;
-mod buffer;
-mod dom_utils;
-mod fetch_utils;
-mod futures_app_state;
-mod jsarray_utils;
-mod shader;
-mod vertex_array;
-
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use futures::try_join;
@@ -20,13 +11,7 @@ use vek::Rgba;
 use vek::Vec2;
 use web_sys::WebGl2RenderingContext;
 
-use crate::app_states::*;
-use crate::buffer::*;
-use crate::fetch_utils::*;
-use crate::futures_app_state::*;
-use crate::jsarray_utils::*;
-use crate::shader::*;
-use crate::vertex_array::*;
+use lib::*;
 
 struct Data {
 	random: ThreadRng,

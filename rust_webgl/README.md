@@ -1,3 +1,3 @@
 ```
-trunk serve
+pushd client && trunk serve && popd
 ```
