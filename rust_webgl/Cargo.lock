@@ -181,6 +181,7 @@ dependencies = [
  "memoffset",
  "rand",
  "vek",
+ "wasm-bindgen",
  "web-sys",
 ]
 

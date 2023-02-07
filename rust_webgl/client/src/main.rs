@@ -10,51 +10,37 @@ use vek::FrustumPlanes;
 use vek::Mat4;
 use vek::Rgba;
 use vek::Vec2;
+use wasm_bindgen::JsCast;
+use web_sys::CanvasRenderingContext2d;
+use web_sys::HtmlCanvasElement;
 use web_sys::WebGl2RenderingContext;
 
 use lib::*;
 
-struct SolidColorState {
-	color: Rgba<f32>,
-	gl: Option<Rc<WebGl2RenderingContext>>,
-}
+mod solid_color_state;
+use solid_color_state::*;
 
-impl SolidColorState {
-	pub fn new(color: Rgba<f32>) -> Self {
-		Self { color, gl: None }
-	}
-}
+// TODO move to lib
+fn new_canvas_image<F>(size: Extent2<u32>, f: F) -> Result<HtmlCanvasElement, AppError>
+where
+	F: Fn(&CanvasRenderingContext2d, Extent2<u32>) -> Result<(), AppError>,
+{
+	let result = document()?
+		.create_element("canvas")?
+		.dyn_into::<web_sys::HtmlCanvasElement>()
+		.or(Err("failed to cast into the right type"))?;
+	result.set_width(size.w);
+	result.set_height(size.h);
 
-impl AppState for SolidColorState {
-	fn activate(&mut self, gl: Rc<WebGl2RenderingContext>) -> AppResult<()> {
-		self.gl = Some(gl.clone());
-		Ok(())
-	}
+	let context = result
+		.get_context("2d")?
+		.ok_or("failed to create canvas 2d context")?
+		.dyn_into::<web_sys::CanvasRenderingContext2d>()
+		.or(Err("failed to cast into the right type"))?;
 
-	fn deactivate(&mut self) -> AppResult<()> {
-		Ok(())
-	}
+	f(&context, size)?;
 
-	fn resize(&mut self, size: Extent2<i32>) -> AppResult<()> {
-		let gl = self.gl.clone().unwrap();
-
-		gl.viewport(0, 0, size.w, size.h);
-
-		Ok(())
-	}
-
-	fn render(&mut self) -> AppResult<()> {
-		let gl = self.gl.clone().unwrap();
-
-		gl.clear_color(self.color.r, self.color.g, self.color.b, self.color.a);
-		gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-
-		Ok(())
-	}
-
-	fn update(&mut self, _time: Duration) -> AppResult<Option<AppStateHandle>> {
-		Ok(None)
-	}
+	Ok(result)
 }
 
 struct Data {
@@ -259,6 +245,13 @@ async fn main() {
 					fetch_string("assets/shader.frag")
 				)?;
 				let shader = Shader::new(gl, &vertex_source, &fragment_source)?;
+
+				// TODO make a texture out of this
+				new_canvas_image(Extent2::new(300, 300), |context, size| {
+					context.set_fill_style(&"red".into());
+					context.fill_rect(0f64, 0f64, size.w as f64, size.h as f64);
+					Ok(())
+				})?;
 
 				let data = Rc::new(RefCell::new(Data::new(shader)?));
 				let next_state = Rc::new(RefCell::new(DemoState::new(data)));

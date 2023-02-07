@@ -19,6 +19,7 @@ features = [
 	"HtmlElement",
 	"CssStyleDeclaration",
 	"HtmlCanvasElement",
+	"CanvasRenderingContext2d",
 	"WebGl2RenderingContext",
 	"WebGlContextAttributes",
 	"WebGlPowerPreference",
