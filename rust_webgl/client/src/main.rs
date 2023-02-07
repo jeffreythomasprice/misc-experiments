@@ -57,8 +57,9 @@ impl Data {
 	}
 }
 
-struct VertexPos2RGBA<T> {
+struct VertexPos2Coord2RGBA<T> {
 	pub pos: Vec2<T>,
+	pub coord: Vec2<T>,
 	pub color: Rgba<T>,
 }
 
@@ -70,6 +71,7 @@ struct DemoState {
 	gl: Option<Rc<WebGl2RenderingContext>>,
 	buffer: Option<Buffer>,
 	vertex_array: Option<VertexArray>,
+	texture: Option<Texture>,
 }
 
 impl DemoState {
@@ -93,6 +95,7 @@ impl DemoState {
 			gl: None,
 			buffer: None,
 			vertex_array: None,
+			texture: None,
 		}
 	}
 }
@@ -104,23 +107,43 @@ impl AppState for DemoState {
 
 		let shader = &self.data.borrow().shader;
 		let position_attribute = &shader.get_attributes_by_name()["position_attribute"];
+		let texture_coordinate_attribute =
+			&shader.get_attributes_by_name()["texture_coordinate_attribute"];
 		let color_attribute = &shader.get_attributes_by_name()["color_attribute"];
 
 		let buffer = Buffer::new(gl.clone(), BufferTarget::Array)?;
 		buffer.bind();
 		unsafe {
 			let data = vec![
-				VertexPos2RGBA {
+				VertexPos2Coord2RGBA {
 					pos: Vec2::new(50f32, 50f32),
-					color: Rgba::new(1f32, 0f32, 0f32, 1f32),
+					coord: Vec2::new(0f32, 0f32),
+					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
-				VertexPos2RGBA {
+				VertexPos2Coord2RGBA {
 					pos: Vec2::new(300f32, 50f32),
-					color: Rgba::new(0f32, 1f32, 0f32, 1f32),
+					coord: Vec2::new(1f32, 0f32),
+					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
-				VertexPos2RGBA {
+				VertexPos2Coord2RGBA {
+					pos: Vec2::new(300f32, 300f32),
+					coord: Vec2::new(1f32, 1f32),
+					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
+				},
+				VertexPos2Coord2RGBA {
+					pos: Vec2::new(300f32, 300f32),
+					coord: Vec2::new(1f32, 1f32),
+					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
+				},
+				VertexPos2Coord2RGBA {
 					pos: Vec2::new(50f32, 300f32),
-					color: Rgba::new(0f32, 0f32, 1f32, 1f32),
+					coord: Vec2::new(0f32, 1f32),
+					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
+				},
+				VertexPos2Coord2RGBA {
+					pos: Vec2::new(50f32, 50f32),
+					coord: Vec2::new(0f32, 0f32),
+					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
 			];
 			gl.buffer_data_with_array_buffer_view(
@@ -141,8 +164,17 @@ impl AppState for DemoState {
 			2,
 			WebGl2RenderingContext::FLOAT,
 			false,
-			std::mem::size_of::<VertexPos2RGBA<f32>>() as i32,
-			offset_of!(VertexPos2RGBA<f32>, pos) as i32,
+			std::mem::size_of::<VertexPos2Coord2RGBA<f32>>() as i32,
+			offset_of!(VertexPos2Coord2RGBA<f32>, pos) as i32,
+		);
+		gl.enable_vertex_attrib_array(texture_coordinate_attribute.location);
+		gl.vertex_attrib_pointer_with_i32(
+			texture_coordinate_attribute.location,
+			2,
+			WebGl2RenderingContext::FLOAT,
+			false,
+			std::mem::size_of::<VertexPos2Coord2RGBA<f32>>() as i32,
+			offset_of!(VertexPos2Coord2RGBA<f32>, coord) as i32,
 		);
 		gl.enable_vertex_attrib_array(color_attribute.location);
 		gl.vertex_attrib_pointer_with_i32(
@@ -150,14 +182,57 @@ impl AppState for DemoState {
 			4,
 			WebGl2RenderingContext::FLOAT,
 			false,
-			std::mem::size_of::<VertexPos2RGBA<f32>>() as i32,
-			offset_of!(VertexPos2RGBA<f32>, color) as i32,
+			std::mem::size_of::<VertexPos2Coord2RGBA<f32>>() as i32,
+			offset_of!(VertexPos2Coord2RGBA<f32>, color) as i32,
 		);
 		buffer.bind_none();
 		vertex_array.bind_none();
 
 		self.buffer = Some(buffer);
 		self.vertex_array = Some(vertex_array);
+
+		self.texture = {
+			let source = new_canvas_image(Extent2::new(300, 300), |context, size| {
+				context.set_fill_style(&"red".into());
+				context.fill_rect(0f64, 0f64, size.w as f64, size.h as f64);
+				context.set_fill_style(&"blue".into());
+				context.fill_rect(50f64, 50f64, (size.w - 100) as f64, (size.h - 100) as f64);
+				Ok(())
+			})?;
+
+			let texture = Texture::new(gl.clone())?;
+			texture.bind();
+			gl.tex_parameteri(
+				WebGl2RenderingContext::TEXTURE_2D,
+				WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+				WebGl2RenderingContext::LINEAR as i32,
+			);
+			gl.tex_parameteri(
+				WebGl2RenderingContext::TEXTURE_2D,
+				WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+				WebGl2RenderingContext::LINEAR as i32,
+			);
+			gl.tex_parameteri(
+				WebGl2RenderingContext::TEXTURE_2D,
+				WebGl2RenderingContext::TEXTURE_WRAP_S,
+				WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+			);
+			gl.tex_parameteri(
+				WebGl2RenderingContext::TEXTURE_2D,
+				WebGl2RenderingContext::TEXTURE_WRAP_T,
+				WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+			);
+			gl.tex_image_2d_with_u32_and_u32_and_html_canvas_element(
+				WebGl2RenderingContext::TEXTURE_2D,
+				0,
+				WebGl2RenderingContext::RGBA.try_into().unwrap(),
+				WebGl2RenderingContext::RGBA,
+				WebGl2RenderingContext::UNSIGNED_BYTE,
+				&source,
+			)?;
+			texture.bind_none();
+			Some(texture)
+		};
 
 		Ok(())
 	}
@@ -208,11 +283,20 @@ impl AppState for DemoState {
 				.into_col_array(),
 		);
 
-		if let Some(vertex_array) = &self.vertex_array {
+		let sampler_uniform = &shader.get_uniforms_by_name()["sampler_uniform"];
+		gl.active_texture(WebGl2RenderingContext::TEXTURE1);
+		gl.uniform1i(Some(&sampler_uniform.location), 1);
+
+		if let (Some(texture), Some(vertex_array)) = (&self.texture, &self.vertex_array) {
+			texture.bind();
+
 			vertex_array.bind();
-			gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+			gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 6);
 			vertex_array.bind_none();
+
+			texture.bind_none();
 		}
+
 		shader.bind_none();
 
 		Ok(())
@@ -245,13 +329,6 @@ async fn main() {
 					fetch_string("assets/shader.frag")
 				)?;
 				let shader = Shader::new(gl, &vertex_source, &fragment_source)?;
-
-				// TODO make a texture out of this
-				new_canvas_image(Extent2::new(300, 300), |context, size| {
-					context.set_fill_style(&"red".into());
-					context.fill_rect(0f64, 0f64, size.w as f64, size.h as f64);
-					Ok(())
-				})?;
 
 				let data = Rc::new(RefCell::new(Data::new(shader)?));
 				let next_state = Rc::new(RefCell::new(DemoState::new(data)));

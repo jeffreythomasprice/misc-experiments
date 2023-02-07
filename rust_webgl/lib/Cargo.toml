@@ -29,6 +29,7 @@ features = [
 	"WebGlUniformLocation",
 	"WebGlVertexArrayObject",
 	"WebGlBuffer",
+	"WebGlTexture",
 	"Headers",
 	"Request",
 	"RequestInit",
