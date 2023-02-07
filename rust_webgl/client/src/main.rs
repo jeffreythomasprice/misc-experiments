@@ -14,14 +14,57 @@ use web_sys::WebGl2RenderingContext;
 
 use lib::*;
 
+struct SolidColorState {
+	color: Rgba<f32>,
+	gl: Option<Rc<WebGl2RenderingContext>>,
+}
+
+impl SolidColorState {
+	pub fn new(color: Rgba<f32>) -> Self {
+		Self { color, gl: None }
+	}
+}
+
+impl AppState for SolidColorState {
+	fn activate(&mut self, gl: Rc<WebGl2RenderingContext>) -> AppResult<()> {
+		self.gl = Some(gl.clone());
+		Ok(())
+	}
+
+	fn deactivate(&mut self) -> AppResult<()> {
+		Ok(())
+	}
+
+	fn resize(&mut self, size: Extent2<i32>) -> AppResult<()> {
+		let gl = self.gl.clone().unwrap();
+
+		gl.viewport(0, 0, size.w, size.h);
+
+		Ok(())
+	}
+
+	fn render(&mut self) -> AppResult<()> {
+		let gl = self.gl.clone().unwrap();
+
+		gl.clear_color(self.color.r, self.color.g, self.color.b, self.color.a);
+		gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+		Ok(())
+	}
+
+	fn update(&mut self, _time: Duration) -> AppResult<Option<AppStateHandle>> {
+		Ok(None)
+	}
+}
+
 struct Data {
 	random: ThreadRng,
 	shader: Shader,
 }
 
 impl Data {
-	fn new(shader: Shader) -> Result<Data, AppError> {
-		Ok(Data {
+	fn new(shader: Shader) -> Result<Self, AppError> {
+		Ok(Self {
 			random: rand::thread_rng(),
 			shader,
 		})
@@ -36,6 +79,7 @@ struct VertexPos2RGBA<T> {
 struct DemoState {
 	data: Rc<RefCell<Data>>,
 	ortho_matrix: Mat4<f32>,
+	// TODO should be a vek color
 	color: (f32, f32, f32),
 	remaining_time: Duration,
 	gl: Option<Rc<WebGl2RenderingContext>>,
@@ -44,7 +88,7 @@ struct DemoState {
 }
 
 impl DemoState {
-	fn new(data: Rc<RefCell<Data>>) -> DemoState {
+	fn new(data: Rc<RefCell<Data>>) -> Self {
 		let color = {
 			let data = data.clone();
 			let r = &mut data.borrow_mut().random;
@@ -55,7 +99,7 @@ impl DemoState {
 			)
 		};
 		let remaining_time = Duration::from_secs_f64(data.borrow_mut().random.gen_range(3.0..=5.0));
-		DemoState {
+		Self {
 			data,
 			ortho_matrix: Mat4::identity(),
 			color,
@@ -206,6 +250,9 @@ async fn main() {
 	panic::set_hook(Box::new(console_error_panic_hook::hook));
 	if let Err(e) = run_state_machine(|| {
 		Ok(Rc::new(RefCell::new(PendingFutureState::new(
+			Rc::new(RefCell::new(SolidColorState::new(Rgba::new(
+				0.2f32, 0.2f32, 0.2f32, 1.0f32,
+			)))),
 			|gl| async move {
 				let gl = gl.clone();
 				let (vertex_source, fragment_source) = try_join!(
