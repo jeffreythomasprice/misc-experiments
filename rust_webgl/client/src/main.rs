@@ -5,6 +5,7 @@ use gloo_console::*;
 use memoffset::offset_of;
 use rand::{rngs::ThreadRng, Rng};
 use std::panic;
+use vek::Extent2;
 use vek::FrustumPlanes;
 use vek::Mat4;
 use vek::Rgba;
@@ -53,12 +54,12 @@ impl DemoState {
 				r.gen_range(0f32..=1f32),
 			)
 		};
-		let remaining_time = data.borrow_mut().random.gen_range(3.0..=5.0);
+		let remaining_time = Duration::from_secs_f64(data.borrow_mut().random.gen_range(3.0..=5.0));
 		DemoState {
 			data,
 			ortho_matrix: Mat4::identity(),
 			color,
-			remaining_time: Duration::from_secs_f64(remaining_time),
+			remaining_time,
 			gl: None,
 			buffer: None,
 			vertex_array: None,
@@ -135,15 +136,15 @@ impl AppState for DemoState {
 		Ok(())
 	}
 
-	fn resize(&mut self, width: i32, height: i32) -> AppResult<()> {
+	fn resize(&mut self, size: Extent2<i32>) -> AppResult<()> {
 		let gl = self.gl.clone().unwrap();
 
-		gl.viewport(0, 0, width, height);
+		gl.viewport(0, 0, size.w, size.h);
 
 		self.ortho_matrix = Mat4::<f32>::orthographic_rh_zo(FrustumPlanes {
 			left: 0f32,
-			right: width as f32,
-			bottom: height as f32,
+			right: size.w as f32,
+			bottom: size.h as f32,
 			top: 0f32,
 			near: -1f32,
 			far: 1f32,

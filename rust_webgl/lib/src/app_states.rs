@@ -1,6 +1,7 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 use gloo_console::*;
+use vek::Extent2;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlContextAttributes, Window};
 
@@ -37,8 +38,7 @@ pub type AppStateHandle = Rc<RefCell<dyn AppState>>;
 pub trait AppState {
 	fn activate(&mut self, gl: Rc<WebGl2RenderingContext>) -> AppResult<()>;
 	fn deactivate(&mut self) -> AppResult<()>;
-	// TODO resize should be Extent2<u32>
-	fn resize(&mut self, width: i32, height: i32) -> AppResult<()>;
+	fn resize(&mut self, size: Extent2<i32>) -> AppResult<()>;
 	fn render(&mut self) -> AppResult<()>;
 	fn update(&mut self, time: Duration) -> AppResult<Option<AppStateHandle>>;
 }
@@ -111,7 +111,10 @@ where
 			canvas.set_height(height as u32);
 
 			let current_state = (**current_state).borrow_mut();
-			current_state.as_ref().borrow_mut().resize(width, height)?;
+			current_state
+				.as_ref()
+				.borrow_mut()
+				.resize(Extent2::new(width, height))?;
 
 			Ok(())
 		}
@@ -156,7 +159,7 @@ where
 					new_state
 						.as_ref()
 						.borrow_mut()
-						.resize(canvas.width() as i32, canvas.height() as i32)?;
+						.resize(Extent2::new(canvas.width() as i32, canvas.height() as i32))?;
 				}
 			}
 			last_time.replace(Some(now));

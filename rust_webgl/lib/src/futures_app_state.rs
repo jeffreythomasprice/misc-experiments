@@ -3,6 +3,7 @@ use std::{rc::Rc, time::Duration};
 use futures::Future;
 use gloo_console::*;
 use std::sync::mpsc::{self, Receiver};
+use vek::Extent2;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::WebGl2RenderingContext;
 
@@ -76,9 +77,9 @@ where
 		Ok(())
 	}
 
-	fn resize(&mut self, width: i32, height: i32) -> AppResult<()> {
+	fn resize(&mut self, size: Extent2<i32>) -> AppResult<()> {
 		let gl = self.gl.clone().unwrap();
-		gl.viewport(0, 0, width, height);
+		gl.viewport(0, 0, size.w, size.h);
 		Ok(())
 	}
 

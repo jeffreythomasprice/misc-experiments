@@ -177,13 +177,10 @@ dependencies = [
  "futures",
  "getrandom",
  "gloo-console",
- "js-sys",
  "lib",
  "memoffset",
  "rand",
  "vek",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -432,14 +429,9 @@ dependencies = [
 name = "lib"
 version = "0.1.0"
 dependencies = [
- "async-std",
- "console_error_panic_hook",
  "futures",
- "getrandom",
  "gloo-console",
  "js-sys",
- "memoffset",
- "rand",
  "vek",
  "wasm-bindgen",
  "wasm-bindgen-futures",
