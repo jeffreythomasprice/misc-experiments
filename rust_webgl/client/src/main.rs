@@ -79,8 +79,7 @@ struct VertexPos2RGBA<T> {
 struct DemoState {
 	data: Rc<RefCell<Data>>,
 	ortho_matrix: Mat4<f32>,
-	// TODO should be a vek color
-	color: (f32, f32, f32),
+	color: Rgba<f32>,
 	remaining_time: Duration,
 	gl: Option<Rc<WebGl2RenderingContext>>,
 	buffer: Option<Buffer>,
@@ -92,10 +91,11 @@ impl DemoState {
 		let color = {
 			let data = data.clone();
 			let r = &mut data.borrow_mut().random;
-			(
+			Rgba::new(
 				r.gen_range(0f32..=1f32),
 				r.gen_range(0f32..=1f32),
 				r.gen_range(0f32..=1f32),
+				1.0f32,
 			)
 		};
 		let remaining_time = Duration::from_secs_f64(data.borrow_mut().random.gen_range(3.0..=5.0));
@@ -200,8 +200,7 @@ impl AppState for DemoState {
 	fn render(&mut self) -> AppResult<()> {
 		let gl = self.gl.clone().unwrap();
 
-		let (red, green, blue) = self.color;
-		gl.clear_color(red, green, blue, 1f32);
+		gl.clear_color(self.color.r, self.color.g, self.color.b, self.color.a);
 		gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
 		let shader = &self.data.borrow().shader;
