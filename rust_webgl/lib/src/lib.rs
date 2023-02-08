@@ -1,5 +1,6 @@
 mod app_states;
 mod buffer;
+mod canvas_utils;
 mod dom_utils;
 mod fetch_utils;
 mod futures_app_state;
@@ -10,6 +11,7 @@ mod vertex_array;
 
 pub use crate::app_states::*;
 pub use crate::buffer::*;
+pub use crate::canvas_utils::*;
 pub use crate::dom_utils::*;
 pub use crate::fetch_utils::*;
 pub use crate::futures_app_state::*;
