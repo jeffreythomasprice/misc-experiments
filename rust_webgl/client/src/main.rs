@@ -8,6 +8,7 @@ use std::panic;
 use vek::Extent2;
 use vek::FrustumPlanes;
 use vek::Mat4;
+use vek::Rect;
 use vek::Rgba;
 use vek::Vec2;
 use wasm_bindgen::JsCast;
@@ -46,11 +47,11 @@ where
 struct Data {
 	random: ThreadRng,
 	shader: Shader,
-	texture: Texture,
+	texture: Texture2d,
 }
 
 impl Data {
-	fn new(shader: Shader, texture: Texture) -> Result<Self, AppError> {
+	fn new(shader: Shader, texture: Texture2d) -> Result<Self, AppError> {
 		Ok(Self {
 			random: rand::thread_rng(),
 			shader,
@@ -114,34 +115,36 @@ impl AppState for DemoState {
 		let buffer = Buffer::new(gl.clone(), BufferTarget::Array)?;
 		buffer.bind();
 		unsafe {
+			let size = self.data.borrow().texture.size();
+			let r = Rect::new(0f32, 0f32, size.w as f32, size.h as f32).into_aabr();
 			let data = vec![
 				VertexPos2Coord2RGBA {
-					pos: Vec2::new(50f32, 50f32),
+					pos: Vec2::new(r.min.x, r.min.y),
 					coord: Vec2::new(0f32, 0f32),
 					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
 				VertexPos2Coord2RGBA {
-					pos: Vec2::new(300f32, 50f32),
+					pos: Vec2::new(r.max.x, r.min.y),
 					coord: Vec2::new(1f32, 0f32),
 					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
 				VertexPos2Coord2RGBA {
-					pos: Vec2::new(300f32, 300f32),
+					pos: Vec2::new(r.max.x, r.max.y),
 					coord: Vec2::new(1f32, 1f32),
 					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
 				VertexPos2Coord2RGBA {
-					pos: Vec2::new(300f32, 300f32),
+					pos: Vec2::new(r.max.x, r.max.y),
 					coord: Vec2::new(1f32, 1f32),
 					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
 				VertexPos2Coord2RGBA {
-					pos: Vec2::new(50f32, 300f32),
+					pos: Vec2::new(r.min.x, r.max.y),
 					coord: Vec2::new(0f32, 1f32),
 					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
 				VertexPos2Coord2RGBA {
-					pos: Vec2::new(50f32, 50f32),
+					pos: Vec2::new(r.min.x, r.min.y),
 					coord: Vec2::new(0f32, 0f32),
 					color: Rgba::new(1f32, 1f32, 1f32, 1f32),
 				},
@@ -286,41 +289,8 @@ async fn main() {
 				)?;
 				let shader = Shader::new(gl.clone(), &vertex_source, &fragment_source)?;
 
-				let texture = {
-					let image = new_image_from_url("assets/bricks.png").await?;
-					let texture = Texture::new(gl.clone(), TextureTarget::Texture2d)?;
-					texture.bind();
-					gl.tex_parameteri(
-						texture.target(),
-						WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-						WebGl2RenderingContext::LINEAR as i32,
-					);
-					gl.tex_parameteri(
-						texture.target(),
-						WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-						WebGl2RenderingContext::LINEAR as i32,
-					);
-					gl.tex_parameteri(
-						texture.target(),
-						WebGl2RenderingContext::TEXTURE_WRAP_S,
-						WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-					);
-					gl.tex_parameteri(
-						texture.target(),
-						WebGl2RenderingContext::TEXTURE_WRAP_T,
-						WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-					);
-					gl.tex_image_2d_with_u32_and_u32_and_html_image_element(
-						texture.target(),
-						0,
-						WebGl2RenderingContext::RGBA.try_into().unwrap(),
-						WebGl2RenderingContext::RGBA,
-						WebGl2RenderingContext::UNSIGNED_BYTE,
-						&image,
-					)?;
-					texture.bind_none();
-					texture
-				};
+				let texture =
+					Texture2d::new_with_image_url(gl.clone(), "assets/bricks.png").await?;
 
 				let data = Rc::new(RefCell::new(Data::new(shader, texture)?));
 				let next_state = Rc::new(RefCell::new(DemoState::new(data)));
