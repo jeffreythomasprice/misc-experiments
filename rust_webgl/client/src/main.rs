@@ -46,14 +46,15 @@ where
 struct Data {
 	random: ThreadRng,
 	shader: Shader,
-	// TODO JEFF texture goes here
+	texture: Texture,
 }
 
 impl Data {
-	fn new(shader: Shader) -> Result<Self, AppError> {
+	fn new(shader: Shader, texture: Texture) -> Result<Self, AppError> {
 		Ok(Self {
 			random: rand::thread_rng(),
 			shader,
+			texture,
 		})
 	}
 }
@@ -72,7 +73,6 @@ struct DemoState {
 	gl: Option<Rc<WebGl2RenderingContext>>,
 	buffer: Option<Buffer>,
 	vertex_array: Option<VertexArray>,
-	texture: Option<Texture>,
 }
 
 impl DemoState {
@@ -96,7 +96,6 @@ impl DemoState {
 			gl: None,
 			buffer: None,
 			vertex_array: None,
-			texture: None,
 		}
 	}
 }
@@ -192,50 +191,6 @@ impl AppState for DemoState {
 		self.buffer = Some(buffer);
 		self.vertex_array = Some(vertex_array);
 
-		// TODO JEFF don't init texture here
-		self.texture = {
-			let source = new_canvas_image(Extent2::new(300, 300), |context, size| {
-				context.set_fill_style(&"red".into());
-				context.fill_rect(0f64, 0f64, size.w as f64, size.h as f64);
-				context.set_fill_style(&"blue".into());
-				context.fill_rect(50f64, 50f64, (size.w - 100) as f64, (size.h - 100) as f64);
-				Ok(())
-			})?;
-
-			let texture = Texture::new(gl.clone(), TextureTarget::Texture2d)?;
-			texture.bind();
-			gl.tex_parameteri(
-				texture.target(),
-				WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-				WebGl2RenderingContext::LINEAR as i32,
-			);
-			gl.tex_parameteri(
-				texture.target(),
-				WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-				WebGl2RenderingContext::LINEAR as i32,
-			);
-			gl.tex_parameteri(
-				texture.target(),
-				WebGl2RenderingContext::TEXTURE_WRAP_S,
-				WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-			);
-			gl.tex_parameteri(
-				texture.target(),
-				WebGl2RenderingContext::TEXTURE_WRAP_T,
-				WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
-			);
-			gl.tex_image_2d_with_u32_and_u32_and_html_canvas_element(
-				texture.target(),
-				0,
-				WebGl2RenderingContext::RGBA.try_into().unwrap(),
-				WebGl2RenderingContext::RGBA,
-				WebGl2RenderingContext::UNSIGNED_BYTE,
-				&source,
-			)?;
-			texture.bind_none();
-			Some(texture)
-		};
-
 		Ok(())
 	}
 
@@ -289,7 +244,7 @@ impl AppState for DemoState {
 		gl.active_texture(WebGl2RenderingContext::TEXTURE1);
 		gl.uniform1i(Some(&sampler_uniform.location), 1);
 
-		if let (Some(texture), Some(vertex_array)) = (&self.texture, &self.vertex_array) {
+		if let (texture, Some(vertex_array)) = (&self.data.borrow().texture, &self.vertex_array) {
 			texture.bind();
 
 			vertex_array.bind();
@@ -325,18 +280,49 @@ async fn main() {
 				0.2f32, 0.2f32, 0.2f32, 1.0f32,
 			)))),
 			|gl| async move {
-				let gl = gl.clone();
 				let (vertex_source, fragment_source) = try_join!(
 					fetch_string("assets/shader.vert"),
 					fetch_string("assets/shader.frag")
 				)?;
-				let shader = Shader::new(gl, &vertex_source, &fragment_source)?;
+				let shader = Shader::new(gl.clone(), &vertex_source, &fragment_source)?;
 
-				let image = new_image_from_url("assets/bricks.png").await?;
-				log!("TODO JEFF loaded image", image);
-				// TODO JEFF make texture from image
+				let texture = {
+					let image = new_image_from_url("assets/bricks.png").await?;
+					let texture = Texture::new(gl.clone(), TextureTarget::Texture2d)?;
+					texture.bind();
+					gl.tex_parameteri(
+						texture.target(),
+						WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+						WebGl2RenderingContext::LINEAR as i32,
+					);
+					gl.tex_parameteri(
+						texture.target(),
+						WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+						WebGl2RenderingContext::LINEAR as i32,
+					);
+					gl.tex_parameteri(
+						texture.target(),
+						WebGl2RenderingContext::TEXTURE_WRAP_S,
+						WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+					);
+					gl.tex_parameteri(
+						texture.target(),
+						WebGl2RenderingContext::TEXTURE_WRAP_T,
+						WebGl2RenderingContext::CLAMP_TO_EDGE as i32,
+					);
+					gl.tex_image_2d_with_u32_and_u32_and_html_image_element(
+						texture.target(),
+						0,
+						WebGl2RenderingContext::RGBA.try_into().unwrap(),
+						WebGl2RenderingContext::RGBA,
+						WebGl2RenderingContext::UNSIGNED_BYTE,
+						&image,
+					)?;
+					texture.bind_none();
+					texture
+				};
 
-				let data = Rc::new(RefCell::new(Data::new(shader)?));
+				let data = Rc::new(RefCell::new(Data::new(shader, texture)?));
 				let next_state = Rc::new(RefCell::new(DemoState::new(data)));
 				Ok::<AppStateHandle, AppError>(next_state)
 			},
