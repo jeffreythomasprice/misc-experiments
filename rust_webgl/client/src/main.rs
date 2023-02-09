@@ -275,6 +275,25 @@ async fn main() {
 	}
 }
 
+fn add_triangle_fan<'a, T: 'a, I>(
+	dst_vertices: &mut Vec<T>,
+	dst_indices: &mut Vec<u16>,
+	vertices: I,
+) where
+	I: Iterator<Item = &'a T>,
+	T: Copy,
+{
+	let first_index = dst_vertices.len();
+	dst_vertices.extend(vertices);
+	let len = dst_vertices.len() - first_index;
+	dst_indices.reserve((len - 2) * 3);
+	for i in (first_index + 1)..(first_index + len - 1) {
+		dst_indices.push(first_index as u16);
+		dst_indices.push(i as u16);
+		dst_indices.push((i + 1) as u16);
+	}
+}
+
 fn add_rect(
 	vertices: &mut Vec<VertexPos2Coord2RGBA<f32>>,
 	indices: &mut Vec<u16>,
@@ -282,37 +301,37 @@ fn add_rect(
 	texture_coordinate_bounds: Aabr<f32>,
 	color: Rgba<f32>,
 ) {
-	let i = vertices.len() as u16;
-	vertices.push(VertexPos2Coord2RGBA {
-		pos: bounds.min,
-		coord: texture_coordinate_bounds.min,
-		color,
-	});
-	vertices.push(VertexPos2Coord2RGBA {
-		pos: Vec2::new(bounds.min.x, bounds.max.y),
-		coord: Vec2::new(
-			texture_coordinate_bounds.min.x,
-			texture_coordinate_bounds.max.y,
-		),
-		color,
-	});
-	vertices.push(VertexPos2Coord2RGBA {
-		pos: bounds.max,
-		coord: texture_coordinate_bounds.max,
-		color,
-	});
-	vertices.push(VertexPos2Coord2RGBA {
-		pos: Vec2::new(bounds.max.x, bounds.min.y),
-		coord: Vec2::new(
-			texture_coordinate_bounds.max.x,
-			texture_coordinate_bounds.min.y,
-		),
-		color,
-	});
-	indices.push(i + 0);
-	indices.push(i + 1);
-	indices.push(i + 2);
-	indices.push(i + 2);
-	indices.push(i + 3);
-	indices.push(i + 0);
+	add_triangle_fan(
+		vertices,
+		indices,
+		vec![
+			VertexPos2Coord2RGBA {
+				pos: bounds.min,
+				coord: texture_coordinate_bounds.min,
+				color,
+			},
+			VertexPos2Coord2RGBA {
+				pos: Vec2::new(bounds.min.x, bounds.max.y),
+				coord: Vec2::new(
+					texture_coordinate_bounds.min.x,
+					texture_coordinate_bounds.max.y,
+				),
+				color,
+			},
+			VertexPos2Coord2RGBA {
+				pos: bounds.max,
+				coord: texture_coordinate_bounds.max,
+				color,
+			},
+			VertexPos2Coord2RGBA {
+				pos: Vec2::new(bounds.max.x, bounds.min.y),
+				coord: Vec2::new(
+					texture_coordinate_bounds.max.x,
+					texture_coordinate_bounds.min.y,
+				),
+				color,
+			},
+		]
+		.iter(),
+	);
 }
