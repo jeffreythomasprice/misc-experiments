@@ -5,11 +5,9 @@ use gloo_console::*;
 use memoffset::offset_of;
 use rand::{rngs::ThreadRng, Rng};
 use std::panic;
-use vek::Aabr;
 use vek::Extent2;
 use vek::FrustumPlanes;
 use vek::Mat4;
-use vek::Rect;
 use vek::Rgba;
 use vek::Vec2;
 use web_sys::WebGl2RenderingContext;
@@ -48,9 +46,7 @@ struct DemoState {
 	color: Rgba<f32>,
 	remaining_time: Duration,
 	gl: Option<Rc<WebGl2RenderingContext>>,
-	array_buffer: Option<Buffer>,
-	element_array_buffer: Option<Buffer>,
-	vertex_array: Option<VertexArray>,
+	mesh: Option<Mesh<VertexPos2Coord2RGBA<f32>>>,
 }
 
 impl DemoState {
@@ -72,9 +68,7 @@ impl DemoState {
 			color,
 			remaining_time,
 			gl: None,
-			array_buffer: None,
-			element_array_buffer: None,
-			vertex_array: None,
+			mesh: None,
 		}
 	}
 }
@@ -90,71 +84,69 @@ impl AppState for DemoState {
 			&shader.get_attributes_by_name()["texture_coordinate_attribute"];
 		let color_attribute = &shader.get_attributes_by_name()["color_attribute"];
 
-		let array_buffer = Buffer::new(gl.clone(), BufferTarget::Array)?;
-		array_buffer.bind();
-		let element_array_buffer = Buffer::new(gl.clone(), BufferTarget::ElementArray)?;
-		element_array_buffer.bind();
-		unsafe {
+		// TODO JEFF should be able to infer vertex type
+		let mut mesh = Mesh::<VertexPos2Coord2RGBA<f32>>::new(
+			gl.clone(),
+			[
+				VertexAttribute::new::<VertexPos2Coord2RGBA<f32>>(
+					position_attribute,
+					2,
+					VertexAttributeDataType::Float,
+					false,
+					offset_of!(VertexPos2Coord2RGBA<f32>, pos),
+				),
+				VertexAttribute::new::<VertexPos2Coord2RGBA<f32>>(
+					texture_coordinate_attribute,
+					2,
+					VertexAttributeDataType::Float,
+					false,
+					offset_of!(VertexPos2Coord2RGBA<f32>, coord),
+				),
+				VertexAttribute::new::<VertexPos2Coord2RGBA<f32>>(
+					color_attribute,
+					4,
+					VertexAttributeDataType::Float,
+					false,
+					offset_of!(VertexPos2Coord2RGBA<f32>, color),
+				),
+			]
+			// TODO JEFF should be able to do from_iter or whatever?
+			.iter(),
+		)?;
+		{
 			let size = self.data.borrow().texture.size();
-			let mut vertices = Vec::new();
-			let mut indices = Vec::new();
-			add_rect(
-				&mut vertices,
-				&mut indices,
-				Rect::new(0f32, 0f32, size.w as f32, size.h as f32).into_aabr(),
-				Rect::new(0f32, 0f32, 1f32, 1f32).into_aabr(),
-				Rgba::new(1f32, 1f32, 1f32, 1f32),
+			let color = Rgba::new(1f32, 1f32, 1f32, 1f32);
+			mesh.add_triangle_fan(
+				[
+					VertexPos2Coord2RGBA {
+						pos: Vec2::new(0f32, 0f32),
+						coord: Vec2::new(0f32, 0f32),
+						color,
+					},
+					VertexPos2Coord2RGBA {
+						pos: Vec2::new(size.w as f32, 0f32),
+						coord: Vec2::new(1f32, 0f32),
+						color,
+					},
+					VertexPos2Coord2RGBA {
+						pos: Vec2::new(size.w as f32, size.h as f32),
+						coord: Vec2::new(1f32, 1f32),
+						color,
+					},
+					VertexPos2Coord2RGBA {
+						pos: Vec2::new(0f32, size.h as f32),
+						coord: Vec2::new(0f32, 1f32),
+						color,
+					},
+				]
+				// TODO JEFF should be able to do from_iter or whatever?
+				.iter(),
 			);
-			gl.buffer_data_with_array_buffer_view(
-				WebGl2RenderingContext::ARRAY_BUFFER,
-				&vertices.as_uint8array(),
-				WebGl2RenderingContext::STATIC_DRAW,
-			);
-			gl.buffer_data_with_array_buffer_view(
-				WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
-				&indices.as_uint8array(),
-				WebGl2RenderingContext::STATIC_DRAW,
-			)
+			unsafe {
+				mesh.flush();
+			}
 		}
-		array_buffer.bind_none();
-		element_array_buffer.bind_none();
-
-		let vertex_array = VertexArray::new(gl.clone())?;
-		vertex_array.bind();
-		array_buffer.bind();
-		gl.enable_vertex_attrib_array(position_attribute.location);
-		gl.vertex_attrib_pointer_with_i32(
-			position_attribute.location,
-			2,
-			WebGl2RenderingContext::FLOAT,
-			false,
-			std::mem::size_of::<VertexPos2Coord2RGBA<f32>>() as i32,
-			offset_of!(VertexPos2Coord2RGBA<f32>, pos) as i32,
-		);
-		gl.enable_vertex_attrib_array(texture_coordinate_attribute.location);
-		gl.vertex_attrib_pointer_with_i32(
-			texture_coordinate_attribute.location,
-			2,
-			WebGl2RenderingContext::FLOAT,
-			false,
-			std::mem::size_of::<VertexPos2Coord2RGBA<f32>>() as i32,
-			offset_of!(VertexPos2Coord2RGBA<f32>, coord) as i32,
-		);
-		gl.enable_vertex_attrib_array(color_attribute.location);
-		gl.vertex_attrib_pointer_with_i32(
-			color_attribute.location,
-			4,
-			WebGl2RenderingContext::FLOAT,
-			false,
-			std::mem::size_of::<VertexPos2Coord2RGBA<f32>>() as i32,
-			offset_of!(VertexPos2Coord2RGBA<f32>, color) as i32,
-		);
-		array_buffer.bind_none();
-		vertex_array.bind_none();
-
-		self.array_buffer = Some(array_buffer);
-		self.element_array_buffer = Some(element_array_buffer);
-		self.vertex_array = Some(vertex_array);
+		self.mesh = Some(mesh);
 
 		Ok(())
 	}
@@ -209,23 +201,18 @@ impl AppState for DemoState {
 		gl.active_texture(WebGl2RenderingContext::TEXTURE1);
 		gl.uniform1i(Some(&sampler_uniform.location), 1);
 
-		if let (texture, Some(vertex_array), Some(element_array_buffer)) = (
-			&self.data.borrow().texture,
-			&self.vertex_array,
-			&self.element_array_buffer,
-		) {
+		if let (texture, Some(mesh)) = (&self.data.borrow().texture, &self.mesh) {
 			texture.bind();
 
-			vertex_array.bind();
-			element_array_buffer.bind();
+			mesh.bind();
 			gl.draw_elements_with_i32(
 				WebGl2RenderingContext::TRIANGLES,
+				// TODO JEFF based on number of indices in mesh
 				6,
 				WebGl2RenderingContext::UNSIGNED_SHORT,
 				0,
 			);
-			element_array_buffer.bind_none();
-			vertex_array.bind_none();
+			mesh.bind_none();
 
 			texture.bind_none();
 		}
@@ -273,65 +260,4 @@ async fn main() {
 	}) {
 		error!(format!("fatal {e:?}"))
 	}
-}
-
-fn add_triangle_fan<'a, T: 'a, I>(
-	dst_vertices: &mut Vec<T>,
-	dst_indices: &mut Vec<u16>,
-	vertices: I,
-) where
-	I: Iterator<Item = &'a T>,
-	T: Copy,
-{
-	let first_index = dst_vertices.len();
-	dst_vertices.extend(vertices);
-	let len = dst_vertices.len() - first_index;
-	dst_indices.reserve((len - 2) * 3);
-	for i in (first_index + 1)..(first_index + len - 1) {
-		dst_indices.push(first_index as u16);
-		dst_indices.push(i as u16);
-		dst_indices.push((i + 1) as u16);
-	}
-}
-
-fn add_rect(
-	vertices: &mut Vec<VertexPos2Coord2RGBA<f32>>,
-	indices: &mut Vec<u16>,
-	bounds: Aabr<f32>,
-	texture_coordinate_bounds: Aabr<f32>,
-	color: Rgba<f32>,
-) {
-	add_triangle_fan(
-		vertices,
-		indices,
-		vec![
-			VertexPos2Coord2RGBA {
-				pos: bounds.min,
-				coord: texture_coordinate_bounds.min,
-				color,
-			},
-			VertexPos2Coord2RGBA {
-				pos: Vec2::new(bounds.min.x, bounds.max.y),
-				coord: Vec2::new(
-					texture_coordinate_bounds.min.x,
-					texture_coordinate_bounds.max.y,
-				),
-				color,
-			},
-			VertexPos2Coord2RGBA {
-				pos: bounds.max,
-				coord: texture_coordinate_bounds.max,
-				color,
-			},
-			VertexPos2Coord2RGBA {
-				pos: Vec2::new(bounds.max.x, bounds.min.y),
-				coord: Vec2::new(
-					texture_coordinate_bounds.max.x,
-					texture_coordinate_bounds.min.y,
-				),
-				color,
-			},
-		]
-		.iter(),
-	);
 }
