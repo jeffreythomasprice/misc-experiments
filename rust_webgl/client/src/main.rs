@@ -10,6 +10,7 @@ use vek::FrustumPlanes;
 use vek::Mat4;
 use vek::Rgba;
 use vek::Vec2;
+use web_sys::HtmlCanvasElement;
 use web_sys::WebGl2RenderingContext;
 
 use lib::*;
@@ -201,6 +202,12 @@ impl AppState for DemoState {
 		gl.active_texture(WebGl2RenderingContext::TEXTURE1);
 		gl.uniform1i(Some(&sampler_uniform.location), 1);
 
+		gl.blend_func(
+			WebGl2RenderingContext::SRC_ALPHA,
+			WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
+		);
+		gl.enable(WebGl2RenderingContext::BLEND);
+
 		if let (texture, Some(mesh)) = (&self.data.borrow().texture, &self.mesh) {
 			texture.bind();
 
@@ -216,6 +223,8 @@ impl AppState for DemoState {
 
 			texture.bind_none();
 		}
+
+		gl.disable(WebGl2RenderingContext::BLEND);
 
 		shader.bind_none();
 
@@ -249,8 +258,9 @@ async fn main() {
 				)?;
 				let shader = Shader::new(gl.clone(), &vertex_source, &fragment_source)?;
 
-				let texture =
-					Texture2d::new_with_image_url(gl.clone(), "assets/bricks.png").await?;
+				// let texture =
+				// 	Texture2d::new_with_image_url(gl.clone(), "assets/bricks.png").await?;
+				let texture = Texture2d::new_with_canvas(gl.clone(), &new_test_image()?)?;
 
 				let data = Rc::new(RefCell::new(Data::new(shader, texture)?));
 				let next_state = Rc::new(RefCell::new(DemoState::new(data)));
@@ -260,4 +270,64 @@ async fn main() {
 	}) {
 		error!(format!("fatal {e:?}"))
 	}
+}
+
+// TODO JEFF rename me, should take some generating params
+fn new_test_image() -> Result<HtmlCanvasElement, AppError> {
+	new_canvas_image(Extent2::new(512, 512), |context, size| {
+		let edge_size = 0.43f64;
+		let corner_size = 0.28f64;
+		// 1 = edge_size + corner_size * 2 + outside_size * 2
+		let outside_size = 1f64 - edge_size - corner_size * 2f64;
+
+		let t1 = outside_size;
+		let t2 = outside_size + corner_size;
+		let t3 = 0.5f64;
+		let t4 = 1f64 - outside_size - corner_size;
+		let t5 = 1f64 - outside_size;
+
+		let x1 = size.w as f64 * t1;
+		let x2 = size.w as f64 * t2;
+		let x3 = size.w as f64 * t3;
+		let x4 = size.w as f64 * t4;
+		let x5 = size.w as f64 * t5;
+
+		let y1 = size.h as f64 * t1;
+		let y2 = size.h as f64 * t2;
+		let y3 = size.h as f64 * t3;
+		let y4 = size.h as f64 * t4;
+		let y5 = size.h as f64 * t5;
+
+		let gradient = context.create_radial_gradient(
+			x3,
+			y3,
+			0f64,
+			x3,
+			y3,
+			std::cmp::max(size.w, size.h) as f64 * 0.5f64,
+		)?;
+		gradient.add_color_stop(0f32, "#5c81e6")?;
+		gradient.add_color_stop(1f32, "#114df2")?;
+
+		context.clear_rect(0f64, 0f64, size.w as f64, size.h as f64);
+
+		let radius = std::cmp::max(size.w, size.h) as f64 * corner_size;
+		context.begin_path();
+		context.move_to(x1, y2);
+		context.arc_to(x1, y1, x2, y1, radius)?;
+		context.line_to(x4, y1);
+		context.arc_to(x5, y1, x5, y2, radius)?;
+		context.line_to(x5, y4);
+		context.arc_to(x5, y5, x4, y5, radius)?;
+		context.line_to(x2, y5);
+		context.arc_to(x1, y5, x1, y4, radius)?;
+		context.close_path();
+		context.set_fill_style(&gradient);
+		context.fill();
+		context.set_stroke_style(&"black".into());
+		context.set_line_width(5f64);
+		context.stroke();
+
+		Ok(())
+	})
 }
