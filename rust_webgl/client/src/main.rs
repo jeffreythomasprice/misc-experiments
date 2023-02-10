@@ -5,11 +5,15 @@ use gloo_console::*;
 use memoffset::offset_of;
 use rand::{rngs::ThreadRng, Rng};
 use std::panic;
+use vek::Aabr;
 use vek::Extent2;
 use vek::FrustumPlanes;
 use vek::Mat4;
+use vek::Rect;
 use vek::Rgba;
 use vek::Vec2;
+use wasm_bindgen::JsValue;
+use web_sys::CanvasRenderingContext2d;
 use web_sys::HtmlCanvasElement;
 use web_sys::WebGl2RenderingContext;
 
@@ -274,55 +278,38 @@ async fn main() {
 
 // TODO JEFF rename me, should take some generating params
 fn new_test_image() -> Result<HtmlCanvasElement, AppError> {
-	new_canvas_image(Extent2::new(512, 512), |context, size| {
-		let edge_size = 0.43f64;
-		let corner_size = 0.28f64;
-		// 1 = edge_size + corner_size * 2 + outside_size * 2
-		let outside_size = 1f64 - edge_size - corner_size * 2f64;
+	new_canvas_image(Extent2::new(800, 800), |context, size| {
+		let bounds = Rect::new(0, 0, size.w, size.h)
+			.as_::<f64, f64>()
+			.into_aabr();
 
-		let t1 = outside_size;
-		let t2 = outside_size + corner_size;
-		let t3 = 0.5f64;
-		let t4 = 1f64 - outside_size - corner_size;
-		let t5 = 1f64 - outside_size;
-
-		let x1 = size.w as f64 * t1;
-		let x2 = size.w as f64 * t2;
-		let x3 = size.w as f64 * t3;
-		let x4 = size.w as f64 * t4;
-		let x5 = size.w as f64 * t5;
-
-		let y1 = size.h as f64 * t1;
-		let y2 = size.h as f64 * t2;
-		let y3 = size.h as f64 * t3;
-		let y4 = size.h as f64 * t4;
-		let y5 = size.h as f64 * t5;
-
-		let gradient = context.create_radial_gradient(
-			x3,
-			y3,
-			0f64,
-			x3,
-			y3,
-			std::cmp::max(size.w, size.h) as f64 * 0.5f64,
+		let checkerboard = new_checkerboard_image(
+			Extent2::new(size.w / 4, size.h / 4),
+			Extent2::new(size.w as f64 / 8f64, size.h as f64 / 8f64),
+			&"#ffa552".into(),
+			&"#212354".into(),
 		)?;
-		gradient.add_color_stop(0f32, "#5c81e6")?;
-		gradient.add_color_stop(1f32, "#114df2")?;
+		let pattern = context
+			.create_pattern_with_html_canvas_element(&checkerboard, "repeat")?
+			.ok_or("failed to make pattern")?;
 
 		context.clear_rect(0f64, 0f64, size.w as f64, size.h as f64);
 
-		let radius = std::cmp::max(size.w, size.h) as f64 * corner_size;
-		context.begin_path();
-		context.move_to(x1, y2);
-		context.arc_to(x1, y1, x2, y1, radius)?;
-		context.line_to(x4, y1);
-		context.arc_to(x5, y1, x5, y2, radius)?;
-		context.line_to(x5, y4);
-		context.arc_to(x5, y5, x4, y5, radius)?;
-		context.line_to(x2, y5);
-		context.arc_to(x1, y5, x1, y4, radius)?;
-		context.close_path();
-		context.set_fill_style(&gradient);
+		let corner_radius = if bounds.size().w < bounds.size().h {
+			bounds.size().w
+		} else {
+			bounds.size().h
+		} * 0.28f64;
+		let rounded_rect_bounds = {
+			let inner_size = bounds.size() * 0.97f64;
+			let offset = (bounds.size() - inner_size) * 0.5f64;
+			Aabr {
+				min: bounds.min + offset,
+				max: bounds.max - offset,
+			}
+		};
+		rounded_rect(context, rounded_rect_bounds, corner_radius)?;
+		context.set_fill_style(&pattern);
 		context.fill();
 		context.set_stroke_style(&"black".into());
 		context.set_line_width(5f64);
@@ -330,4 +317,78 @@ fn new_test_image() -> Result<HtmlCanvasElement, AppError> {
 
 		Ok(())
 	})
+}
+
+fn new_checkerboard_image(
+	size: Extent2<u32>,
+	tile_size: Extent2<f64>,
+	fill_style_0: &JsValue,
+	fill_style_1: &JsValue,
+) -> Result<HtmlCanvasElement, AppError> {
+	new_canvas_image(size, |context, size| {
+		context.clear_rect(0f64, 0f64, size.w as f64, size.h as f64);
+
+		let mut x = 0f64;
+		let mut first_style_index_on_row = 0;
+		while x < size.w as f64 {
+			let mut y = 0f64;
+			let mut style_index = first_style_index_on_row;
+			while y < size.h as f64 {
+				context.set_fill_style(if style_index == 0 {
+					fill_style_0
+				} else {
+					fill_style_1
+				});
+				context.fill_rect(x, y, tile_size.w, tile_size.h);
+				y += tile_size.h;
+				style_index = (style_index + 1) % 2;
+			}
+			x += tile_size.w;
+			first_style_index_on_row = (first_style_index_on_row + 1) % 2;
+		}
+
+		Ok(())
+	})
+}
+
+fn rounded_rect(
+	context: &CanvasRenderingContext2d,
+	rect: Aabr<f64>,
+	corner_radius: f64,
+) -> Result<(), AppError> {
+	context.begin_path();
+	context.move_to(rect.min.x, rect.min.x + corner_radius);
+	context.arc_to(
+		rect.min.x,
+		rect.min.y,
+		rect.min.x + corner_radius,
+		rect.min.y,
+		corner_radius,
+	)?;
+	context.line_to(rect.max.x - corner_radius, rect.min.y);
+	context.arc_to(
+		rect.max.x,
+		rect.min.y,
+		rect.max.x,
+		rect.min.y + corner_radius,
+		corner_radius,
+	)?;
+	context.line_to(rect.max.x, rect.max.y - corner_radius);
+	context.arc_to(
+		rect.max.x,
+		rect.max.y,
+		rect.max.x - corner_radius,
+		rect.max.y,
+		corner_radius,
+	)?;
+	context.line_to(rect.min.x + corner_radius, rect.max.y);
+	context.arc_to(
+		rect.min.x,
+		rect.max.y,
+		rect.min.x,
+		rect.max.y - corner_radius,
+		corner_radius,
+	)?;
+	context.close_path();
+	Ok(())
 }

@@ -21,6 +21,7 @@ features = [
 	"WebGl2RenderingContext",
 	"CanvasRenderingContext2d",
 	"CanvasGradient",
+	"CanvasPattern",
 ]
 
 [dependencies.getrandom]
