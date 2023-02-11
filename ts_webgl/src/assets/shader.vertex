@@ -1,0 +1,15 @@
+attribute vec2 positionAttribute;
+attribute vec2 textureCoordinateAttribute;
+attribute vec4 colorAttribute;
+
+uniform mat4 projectionMatrixUniform;
+uniform mat4 modelviewMatrixUniform;
+
+varying vec2 textureCoordinateVarying;
+varying vec4 colorVarying;
+
+void main() {
+	gl_Position = projectionMatrixUniform * modelviewMatrixUniform * vec4(positionAttribute, 0, 1);
+	textureCoordinateVarying = textureCoordinateAttribute;
+	colorVarying = colorAttribute;
+}
