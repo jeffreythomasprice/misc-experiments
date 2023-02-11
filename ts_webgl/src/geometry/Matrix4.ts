@@ -71,6 +71,25 @@ export class Matrix4 {
 		);
 	}
 
+	/**
+	 * @param position the point where the camera is
+	 * @param target a point that will be in the center of the camera's view
+	 * @param up a vector that points along the camera's local up axis
+	 */
+	static createLookAt(position: Vector3, target: Vector3, up: Vector3): Matrix4 {
+		const f = target.sub(position).normalized;
+		up = up.normalized;
+		const s = f.cross(up).normalized;
+		const u = s.cross(f).normalized;
+		return new Matrix4(
+			s.x, u.x, -f.x, 0,
+			s.y, u.y, -f.y, 0,
+			s.z, u.z, -f.z, 0,
+			0, 0, 0, 1,
+		)
+			.mul(Matrix4.createTranslation(position.negated));
+	}
+
 	toArray(): number[] {
 		return [
 			this.d00, this.d10, this.d20, this.d30,

@@ -36,10 +36,15 @@ class DemoState implements AppState {
 	private arrayBuffer?: WebGLBuffer;
 	private vertexArray?: VertexArray;
 
-	async activate(gl: WebGL2RenderingContext) {
+	private rotation = 0;
+
+	activate(gl: WebGL2RenderingContext) {
 		this.shader = new Shader(gl, shaderVertexSource, shaderFragmentSource);
 
-		this.texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
+		loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url))
+			.then((texture) => {
+				this.texture = texture;
+			});
 
 		this.arrayBuffer = new WebGLBuffer(gl, WebGLBuffer.Target.Array);
 		this.arrayBuffer.bufferData(
@@ -105,8 +110,6 @@ class DemoState implements AppState {
 		this.perspectiveMatrix = Matrix4.createPerspective(60 * Math.PI / 180, size.width, size.height, 1, 1000);
 	}
 
-	private rotation = 0;
-
 	render(gl: WebGL2RenderingContext): void {
 		gl.viewport(0, 0, this.size.width, this.size.height);
 
@@ -131,9 +134,15 @@ class DemoState implements AppState {
 		gl.uniformMatrix4fv(
 			this.shader.uniforms.get("modelviewMatrixUniform")!.location,
 			false,
-			Matrix4.identity
-				.rotate(new Vector3(0, 1, 0), this.rotation)
-				.translate(new Vector3(0, 0, -6))
+			Matrix4.createLookAt(
+				new Vector3(
+					Math.cos(this.rotation) * 6,
+					0,
+					Math.sin(this.rotation) * 6,
+				),
+				new Vector3(0, 0, 0),
+				new Vector3(0, 1, 0),
+			)
 				.toArray()
 		);
 
