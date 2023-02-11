@@ -121,17 +121,23 @@ class DemoState implements AppState {
 	private orthoMatrix = Matrix4.identity;
 	private perspectiveMatrix = Matrix4.identity;
 	private shader?: Shader;
+	private texture?: Texture2d;
 	private arrayBuffer?: WebGLBuffer;
 	private vertexArray?: VertexArray;
 
 	private rotation = 0;
 
-	constructor(
-		private readonly texture: Texture2d
-	) { }
+	// constructor(
+	// 	private readonly texture: Texture2d
+	// ) { }
 
 	activate(gl: WebGL2RenderingContext): void {
 		this.shader = new Shader(gl, shaderVertexSource, shaderFragmentSource);
+
+		loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url))
+			.then((texture) => {
+				this.texture = texture;
+			});
 
 		this.arrayBuffer = new WebGLBuffer(gl, WebGLBuffer.Target.Array);
 		this.arrayBuffer.bufferData(
@@ -163,16 +169,21 @@ class DemoState implements AppState {
 			WebGLBuffer.Usage.StaticDraw
 		);
 
-		const stride = Float32Array.BYTES_PER_ELEMENT * 9;
+		// TODO helper for organizing data in packed form
+		// TODO mesh helper
+		const positionSizeInBytes = Float32Array.BYTES_PER_ELEMENT * 3;
+		const textureCoordinateSizeInBytes = Float32Array.BYTES_PER_ELEMENT * 2;
+		const colorSizeInBytes = Float32Array.BYTES_PER_ELEMENT * 4;
+		const stride = positionSizeInBytes + textureCoordinateSizeInBytes + colorSizeInBytes;
 		const positionOffset = 0;
-		const textureCoordinateOffset = Float32Array.BYTES_PER_ELEMENT * 3;
-		const colorOffset = textureCoordinateOffset + Float32Array.BYTES_PER_ELEMENT * 2;
+		const textureCoordinateOffset = positionOffset + positionSizeInBytes;
+		const colorOffset = textureCoordinateOffset + textureCoordinateSizeInBytes;
 		this.vertexArray = new VertexArray(gl);
 		this.vertexArray.bind();
 		this.arrayBuffer.bind();
 		const positionAttribute = this.shader.attributes.get("positionAttribute")!.location;
 		gl.enableVertexAttribArray(positionAttribute);
-		gl.vertexAttribPointer(positionAttribute, 2, gl.FLOAT, false, stride, positionOffset);
+		gl.vertexAttribPointer(positionAttribute, 3, gl.FLOAT, false, stride, positionOffset);
 		const textureCoordinateAttribute = this.shader.attributes.get("textureCoordinateAttribute")!.location;
 		gl.enableVertexAttribArray(textureCoordinateAttribute);
 		gl.vertexAttribPointer(textureCoordinateAttribute, 2, gl.FLOAT, false, stride, textureCoordinateOffset);
@@ -204,12 +215,13 @@ class DemoState implements AppState {
 		gl.clearColor(0.25, 0.5, 0.75, 1);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 
-		if (!this.shader || !this.vertexArray) {
+		if (!this.shader || !this.texture || !this.vertexArray) {
 			return;
 		}
 
 		this.shader.use();
 
+		// TODO prove I know how textures work by using non-0
 		gl.activeTexture(gl.TEXTURE0);
 		this.texture.bind();
 		gl.uniform1i(this.shader.uniforms.get("samplerUniform")!.location, 0);
@@ -249,11 +261,15 @@ class DemoState implements AppState {
 	}
 }
 
-run(new AsyncOperationState(
-	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
-	async (gl) => {
-		// TODO JEFF somehow moving texture before state init broke everything?
-		const texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
-		return new DemoState(texture);
-	},
-));
+// TODO use the async state generator
+
+run(new DemoState());
+
+// run(new AsyncOperationState(
+// 	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
+// 	async (gl) => {
+// 		// TODO JEFF somehow moving texture before state init broke everything?
+// 		const texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
+// 		return new DemoState(texture);
+// 	},
+// ));
