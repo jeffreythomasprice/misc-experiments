@@ -5,6 +5,10 @@ export class Vector3 {
 		readonly z: number,
 	) { }
 
+	toString(): string {
+		return `(${this.x}, ${this.y}, ${this.z})`;
+	}
+
 	get negated(): Vector3 {
 		return new Vector3(
 			-this.x,

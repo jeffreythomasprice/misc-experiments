@@ -1,18 +1,16 @@
 import { Vector2 } from "./Vector2";
 
-export class Size2 extends Vector2 {
+export class Size2 {
 	constructor(
-		width: number,
-		height: number,
-	) {
-		super(width, height);
+		readonly width: number,
+		readonly height: number,
+	) { }
+
+	toString(): string {
+		return `(${this.width} x ${this.height})`;
 	}
 
-	get width() {
-		return this.x;
-	}
-
-	get height() {
-		return this.y;
+	get toVector(): Vector2 {
+		return new Vector2(this.width, this.height);
 	}
 }

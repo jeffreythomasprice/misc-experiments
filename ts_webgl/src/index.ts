@@ -1,7 +1,7 @@
 import shaderVertexSource from "bundle-text:./assets/shader.vertex";
 import shaderFragmentSource from "bundle-text:./assets/shader.fragment";
 
-import { Matrix4, Size2, Vector3 } from "./geometry";
+import { Matrix4, Rgba, Size2, Vector3 } from "./geometry";
 import { AppState, run } from "./state-machine";
 import { Shader, Buffer as WebGLBuffer, VertexArray, Texture2d } from "./webgl";
 
@@ -27,24 +27,111 @@ async function loadTextureFromURL(gl: WebGL2RenderingContext, url: URL): Promise
 	return result;
 }
 
+// TODO move me
+class SolidColorState implements AppState {
+	private size = new Size2(0, 0);
+
+	constructor(readonly color: Rgba) { }
+
+	activate(_gl: WebGL2RenderingContext): void {
+		// nothing to do
+	}
+
+	deactivate(): void {
+		// nothing to do
+	}
+
+	resize(size: Size2): void {
+		this.size = size;
+	}
+
+	render(gl: WebGL2RenderingContext): void {
+		gl.viewport(0, 0, this.size.width, this.size.height);
+		gl.clearColor(this.color.red, this.color.green, this.color.blue, this.color.alpha);
+		gl.clear(gl.COLOR_BUFFER_BIT);
+	}
+
+	update(_elapsedTime: number): AppState | null | undefined {
+		return null;
+	}
+}
+
+// TODO move me
+class AsyncOperationState implements AppState {
+	private isActive = false;
+	private nextState: AppState | null = null;
+
+	constructor(
+		private readonly wrappedState: AppState,
+		private readonly factory: (gl: WebGL2RenderingContext) => Promise<AppState>
+	) { }
+
+	activate(gl: WebGL2RenderingContext): void {
+		this.wrappedState.activate(gl);
+		this.isActive = true;
+		this.factory(gl)
+			.then((nextState) => {
+				if (this.isActive) {
+					// TODO logger
+					console.log("pending operation completed, advancing states");
+					this.nextState = nextState;
+				} else {
+					// TODO logger
+					console.warn("pending operation completed, but this state is no longer active, can't transition");
+				}
+			})
+			.catch((e) => {
+				// TODO logger
+				console.error("pending operation failed", e);
+			});
+	}
+
+	deactivate(): void {
+		this.wrappedState.deactivate();
+		this.isActive = false;
+		this.nextState = null;
+	}
+
+	resize(size: Size2): void {
+		this.wrappedState.resize(size);
+	}
+
+	render(gl: WebGL2RenderingContext): void {
+		this.wrappedState.render(gl);
+	}
+
+	update(elapsedTime: number): AppState | null | undefined {
+		const next = this.wrappedState.update(elapsedTime);
+		if (next) {
+			// TODO logger
+			console.log("while waiting for pending operation to complete the wrapped state signaled it wants to transition to a new state, using that instead");
+			return next;
+		}
+		if (this.nextState) {
+			// TODO logger
+			console.log("transitioning to the result of the pending operation");
+			return this.nextState;
+		}
+		return null;
+	}
+}
+
 class DemoState implements AppState {
 	private size = new Size2(0, 0);
 	private orthoMatrix = Matrix4.identity;
 	private perspectiveMatrix = Matrix4.identity;
 	private shader?: Shader;
-	private texture?: Texture2d;
 	private arrayBuffer?: WebGLBuffer;
 	private vertexArray?: VertexArray;
 
 	private rotation = 0;
 
-	activate(gl: WebGL2RenderingContext) {
-		this.shader = new Shader(gl, shaderVertexSource, shaderFragmentSource);
+	constructor(
+		private readonly texture: Texture2d
+	) { }
 
-		loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url))
-			.then((texture) => {
-				this.texture = texture;
-			});
+	activate(gl: WebGL2RenderingContext): void {
+		this.shader = new Shader(gl, shaderVertexSource, shaderFragmentSource);
 
 		this.arrayBuffer = new WebGLBuffer(gl, WebGLBuffer.Target.Array);
 		this.arrayBuffer.bufferData(
@@ -102,6 +189,7 @@ class DemoState implements AppState {
 	deactivate(): void {
 		this.shader?.dispose();
 		this.arrayBuffer?.dispose();
+		this.vertexArray?.dispose();
 	}
 
 	resize(size: Size2): void {
@@ -116,7 +204,7 @@ class DemoState implements AppState {
 		gl.clearColor(0.25, 0.5, 0.75, 1);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 
-		if (!this.shader || !this.texture || !this.vertexArray) {
+		if (!this.shader || !this.vertexArray) {
 			return;
 		}
 
@@ -161,4 +249,11 @@ class DemoState implements AppState {
 	}
 }
 
-run(new DemoState());
+run(new AsyncOperationState(
+	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
+	async (gl) => {
+		// TODO JEFF somehow moving texture before state init broke everything?
+		const texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
+		return new DemoState(texture);
+	},
+));
