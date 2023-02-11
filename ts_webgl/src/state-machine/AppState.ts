@@ -6,5 +6,8 @@ export interface AppState {
 	deactivate(): MaybePromise<void>;
 	resize(size: Size2): MaybePromise<void>;
 	render(gl: WebGL2RenderingContext): MaybePromise<void>;
-	update(time: number): MaybePromise<AppState | undefined | null>;
+	/**
+	 * @param elapsedTime the time since the last call to update, in seconds
+	 */
+	update(elapsedTime: number): MaybePromise<AppState | undefined | null>;
 }

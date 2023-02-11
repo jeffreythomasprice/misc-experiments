@@ -50,6 +50,7 @@ export function run(initialState: AppState) {
 		window.addEventListener("resize", resize);
 		await resize();
 
+		let lastTime: number | null = null;
 		const animate = async (time: number) => {
 			try {
 				currentState.render(gl);
@@ -57,28 +58,35 @@ export function run(initialState: AppState) {
 				// TODO logger
 				console.error("error invoking render on current state", e);
 			}
-			let newState;
-			try {
-				newState = await awaitIfNeeded(currentState.update(time));
-			} catch (e) {
-				// TODO logger
-				console.error("error invoking update on current state", e);
-			}
-			if (newState && newState !== currentState) {
+
+			if (lastTime) {
+				const elapsedTime = (time - lastTime) / 1000;
+				let newState;
 				try {
-					await awaitIfNeeded(newState.activate(gl));
+					newState = await awaitIfNeeded(currentState.update(elapsedTime));
 				} catch (e) {
 					// TODO logger
-					console.error("error invoking activate on new state", e);
+					console.error("error invoking update on current state", e);
 				}
-				try {
-					await awaitIfNeeded(currentState.deactivate());
-				} catch (e) {
-					// TODO logger
-					console.error("error invoking deactivate on old state", e);
+
+				if (newState && newState !== currentState) {
+					try {
+						await awaitIfNeeded(newState.activate(gl));
+					} catch (e) {
+						// TODO logger
+						console.error("error invoking activate on new state", e);
+					}
+					try {
+						await awaitIfNeeded(currentState.deactivate());
+					} catch (e) {
+						// TODO logger
+						console.error("error invoking deactivate on old state", e);
+					}
+					currentState = newState;
 				}
-				currentState = newState;
 			}
+			lastTime = time;
+
 			requestAnimationFrame(animate);
 		};
 		requestAnimationFrame(animate);
