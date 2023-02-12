@@ -1,9 +1,10 @@
 export * from "./AppState";
 
 import { Size2 } from "../geometry";
+import { Logger } from "../utils";
 import { AppState } from "./AppState";
 
-export function run(initialState: AppState) {
+export function run(logger: Logger, initialState: AppState) {
 	window.addEventListener("DOMContentLoaded", async () => {
 		const canvas = document.createElement("canvas");
 		canvas.style.position = "absolute";
@@ -30,8 +31,7 @@ export function run(initialState: AppState) {
 		try {
 			currentState.activate(gl);
 		} catch (e) {
-			// TODO logger
-			console.error("error invoking activate on initial state", e);
+			logger.error("error invoking activate on initial state", e);
 		}
 
 		let currentSize: Size2;
@@ -42,8 +42,7 @@ export function run(initialState: AppState) {
 				canvas.height = currentSize.height;
 				currentState.resize(currentSize);
 			} catch (e) {
-				// TODO logger
-				console.error("error invoking resize on current state", e);
+				logger.error("error invoking resize on current state", e);
 			}
 		};
 		window.addEventListener("resize", resize);
@@ -54,8 +53,7 @@ export function run(initialState: AppState) {
 			try {
 				currentState.render(gl);
 			} catch (e) {
-				// TODO logger
-				console.error("error invoking render on current state", e);
+				logger.error("error invoking render on current state", e);
 			}
 
 			if (lastTime) {
@@ -64,22 +62,19 @@ export function run(initialState: AppState) {
 				try {
 					newState = currentState.update(elapsedTime);
 				} catch (e) {
-					// TODO logger
-					console.error("error invoking update on current state", e);
+					logger.error("error invoking update on current state", e);
 				}
 
 				if (newState && newState !== currentState) {
 					try {
 						newState.activate(gl);
 					} catch (e) {
-						// TODO logger
-						console.error("error invoking activate on new state", e);
+						logger.error("error invoking activate on new state", e);
 					}
 					try {
 						currentState.deactivate();
 					} catch (e) {
-						// TODO logger
-						console.error("error invoking deactivate on old state", e);
+						logger.error("error invoking deactivate on old state", e);
 					}
 					currentState = newState;
 					resize();

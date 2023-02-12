@@ -4,6 +4,7 @@ import shaderFragmentSource from "bundle-text:./assets/shader.fragment";
 import { Matrix4, Rgba, Size2, Vector3 } from "./geometry";
 import { AppState, run } from "./state-machine";
 import { Shader, Buffer as WebGLBuffer, VertexArray, Texture2d } from "./webgl";
+import { Logger } from "./utils";
 
 // TODO move me
 function loadImageFromURL(url: URL): Promise<HTMLImageElement> {
@@ -62,6 +63,7 @@ class AsyncOperationState implements AppState {
 	private nextState: AppState | null = null;
 
 	constructor(
+		private readonly logger: Logger,
 		private readonly wrappedState: AppState,
 		private readonly factory: (gl: WebGL2RenderingContext) => Promise<AppState>
 	) { }
@@ -72,17 +74,14 @@ class AsyncOperationState implements AppState {
 		this.factory(gl)
 			.then((nextState) => {
 				if (this.isActive) {
-					// TODO logger
-					console.log("pending operation completed, advancing states");
+					logger.debug("pending operation completed, advancing states");
 					this.nextState = nextState;
 				} else {
-					// TODO logger
-					console.warn("pending operation completed, but this state is no longer active, can't transition");
+					logger.warn("pending operation completed, but this state is no longer active, can't transition");
 				}
 			})
 			.catch((e) => {
-				// TODO logger
-				console.error("pending operation failed", e);
+				logger.error("pending operation failed", e);
 			});
 	}
 
@@ -103,13 +102,11 @@ class AsyncOperationState implements AppState {
 	update(elapsedTime: number): AppState | null | undefined {
 		const next = this.wrappedState.update(elapsedTime);
 		if (next) {
-			// TODO logger
-			console.log("while waiting for pending operation to complete the wrapped state signaled it wants to transition to a new state, using that instead");
+			logger.debug("while waiting for pending operation to complete the wrapped state signaled it wants to transition to a new state, using that instead");
 			return next;
 		}
 		if (this.nextState) {
-			// TODO logger
-			console.log("transitioning to the result of the pending operation");
+			logger.debug("transitioning to the result of the pending operation");
 			return this.nextState;
 		}
 		return null;
@@ -127,6 +124,7 @@ class DemoState implements AppState {
 	private rotation = 0;
 
 	constructor(
+		private readonly logger: Logger,
 		private readonly texture: Texture2d
 	) { }
 
@@ -215,7 +213,6 @@ class DemoState implements AppState {
 
 		this.shader.use();
 
-		// TODO prove I know how textures work by using non-0
 		gl.activeTexture(gl.TEXTURE0);
 		this.texture.bind();
 		gl.uniform1i(this.shader.uniforms.get("samplerUniform")!.location, 0);
@@ -255,10 +252,17 @@ class DemoState implements AppState {
 	}
 }
 
-run(new AsyncOperationState(
-	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
-	async (gl) => {
-		const texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
-		return new DemoState(texture);
-	},
-));
+const logger = new Logger();
+logger.level = Logger.Level.Debug;
+
+run(
+	logger,
+	new AsyncOperationState(
+		logger,
+		new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
+		async (gl) => {
+			const texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
+			return new DemoState(logger, texture);
+		},
+	)
+);
