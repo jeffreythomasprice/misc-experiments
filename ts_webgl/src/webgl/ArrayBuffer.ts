@@ -1,5 +1,5 @@
 import { DirtyRegionTracker, Disposable } from "../utils";
-import { StructWriter } from "./StructWriter";
+import { StructIO } from "./StructIO";
 import { Buffer as WebGLBuffer } from "./Buffer";
 
 export class ArrayBuffer<T> extends Disposable {
@@ -11,7 +11,7 @@ export class ArrayBuffer<T> extends Disposable {
 
 	constructor(
 		gl: WebGL2RenderingContext,
-		readonly writer: StructWriter<T>,
+		readonly io: StructIO<T>,
 	) {
 		super();
 
@@ -20,7 +20,7 @@ export class ArrayBuffer<T> extends Disposable {
 	}
 
 	get stride(): number {
-		return this.writer.def.stride;
+		return this.io.def.stride;
 	}
 
 	/**
@@ -46,6 +46,21 @@ export class ArrayBuffer<T> extends Disposable {
 		this.localBuffer = newBuffer;
 	}
 
+	get(index: number): T {
+		if (index < 0 || index >= this.size) {
+			throw new Error(`index ${index} out of bounds, size ${this.size}`);
+		}
+		return this.io.read(this.localBuffer, this.stride * index);
+	}
+
+	set(index: number, value: T): void {
+		if (index < 0 || index >= this.size) {
+			throw new Error(`index ${index} out of bounds, size ${this.size}`);
+		}
+		this.io.write(this.localBuffer, this.stride * index, value);
+		this.dirty.add(index);
+	}
+
 	push(...vertices: T[]): void {
 		if (vertices.length === 0) {
 			return;
@@ -55,7 +70,7 @@ export class ArrayBuffer<T> extends Disposable {
 			this.size + vertices.length - 1
 		);
 		this.ensureCapacity(this.size + vertices.length);
-		this.writer.update(
+		this.io.update(
 			this.localBuffer,
 			this.size * this.stride,
 			...vertices
@@ -64,6 +79,7 @@ export class ArrayBuffer<T> extends Disposable {
 	}
 
 	flush() {
+		this.glBuffer.bind();
 		const range = this.dirty.clear();
 		if (!range) {
 			return;
@@ -75,6 +91,7 @@ export class ArrayBuffer<T> extends Disposable {
 			const length = (range.max - range.min + 1) * this.stride;
 			this.glBuffer.subData(offset, this.localBuffer, offset, length);
 		}
+		this.glBuffer.bindNone();
 	}
 
 	bind() {
@@ -82,11 +99,11 @@ export class ArrayBuffer<T> extends Disposable {
 			this.flush();
 		}
 		this.glBuffer.bind();
-		this.writer.def.enable();
+		this.io.def.enable();
 	}
 
 	bindNone() {
-		this.writer.def.disable();
+		this.io.def.disable();
 		this.glBuffer.bindNone();
 	}
 

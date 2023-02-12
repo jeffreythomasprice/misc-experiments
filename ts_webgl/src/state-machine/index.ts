@@ -1,4 +1,5 @@
 export * from "./AppState";
+export * from "./AsyncOperationState";
 
 import { Size2 } from "../geometry";
 import { Logger } from "../utils";

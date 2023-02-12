@@ -1,34 +1,59 @@
 import shaderVertexSource from "bundle-text:./assets/shader.vertex";
 import shaderFragmentSource from "bundle-text:./assets/shader.fragment";
 
-import { Matrix4, Rgba, Size2, Vector2, Vector3 } from "./geometry";
-import { AppState, run } from "./state-machine";
-import { Shader, VertexArray, Texture2d, VertexDefinition, StructWriter, ArrayBuffer, ElementArrayBuffer } from "./webgl";
-import { Logger } from "./utils";
+import { Matrix4, Rgba, Size2, Vector2, Vector3, Vector4 } from "./geometry";
+import { AppState, AsyncOperationState, run } from "./state-machine";
+import { Shader, VertexArray, Texture2d, VertexDefinition, StructIO, ArrayBuffer, ElementArrayBuffer } from "./webgl";
+import { Disposable, Logger } from "./utils";
 
-// TODO move me
-function loadImageFromURL(url: URL): Promise<HTMLImageElement> {
-	return new Promise((resolve, reject) => {
-		const result = document.createElement("img");
-		result.addEventListener("load", () => {
-			resolve(result);
-		});
-		result.addEventListener("error", () => {
-			reject(new Error(`failed to load from ${url}`));
-		});
-		result.src = url.toString();
-	});
+class Vertex {
+	constructor(
+		readonly position: Vector3,
+		readonly textureCoordinate: Vector2,
+		readonly color: Rgba,
+	) { }
 }
 
-// TODO should be part of texture
-async function loadTextureFromURL(gl: WebGL2RenderingContext, url: URL): Promise<Texture2d> {
-	const image = await loadImageFromURL(url);
-	const result = new Texture2d(gl);
-	result.texImage(0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-	return result;
+class VertexWriter extends StructIO<Vertex> {
+	read(source: Buffer, offset: number): Vertex {
+		const x = source.readFloatLE(offset);
+		offset += 4;
+		const y = source.readFloatLE(offset);
+		offset += 4;
+		const z = source.readFloatLE(offset);
+		offset += 4;
+		const tx = source.readFloatLE(offset);
+		offset += 4;
+		const ty = source.readFloatLE(offset);
+		offset += 4;
+		const r = source.readFloatLE(offset);
+		offset += 4;
+		const g = source.readFloatLE(offset);
+		offset += 4;
+		const b = source.readFloatLE(offset);
+		offset += 4;
+		const a = source.readFloatLE(offset);
+		offset += 4;
+		return new Vertex(
+			new Vector3(x, y, z),
+			new Vector2(tx, ty),
+			new Rgba(r, g, b, a),
+		);
+	}
+
+	write(destination: Buffer, offset: number, source: Vertex): void {
+		offset = destination.writeFloatLE(source.position.x, offset);
+		offset = destination.writeFloatLE(source.position.y, offset);
+		offset = destination.writeFloatLE(source.position.z, offset);
+		offset = destination.writeFloatLE(source.textureCoordinate.x, offset);
+		offset = destination.writeFloatLE(source.textureCoordinate.y, offset);
+		offset = destination.writeFloatLE(source.color.red, offset);
+		offset = destination.writeFloatLE(source.color.green, offset);
+		offset = destination.writeFloatLE(source.color.blue, offset);
+		offset = destination.writeFloatLE(source.color.alpha, offset);
+	}
 }
 
-// TODO move me
 class SolidColorState implements AppState {
 	private size = new Size2(0, 0);
 
@@ -58,86 +83,73 @@ class SolidColorState implements AppState {
 }
 
 // TODO move me
-class AsyncOperationState implements AppState {
-	private isActive = false;
-	private nextState: AppState | null = null;
+class Mesh<T> extends Disposable {
+	readonly arrayBuffer: ArrayBuffer<T>;
+	readonly elementArrayBuffer: ElementArrayBuffer;
 
-	private readonly logger: Logger;
+	private readonly vertexArray: VertexArray;
 
 	constructor(
-		private readonly wrappedState: AppState,
-		private readonly factory: (gl: WebGL2RenderingContext) => Promise<AppState>
+		gl: WebGL2RenderingContext,
+		writer: StructIO<T>,
 	) {
-		this.logger = new Logger({
-			prefix: "async-op-state",
-		});
+		super();
+
+		this.arrayBuffer = new ArrayBuffer(gl, writer);
+		this.elementArrayBuffer = new ElementArrayBuffer(gl);
+		this.vertexArray = new VertexArray(gl);
+
+		this.vertexArray.bind();
+		this.arrayBuffer.bind();
+		this.elementArrayBuffer.bind();
+		this.vertexArray.bindNone();
+		this.arrayBuffer.bindNone();
+		this.elementArrayBuffer.bindNone();
 	}
 
-	activate(gl: WebGL2RenderingContext): void {
-		this.wrappedState.activate(gl);
-		this.isActive = true;
-		this.factory(gl)
-			.then((nextState) => {
-				if (this.isActive) {
-					this.logger.debug("pending operation completed, advancing states");
-					this.nextState = nextState;
-				} else {
-					this.logger.warn("pending operation completed, but this state is no longer active, can't transition");
-				}
-			})
-			.catch((e) => {
-				this.logger.error("pending operation failed", e);
-			});
+	bind() {
+		this.arrayBuffer.flush();
+		this.elementArrayBuffer.flush();
+		this.vertexArray.bind();
 	}
 
-	deactivate(): void {
-		this.wrappedState.deactivate();
-		this.isActive = false;
-		this.nextState = null;
+	bindNone() {
+		this.vertexArray.bindNone();
 	}
 
-	resize(size: Size2): void {
-		this.wrappedState.resize(size);
-	}
-
-	render(gl: WebGL2RenderingContext): void {
-		this.wrappedState.render(gl);
-	}
-
-	update(elapsedTime: number): AppState | null | undefined {
-		const next = this.wrappedState.update(elapsedTime);
-		if (next) {
-			this.logger.debug("while waiting for pending operation to complete the wrapped state signaled it wants to transition to a new state, using that instead");
-			return next;
+	triangleFan(...vertices: T[]) {
+		if (vertices.length < 3) {
+			throw new Error("can't make a triangle fan with fewer than three vertices");
 		}
-		if (this.nextState) {
-			this.logger.debug("transitioning to the result of the pending operation");
-			return this.nextState;
+		const first = this.arrayBuffer.size;
+		this.arrayBuffer.push(...vertices);
+		this.elementArrayBuffer.ensureCapacity((vertices.length - 2) * 3);
+		for (let i = 1; i < vertices.length - 1; i++) {
+			this.elementArrayBuffer.push(first, i, i + 1);
 		}
-		return null;
+	}
+
+	protected disposeImpl(): void {
+		this.arrayBuffer.dispose();
+		this.elementArrayBuffer.dispose();
+		this.vertexArray.dispose();
 	}
 }
 
-class Vertex {
-	constructor(
-		readonly position: Vector3,
-		readonly textureCoordinate: Vector2,
-		readonly color: Rgba,
-	) { }
+// TODO move me
+function clamp(value: number, min: number, max: number): number {
+	if (value < min) {
+		return min;
+	}
+	if (value > max) {
+		return max;
+	}
+	return value;
 }
 
-class VertexWriter extends StructWriter<Vertex> {
-	write(destination: Buffer, offset: number, source: Vertex): void {
-		offset = destination.writeFloatLE(source.position.x, offset);
-		offset = destination.writeFloatLE(source.position.y, offset);
-		offset = destination.writeFloatLE(source.position.z, offset);
-		offset = destination.writeFloatLE(source.textureCoordinate.x, offset);
-		offset = destination.writeFloatLE(source.textureCoordinate.y, offset);
-		offset = destination.writeFloatLE(source.color.red, offset);
-		offset = destination.writeFloatLE(source.color.green, offset);
-		offset = destination.writeFloatLE(source.color.blue, offset);
-		offset = destination.writeFloatLE(source.color.alpha, offset);
-	}
+// TODO move me
+function wrap(value: number, min: number, max: number): number {
+	return ((value - min) % (max - min)) + min;
 }
 
 class DemoState implements AppState {
@@ -145,11 +157,10 @@ class DemoState implements AppState {
 	private orthoMatrix = Matrix4.identity;
 	private perspectiveMatrix = Matrix4.identity;
 	private shader?: Shader;
-	private arrayBuffer?: ArrayBuffer<Vertex>;
-	private elementArrayBuffer?: ElementArrayBuffer;
-	private vertexArray?: VertexArray;
+	private mesh?: Mesh<Vertex>;
 
 	private rotation = 0;
+	private color = 0;
 
 	constructor(
 		private readonly texture: Texture2d,
@@ -176,8 +187,8 @@ class DemoState implements AppState {
 			})
 			.build();
 
-		this.arrayBuffer = new ArrayBuffer(gl, new VertexWriter(vertexDef));
-		this.arrayBuffer.push(
+		this.mesh = new Mesh(gl, new VertexWriter(vertexDef));
+		this.mesh.triangleFan(
 			new Vertex(
 				new Vector3(-1, -1, 0),
 				new Vector2(0, 0),
@@ -199,27 +210,11 @@ class DemoState implements AppState {
 				new Rgba(1, 1, 1, 1),
 			),
 		);
-		this.elementArrayBuffer = new ElementArrayBuffer(gl);
-		this.elementArrayBuffer.push(
-			0, 1, 2,
-			2, 3, 0,
-		);
-
-		// TODO mesh helper
-		this.vertexArray = new VertexArray(gl);
-		this.vertexArray.bind();
-		this.arrayBuffer.bind();
-		this.elementArrayBuffer.bind();
-		this.vertexArray.bindNone();
-		this.arrayBuffer.bindNone();
-		this.elementArrayBuffer.bindNone();
 	}
 
 	deactivate(): void {
 		this.shader?.dispose();
-		this.arrayBuffer?.dispose();
-		this.elementArrayBuffer?.dispose();
-		this.vertexArray?.dispose();
+		this.mesh?.dispose();
 	}
 
 	resize(size: Size2): void {
@@ -234,7 +229,7 @@ class DemoState implements AppState {
 		gl.clearColor(0.25, 0.5, 0.75, 1);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 
-		if (!this.shader || !this.texture || !this.vertexArray) {
+		if (!this.shader || !this.mesh) {
 			return;
 		}
 
@@ -264,9 +259,9 @@ class DemoState implements AppState {
 				.toArray()
 		);
 
-		this.vertexArray.bind();
+		this.mesh.bind();
 		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-		this.vertexArray.bindNone();
+		this.mesh.bindNone();
 
 		this.texture.bindNone();
 
@@ -274,7 +269,23 @@ class DemoState implements AppState {
 	}
 
 	update(elapsedTime: number): AppState | null | undefined {
-		this.rotation = (this.rotation + 45 * Math.PI / 180 * elapsedTime) % (Math.PI * 2);
+		this.rotation = wrap(this.rotation + 45 * Math.PI / 180 * elapsedTime, 0, Math.PI * 2);
+		this.color = wrap(this.color + elapsedTime * 0.1, 0, 1);
+
+		if (this.mesh) {
+			const color1 = new Rgba(1, 0, 0, 1);
+			const color2 = new Rgba(0, 0, 1, 1);
+			const color = color1.toVector.mul(this.color).add(color2.toVector.mul(1 - this.color)).toRgba;
+			for (let i = 0; i < this.mesh.arrayBuffer.size; i++) {
+				const v = this.mesh.arrayBuffer.get(i);
+				this.mesh.arrayBuffer.set(i, new Vertex(
+					v.position,
+					v.textureCoordinate,
+					color
+				));
+			}
+		}
+
 		return null;
 	}
 }
@@ -284,7 +295,7 @@ Logger.defaultLevel = Logger.Level.Debug;
 run(new AsyncOperationState(
 	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
 	async (gl) => {
-		const texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
+		const texture = await Texture2d.createFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
 		return new DemoState(texture);
 	},
 ));

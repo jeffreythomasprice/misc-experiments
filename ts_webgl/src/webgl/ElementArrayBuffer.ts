@@ -44,6 +44,21 @@ export class ElementArrayBuffer extends Disposable {
 		this.localBuffer = newBuffer;
 	}
 
+	get(index: number): number {
+		if (index < 0 || index >= this.size) {
+			throw new Error(`index ${index} out of bounds, size ${this.size}`);
+		}
+		return new Uint16Array(this.localBuffer.buffer)[index];
+	}
+
+	set(index: number, value: number): void {
+		if (index < 0 || index >= this.size) {
+			throw new Error(`index ${index} out of bounds, size ${this.size}`);
+		}
+		new Uint16Array(this.localBuffer.buffer)[index] = value;
+		this.dirty.add(index);
+	}
+
 	push(...indices: number[]): void {
 		if (indices.length === 0) {
 			return;
@@ -58,6 +73,7 @@ export class ElementArrayBuffer extends Disposable {
 	}
 
 	flush() {
+		this.glBuffer.bind();
 		const range = this.dirty.clear();
 		if (!range) {
 			return;
@@ -69,6 +85,7 @@ export class ElementArrayBuffer extends Disposable {
 			const length = (range.max - range.min + 1) * this.stride;
 			this.glBuffer.subData(offset, this.localBuffer, offset, length);
 		}
+		this.glBuffer.bindNone();
 	}
 
 	bind() {

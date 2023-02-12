@@ -1,9 +1,16 @@
 import { Size2 } from "../geometry";
-import { Disposable } from "../utils";
+import { Disposable, loadImageFromURL } from "../utils";
 
 export class Texture2d extends Disposable {
 	private readonly texture: WebGLTexture;
 	private size_: Size2;
+
+	static async createFromURL(gl: WebGL2RenderingContext, url: URL): Promise<Texture2d> {
+		const image = await loadImageFromURL(url);
+		const result = new Texture2d(gl);
+		result.texImage(0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+		return result;
+	}
 
 	constructor(
 		private readonly gl: WebGL2RenderingContext,
