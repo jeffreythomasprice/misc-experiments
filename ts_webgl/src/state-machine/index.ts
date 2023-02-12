@@ -82,6 +82,7 @@ export function run(initialState: AppState) {
 						console.error("error invoking deactivate on old state", e);
 					}
 					currentState = newState;
+					resize();
 				}
 			}
 			lastTime = time;

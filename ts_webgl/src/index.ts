@@ -121,23 +121,17 @@ class DemoState implements AppState {
 	private orthoMatrix = Matrix4.identity;
 	private perspectiveMatrix = Matrix4.identity;
 	private shader?: Shader;
-	private texture?: Texture2d;
 	private arrayBuffer?: WebGLBuffer;
 	private vertexArray?: VertexArray;
 
 	private rotation = 0;
 
-	// constructor(
-	// 	private readonly texture: Texture2d
-	// ) { }
+	constructor(
+		private readonly texture: Texture2d
+	) { }
 
 	activate(gl: WebGL2RenderingContext): void {
 		this.shader = new Shader(gl, shaderVertexSource, shaderFragmentSource);
-
-		loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url))
-			.then((texture) => {
-				this.texture = texture;
-			});
 
 		this.arrayBuffer = new WebGLBuffer(gl, WebGLBuffer.Target.Array);
 		this.arrayBuffer.bufferData(
@@ -261,15 +255,10 @@ class DemoState implements AppState {
 	}
 }
 
-// TODO use the async state generator
-
-run(new DemoState());
-
-// run(new AsyncOperationState(
-// 	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
-// 	async (gl) => {
-// 		// TODO JEFF somehow moving texture before state init broke everything?
-// 		const texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
-// 		return new DemoState(texture);
-// 	},
-// ));
+run(new AsyncOperationState(
+	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
+	async (gl) => {
+		const texture = await loadTextureFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
+		return new DemoState(texture);
+	},
+));
