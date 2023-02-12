@@ -1,6 +1,7 @@
 import { Shader } from "./Shader";
 
 export interface VertexDefinition {
+	get stride(): number;
 	enable(): void;
 	disable(): void;
 }
@@ -138,7 +139,7 @@ class VertexDefinitionImpl implements VertexDefinition {
 
 	constructor(
 		private readonly gl: WebGL2RenderingContext,
-		private readonly stride: number,
+		readonly stride: number,
 		...attributes: Attribute[]
 	) {
 		this.attributes = [...attributes];

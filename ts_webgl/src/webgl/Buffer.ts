@@ -53,6 +53,16 @@ export class Buffer extends Disposable {
 		this.bindNone();
 	}
 
+	subData(dstByteOffset: GLintptr, srcData: BufferSource): void;
+	subData(dstByteOffset: GLintptr, srcData: ArrayBufferView, srcOffset: GLuint, length?: GLuint): void;
+	subData(dstByteOffset: GLintptr, srcData: BufferSource | ArrayBufferView, srcOffset?: GLuint, length?: GLuint): void {
+		if (srcOffset === undefined) {
+			this.gl.bufferSubData(this.target, dstByteOffset, srcData);
+		} else {
+			this.gl.bufferSubData(this.target, dstByteOffset, srcData as ArrayBufferView, srcOffset, length);
+		}
+	}
+
 	protected disposeImpl(): void {
 		this.gl.deleteBuffer(this.buffer);
 	}

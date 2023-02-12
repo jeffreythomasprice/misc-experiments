@@ -1,9 +1,9 @@
 import shaderVertexSource from "bundle-text:./assets/shader.vertex";
 import shaderFragmentSource from "bundle-text:./assets/shader.fragment";
 
-import { Matrix4, Rgba, Size2, Vector3 } from "./geometry";
+import { Matrix4, Rgba, Size2, Vector2, Vector3 } from "./geometry";
 import { AppState, run } from "./state-machine";
-import { Shader, Buffer as WebGLBuffer, VertexArray, Texture2d, VertexDefinition } from "./webgl";
+import { Shader, VertexArray, Texture2d, VertexDefinition, StructWriter, ArrayBuffer, ElementArrayBuffer } from "./webgl";
 import { Logger } from "./utils";
 
 // TODO move me
@@ -118,12 +118,35 @@ class AsyncOperationState implements AppState {
 	}
 }
 
+class Vertex {
+	constructor(
+		readonly position: Vector3,
+		readonly textureCoordinate: Vector2,
+		readonly color: Rgba,
+	) { }
+}
+
+class VertexWriter extends StructWriter<Vertex> {
+	write(destination: Buffer, offset: number, source: Vertex): void {
+		offset = destination.writeFloatLE(source.position.x, offset);
+		offset = destination.writeFloatLE(source.position.y, offset);
+		offset = destination.writeFloatLE(source.position.z, offset);
+		offset = destination.writeFloatLE(source.textureCoordinate.x, offset);
+		offset = destination.writeFloatLE(source.textureCoordinate.y, offset);
+		offset = destination.writeFloatLE(source.color.red, offset);
+		offset = destination.writeFloatLE(source.color.green, offset);
+		offset = destination.writeFloatLE(source.color.blue, offset);
+		offset = destination.writeFloatLE(source.color.alpha, offset);
+	}
+}
+
 class DemoState implements AppState {
 	private size = new Size2(0, 0);
 	private orthoMatrix = Matrix4.identity;
 	private perspectiveMatrix = Matrix4.identity;
 	private shader?: Shader;
-	private arrayBuffer?: WebGLBuffer;
+	private arrayBuffer?: ArrayBuffer<Vertex>;
+	private elementArrayBuffer?: ElementArrayBuffer;
 	private vertexArray?: VertexArray;
 
 	private rotation = 0;
@@ -134,36 +157,6 @@ class DemoState implements AppState {
 
 	activate(gl: WebGL2RenderingContext): void {
 		this.shader = new Shader(gl, shaderVertexSource, shaderFragmentSource);
-
-		this.arrayBuffer = new WebGLBuffer(gl, WebGLBuffer.Target.Array);
-		this.arrayBuffer.bufferData(
-			new Float32Array([
-				-1, -1, 0,
-				0, 1,
-				1, 1, 1, 1,
-
-				1, -1, 0,
-				1, 1,
-				1, 1, 1, 1,
-
-				1, 1, 0,
-				1, 0,
-				1, 1, 1, 1,
-
-				1, 1, 0,
-				1, 0,
-				1, 1, 1, 1,
-
-				-1, 1, 0,
-				0, 0,
-				1, 1, 1, 1,
-
-				-1, -1, 0,
-				0, 1,
-				1, 1, 1, 1,
-			]),
-			WebGLBuffer.Usage.StaticDraw
-		);
 
 		const vertexDef = new VertexDefinition.Builder(gl, this.shader)
 			.attribute("positionAttribute", (builder) => {
@@ -183,19 +176,49 @@ class DemoState implements AppState {
 			})
 			.build();
 
+		this.arrayBuffer = new ArrayBuffer(gl, new VertexWriter(vertexDef));
+		this.arrayBuffer.push(
+			new Vertex(
+				new Vector3(-1, -1, 0),
+				new Vector2(0, 0),
+				new Rgba(1, 1, 1, 1),
+			),
+			new Vertex(
+				new Vector3(1, -1, 0),
+				new Vector2(1, 0),
+				new Rgba(1, 1, 1, 1),
+			),
+			new Vertex(
+				new Vector3(1, 1, 0),
+				new Vector2(1, 1),
+				new Rgba(1, 1, 1, 1),
+			),
+			new Vertex(
+				new Vector3(-1, 1, 0),
+				new Vector2(0, 1),
+				new Rgba(1, 1, 1, 1),
+			),
+		);
+		this.elementArrayBuffer = new ElementArrayBuffer(gl);
+		this.elementArrayBuffer.push(
+			0, 1, 2,
+			2, 3, 0,
+		);
+
 		// TODO mesh helper
 		this.vertexArray = new VertexArray(gl);
 		this.vertexArray.bind();
 		this.arrayBuffer.bind();
-		vertexDef.enable();
+		this.elementArrayBuffer.bind();
 		this.vertexArray.bindNone();
 		this.arrayBuffer.bindNone();
-		vertexDef.disable();
+		this.elementArrayBuffer.bindNone();
 	}
 
 	deactivate(): void {
 		this.shader?.dispose();
 		this.arrayBuffer?.dispose();
+		this.elementArrayBuffer?.dispose();
 		this.vertexArray?.dispose();
 	}
 
@@ -242,7 +265,7 @@ class DemoState implements AppState {
 		);
 
 		this.vertexArray.bind();
-		gl.drawArrays(gl.TRIANGLES, 0, 6);
+		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
 		this.vertexArray.bindNone();
 
 		this.texture.bindNone();
