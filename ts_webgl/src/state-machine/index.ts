@@ -4,7 +4,11 @@ import { Size2 } from "../geometry";
 import { Logger } from "../utils";
 import { AppState } from "./AppState";
 
-export function run(logger: Logger, initialState: AppState) {
+export function run(initialState: AppState) {
+	const logger = new Logger({
+		prefix: "state-machine",
+	});
+
 	window.addEventListener("DOMContentLoaded", async () => {
 		const canvas = document.createElement("canvas");
 		canvas.style.position = "absolute";

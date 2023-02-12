@@ -1,25 +1,15 @@
 import { Disposable } from "../utils";
 
 export class Buffer extends Disposable {
-	private readonly glTarget: number;
 	private readonly buffer: WebGLBuffer;
+
+	private byteLength_ = 0;
 
 	constructor(
 		private readonly gl: WebGL2RenderingContext,
-		target: Buffer.Target,
+		private readonly target: Buffer.Target,
 	) {
 		super();
-
-		switch (target) {
-			case Buffer.Target.Array:
-				this.glTarget = gl.ARRAY_BUFFER;
-				break;
-			case Buffer.Target.ElementArray:
-				this.glTarget = gl.ELEMENT_ARRAY_BUFFER;
-				break;
-			default:
-				throw new Error(`unhandled buffer type: ${target}`);
-		}
 
 		const buffer = gl.createBuffer();
 		if (!buffer) {
@@ -28,12 +18,16 @@ export class Buffer extends Disposable {
 		this.buffer = buffer;
 	}
 
+	get byteLength(): number {
+		return this.byteLength_;
+	}
+
 	bind() {
-		this.gl.bindBuffer(this.glTarget, this.buffer);
+		this.gl.bindBuffer(this.target, this.buffer);
 	}
 
 	bindNone() {
-		this.gl.bindBuffer(this.glTarget, null);
+		this.gl.bindBuffer(this.target, null);
 	}
 
 	bufferData(size: GLsizeiptr, usage: Buffer.Usage): void;
@@ -45,14 +39,16 @@ export class Buffer extends Disposable {
 		srcOffset?: GLuint,
 		length?: GLuint,
 	): void {
-		const glUsage = this.getGlUsage(usage);
 		this.bind();
 		if (typeof sizeOrSrcData === "number") {
-			this.gl.bufferData(this.glTarget, sizeOrSrcData, glUsage);
+			this.gl.bufferData(this.target, sizeOrSrcData, usage);
+			this.byteLength_ = sizeOrSrcData;
 		} else if (srcOffset === undefined) {
-			this.gl.bufferData(this.glTarget, sizeOrSrcData, glUsage);
+			this.gl.bufferData(this.target, sizeOrSrcData, usage);
+			this.byteLength_ = sizeOrSrcData?.byteLength ?? 0;
 		} else {
-			this.gl.bufferData(this.glTarget, sizeOrSrcData as ArrayBufferView, glUsage, srcOffset, length);
+			this.gl.bufferData(this.target, sizeOrSrcData as ArrayBufferView, usage, srcOffset, length);
+			this.byteLength_ = length ?? sizeOrSrcData?.byteLength ?? 0;
 		}
 		this.bindNone();
 	}
@@ -60,48 +56,23 @@ export class Buffer extends Disposable {
 	protected disposeImpl(): void {
 		this.gl.deleteBuffer(this.buffer);
 	}
-
-	private getGlUsage(usage: Buffer.Usage) {
-		switch (usage) {
-			case Buffer.Usage.StaticDraw:
-				return this.gl.STATIC_DRAW;
-			case Buffer.Usage.DynamicDraw:
-				return this.gl.DYNAMIC_DRAW;
-			case Buffer.Usage.StreamDraw:
-				return this.gl.STREAM_DRAW;
-			case Buffer.Usage.StaticRead:
-				return this.gl.STATIC_READ;
-			case Buffer.Usage.DynamicRead:
-				return this.gl.DYNAMIC_READ;
-			case Buffer.Usage.StreamRead:
-				return this.gl.STREAM_READ;
-			case Buffer.Usage.StaticCopy:
-				return this.gl.STATIC_COPY;
-			case Buffer.Usage.DynamicCopy:
-				return this.gl.DYNAMIC_COPY;
-			case Buffer.Usage.StreamCopy:
-				return this.gl.STREAM_COPY;
-			default:
-				throw new Error(`unrecognized usage: ${usage}`);
-		}
-	}
 }
 
 export namespace Buffer {
 	export enum Target {
-		Array,
-		ElementArray
+		Array = 0x8892,
+		ElementArray = 0x8893,
 	}
 
 	export enum Usage {
-		StaticDraw,
-		DynamicDraw,
-		StreamDraw,
-		StaticRead,
-		DynamicRead,
-		StreamRead,
-		StaticCopy,
-		DynamicCopy,
-		StreamCopy
+		StaticDraw = 0x88E4,
+		DynamicDraw = 0x88E8,
+		StreamDraw = 0x88E0,
+		StaticRead = 0x88E5,
+		DynamicRead = 0x88E9,
+		StreamRead = 0x88E1,
+		StaticCopy = 0x88E6,
+		DynamicCopy = 0x88EA,
+		StreamCopy = 0x88E2,
 	}
 }
