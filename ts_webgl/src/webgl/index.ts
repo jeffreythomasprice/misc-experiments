@@ -1,6 +1,7 @@
 export * from "./ArrayBuffer";
 export * from "./Buffer";
 export * from "./ElementArrayBuffer";
+export * from "./Mesh";
 export * from "./Shader";
 export * from "./StructIO";
 export * from "./Texture2d";

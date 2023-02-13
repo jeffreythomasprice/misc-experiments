@@ -1,10 +1,10 @@
 import shaderVertexSource from "bundle-text:./assets/shader.vertex";
 import shaderFragmentSource from "bundle-text:./assets/shader.fragment";
 
-import { Matrix4, Rgba, Size2, Vector2, Vector3, Vector4 } from "./geometry";
+import { Matrix4, Rgba, Size2, Vector2, Vector3 } from "./geometry";
 import { AppState, AsyncOperationState, run } from "./state-machine";
-import { Shader, VertexArray, Texture2d, VertexDefinition, StructIO, ArrayBuffer, ElementArrayBuffer } from "./webgl";
-import { Disposable, Logger } from "./utils";
+import { Shader, Texture2d, VertexDefinition, StructIO, Mesh } from "./webgl";
+import { loadFontFromURL, Logger, wrap } from "./utils";
 
 class Vertex {
 	constructor(
@@ -82,94 +82,26 @@ class SolidColorState implements AppState {
 	}
 }
 
-// TODO move me
-class Mesh<T> extends Disposable {
-	readonly arrayBuffer: ArrayBuffer<T>;
-	readonly elementArrayBuffer: ElementArrayBuffer;
-
-	private readonly vertexArray: VertexArray;
-
-	constructor(
-		gl: WebGL2RenderingContext,
-		writer: StructIO<T>,
-	) {
-		super();
-
-		this.arrayBuffer = new ArrayBuffer(gl, writer);
-		this.elementArrayBuffer = new ElementArrayBuffer(gl);
-		this.vertexArray = new VertexArray(gl);
-
-		this.vertexArray.bind();
-		this.arrayBuffer.bind();
-		this.elementArrayBuffer.bind();
-		this.vertexArray.bindNone();
-		this.arrayBuffer.bindNone();
-		this.elementArrayBuffer.bindNone();
-	}
-
-	bind() {
-		this.arrayBuffer.flush();
-		this.elementArrayBuffer.flush();
-		this.vertexArray.bind();
-	}
-
-	bindNone() {
-		this.vertexArray.bindNone();
-	}
-
-	triangleFan(...vertices: T[]) {
-		if (vertices.length < 3) {
-			throw new Error("can't make a triangle fan with fewer than three vertices");
-		}
-		const first = this.arrayBuffer.size;
-		this.arrayBuffer.push(...vertices);
-		this.elementArrayBuffer.ensureCapacity((vertices.length - 2) * 3);
-		for (let i = 1; i < vertices.length - 1; i++) {
-			this.elementArrayBuffer.push(first, i, i + 1);
-		}
-	}
-
-	protected disposeImpl(): void {
-		this.arrayBuffer.dispose();
-		this.elementArrayBuffer.dispose();
-		this.vertexArray.dispose();
-	}
-}
-
-// TODO move me
-function clamp(value: number, min: number, max: number): number {
-	if (value < min) {
-		return min;
-	}
-	if (value > max) {
-		return max;
-	}
-	return value;
-}
-
-// TODO move me
-function wrap(value: number, min: number, max: number): number {
-	return ((value - min) % (max - min)) + min;
-}
-
 class DemoState implements AppState {
 	private size = new Size2(0, 0);
 	private orthoMatrix = Matrix4.identity;
 	private perspectiveMatrix = Matrix4.identity;
 	private shader?: Shader;
-	private mesh?: Mesh<Vertex>;
+	private fontMesh?: Mesh<Vertex>;
+	private imageMesh?: Mesh<Vertex>;
 
 	private rotation = 0;
 	private color = 0;
 
 	constructor(
-		private readonly texture: Texture2d,
+		private readonly fontTexture: Texture2d,
+		private readonly imageTexture: Texture2d,
 	) { }
 
 	activate(gl: WebGL2RenderingContext): void {
 		this.shader = new Shader(gl, shaderVertexSource, shaderFragmentSource);
 
-		const vertexDef = new VertexDefinition.Builder(gl, this.shader)
+		const vertexWriter = new VertexWriter(new VertexDefinition.Builder(gl, this.shader)
 			.attribute("positionAttribute", (builder) => {
 				builder
 					.size(3)
@@ -185,10 +117,10 @@ class DemoState implements AppState {
 					.size(4)
 					.type(WebGL2RenderingContext.FLOAT);
 			})
-			.build();
+			.build());
 
-		this.mesh = new Mesh(gl, new VertexWriter(vertexDef));
-		this.mesh.triangleFan(
+		this.imageMesh = new Mesh(gl, vertexWriter);
+		this.imageMesh.triangleFan(
 			new Vertex(
 				new Vector3(-1, -1, 0),
 				new Vector2(0, 0),
@@ -210,11 +142,35 @@ class DemoState implements AppState {
 				new Rgba(1, 1, 1, 1),
 			),
 		);
+
+		this.fontMesh = new Mesh(gl, vertexWriter);
+		this.fontMesh.triangleFan(
+			new Vertex(
+				new Vector3(0, 0, 0),
+				new Vector2(0, 0),
+				new Rgba(1, 1, 1, 1),
+			),
+			new Vertex(
+				new Vector3(this.fontTexture.width, 0, 0),
+				new Vector2(1, 0),
+				new Rgba(1, 1, 1, 1),
+			),
+			new Vertex(
+				new Vector3(this.fontTexture.width, this.fontTexture.height, 0),
+				new Vector2(1, 1),
+				new Rgba(1, 1, 1, 1),
+			),
+			new Vertex(
+				new Vector3(0, this.fontTexture.height, 0),
+				new Vector2(0, 1),
+				new Rgba(1, 1, 1, 1),
+			),
+		);
 	}
 
 	deactivate(): void {
 		this.shader?.dispose();
-		this.mesh?.dispose();
+		this.imageMesh?.dispose();
 	}
 
 	resize(size: Size2): void {
@@ -229,56 +185,82 @@ class DemoState implements AppState {
 		gl.clearColor(0.25, 0.5, 0.75, 1);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 
-		if (!this.shader || !this.mesh) {
-			return;
+		if (this.shader) {
+			this.shader.use();
+
+			gl.activeTexture(gl.TEXTURE0);
+			this.imageTexture.bind();
+			gl.uniform1i(this.shader.uniforms.get("samplerUniform")!.location, 0);
+
+			gl.uniformMatrix4fv(
+				this.shader.uniforms.get("projectionMatrixUniform")!.location,
+				false,
+				this.perspectiveMatrix.toArray()
+			);
+			gl.uniformMatrix4fv(
+				this.shader.uniforms.get("modelviewMatrixUniform")!.location,
+				false,
+				Matrix4.createLookAt(
+					new Vector3(
+						Math.cos(this.rotation) * 6,
+						0,
+						Math.sin(this.rotation) * 6,
+					),
+					new Vector3(0, 0, 0),
+					new Vector3(0, 1, 0),
+				)
+					.toArray()
+			);
+
+			if (this.imageMesh) {
+				this.imageMesh.bind();
+				gl.drawElements(gl.TRIANGLES, this.imageMesh.elementArrayBuffer.size, gl.UNSIGNED_SHORT, 0);
+				this.imageMesh.bindNone();
+			}
+
+			this.imageTexture.bindNone();
+
+			this.fontTexture.bind();
+
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+			gl.enable(gl.BLEND);
+
+			gl.uniformMatrix4fv(
+				this.shader.uniforms.get("projectionMatrixUniform")!.location,
+				false,
+				this.orthoMatrix.toArray()
+			);
+			gl.uniformMatrix4fv(
+				this.shader.uniforms.get("modelviewMatrixUniform")!.location,
+				false,
+				Matrix4.identity.toArray()
+			);
+
+			if (this.fontMesh) {
+				this.fontMesh.bind();
+				gl.drawElements(gl.TRIANGLES, this.fontMesh.elementArrayBuffer.size, gl.UNSIGNED_SHORT, 0);
+				this.fontMesh.bindNone();
+			}
+
+			gl.disable(gl.BLEND);
+
+			this.fontTexture.bindNone();
+
+			this.shader.useNone();
 		}
-
-		this.shader.use();
-
-		gl.activeTexture(gl.TEXTURE0);
-		this.texture.bind();
-		gl.uniform1i(this.shader.uniforms.get("samplerUniform")!.location, 0);
-
-		gl.uniformMatrix4fv(
-			this.shader.uniforms.get("projectionMatrixUniform")!.location,
-			false,
-			this.perspectiveMatrix.toArray()
-		);
-		gl.uniformMatrix4fv(
-			this.shader.uniforms.get("modelviewMatrixUniform")!.location,
-			false,
-			Matrix4.createLookAt(
-				new Vector3(
-					Math.cos(this.rotation) * 6,
-					0,
-					Math.sin(this.rotation) * 6,
-				),
-				new Vector3(0, 0, 0),
-				new Vector3(0, 1, 0),
-			)
-				.toArray()
-		);
-
-		this.mesh.bind();
-		gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-		this.mesh.bindNone();
-
-		this.texture.bindNone();
-
-		this.shader.useNone();
 	}
 
 	update(elapsedTime: number): AppState | null | undefined {
 		this.rotation = wrap(this.rotation + 45 * Math.PI / 180 * elapsedTime, 0, Math.PI * 2);
-		this.color = wrap(this.color + elapsedTime * 0.1, 0, 1);
+		this.color = wrap(this.color + elapsedTime * 0.5, 0, 1);
 
-		if (this.mesh) {
+		if (this.imageMesh) {
 			const color1 = new Rgba(1, 0, 0, 1);
 			const color2 = new Rgba(0, 0, 1, 1);
 			const color = color1.toVector.mul(this.color).add(color2.toVector.mul(1 - this.color)).toRgba;
-			for (let i = 0; i < this.mesh.arrayBuffer.size; i++) {
-				const v = this.mesh.arrayBuffer.get(i);
-				this.mesh.arrayBuffer.set(i, new Vertex(
+			for (let i = 0; i < this.imageMesh.arrayBuffer.size; i++) {
+				const v = this.imageMesh.arrayBuffer.get(i);
+				this.imageMesh.arrayBuffer.set(i, new Vertex(
 					v.position,
 					v.textureCoordinate,
 					color
@@ -295,7 +277,36 @@ Logger.defaultLevel = Logger.Level.Debug;
 run(new AsyncOperationState(
 	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
 	async (gl) => {
-		const texture = await Texture2d.createFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
-		return new DemoState(texture);
+		const font = await loadFontFromURL("custom-font", new URL("./assets/RobotoSlab-VariableFont_wght.ttf", import.meta.url));
+		const textImage = createTestStringImage(
+			// font weight, then size, then family
+			// https://developer.mozilla.org/en-US/docs/Web/CSS/font
+			`900 40px "${font.family}"`,
+			"Hello, World!\n\nHow does this handle big multi-line\ntext?"
+		);
+		const textTexture = new Texture2d(gl);
+		textTexture.texImage(0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textImage);
+
+		const imageTexture = await Texture2d.createFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
+		return new DemoState(textTexture, imageTexture);
 	},
 ));
+
+// TODO refactor to something reusable
+function createTestStringImage(font: string, text: string): OffscreenCanvas {
+	// TODO support multiline
+	const canvas = new OffscreenCanvas(0, 0);
+	const context = canvas.getContext("2d");
+	if (!context) {
+		throw new Error("failed to make offscreen rendering context");
+	}
+	context.font = font;
+	const metrics = context.measureText(text);
+	canvas.width = Math.ceil(metrics.width);
+	canvas.height = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent);
+	context.clearRect(0, 0, canvas.width, canvas.height);
+	context.font = font;
+	context.fillStyle = "white";
+	context.fillText(text, metrics.actualBoundingBoxLeft, metrics.actualBoundingBoxAscent);
+	return canvas;
+}

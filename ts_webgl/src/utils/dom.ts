@@ -10,3 +10,9 @@ export function loadImageFromURL(url: URL): Promise<HTMLImageElement> {
 		result.src = url.toString();
 	});
 }
+
+export async function loadFontFromURL(family: string, url: URL): Promise<FontFace> {
+	const response = await fetch(url);
+	const responseBody = await response.arrayBuffer();
+	return await new FontFace(family, responseBody).load();
+}
