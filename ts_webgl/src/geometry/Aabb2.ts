@@ -22,10 +22,19 @@ export class Aabb2 {
 		return new Aabb2(new Vector2(x1, y1), new Vector2(x2, y2));
 	}
 
-	constructor(
-		readonly min: Vector2,
-		readonly max: Vector2,
-	) { }
+	readonly min: Vector2;
+	readonly max: Vector2;
+
+	constructor(min: Vector2, max: Vector2);
+	constructor(origin: Vector2, size: Size2);
+	constructor(min: Vector2, maxOrSize: Vector2 | Size2) {
+		this.min = min;
+		if (maxOrSize instanceof Vector2) {
+			this.max = maxOrSize;
+		} else {
+			this.max = this.min.add(maxOrSize.toVector);
+		}
+	}
 
 	toString(): string {
 		return `AABB(min=${this.min}, max=${this.max})`;

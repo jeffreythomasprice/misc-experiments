@@ -1,7 +1,7 @@
 import shaderVertexSource from "bundle-text:./assets/shader.vertex";
 import shaderFragmentSource from "bundle-text:./assets/shader.fragment";
 
-import { Matrix4, Rgba, Size2, Vector2, Vector3 } from "./geometry";
+import { Aabb2, Matrix4, Rgba, Size2, Vector2, Vector3 } from "./geometry";
 import { AppState, AsyncOperationState, run } from "./state-machine";
 import { Shader, Texture2d, VertexDefinition, StructIO, Mesh } from "./webgl";
 import { loadFontFromURL, Logger, wrap } from "./utils";
@@ -279,10 +279,14 @@ run(new AsyncOperationState(
 	async (gl) => {
 		const font = await loadFontFromURL("custom-font", new URL("./assets/RobotoSlab-VariableFont_wght.ttf", import.meta.url));
 		const textImage = createTestStringImage(
-			// font weight, then size, then family
-			// https://developer.mozilla.org/en-US/docs/Web/CSS/font
-			`900 40px "${font.family}"`,
-			"Hello, World!\n\nHow does this handle big multi-line\ntext?"
+			getTextMetrics(
+				// font weight, then size, then family
+				// https://developer.mozilla.org/en-US/docs/Web/CSS/font
+				`500 40px "${font.family}"`,
+				"Hello, World!\n\njqyp\nHow does this handle big multi-line\ntext?",
+			),
+			"white",
+			"black",
 		);
 		const textTexture = new Texture2d(gl);
 		textTexture.texImage(0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textImage);
@@ -292,21 +296,90 @@ run(new AsyncOperationState(
 	},
 ));
 
-// TODO refactor to something reusable
-function createTestStringImage(font: string, text: string): OffscreenCanvas {
-	// TODO support multiline
+interface TextMetrics {
+	readonly font: string;
+	readonly bounds: Aabb2;
+	lines: {
+		readonly text: string;
+		readonly bounds: Aabb2;
+	}[];
+}
+
+function getTextMetrics(font: string, text: string): TextMetrics {
 	const canvas = new OffscreenCanvas(0, 0);
 	const context = canvas.getContext("2d");
 	if (!context) {
 		throw new Error("failed to make offscreen rendering context");
 	}
 	context.font = font;
-	const metrics = context.measureText(text);
-	canvas.width = Math.ceil(metrics.width);
-	canvas.height = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent);
-	context.clearRect(0, 0, canvas.width, canvas.height);
-	context.font = font;
-	context.fillStyle = "white";
-	context.fillText(text, metrics.actualBoundingBoxLeft, metrics.actualBoundingBoxAscent);
-	return canvas;
+
+	const sampleLineMetrics = context.measureText("M");
+	const lines = text.split("\n").map((line) => {
+		const metrics = context.measureText(line);
+		return { line, metrics };
+	});
+	const { maxWidth, maxAscent, maxDescent } = [sampleLineMetrics, ...lines.map(({ metrics }) => metrics)]
+		.reduce(
+			({ maxWidth, maxAscent, maxDescent }, metrics) => {
+				return {
+					maxWidth: Math.max(maxWidth, metrics.width),
+					maxAscent: Math.max(maxAscent, metrics.actualBoundingBoxAscent),
+					maxDescent: Math.max(maxDescent, metrics.actualBoundingBoxDescent),
+				};
+			},
+			{
+				maxWidth: 0,
+				maxAscent: 0,
+				maxDescent: 0,
+			}
+		);
+	const lineHeight = maxAscent + maxDescent;
+
+	// TODO support vertical alignment
+	const resultLines: TextMetrics["lines"] = [];
+	let y = maxAscent;
+	for (const line of lines) {
+		// TODO support horizontal alignment
+		const x = 0;
+		const height = line.metrics.actualBoundingBoxAscent + line.metrics.actualBoundingBoxDescent;
+		resultLines.push({
+			text: line.line,
+			bounds: new Aabb2(new Vector2(x, y), new Size2(line.metrics.width, height)),
+		});
+		y += lineHeight;
+	}
+	return {
+		font,
+		bounds: Aabb2.fromPoints(resultLines.flatMap(({ bounds }) => [bounds.min, bounds.max])),
+		lines: resultLines,
+	};
+}
+
+function createTestStringImage(
+	metrics: TextMetrics,
+	fillStyle: string | undefined | null,
+	strokeStyle: string | undefined | null,
+): OffscreenCanvas {
+	// TODO de-duplicate canvas creation?
+	const result = new OffscreenCanvas(Math.ceil(metrics.bounds.width), Math.ceil(metrics.bounds.height));
+	const context = result.getContext("2d");
+	if (!context) {
+		throw new Error("failed to make offscreen rendering context");
+	}
+	context.font = metrics.font;
+	if (fillStyle) {
+		context.fillStyle = fillStyle;
+	}
+	if (strokeStyle) {
+		context.strokeStyle = strokeStyle;
+	}
+	for (const lineMetrics of metrics.lines) {
+		if (fillStyle) {
+			context.fillText(lineMetrics.text, lineMetrics.bounds.min.x, lineMetrics.bounds.min.y);
+		}
+		if (strokeStyle) {
+			context.strokeText(lineMetrics.text, lineMetrics.bounds.min.x, lineMetrics.bounds.min.y);
+		}
+	}
+	return result;
 }
