@@ -284,6 +284,11 @@ run(new AsyncOperationState(
 				// https://developer.mozilla.org/en-US/docs/Web/CSS/font
 				`500 40px "${font.family}"`,
 				"Hello, World!\n\njqyp\nHow does this handle big multi-line\ntext?",
+				{
+					bounds: new Aabb2(new Vector2(0, 0), new Size2(400, 800)),
+					horizontal: "center",
+					vertical: "center",
+				}
 			),
 			"white",
 			"black",
@@ -302,15 +307,52 @@ interface TextMetrics {
 	lines: {
 		readonly text: string;
 		readonly bounds: Aabb2;
+		readonly ascent: number;
 	}[];
 }
 
-function getTextMetrics(font: string, text: string): TextMetrics {
-	const canvas = new OffscreenCanvas(0, 0);
-	const context = canvas.getContext("2d");
-	if (!context) {
-		throw new Error("failed to make offscreen rendering context");
+interface TextMetricsAlignmentOptions {
+	bounds?: Aabb2;
+	horizontal?: number | "left" | "center" | "right";
+	vertical?: number | "top" | "center" | "bottom";
+}
+
+function getTextMetrics(
+	font: string,
+	text: string,
+	alignmentOptions?: TextMetricsAlignmentOptions,
+): TextMetrics {
+	const destinationBounds = alignmentOptions?.bounds ?? new Aabb2(new Vector2(0, 0), new Size2(0, 0));
+	let halign = alignmentOptions?.horizontal ?? 0;
+	if (typeof halign === "string") {
+		switch (halign) {
+			case "left":
+				halign = 0;
+				break;
+			case "center":
+				halign = 0.5;
+				break;
+			case "right":
+				halign = 1;
+				break;
+		}
 	}
+	let valign = alignmentOptions?.vertical ?? 0;
+	if (typeof valign === "string") {
+		switch (valign) {
+			case "top":
+				valign = 0;
+				break;
+			case "center":
+				valign = 0.5;
+				break;
+			case "bottom":
+				valign = 1;
+				break;
+		}
+	}
+
+	const [_canvas, context] = createOffscreenCanvasAndContext(new Size2(0, 0));
 	context.font = font;
 
 	const sampleLineMetrics = context.measureText("M");
@@ -318,33 +360,31 @@ function getTextMetrics(font: string, text: string): TextMetrics {
 		const metrics = context.measureText(line);
 		return { line, metrics };
 	});
-	const { maxWidth, maxAscent, maxDescent } = [sampleLineMetrics, ...lines.map(({ metrics }) => metrics)]
+	const { maxAscent, maxDescent } = [sampleLineMetrics, ...lines.map(({ metrics }) => metrics)]
 		.reduce(
-			({ maxWidth, maxAscent, maxDescent }, metrics) => {
+			({ maxAscent, maxDescent }, metrics) => {
 				return {
-					maxWidth: Math.max(maxWidth, metrics.width),
 					maxAscent: Math.max(maxAscent, metrics.actualBoundingBoxAscent),
 					maxDescent: Math.max(maxDescent, metrics.actualBoundingBoxDescent),
 				};
 			},
 			{
-				maxWidth: 0,
 				maxAscent: 0,
 				maxDescent: 0,
 			}
 		);
 	const lineHeight = maxAscent + maxDescent;
+	const totalHeight = lineHeight * lines.length;
 
-	// TODO support vertical alignment
 	const resultLines: TextMetrics["lines"] = [];
-	let y = maxAscent;
+	let y = destinationBounds.y + (destinationBounds.height - totalHeight) * valign;
 	for (const line of lines) {
-		// TODO support horizontal alignment
-		const x = 0;
+		const x = destinationBounds.x + (destinationBounds.width - line.metrics.width) * halign;
 		const height = line.metrics.actualBoundingBoxAscent + line.metrics.actualBoundingBoxDescent;
 		resultLines.push({
 			text: line.line,
 			bounds: new Aabb2(new Vector2(x, y), new Size2(line.metrics.width, height)),
+			ascent: line.metrics.actualBoundingBoxAscent,
 		});
 		y += lineHeight;
 	}
@@ -360,12 +400,7 @@ function createTestStringImage(
 	fillStyle: string | undefined | null,
 	strokeStyle: string | undefined | null,
 ): OffscreenCanvas {
-	// TODO de-duplicate canvas creation?
-	const result = new OffscreenCanvas(Math.ceil(metrics.bounds.width), Math.ceil(metrics.bounds.height));
-	const context = result.getContext("2d");
-	if (!context) {
-		throw new Error("failed to make offscreen rendering context");
-	}
+	const [result, context] = createOffscreenCanvasAndContext(new Size2(Math.ceil(metrics.bounds.width), Math.ceil(metrics.bounds.height)));
 	context.font = metrics.font;
 	if (fillStyle) {
 		context.fillStyle = fillStyle;
@@ -374,12 +409,22 @@ function createTestStringImage(
 		context.strokeStyle = strokeStyle;
 	}
 	for (const lineMetrics of metrics.lines) {
+		const p = lineMetrics.bounds.min.sub(metrics.bounds.min).add(new Vector2(0, lineMetrics.ascent));
 		if (fillStyle) {
-			context.fillText(lineMetrics.text, lineMetrics.bounds.min.x, lineMetrics.bounds.min.y);
+			context.fillText(lineMetrics.text, p.x, p.y);
 		}
 		if (strokeStyle) {
-			context.strokeText(lineMetrics.text, lineMetrics.bounds.min.x, lineMetrics.bounds.min.y);
+			context.strokeText(lineMetrics.text, p.x, p.y);
 		}
 	}
 	return result;
+}
+
+function createOffscreenCanvasAndContext(size: Size2): [OffscreenCanvas, OffscreenCanvasRenderingContext2D] {
+	const canvas = new OffscreenCanvas(size.width, size.height);
+	const context = canvas.getContext("2d");
+	if (!context) {
+		throw new Error("failed to make offscreen rendering context");
+	}
+	return [canvas, context];
 }

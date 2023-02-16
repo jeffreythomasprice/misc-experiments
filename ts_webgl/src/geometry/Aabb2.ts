@@ -40,6 +40,18 @@ export class Aabb2 {
 		return `AABB(min=${this.min}, max=${this.max})`;
 	}
 
+	get origin(): Vector2 {
+		return this.min;
+	}
+
+	get x(): number {
+		return this.min.x;
+	}
+
+	get y(): number {
+		return this.min.y;
+	}
+
 	get size(): Size2 {
 		return this.max.sub(this.min).toSize;
 	}
