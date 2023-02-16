@@ -274,6 +274,20 @@ class DemoState implements AppState {
 
 Logger.defaultLevel = Logger.Level.Debug;
 
+// TODO make something reusable out of workers
+const logger = new Logger();
+const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+worker.addEventListener("message", (e) => {
+	logger.debug("message from worker", e.data);
+});
+worker.addEventListener("messageerror", (e) => {
+	logger.error("messageerror from worker", e);
+});
+worker.addEventListener("error", (e) => {
+	logger.error("error from worker", e);
+});
+worker.postMessage("this came from index");
+
 run(new AsyncOperationState(
 	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
 	async (gl) => {
@@ -300,6 +314,8 @@ run(new AsyncOperationState(
 		return new DemoState(textTexture, imageTexture);
 	},
 ));
+
+// TODO move the font stuff
 
 interface TextMetrics {
 	readonly font: string;

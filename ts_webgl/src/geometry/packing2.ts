@@ -2,7 +2,7 @@ import { Aabb2 } from "./Aabb2";
 import { Vector2 } from "./Vector2";
 
 export function packAabb2<T>(
-	input: {
+	_input: {
 		readonly key: T,
 		readonly size: Vector2,
 	}[],
