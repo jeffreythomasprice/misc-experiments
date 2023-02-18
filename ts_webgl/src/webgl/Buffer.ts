@@ -70,19 +70,19 @@ export class Buffer extends Disposable {
 
 export namespace Buffer {
 	export enum Target {
-		Array = 0x8892,
-		ElementArray = 0x8893,
+		ARRAY = 0x8892,
+		ELEMENT_ARRAY = 0x8893,
 	}
 
 	export enum Usage {
-		StaticDraw = 0x88E4,
-		DynamicDraw = 0x88E8,
-		StreamDraw = 0x88E0,
-		StaticRead = 0x88E5,
-		DynamicRead = 0x88E9,
-		StreamRead = 0x88E1,
-		StaticCopy = 0x88E6,
-		DynamicCopy = 0x88EA,
-		StreamCopy = 0x88E2,
+		STATIC_DRAW = 0x88E4,
+		DYNAMIC_DRAW = 0x88E8,
+		STREAM_DRAW = 0x88E0,
+		STATIC_READ = 0x88E5,
+		DYNAMIC_READ = 0x88E9,
+		STREAM_READ = 0x88E1,
+		STATIC_COPY = 0x88E6,
+		DYNAMIC_COPY = 0x88EA,
+		STREAM_COPY = 0x88E2,
 	}
 }

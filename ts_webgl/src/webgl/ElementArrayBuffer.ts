@@ -13,7 +13,7 @@ export class ElementArrayBuffer extends Disposable {
 	) {
 		super();
 
-		this.glBuffer = new WebGLBuffer(gl, WebGLBuffer.Target.ElementArray);
+		this.glBuffer = new WebGLBuffer(gl, WebGLBuffer.Target.ELEMENT_ARRAY);
 		this.localBuffer = Buffer.allocUnsafe(0);
 	}
 
@@ -79,7 +79,7 @@ export class ElementArrayBuffer extends Disposable {
 			return;
 		}
 		if (this.glBuffer.byteLength !== this.localBuffer.byteLength) {
-			this.glBuffer.bufferData(this.localBuffer, WebGLBuffer.Usage.DynamicDraw);
+			this.glBuffer.bufferData(this.localBuffer, WebGLBuffer.Usage.DYNAMIC_DRAW);
 		} else {
 			const offset = range.min * this.stride;
 			const length = (range.max - range.min + 1) * this.stride;

@@ -5,8 +5,6 @@ const logger = new Logger({
 	prefix: "worker",
 });
 
-logger.debug("TODO worker");
-
 addEventListener("message", (e) => {
 	logger.debug("message", e.data);
 	postMessage("this came from worker");

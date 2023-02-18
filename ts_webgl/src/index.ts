@@ -4,7 +4,7 @@ import shaderFragmentSource from "bundle-text:./assets/shader.fragment";
 import { Aabb2, Matrix4, Rgba, Size2, Vector2, Vector3 } from "./geometry";
 import { AppState, AsyncOperationState, run } from "./state-machine";
 import { Shader, Texture2d, VertexDefinition, StructIO, Mesh } from "./webgl";
-import { loadFontFromURL, Logger, wrap } from "./utils";
+import { createOffscreenCanvasAndContext, getTextPlacement, loadFontFromURL, Logger, TextPlacement, wrap } from "./utils";
 
 class Vertex {
 	constructor(
@@ -293,7 +293,7 @@ run(new AsyncOperationState(
 	async (gl) => {
 		const font = await loadFontFromURL("custom-font", new URL("./assets/RobotoSlab-VariableFont_wght.ttf", import.meta.url));
 		const textImage = createTestStringImage(
-			getTextMetrics(
+			getTextPlacement(
 				// font weight, then size, then family
 				// https://developer.mozilla.org/en-US/docs/Web/CSS/font
 				`500 40px "${font.family}"`,
@@ -308,111 +308,15 @@ run(new AsyncOperationState(
 			"black",
 		);
 		const textTexture = new Texture2d(gl);
-		textTexture.texImage(0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textImage);
+		textTexture.texImage(0, Texture2d.Format.RGBA, Texture2d.Format.RGBA, Texture2d.Type.UNSIGNED_BYTE, textImage);
 
 		const imageTexture = await Texture2d.createFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
 		return new DemoState(textTexture, imageTexture);
 	},
 ));
 
-// TODO move the font stuff
-
-interface TextMetrics {
-	readonly font: string;
-	readonly bounds: Aabb2;
-	lines: {
-		readonly text: string;
-		readonly bounds: Aabb2;
-		readonly ascent: number;
-	}[];
-}
-
-interface TextMetricsAlignmentOptions {
-	bounds?: Aabb2;
-	horizontal?: number | "left" | "center" | "right";
-	vertical?: number | "top" | "center" | "bottom";
-}
-
-function getTextMetrics(
-	font: string,
-	text: string,
-	alignmentOptions?: TextMetricsAlignmentOptions,
-): TextMetrics {
-	const destinationBounds = alignmentOptions?.bounds ?? new Aabb2(new Vector2(0, 0), new Size2(0, 0));
-	let halign = alignmentOptions?.horizontal ?? 0;
-	if (typeof halign === "string") {
-		switch (halign) {
-			case "left":
-				halign = 0;
-				break;
-			case "center":
-				halign = 0.5;
-				break;
-			case "right":
-				halign = 1;
-				break;
-		}
-	}
-	let valign = alignmentOptions?.vertical ?? 0;
-	if (typeof valign === "string") {
-		switch (valign) {
-			case "top":
-				valign = 0;
-				break;
-			case "center":
-				valign = 0.5;
-				break;
-			case "bottom":
-				valign = 1;
-				break;
-		}
-	}
-
-	const [_canvas, context] = createOffscreenCanvasAndContext(new Size2(0, 0));
-	context.font = font;
-
-	const sampleLineMetrics = context.measureText("M");
-	const lines = text.split("\n").map((line) => {
-		const metrics = context.measureText(line);
-		return { line, metrics };
-	});
-	const { maxAscent, maxDescent } = [sampleLineMetrics, ...lines.map(({ metrics }) => metrics)]
-		.reduce(
-			({ maxAscent, maxDescent }, metrics) => {
-				return {
-					maxAscent: Math.max(maxAscent, metrics.actualBoundingBoxAscent),
-					maxDescent: Math.max(maxDescent, metrics.actualBoundingBoxDescent),
-				};
-			},
-			{
-				maxAscent: 0,
-				maxDescent: 0,
-			}
-		);
-	const lineHeight = maxAscent + maxDescent;
-	const totalHeight = lineHeight * lines.length;
-
-	const resultLines: TextMetrics["lines"] = [];
-	let y = destinationBounds.y + (destinationBounds.height - totalHeight) * valign;
-	for (const line of lines) {
-		const x = destinationBounds.x + (destinationBounds.width - line.metrics.width) * halign;
-		const height = line.metrics.actualBoundingBoxAscent + line.metrics.actualBoundingBoxDescent;
-		resultLines.push({
-			text: line.line,
-			bounds: new Aabb2(new Vector2(x, y), new Size2(line.metrics.width, height)),
-			ascent: line.metrics.actualBoundingBoxAscent,
-		});
-		y += lineHeight;
-	}
-	return {
-		font,
-		bounds: Aabb2.fromPoints(resultLines.flatMap(({ bounds }) => [bounds.min, bounds.max])),
-		lines: resultLines,
-	};
-}
-
 function createTestStringImage(
-	metrics: TextMetrics,
+	metrics: TextPlacement,
 	fillStyle: string | undefined | null,
 	strokeStyle: string | undefined | null,
 ): OffscreenCanvas {
@@ -434,13 +338,4 @@ function createTestStringImage(
 		}
 	}
 	return result;
-}
-
-function createOffscreenCanvasAndContext(size: Size2): [OffscreenCanvas, OffscreenCanvasRenderingContext2D] {
-	const canvas = new OffscreenCanvas(size.width, size.height);
-	const context = canvas.getContext("2d");
-	if (!context) {
-		throw new Error("failed to make offscreen rendering context");
-	}
-	return [canvas, context];
 }
