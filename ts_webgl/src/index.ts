@@ -54,35 +54,41 @@ class VertexWriter extends StructIO<Vertex> {
 	}
 }
 
-class SolidColorState implements AppState {
+class Renderer {
+	// TODO some renderer abstraction stuff?
+}
+
+class SolidColorState implements AppState<WebGL2RenderingContext, Renderer> {
 	private size = new Size2(0, 0);
 
 	constructor(readonly color: Rgba) { }
 
-	activate(_gl: WebGL2RenderingContext): void {
+	activate(_context: AppState.Context<WebGL2RenderingContext, Renderer>): void {
 		// nothing to do
 	}
 
-	deactivate(): void {
+	deactivate(_context: AppState.Context<WebGL2RenderingContext, Renderer>): void {
+		// nothing to do	
+	}
+
+	resize(_context: AppState.Context<WebGL2RenderingContext, Renderer>): void {
 		// nothing to do
 	}
 
-	resize(size: Size2): void {
-		this.size = size;
-	}
-
-	render(gl: WebGL2RenderingContext): void {
+	render(context: AppState.Context<WebGL2RenderingContext, Renderer>): void {
+		// TODO shouldn't need to get gl directly, renderer should do this
+		const gl = context.renderingContext;
 		gl.viewport(0, 0, this.size.width, this.size.height);
 		gl.clearColor(this.color.red, this.color.green, this.color.blue, this.color.alpha);
 		gl.clear(gl.COLOR_BUFFER_BIT);
 	}
 
-	update(_elapsedTime: number): AppState | null | undefined {
+	update(_context: AppState.Context<WebGL2RenderingContext, Renderer>, _elapsedTime: number): AppState<WebGL2RenderingContext, Renderer> | null | undefined {
 		return null;
 	}
 }
 
-class DemoState implements AppState {
+class DemoState implements AppState<WebGL2RenderingContext, Renderer> {
 	private size = new Size2(0, 0);
 	private orthoMatrix = Matrix4.identity;
 	private perspectiveMatrix = Matrix4.identity;
@@ -98,7 +104,10 @@ class DemoState implements AppState {
 		private readonly imageTexture: Texture2d,
 	) { }
 
-	activate(gl: WebGL2RenderingContext): void {
+	activate(context: AppState.Context<WebGL2RenderingContext, Renderer>): void {
+		// TODO shouldn't need to get gl directly, renderer should do this
+		const gl = context.renderingContext;
+
 		this.shader = new Shader(gl, shaderVertexSource, shaderFragmentSource);
 
 		const vertexWriter = new VertexWriter(new VertexDefinition.Builder(gl, this.shader)
@@ -168,18 +177,22 @@ class DemoState implements AppState {
 		);
 	}
 
-	deactivate(): void {
+	deactivate(_context: AppState.Context<WebGL2RenderingContext, Renderer>): void {
 		this.shader?.dispose();
 		this.imageMesh?.dispose();
 	}
 
-	resize(size: Size2): void {
+	resize(context: AppState.Context<WebGL2RenderingContext, Renderer>): void {
+		const size = context.size;
 		this.size = size;
 		this.orthoMatrix = Matrix4.createOrtho(0, size.width, size.height, 0, -1, 1);
 		this.perspectiveMatrix = Matrix4.createPerspective(60 * Math.PI / 180, size.width, size.height, 1, 1000);
 	}
 
-	render(gl: WebGL2RenderingContext): void {
+	render(context: AppState.Context<WebGL2RenderingContext, Renderer>): void {
+		// TODO shouldn't need to get gl directly, renderer should do this
+		const gl = context.renderingContext;
+
 		gl.viewport(0, 0, this.size.width, this.size.height);
 
 		gl.clearColor(0.25, 0.5, 0.75, 1);
@@ -250,7 +263,7 @@ class DemoState implements AppState {
 		}
 	}
 
-	update(elapsedTime: number): AppState | null | undefined {
+	update(_context: AppState.Context<WebGL2RenderingContext, Renderer>, elapsedTime: number): AppState<WebGL2RenderingContext, Renderer> | null | undefined {
 		this.rotation = wrap(this.rotation + 45 * Math.PI / 180 * elapsedTime, 0, Math.PI * 2);
 		this.color = wrap(this.color + elapsedTime * 0.5, 0, 1);
 
@@ -288,32 +301,40 @@ worker.addEventListener("error", (e) => {
 });
 worker.postMessage("this came from index");
 
-run(new AsyncOperationState(
-	new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
-	async (gl) => {
-		const font = await loadFontFromURL("custom-font", new URL("./assets/RobotoSlab-VariableFont_wght.ttf", import.meta.url));
-		const textImage = createTestStringImage(
-			getTextPlacement(
-				// font weight, then size, then family
-				// https://developer.mozilla.org/en-US/docs/Web/CSS/font
-				`500 40px "${font.family}"`,
-				"Hello, World!\n\njqyp\nHow does this handle big multi-line\ntext?",
-				{
-					bounds: new Aabb2(new Vector2(0, 0), new Size2(400, 800)),
-					horizontal: "center",
-					vertical: "center",
-				}
-			),
-			"white",
-			"black",
-		);
-		const textTexture = new Texture2d(gl);
-		textTexture.texImage(0, Texture2d.Format.RGBA, Texture2d.Format.RGBA, Texture2d.Type.UNSIGNED_BYTE, textImage);
-
-		const imageTexture = await Texture2d.createFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
-		return new DemoState(textTexture, imageTexture);
+run(
+	"webgl2",
+	(_renderingContext) => {
+		return new Renderer();
 	},
-));
+	new AsyncOperationState(
+		new SolidColorState(new Rgba(0.25, 0.25, 0.25, 1)),
+		async (context) => {
+			// TODO shouldn't need to get gl directly, renderer should do this
+			const gl = context.renderingContext as WebGL2RenderingContext;
+
+			const font = await loadFontFromURL("custom-font", new URL("./assets/RobotoSlab-VariableFont_wght.ttf", import.meta.url));
+			const textImage = createTestStringImage(
+				getTextPlacement(
+					// font weight, then size, then family
+					// https://developer.mozilla.org/en-US/docs/Web/CSS/font
+					`500 40px "${font.family}"`,
+					"Hello, World!\n\njqyp\nHow does this handle big multi-line\ntext?",
+					{
+						bounds: new Aabb2(new Vector2(0, 0), new Size2(400, 800)),
+						horizontal: "center",
+						vertical: "center",
+					}
+				),
+				"white",
+				"black",
+			);
+			const textTexture = new Texture2d(gl);
+			textTexture.texImage(0, Texture2d.Format.RGBA, Texture2d.Format.RGBA, Texture2d.Type.UNSIGNED_BYTE, textImage);
+
+			const imageTexture = await Texture2d.createFromURL(gl, new URL("./assets/bricks.png", import.meta.url));
+			return new DemoState(textTexture, imageTexture);
+		},
+	));
 
 function createTestStringImage(
 	metrics: TextPlacement,

@@ -1,26 +1,25 @@
-import { Size2 } from "../geometry";
 import { Logger } from "../utils";
 import { AppState } from "./AppState";
 
-export class AsyncOperationState implements AppState {
+export class AsyncOperationState<RenderingContextType extends WebGLRenderingContextBase, RendererType> implements AppState<RenderingContextType, RendererType> {
 	private isActive = false;
-	private nextState: AppState | null = null;
+	private nextState: AppState<RenderingContextType, RendererType> | null = null;
 
 	private readonly logger: Logger;
 
 	constructor(
-		private readonly wrappedState: AppState,
-		private readonly factory: (gl: WebGL2RenderingContext) => Promise<AppState>
+		private readonly wrappedState: AppState<RenderingContextType, RendererType>,
+		private readonly factory: (context: AppState.Context<RenderingContextType, RendererType>) => Promise<AppState<RenderingContextType, RendererType>>
 	) {
 		this.logger = new Logger({
 			prefix: "async-op-state",
 		});
 	}
 
-	activate(gl: WebGL2RenderingContext): void {
-		this.wrappedState.activate(gl);
+	activate(context: AppState.Context<RenderingContextType, RendererType>): void {
+		this.wrappedState.activate(context);
 		this.isActive = true;
-		this.factory(gl)
+		this.factory(context)
 			.then((nextState) => {
 				if (this.isActive) {
 					this.logger.debug("pending operation completed, advancing states");
@@ -34,22 +33,22 @@ export class AsyncOperationState implements AppState {
 			});
 	}
 
-	deactivate(): void {
-		this.wrappedState.deactivate();
+	deactivate(context: AppState.Context<RenderingContextType, RendererType>): void {
+		this.wrappedState.deactivate(context);
 		this.isActive = false;
 		this.nextState = null;
 	}
 
-	resize(size: Size2): void {
-		this.wrappedState.resize(size);
+	resize(context: AppState.Context<RenderingContextType, RendererType>): void {
+		this.wrappedState.resize(context);
 	}
 
-	render(gl: WebGL2RenderingContext): void {
-		this.wrappedState.render(gl);
+	render(context: AppState.Context<RenderingContextType, RendererType>): void {
+		this.wrappedState.render(context);
 	}
 
-	update(elapsedTime: number): AppState | null | undefined {
-		const next = this.wrappedState.update(elapsedTime);
+	update(context: AppState.Context<RenderingContextType, RendererType>, elapsedTime: number): AppState<RenderingContextType, RendererType> | null | undefined {
+		const next = this.wrappedState.update(context, elapsedTime);
 		if (next) {
 			this.logger.debug("while waiting for pending operation to complete the wrapped state signaled it wants to transition to a new state, using that instead");
 			return next;
