@@ -99,6 +99,24 @@ static class LibC
 	public static extern int Getchar();
 }
 
+class ExpectedValue<T> : Exception
+{
+	public ExpectedValue(T expected, T actual) : base($"expected {expected}, actual {actual}") { }
+}
+
+class ErrorCodeException : Exception
+{
+	public ErrorCodeException(string description, int errorCode) : base($"{description} failed: {errorCode}") { }
+
+	public static void AssertSuccess(string description, int errorCode)
+	{
+		if (errorCode != 0)
+		{
+			throw new ErrorCodeException(description, errorCode);
+		}
+	}
+}
+
 class Screen : IDisposable
 {
 	private TextWriter logger;
@@ -143,7 +161,8 @@ class Screen : IDisposable
 		get
 		{
 			stdout.Write(new byte[] { 0x1b, (byte)'[', (byte)'6', (byte)'n' });
-			Expect(new byte[] { 0x1b, (byte)'[' });
+			WaitFor(0x1b);
+			Expect((byte)'[');
 			var row = int.Parse(Encoding.ASCII.GetString(ExpectUntil((byte)';', 4)));
 			var column = int.Parse(Encoding.ASCII.GetString(ExpectUntil((byte)'R', 4)));
 			return new(Row: row, Column: column);
@@ -157,20 +176,7 @@ class Screen : IDisposable
 
 	public void WaitForEnter()
 	{
-		// TODO JEFF bring sanity to this
-		while (true)
-		{
-			logger.WriteLine($"TODO JEFF about to call ReadByte");
-			logger.Flush();
-			var next = ReadByte();
-			logger.WriteLine($"TODO JEFF {Convert.ToString(next, 16).PadLeft(2, '0')}");
-			logger.Flush();
-			if (next == '\r')
-			{
-				break;
-			}
-		}
-		// while (ReadByte() != (byte)'\r') { }
+		WaitFor((byte)'\r');
 	}
 
 	private byte ReadByte()
@@ -183,8 +189,7 @@ class Screen : IDisposable
 		var result = ReadByte();
 		if (result != value)
 		{
-			// TODO special exception type
-			throw new Exception($"expected {Convert.ToString(value, 16).PadLeft(2, '0')} but got {Convert.ToString(result, 16).PadLeft(2, '0')}");
+			throw new ExpectedValue<string>(Convert.ToString(value, 16).PadLeft(2, '0'), Convert.ToString(result, 16).PadLeft(2, '0'));
 		}
 	}
 
@@ -211,17 +216,20 @@ class Screen : IDisposable
 		return results.ToArray();
 	}
 
+	private void WaitFor(byte value)
+	{
+		while (ReadByte() != value) { }
+	}
+
 	private LibC.Winsize IoctlWinsize
 	{
 		get
 		{
 			LibC.Winsize result = new();
-			int ioctlResult = LibC.Ioctl(new IntPtr(LibC.STDIN_FILENO), LibC.TIOCGWINSZ, ref result);
-			if (ioctlResult != 0)
-			{
-				// TODO special exception type
-				throw new Exception($"ioctl failed: {ioctlResult}");
-			}
+			ErrorCodeException.AssertSuccess(
+				"ioctl",
+				LibC.Ioctl(new IntPtr(LibC.STDIN_FILENO), LibC.TIOCGWINSZ, ref result)
+			);
 			return result;
 		}
 	}
@@ -231,24 +239,20 @@ class Screen : IDisposable
 		get
 		{
 			LibC.Termios result = new();
-			int tcgetattrResult = LibC.Tcgetattr(new IntPtr(LibC.STDIN_FILENO), ref result);
-			if (tcgetattrResult != 0)
-			{
-				// TODO special exception type
-				throw new Exception($"tcgetattr failed: {tcgetattrResult}");
-			}
+			ErrorCodeException.AssertSuccess(
+				"tcgetattr",
+				LibC.Tcgetattr(new IntPtr(LibC.STDIN_FILENO), ref result)
+			);
 			return result;
 		}
 	}
 
 	private void Tcsetattr(uint optionalActions, LibC.Termios termios)
 	{
-		int result = LibC.Tcsetattr(0, optionalActions, ref termios);
-		if (result != 0)
-		{
-			// TODO special exception type
-			throw new Exception($"tcsetattr failed: {result}");
-		}
+		ErrorCodeException.AssertSuccess(
+			"tcsetattr",
+			LibC.Tcsetattr(0, optionalActions, ref termios)
+		);
 	}
 
 	private void SetRaw()
@@ -268,8 +272,7 @@ class Screen : IDisposable
 	{
 		// set cooked mode
 		// https://github.com/wertarbyte/coreutils/blob/master/src/stty.c#L1167
-		// TODO do we need a backup or just get current termios again?
-		var termios = backupTermios;
+		var termios = Termios;
 		termios.c_iflag |= LibC.BRKINT | LibC.IGNPAR | LibC.ISTRIP | LibC.ICRNL | LibC.IXON;
 		termios.c_oflag |= LibC.OPOST;
 		termios.c_lflag |= LibC.ISIG | LibC.ICANON | LibC.ECHO;
