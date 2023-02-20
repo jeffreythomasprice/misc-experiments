@@ -86,6 +86,22 @@ export class Shader extends Disposable {
 		this.gl.useProgram(null);
 	}
 
+	assertAttribute(name: string): Shader.AttributeInfo {
+		const result = this.attributes.get(name);
+		if (!result) {
+			throw new Error(`no such attribute: ${name}`);
+		}
+		return result;
+	}
+
+	assertUniform(name: string): Shader.UniformInfo {
+		const result = this.uniforms.get(name);
+		if (!result) {
+			throw new Error(`no such uniform: ${name}`);
+		}
+		return result;
+	}
+
 	protected disposeImpl(): void {
 		this.gl.deleteProgram(this.program);
 	}

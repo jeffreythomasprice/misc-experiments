@@ -37,12 +37,9 @@ export namespace VertexDefinition {
 		) { }
 
 		attribute(name: string, f: (attrBuilder: AttributeBuilder) => void): Builder {
+			const info = this.shader.assertAttribute(name);
 			if (this.attributes.has(name)) {
 				throw new Error(`duplicate definition for ${name}`);
-			}
-			const info = this.shader.attributes.get(name);
-			if (!info) {
-				throw new Error(`no such attribute ${name}`);
 			}
 			const attrBuilder = new AttributeBuilderImpl(info);
 			// guess where the offset for this one should start based on the previous attributes

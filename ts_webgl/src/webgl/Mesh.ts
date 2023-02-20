@@ -12,7 +12,7 @@ export class Mesh<T> extends Disposable {
 
 	constructor(
 		gl: WebGL2RenderingContext,
-		writer: StructIO<T>,
+		readonly writer: StructIO<T>,
 	) {
 		super();
 
@@ -32,10 +32,12 @@ export class Mesh<T> extends Disposable {
 		this.arrayBuffer.flush();
 		this.elementArrayBuffer.flush();
 		this.vertexArray.bind();
+		this.elementArrayBuffer.bind();
 	}
 
 	bindNone() {
 		this.vertexArray.bindNone();
+		this.elementArrayBuffer.bindNone();
 	}
 
 	triangleFan(...vertices: T[]) {

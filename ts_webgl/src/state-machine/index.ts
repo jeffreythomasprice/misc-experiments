@@ -5,19 +5,14 @@ import { Size2 } from "../geometry";
 import { Logger } from "../utils";
 import { AppState } from "./AppState";
 
-class Context<RenderingContextType extends WebGLRenderingContextBase, RendererType> implements AppState.Context<RenderingContextType, RendererType> {
+class Context<RenderingContextType extends WebGLRenderingContextBase> implements AppState.Context<RenderingContextType> {
 	constructor(
 		private readonly _renderingContext: RenderingContextType,
-		private readonly _renderer: RendererType,
 		private _size: Size2,
 	) { }
 
 	get renderingContext(): RenderingContextType {
 		return this._renderingContext;
-	}
-
-	get renderer(): RendererType {
-		return this._renderer;
 	}
 
 	get size(): Size2 {
@@ -31,18 +26,15 @@ class Context<RenderingContextType extends WebGLRenderingContextBase, RendererTy
 
 export function run<RendererType>(
 	renderingContextType: "webgl",
-	rendererFactory: (context: WebGLRenderingContext) => RendererType,
-	initialState: AppState<WebGLRenderingContext, RendererType>,
+	initialState: AppState<WebGLRenderingContext>,
 ): void;
 export function run<RendererType>(
 	renderingContextType: "webgl2",
-	rendererFactory: (context: WebGL2RenderingContext) => RendererType,
-	initialState: AppState<WebGL2RenderingContext, RendererType>,
+	initialState: AppState<WebGL2RenderingContext>,
 ): void;
-export function run<RendererType>(
+export function run(
 	renderingContextType: "webgl" | "webgl2",
-	rendererFactory: ((context: WebGLRenderingContext) => RendererType) | ((context: WebGL2RenderingContext) => RendererType),
-	initialState: AppState<WebGLRenderingContextBase, RendererType>,
+	initialState: AppState<WebGLRenderingContextBase>,
 ): void {
 	const logger = new Logger({
 		prefix: "state-machine",
@@ -70,9 +62,7 @@ export function run<RendererType>(
 			throw new Error("failed to make webgl context");
 		}
 
-		const renderer = (rendererFactory as ((context: WebGLRenderingContextBase) => RendererType))(renderingContext);
-
-		const context = new Context(renderingContext, renderer, new Size2(0, 0));
+		const context = new Context(renderingContext, new Size2(0, 0));
 
 		let currentState = initialState;
 		try {
