@@ -1,0 +1,3 @@
+```
+dotnet run --project Client
+```
