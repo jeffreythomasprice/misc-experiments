@@ -9,6 +9,7 @@
 #include <cmath>
 #include <sstream>
 #include <thread>
+#include <future>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -19,7 +20,124 @@
 
 #include <GL/gl.h>
 
-std::string emscriptenResultToString(int result)
+enum class LogLevel
+{
+	Verbose = 0,
+	Debug,
+	Info,
+	Warning,
+	Error,
+};
+
+std::ostream &operator<<(std::ostream &s, LogLevel level)
+{
+	switch (level)
+	{
+	case LogLevel::Verbose:
+		return s << "Verbose";
+	case LogLevel::Debug:
+		return s << "Debug";
+	case LogLevel::Info:
+		return s << "Info";
+	case LogLevel::Warning:
+		return s << "Warning";
+	case LogLevel::Error:
+		return s << "Error";
+	default:
+		return s << "LogLevel(" << (int)level << ")";
+	}
+}
+
+class Logger
+{
+private:
+	LogLevel level;
+
+public:
+	Logger();
+	virtual ~Logger();
+
+	LogLevel getLevel() const;
+	void setLevel(LogLevel level);
+
+	bool isEnabled(LogLevel level) const;
+
+	void verbose(const std::string &s);
+	void debug(const std::string &s);
+	void info(const std::string &s);
+	void warning(const std::string &s);
+	void error(const std::string &s);
+
+	virtual void log(LogLevel level, const std::string &s) = 0;
+
+protected:
+	const std::string formatLogLine(LogLevel level, const std::string &s) const;
+};
+
+Logger::Logger() : level(LogLevel::Debug) {}
+
+Logger::~Logger() {}
+
+LogLevel Logger::getLevel() const { return level; }
+
+void Logger::setLevel(LogLevel level) { this->level = level; }
+
+bool Logger::isEnabled(LogLevel level) const
+{
+	return level >= this->level;
+}
+
+void Logger::verbose(const std::string &s) { log(LogLevel::Verbose, s); }
+
+void Logger::debug(const std::string &s) { log(LogLevel::Debug, s); }
+
+void Logger::info(const std::string &s) { log(LogLevel::Info, s); }
+
+void Logger::warning(const std::string &s) { log(LogLevel::Warning, s); }
+
+void Logger::error(const std::string &s) { log(LogLevel::Error, s); }
+
+const std::string Logger::formatLogLine(LogLevel level, const std::string &s) const
+{
+	std::stringstream ss;
+	// TODO timestamp
+	ss << level << ": " << s;
+	return ss.str();
+}
+
+class ConsoleLogger : public Logger
+{
+public:
+	virtual ~ConsoleLogger();
+
+	virtual void log(LogLevel level, const std::string &s) override;
+};
+
+ConsoleLogger::~ConsoleLogger() {}
+
+void ConsoleLogger::log(LogLevel level, const std::string &s)
+{
+	if (isEnabled(level))
+	{
+		auto formatted = formatLogLine(level, s);
+		switch (level)
+		{
+		case LogLevel::Warning:
+			emscripten_console_warn(formatted.c_str());
+			break;
+		case LogLevel::Error:
+			emscripten_console_error(formatted.c_str());
+			break;
+		default:
+			emscripten_console_log(formatted.c_str());
+			break;
+		}
+	}
+}
+
+// TODO delete me?
+std::string
+emscriptenResultToString(int result)
 {
 	switch (result)
 	{
@@ -50,6 +168,7 @@ std::string emscriptenResultToString(int result)
 	}
 }
 
+// TODO move me
 class DownloadManager
 {
 public:
@@ -74,6 +193,7 @@ public:
 		OnSuccessCallback onSuccess,
 		OnErrorCallback onError = nullptr,
 		OnProgressCallback onProgress = nullptr);
+	std::future<std::string> makeGetRequest(const std::string &url);
 
 private:
 	static void fetchOnSuccess(emscripten_fetch_t *fetch);
@@ -107,6 +227,23 @@ void DownloadManager::makeGetRequest(
 	c->onSuccess = onSuccess;
 	c->onError = onError;
 	c->onProgress = onProgress;
+}
+
+std::future<std::string> DownloadManager::makeGetRequest(const std::string &url)
+{
+	auto p = std::make_shared<std::promise<std::string>>();
+	makeGetRequest(
+		url,
+		[p](const std::string &data)
+		{
+			p->set_value(data);
+		},
+		[p](unsigned short httpStatusCode, const std::string &httpStatusMessage)
+		{
+			// TODO custom exception class for status code and msg
+			p->set_exception(std::make_exception_ptr(std::logic_error("TODO JEFF error msg")));
+		});
+	return p->get_future();
 }
 
 void DownloadManager::fetchOnSuccess(emscripten_fetch_t *fetch)
@@ -169,25 +306,44 @@ void DownloadManager::removeCallbacks(std::shared_ptr<DownloadManager::Callbacks
 class DemoState : public AppState
 {
 private:
+	std::shared_ptr<Logger> logger;
 	DownloadManager downloadManager;
 
 public:
+	DemoState(std::shared_ptr<Logger> logger) : logger(logger) {}
+
 	void activate() override
 	{
-		downloadManager.makeGetRequest(
-			"index.html",
-			[](const std::string &data)
-			{
-				std::cout << "TODO JEFF success " << data << std::endl;
-			},
-			[](unsigned short httpStatusCode, const std::string &httpStatusMessage)
-			{
-				std::cout << "TODO JEFF error " << httpStatusCode << ", " << httpStatusMessage << std::endl;
-			},
-			[](uint64_t numBytes, uint64_t totalBytes)
-			{
-				std::cout << "TODO JEFF progress " << numBytes << " " << totalBytes << std::endl;
-			});
+		// downloadManager.makeGetRequest(
+		// 	"index.html",
+		// 	[](const std::string &data)
+		// 	{
+		// 		emscripten_console_log(data.c_str());
+		// 		// std::cout << "TODO JEFF success " << data << std::endl;
+		// 	},
+		// 	[](unsigned short httpStatusCode, const std::string &httpStatusMessage)
+		// 	{
+		// 		std::cout << "TODO JEFF error " << httpStatusCode << ", " << httpStatusMessage << std::endl;
+		// 	},
+		// 	[](uint64_t numBytes, uint64_t totalBytes)
+		// 	{
+		// 		std::cout << "TODO JEFF progress " << numBytes << " " << totalBytes << std::endl;
+		// 	});
+		try
+		{
+			// TODO blocks main thread
+			auto result = downloadManager.makeGetRequest("index.html").get();
+			std::stringstream ss;
+			ss << "result from get request:\n"
+			   << result;
+			logger->debug(ss.str());
+		}
+		catch (const std::exception &e)
+		{
+			std::stringstream ss;
+			ss << "error making request: " << e.what();
+			logger->error(ss.str());
+		}
 	}
 
 	void resize(int width, int height) override
@@ -210,6 +366,13 @@ public:
 
 int main()
 {
-	App app(std::make_shared<DemoState>());
+	auto logger = std::make_shared<ConsoleLogger>();
+	logger->setLevel(LogLevel::Verbose);
+	logger->verbose("test");
+	logger->debug("test");
+	logger->info("test");
+	logger->warning("test");
+	logger->error("test");
+	App app(std::make_shared<DemoState>(logger));
 	return 0;
 }

@@ -67,7 +67,6 @@ void App::renderAndUpdate()
 	emscripten_webgl_make_context_current(context);
 	currentState->render();
 
-	// TODO use real duration
 	auto now = std::chrono::system_clock::now();
 	if (lastUpdate.has_value())
 	{
