@@ -9,8 +9,30 @@ try
 	logger.WriteLine($"size = {screen.Size}");
 	logger.WriteLine($"cursor = {screen.Cursor}");
 
-	screen.Cursor = new(Row: 1, Column: 1);
+	screen.Cursor = new(Row: 4, Column: 3);
 	logger.WriteLine($"cursor = {screen.Cursor}");
+
+	var s = "";
+	for (var row = 0; row < screen.Size.Rows; row++)
+	{
+		for (var column = 0; column < screen.Size.Columns; column++)
+		{
+			if (row == 0 || row == screen.Size.Rows - 1 || column == 0 || column == screen.Size.Columns - 1)
+			{
+				s += "+";
+			}
+			else
+			{
+				s += " ";
+			}
+		}
+		s += "\n";
+	}
+	screen.Cursor = new(1, 1);
+	screen.Write(s);
+
+	screen.Cursor = new(4, 3);
+	screen.Write("test\ntest 2\n\nfoo bar baz");
 
 	screen.WaitForEnter();
 	logger.WriteLine("done");
@@ -177,6 +199,26 @@ class Screen : IDisposable
 	public void WaitForEnter()
 	{
 		WaitFor((byte)'\r');
+	}
+
+	public void Write(string s)
+	{
+		foreach (var line in s.Split("\n"))
+		{
+			var bytes = Encoding.ASCII.GetBytes(line);
+			stdout.Write(bytes);
+
+			// shift cursor left
+			if (bytes.Length >= 1)
+			{
+				stdout.WriteByte(0x1b);
+				stdout.Write(Encoding.ASCII.GetBytes($"[{bytes.Length}D"));
+			}
+
+			// shift cursor down
+			stdout.WriteByte(0x1b);
+			stdout.Write(Encoding.ASCII.GetBytes($"[1B"));
+		}
 	}
 
 	private byte ReadByte()
