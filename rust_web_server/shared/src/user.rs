@@ -15,6 +15,6 @@ pub struct CreateUserRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateUserRequest {
-    pub password: String,
-    pub is_admin: bool,
+    pub password: Option<String>,
+    pub is_admin: Option<bool>,
 }

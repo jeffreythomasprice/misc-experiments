@@ -1,3 +1,4 @@
+use shared::user::{CreateUserRequest, UpdateUserRequest};
 use sqlx::{Pool, Sqlite};
 
 use crate::responses::Error;
@@ -32,25 +33,29 @@ impl Service {
         }
     }
 
-    pub async fn create(&self, user: &User) -> Result<(), Error> {
+    pub async fn create(&self, request: &CreateUserRequest) -> Result<(), Error> {
         sqlx::query("INSERT INTO users (name, password, is_admin) VALUES (?, ?, ?)")
-            .bind(&user.name)
-            .bind(&user.password)
-            .bind(user.is_admin)
+            .bind(&request.name)
+            .bind(&request.password)
+            .bind(request.is_admin)
             .execute(&self.db)
             .await?;
         Ok(())
     }
 
-    pub async fn update(&self, user: &User) -> Result<(), Error> {
-        let result = sqlx::query("UPDATE users SET password = ?, is_admin = ? WHERE name = ?")
-            .bind(&user.password)
-            .bind(user.is_admin)
-            .bind(&user.name)
-            .execute(&self.db)
-            .await?;
+    pub async fn update(&self, name: &str, request: &UpdateUserRequest) -> Result<(), Error> {
+        let mut query = sqlx::query_builder::QueryBuilder::new("UPDATE users SET ");
+        let mut separated = query.separated(", ");
+        if let Some(value) = &request.password {
+            separated.push("password = ").push_bind_unseparated(value);
+        }
+        if let Some(value) = request.is_admin {
+            separated.push("is_admin = ").push_bind_unseparated(value);
+        }
+        query.push(" WHERE name = ").push_bind(name);
+        let result = query.build().execute(&self.db).await?;
         if result.rows_affected() == 0 {
-            Err(Error::NotFound(user.name.to_string()))
+            Err(Error::NotFound(name.to_string()))
         } else {
             Ok(())
         }
@@ -83,7 +88,7 @@ mod test {
         assert!(users.is_empty());
 
         service
-            .create(&User {
+            .create(&CreateUserRequest {
                 name: "foo".to_string(),
                 password: "bar".to_string(),
                 is_admin: true,
@@ -108,7 +113,7 @@ mod test {
         let service = Service::new(create_db_for_test().await?);
 
         service
-            .create(&User {
+            .create(&CreateUserRequest {
                 name: "foo".to_string(),
                 password: "bar".to_string(),
                 is_admin: true,
@@ -116,7 +121,7 @@ mod test {
             .await?;
 
         let result = service
-            .create(&User {
+            .create(&CreateUserRequest {
                 name: "foo".to_string(),
                 password: "baz".to_string(),
                 is_admin: true,
@@ -132,14 +137,14 @@ mod test {
         let service = Service::new(create_db_for_test().await?);
 
         service
-            .create(&User {
+            .create(&CreateUserRequest {
                 name: "foo".to_string(),
                 password: "asdfasdf".to_string(),
                 is_admin: true,
             })
             .await?;
         service
-            .create(&User {
+            .create(&CreateUserRequest {
                 name: "bar".to_string(),
                 password: "asdfasdf".to_string(),
                 is_admin: false,
@@ -147,19 +152,23 @@ mod test {
             .await?;
 
         service
-            .update(&User {
-                name: "foo".to_string(),
-                password: "new_password".to_string(),
-                is_admin: false,
-            })
+            .update(
+                "foo",
+                &UpdateUserRequest {
+                    password: Some("new_password".to_string()),
+                    is_admin: None,
+                },
+            )
             .await?;
 
         service
-            .update(&User {
-                name: "bar".to_string(),
-                password: "new_password_2".to_string(),
-                is_admin: true,
-            })
+            .update(
+                "bar",
+                &UpdateUserRequest {
+                    password: None,
+                    is_admin: Some(true),
+                },
+            )
             .await?;
 
         let users = service.list().await?;
@@ -168,11 +177,11 @@ mod test {
                 User {
                     name: "foo".to_string(),
                     password: "new_password".to_string(),
-                    is_admin: false
+                    is_admin: true
                 },
                 User {
                     name: "bar".to_string(),
-                    password: "new_password_2".to_string(),
+                    password: "asdfasdf".to_string(),
                     is_admin: true
                 }
             ],
@@ -183,14 +192,14 @@ mod test {
             User {
                 name: "foo".to_string(),
                 password: "new_password".to_string(),
-                is_admin: false
+                is_admin: true
             },
             service.get_by_name("foo").await?
         );
         assert_eq!(
             User {
                 name: "bar".to_string(),
-                password: "new_password_2".to_string(),
+                password: "asdfasdf".to_string(),
                 is_admin: true
             },
             service.get_by_name("bar").await?
@@ -205,11 +214,13 @@ mod test {
         let service = Service::new(create_db_for_test().await?);
 
         let result = service
-            .update(&User {
-                name: "foo".to_string(),
-                password: "new_password".to_string(),
-                is_admin: false,
-            })
+            .update(
+                "foo",
+                &UpdateUserRequest {
+                    password: Some("new_password".to_string()),
+                    is_admin: Some(false),
+                },
+            )
             .await
             .unwrap_err();
         let expected = Error::NotFound("foo".to_string());
@@ -223,7 +234,7 @@ mod test {
         let service = Service::new(create_db_for_test().await?);
 
         service
-            .create(&User {
+            .create(&CreateUserRequest {
                 name: "foo".to_string(),
                 password: "bar".to_string(),
                 is_admin: true,

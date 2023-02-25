@@ -1,10 +1,22 @@
-use rocket::{http::Status, response::status, serde::json::Json};
+use rocket::{http::Status, response::Responder, serde::json::Json, Response};
 use shared::errors::ErrorResponse;
 
 #[derive(Debug)]
 pub enum Error {
     Sql(sqlx::Error),
     NotFound(String),
+}
+
+impl Error {
+    pub fn to_response(&self) -> (Status, ErrorResponse) {
+        match self {
+            Error::Sql(e) => (
+                Status::InternalServerError,
+                ErrorResponse::new(&format!("{e:?}")),
+            ),
+            Error::NotFound(message) => (Status::NotFound, ErrorResponse::new(&message)),
+        }
+    }
 }
 
 impl PartialEq for Error {
@@ -24,23 +36,11 @@ impl From<sqlx::Error> for Error {
     }
 }
 
-pub type JsonResult<T> = Result<Json<T>, status::Custom<Json<ErrorResponse>>>;
-
-pub fn get_json_result<T, S>(r: Result<S, Error>) -> JsonResult<T>
-where
-    S: Into<T>,
-{
-    match r {
-        Ok(result) => Ok(Json(result.into())),
-        Err(e) => match e {
-            Error::Sql(_) => Err(status::Custom(
-                Status::InternalServerError,
-                Json(ErrorResponse::new(&format!("{e:?}"))),
-            )),
-            Error::NotFound(message) => Err(status::Custom(
-                Status::NotFound,
-                Json(ErrorResponse::new(&message)),
-            )),
-        },
+impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
+    fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'o> {
+        let (status, response) = self.to_response();
+        Response::build_from(Json(response).respond_to(request)?)
+            .status(status)
+            .ok()
     }
 }

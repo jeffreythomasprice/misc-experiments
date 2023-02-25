@@ -1,63 +1,56 @@
 use std::sync::Arc;
 
-use rocket::{http::Status, response::status, serde::json::Json, Route, State};
+use rocket::{serde::json::Json, Route, State};
 
-use shared::user::{CreateUserRequest, UserResponse};
+use shared::user::{CreateUserRequest, UpdateUserRequest, UserResponse};
 
-use crate::{
-    responses::{get_json_result, JsonResult},
-    user::{models::User, service::Service},
-};
+use crate::{responses::Error, user::service::Service};
 
 pub fn routes() -> Vec<Route> {
-    routes![list, get_by_name, create]
+    routes![list, get_by_name, create, update, delete_by_name]
 }
 
 #[get("/")]
-async fn list(service: &State<Arc<Service>>) -> JsonResult<Vec<UserResponse>> {
-    get_json_result(service.list().await.and_then(|results| {
-        Ok(results
-            .iter()
+async fn list(service: &State<Arc<Service>>) -> Result<Json<Vec<UserResponse>>, Error> {
+    Ok(Json(
+        service
+            .list()
+            .await?
+            .into_iter()
             .map(|user| user.into())
-            .collect::<Vec<UserResponse>>())
-    }))
+            .collect::<Vec<UserResponse>>(),
+    ))
 }
 
 #[get("/<name>")]
-async fn get_by_name(service: &State<Arc<Service>>, name: &str) -> JsonResult<UserResponse> {
-    get_json_result(service.get_by_name(name).await)
+async fn get_by_name(
+    service: &State<Arc<Service>>,
+    name: &str,
+) -> Result<Json<UserResponse>, Error> {
+    Ok(Json(service.get_by_name(name).await?.into()))
 }
 
 #[post("/", data = "<request>")]
 async fn create(
     service: &State<Arc<Service>>,
     request: Json<CreateUserRequest>,
-) -> Result<Json<UserResponse>, status::Custom<String>> {
-    match service
-        .create(&User {
-            name: request.name.clone(),
-            password: request.password.clone(),
-            is_admin: request.is_admin,
-        })
-        .await
-    {
-        Ok(_) => match service.get_by_name(&request.name).await {
-            Ok(result) => Ok(Json(UserResponse {
-                name: result.name,
-                is_admin: result.is_admin,
-            })),
-            Err(e) => Err(status::Custom(
-                Status::InternalServerError,
-                format!("{e:?}"),
-            )),
-        },
-        Err(e) => Err(status::Custom(
-            Status::InternalServerError,
-            format!("{e:?}"),
-        )),
-    }
+) -> Result<Json<UserResponse>, Error> {
+    service.create(&request).await?;
+    Ok(Json(service.get_by_name(&request.name).await?.into()))
 }
 
-// TODO update
+#[put("/<name>", data = "<request>")]
+async fn update(
+    service: &State<Arc<Service>>,
+    name: &str,
+    request: Json<UpdateUserRequest>,
+) -> Result<Json<UserResponse>, Error> {
+    service.update(name, &request).await?;
+    Ok(Json(service.get_by_name(name).await?.into()))
+}
 
-// TODO delete
+#[delete("/<name>")]
+async fn delete_by_name(service: &State<Arc<Service>>, name: &str) -> Result<(), Error> {
+    service.delete_by_name(name).await?;
+    Ok(())
+}

@@ -8,16 +8,6 @@ pub struct User {
     pub is_admin: bool,
 }
 
-impl Into<UserResponse> for &User {
-    fn into(self) -> UserResponse {
-        UserResponse {
-            name: self.name.clone(),
-            is_admin: self.is_admin,
-        }
-    }
-}
-
-// TODO why both?
 impl Into<UserResponse> for User {
     fn into(self) -> UserResponse {
         UserResponse {
