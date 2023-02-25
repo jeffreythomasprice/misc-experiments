@@ -18,24 +18,22 @@ fn print_at(mut position: Position, s: &str) -> Result<(), io::Error> {
 }
 
 struct RectangleStyle {
-    interior: u8,
-    left: u8,
-    right: u8,
-    top: u8,
-    bottom: u8,
-    top_left: u8,
-    top_right: u8,
-    bottom_left: u8,
-    bottom_right: u8,
+    interior: char,
+    left: char,
+    right: char,
+    top: char,
+    bottom: char,
+    top_left: char,
+    top_right: char,
+    bottom_left: char,
+    bottom_right: char,
 }
 
 fn draw_rect(position: Position, size: Size, style: RectangleStyle) -> Result<(), Box<dyn Error>> {
     let mut content = Vec::with_capacity(
         (
-            // the size of the rectangle
-            size.width * size.height + 
-        // plus the newlines between rows
-        (size.height - 1)
+            // the size of the rectangle, plus the newlines between rows
+            size.width * size.height + (size.height - 1)
         )
         .into(),
     );
@@ -66,7 +64,7 @@ fn draw_rect(position: Position, size: Size, style: RectangleStyle) -> Result<()
             });
         }
     }
-    print_at(position, std::str::from_utf8(&content)?)?;
+    print_at(position, String::from_iter(content).as_str())?;
     Ok(())
 }
 
@@ -78,15 +76,15 @@ fn main() {
             Position { x: 0, y: 0 },
             get_window_size()?,
             RectangleStyle {
-                interior: b' ',
-                left: b'<',
-                right: b'>',
-                top: b'^',
-                bottom: b'v',
-                top_left: b'1',
-                top_right: b'2',
-                bottom_left: b'3',
-                bottom_right: b'4',
+                interior: ' ',
+                left: '┃',
+                right: '┃',
+                top: '━',
+                bottom: '━',
+                top_left: '┏',
+                top_right: '┓',
+                bottom_left: '┗',
+                bottom_right: '┛',
             },
         )?;
 
