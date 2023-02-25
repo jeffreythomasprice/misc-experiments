@@ -12,3 +12,9 @@ pub struct CreateUserRequest {
     pub password: String,
     pub is_admin: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateUserRequest {
+    pub password: String,
+    pub is_admin: bool,
+}
