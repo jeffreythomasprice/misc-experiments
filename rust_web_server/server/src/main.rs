@@ -1,9 +1,11 @@
+mod auth;
 mod db;
-mod responses;
+mod errors;
 mod user;
 
 use std::{error::Error, net::IpAddr, str::FromStr, sync::Arc};
 
+use auth::catchers;
 use db::create_db;
 use rocket::Config;
 
@@ -25,6 +27,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         ..Config::debug_default()
     })
     .manage(Arc::new(user::Service::new(db.clone())))
+    .register("/", catchers())
     .mount("/", routes![index])
     .mount("/users", user::routes())
     .launch()

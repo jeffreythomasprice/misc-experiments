@@ -1,7 +1,7 @@
 use shared::user::{CreateUserRequest, UpdateUserRequest};
 use sqlx::{Pool, Sqlite};
 
-use crate::responses::Error;
+use crate::errors::Error;
 
 use super::models::User;
 

@@ -4,7 +4,7 @@ use rocket::{serde::json::Json, Route, State};
 
 use shared::user::{CreateUserRequest, UpdateUserRequest, UserResponse};
 
-use crate::{responses::Error, user::service::Service};
+use crate::{auth::Authenticated, errors::Error, user::service::Service};
 
 pub fn routes() -> Vec<Route> {
     routes![list, get_by_name, create, update, delete_by_name]
@@ -44,7 +44,9 @@ async fn update(
     service: &State<Arc<Service>>,
     name: &str,
     request: Json<UpdateUserRequest>,
+    auth: Authenticated,
 ) -> Result<Json<UserResponse>, Error> {
+    println!("TODO JEFF update, auth = {:?}", auth);
     service.update(name, &request).await?;
     Ok(Json(service.get_by_name(name).await?.into()))
 }

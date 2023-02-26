@@ -5,6 +5,8 @@ use shared::errors::ErrorResponse;
 pub enum Error {
     Sql(sqlx::Error),
     NotFound(String),
+    Unauthorized,
+    Forbidden,
 }
 
 impl Error {
@@ -15,6 +17,8 @@ impl Error {
                 ErrorResponse::new(&format!("{e:?}")),
             ),
             Error::NotFound(message) => (Status::NotFound, ErrorResponse::new(&message)),
+            Error::Unauthorized => (Status::Unauthorized, ErrorResponse::new("unauthorized")),
+            Error::Forbidden => (Status::Forbidden, ErrorResponse::new("forbidden")),
         }
     }
 }
