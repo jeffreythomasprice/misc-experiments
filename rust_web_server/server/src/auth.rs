@@ -75,11 +75,21 @@ async fn authenticate(request: &Request<'_>) -> Result<Authenticated, Error> {
     }
     let header = header[0];
 
-    // TODO handle more kinds of auth, jwt?
-    basic_auth(service, header).await
+    if let Ok(result) = jwt_auth(service, header).await {
+        return Ok(result);
+    }
+
+    if let Ok(result) = basic_auth(service, header).await {
+        return Ok(result);
+    }
+
+    debug!("no authenticate method succeeded");
+    Err(Error::Unauthorized)
 }
 
 async fn basic_auth(service: &Service, header: &str) -> Result<Authenticated, Error> {
+    trace!("trying basic auth");
+
     // strip off prefix
     if !header.starts_with(BASIC_AUTH_PREFIX) {
         debug!("auth header doesn't look like basic auth");
@@ -117,4 +127,11 @@ async fn basic_auth(service: &Service, header: &str) -> Result<Authenticated, Er
         debug!("password mismatch for {name}");
         Err(Error::Unauthorized)
     }
+}
+
+async fn jwt_auth(service: &Service, header: &str) -> Result<Authenticated, Error> {
+    trace!("trying jwt auth");
+
+    // TODO look for 'Bearer: <jwt>'
+    Err(Error::Unauthorized)
 }
