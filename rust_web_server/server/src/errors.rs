@@ -1,6 +1,8 @@
 use rocket::{http::Status, response::Responder, serde::json::Json, Catcher, Response};
 use shared::errors::ErrorResponse;
 
+const PLACEHOLDER_MESSAGE: &str = "uncaught, no details available";
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
     InternalServerError(String),
@@ -18,6 +20,24 @@ impl Error {
             Error::NotFound(message) => (Status::NotFound, ErrorResponse::new(&message)),
             Error::Unauthorized => (Status::Unauthorized, ErrorResponse::new("unauthorized")),
             Error::Forbidden => (Status::Forbidden, ErrorResponse::new("forbidden")),
+        }
+    }
+
+    pub fn cache_on_request(&self, request: &rocket::Request) {
+        trace!("caching error {:?}", self.clone());
+        request.local_cache(move || Some(self.clone()));
+    }
+
+    pub fn get_cached_from_request(request: &rocket::Request, default: Error) -> Error {
+        match request.local_cache(move || None::<Error>) {
+            Some(result) => result.clone(),
+            None => {
+                warn!(
+                    "expected cached error but there was none, using provided default {:?}",
+                    default
+                );
+                default
+            }
         }
     }
 }
@@ -39,17 +59,28 @@ impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
 }
 
 pub fn catchers() -> Vec<Catcher> {
-    catchers![unauthorized, forbidden]
+    catchers![unauthorized, forbidden, not_found, internal_server_error]
 }
 
 #[catch(401)]
-fn unauthorized() -> Error {
-    Error::Unauthorized
+fn unauthorized(request: &rocket::Request) -> Error {
+    Error::get_cached_from_request(request, Error::Unauthorized)
 }
 
 #[catch(403)]
-fn forbidden() -> Error {
-    Error::Forbidden
+fn forbidden(request: &rocket::Request) -> Error {
+    Error::get_cached_from_request(request, Error::Forbidden)
 }
 
-// TODO default 500 and 404 errors that look for our error type in the request and use the default responder behavior
+#[catch(404)]
+fn not_found(request: &rocket::Request) -> Error {
+    Error::get_cached_from_request(request, Error::NotFound(PLACEHOLDER_MESSAGE.to_string()))
+}
+
+#[catch(500)]
+fn internal_server_error(request: &rocket::Request) -> Error {
+    Error::get_cached_from_request(
+        request,
+        Error::InternalServerError(PLACEHOLDER_MESSAGE.to_string()),
+    )
+}

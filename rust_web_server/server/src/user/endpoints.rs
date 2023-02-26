@@ -16,8 +16,10 @@ pub fn routes() -> Vec<Route> {
         get_by_name_as_admin,
         get_by_name_as_user,
         create,
-        update,
-        delete_by_name
+        update_as_admin,
+        update_as_user,
+        delete_by_name_as_admin,
+        delete_by_name_as_user,
     ]
 }
 
@@ -36,7 +38,7 @@ async fn list(
     ))
 }
 
-#[get("/<name>")]
+#[get("/<name>", rank = 1)]
 async fn get_by_name_as_admin(
     service: &State<Arc<Service>>,
     name: &str,
@@ -58,35 +60,62 @@ async fn get_by_name_as_user(
     }
 }
 
-// TODO add admin vs. non-admin below here
-
 #[post("/", data = "<request>")]
 async fn create(
     service: &State<Arc<Service>>,
     request: Json<CreateUserRequest>,
-    _auth: &Authenticated,
+    _auth: IsAdmin,
 ) -> Result<Json<UserResponse>, Error> {
     service.create(&request).await?;
     Ok(Json(service.get_by_name(&request.name).await?.into()))
 }
 
-#[put("/<name>", data = "<request>")]
-async fn update(
+#[put("/<name>", data = "<request>", rank = 1)]
+async fn update_as_admin(
     service: &State<Arc<Service>>,
     name: &str,
     request: Json<UpdateUserRequest>,
-    _auth: &Authenticated,
+    _auth: IsAdmin,
 ) -> Result<Json<UserResponse>, Error> {
     service.update(name, &request).await?;
     Ok(Json(service.get_by_name(name).await?.into()))
 }
 
-#[delete("/<name>")]
-async fn delete_by_name(
+#[put("/<name>", data = "<request>", rank = 2)]
+async fn update_as_user(
     service: &State<Arc<Service>>,
     name: &str,
-    _auth: &Authenticated,
+    request: Json<UpdateUserRequest>,
+    auth: &Authenticated,
+) -> Result<Json<UserResponse>, Error> {
+    if auth.0.name == name {
+        service.update(name, &request).await?;
+        Ok(Json(service.get_by_name(name).await?.into()))
+    } else {
+        Err(Error::Forbidden)
+    }
+}
+
+#[delete("/<name>", rank = 1)]
+async fn delete_by_name_as_admin(
+    service: &State<Arc<Service>>,
+    name: &str,
+    _auth: IsAdmin,
 ) -> Result<(), Error> {
     service.delete_by_name(name).await?;
     Ok(())
+}
+
+#[delete("/<name>", rank = 2)]
+async fn delete_by_name_as_user(
+    service: &State<Arc<Service>>,
+    name: &str,
+    auth: &Authenticated,
+) -> Result<(), Error> {
+    if auth.0.name == name {
+        service.delete_by_name(name).await?;
+        Ok(())
+    } else {
+        Err(Error::Forbidden)
+    }
 }

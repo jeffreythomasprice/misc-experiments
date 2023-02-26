@@ -25,7 +25,10 @@ impl<'r> FromRequest<'r> for &'r Authenticated {
             .await;
         match result {
             Ok(result) => Outcome::Success(result),
-            Err(e) => Outcome::Failure((Status::Unauthorized, e.clone())),
+            Err(e) => {
+                e.cache_on_request(request);
+                Outcome::Failure((Status::Unauthorized, e.clone()))
+            }
         }
         .forward_then(|_| Outcome::Forward(()))
     }
