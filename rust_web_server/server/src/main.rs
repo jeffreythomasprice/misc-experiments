@@ -18,17 +18,24 @@ fn index() -> &'static str {
 
 #[main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    simplelog::TermLogger::init(
-        log::LevelFilter::Trace,
-        simplelog::ConfigBuilder::new()
-            .add_filter_ignore_str("async_std")
-            .add_filter_ignore_str("async_io")
-            .add_filter_ignore_str("polling")
-            .add_filter_ignore_str("mio")
-            .build(),
-        simplelog::TerminalMode::Mixed,
-        simplelog::ColorChoice::Auto,
-    )?;
+    let colors = fern::colors::ColoredLevelConfig::default();
+    fern::Dispatch::new()
+        .format(move |out, message, record| {
+            out.finish(format_args!(
+                "{}[{: <5}][{}] {}",
+                chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%z"),
+                colors.color(record.level()),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Trace)
+        .level_for("async_std", log::LevelFilter::Error)
+        .level_for("async_io", log::LevelFilter::Error)
+        .level_for("polling", log::LevelFilter::Error)
+        .level_for("mio", log::LevelFilter::Error)
+        .chain(std::io::stdout())
+        .apply()?;
 
     let db = create_db().await?;
 
