@@ -4,18 +4,27 @@ use rocket::{serde::json::Json, Route, State};
 
 use shared::user::{CreateUserRequest, UpdateUserRequest, UserResponse};
 
-use crate::{auth::Authenticated, errors::Error, user::service::Service};
+use crate::{
+    auth::{Authenticated, IsAdmin},
+    errors::Error,
+    user::service::Service,
+};
 
 pub fn routes() -> Vec<Route> {
-    routes![list, get_by_name, create, update, delete_by_name]
+    routes![
+        list,
+        get_by_name_as_admin,
+        get_by_name_as_user,
+        create,
+        update,
+        delete_by_name
+    ]
 }
-
-// TODO various endpoints should only work for the authed user, or for everybody if admin
 
 #[get("/")]
 async fn list(
     service: &State<Arc<Service>>,
-    _auth: &Authenticated,
+    _auth: IsAdmin,
 ) -> Result<Json<Vec<UserResponse>>, Error> {
     Ok(Json(
         service
@@ -28,13 +37,28 @@ async fn list(
 }
 
 #[get("/<name>")]
-async fn get_by_name(
+async fn get_by_name_as_admin(
     service: &State<Arc<Service>>,
     name: &str,
-    _auth: &Authenticated,
+    _auth: IsAdmin,
 ) -> Result<Json<UserResponse>, Error> {
     Ok(Json(service.get_by_name(name).await?.into()))
 }
+
+#[get("/<name>", rank = 2)]
+async fn get_by_name_as_user(
+    service: &State<Arc<Service>>,
+    name: &str,
+    auth: &Authenticated,
+) -> Result<Json<UserResponse>, Error> {
+    if auth.0.name == name {
+        Ok(Json(service.get_by_name(name).await?.into()))
+    } else {
+        Err(Error::Forbidden)
+    }
+}
+
+// TODO add admin vs. non-admin below here
 
 #[post("/", data = "<request>")]
 async fn create(

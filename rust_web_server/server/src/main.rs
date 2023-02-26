@@ -5,8 +5,8 @@ mod user;
 
 use std::{error::Error, net::IpAddr, str::FromStr, sync::Arc};
 
-use auth::catchers;
 use db::create_db;
+use errors::catchers;
 
 #[macro_use]
 extern crate rocket;

@@ -4,7 +4,7 @@ use base64::Engine;
 use rocket::{
     http::Status,
     request::{FromRequest, Outcome, Request},
-    Catcher, State,
+    State,
 };
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct Authenticated(User);
+pub struct Authenticated(pub User);
 
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for &'r Authenticated {
@@ -27,11 +27,12 @@ impl<'r> FromRequest<'r> for &'r Authenticated {
             Ok(result) => Outcome::Success(result),
             Err(e) => Outcome::Failure((Status::Unauthorized, e.clone())),
         }
+        .forward_then(|_| Outcome::Forward(()))
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct IsAdmin(User);
+pub struct IsAdmin(pub User);
 
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for IsAdmin {
@@ -42,19 +43,10 @@ impl<'r> FromRequest<'r> for IsAdmin {
             if auth.0.is_admin {
                 Outcome::Success(IsAdmin(auth.0.clone()))
             } else {
-                Outcome::Failure((Status::Forbidden, Error::Forbidden))
+                Outcome::Forward(())
             }
         })
     }
-}
-
-pub fn catchers() -> Vec<Catcher> {
-    catchers![unauthorized]
-}
-
-#[catch(401)]
-fn unauthorized() -> Error {
-    Error::Unauthorized
 }
 
 const BASIC_AUTH_PREFIX: &str = "Basic ";
