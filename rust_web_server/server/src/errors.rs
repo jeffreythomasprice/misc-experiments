@@ -1,9 +1,9 @@
 use rocket::{http::Status, response::Responder, serde::json::Json, Response};
 use shared::errors::ErrorResponse;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Error {
-    Sql(sqlx::Error),
+    InternalServerError(String),
     NotFound(String),
     Unauthorized,
     Forbidden,
@@ -12,10 +12,9 @@ pub enum Error {
 impl Error {
     pub fn to_response(&self) -> (Status, ErrorResponse) {
         match self {
-            Error::Sql(e) => (
-                Status::InternalServerError,
-                ErrorResponse::new(&format!("{e:?}")),
-            ),
+            Error::InternalServerError(message) => {
+                (Status::InternalServerError, ErrorResponse::new(&message))
+            }
             Error::NotFound(message) => (Status::NotFound, ErrorResponse::new(&message)),
             Error::Unauthorized => (Status::Unauthorized, ErrorResponse::new("unauthorized")),
             Error::Forbidden => (Status::Forbidden, ErrorResponse::new("forbidden")),
@@ -23,20 +22,9 @@ impl Error {
     }
 }
 
-impl PartialEq for Error {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            // TODO smarter comparison of sqlx errors
-            (Self::Sql(l0), Self::Sql(r0)) => l0.to_string() == r0.to_string(),
-            (Self::NotFound(l0), Self::NotFound(r0)) => l0 == r0,
-            _ => false,
-        }
-    }
-}
-
 impl From<sqlx::Error> for Error {
     fn from(value: sqlx::Error) -> Self {
-        Error::Sql(value)
+        Error::InternalServerError(value.to_string())
     }
 }
 

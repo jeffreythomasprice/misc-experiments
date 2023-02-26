@@ -10,8 +10,13 @@ pub fn routes() -> Vec<Route> {
     routes![list, get_by_name, create, update, delete_by_name]
 }
 
+// TODO various endpoints should only work for the authed user, or for everybody if admin
+
 #[get("/")]
-async fn list(service: &State<Arc<Service>>) -> Result<Json<Vec<UserResponse>>, Error> {
+async fn list(
+    service: &State<Arc<Service>>,
+    _auth: &Authenticated,
+) -> Result<Json<Vec<UserResponse>>, Error> {
     Ok(Json(
         service
             .list()
@@ -26,6 +31,7 @@ async fn list(service: &State<Arc<Service>>) -> Result<Json<Vec<UserResponse>>, 
 async fn get_by_name(
     service: &State<Arc<Service>>,
     name: &str,
+    _auth: &Authenticated,
 ) -> Result<Json<UserResponse>, Error> {
     Ok(Json(service.get_by_name(name).await?.into()))
 }
@@ -34,6 +40,7 @@ async fn get_by_name(
 async fn create(
     service: &State<Arc<Service>>,
     request: Json<CreateUserRequest>,
+    _auth: &Authenticated,
 ) -> Result<Json<UserResponse>, Error> {
     service.create(&request).await?;
     Ok(Json(service.get_by_name(&request.name).await?.into()))
@@ -44,15 +51,18 @@ async fn update(
     service: &State<Arc<Service>>,
     name: &str,
     request: Json<UpdateUserRequest>,
-    auth: Authenticated,
+    _auth: &Authenticated,
 ) -> Result<Json<UserResponse>, Error> {
-    println!("TODO JEFF update, auth = {:?}", auth);
     service.update(name, &request).await?;
     Ok(Json(service.get_by_name(name).await?.into()))
 }
 
 #[delete("/<name>")]
-async fn delete_by_name(service: &State<Arc<Service>>, name: &str) -> Result<(), Error> {
+async fn delete_by_name(
+    service: &State<Arc<Service>>,
+    name: &str,
+    _auth: &Authenticated,
+) -> Result<(), Error> {
     service.delete_by_name(name).await?;
     Ok(())
 }

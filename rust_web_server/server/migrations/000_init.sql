@@ -4,5 +4,5 @@ CREATE TABLE users(
 	is_admin INTEGER
 );
 
--- sample data
+-- default admin user
 INSERT INTO users (name, password, is_admin) VALUES ("admin", "admin", 1);

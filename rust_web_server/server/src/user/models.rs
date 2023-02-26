@@ -1,7 +1,7 @@
 use shared::user::UserResponse;
 use sqlx::FromRow;
 
-#[derive(Debug, FromRow, PartialEq)]
+#[derive(Debug, Clone, FromRow, PartialEq)]
 pub struct User {
     pub name: String,
     pub password: String,

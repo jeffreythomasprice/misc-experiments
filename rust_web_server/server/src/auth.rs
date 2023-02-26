@@ -7,64 +7,44 @@ use rocket::{
     Catcher, State,
 };
 
-use crate::{errors::Error, user::Service};
+use crate::{
+    errors::Error,
+    user::{models::User, Service},
+};
 
-#[derive(Debug)]
-pub struct Authenticated;
+#[derive(Debug, Clone)]
+pub struct Authenticated(User);
 
 #[rocket::async_trait]
-impl<'r> FromRequest<'r> for Authenticated {
+impl<'r> FromRequest<'r> for &'r Authenticated {
     type Error = Error;
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        // TODO check header for Authorization
-        match &request.headers().get("Authorization").collect::<Vec<_>>()[..] {
-            &[header] => {
-                async fn is_valid<'r>(
-                    header: &str,
-                    request: &'r Request<'_>,
-                ) -> Result<Authenticated, Error> {
-                    // strip off prefix
-                    const BASIC_AUTH_PREFIX: &str = "Basic ";
-                    if !header.starts_with(BASIC_AUTH_PREFIX) {
-                        Err(Error::Unauthorized)?;
-                    }
-                    let header = &header[BASIC_AUTH_PREFIX.len()..];
-
-                    // get the username and password components
-                    let header = base64::engine::general_purpose::URL_SAFE
-                        .decode(header)
-                        .or(Err(Error::Unauthorized))?;
-                    let header =
-                        std::str::from_utf8(header.as_slice()).or(Err(Error::Unauthorized))?;
-                    let (name, password) = header.split_once(":").ok_or(Error::Unauthorized)?;
-
-                    // get user
-                    let service = request
-                        .guard::<&State<Arc<Service>>>()
-                        .await
-                        .success_or(Error::Unauthorized)?;
-                    // TODO JEFF failure to find user 404, should 401
-                    let user = service.get_by_name(name).await?;
-
-                    // check that password matches
-                    if user.password == password {
-                        Ok(Authenticated)
-                    } else {
-                        Err(Error::Unauthorized)
-                    }
-                }
-
-                match is_valid(header, request).await {
-                    Ok(result) => Outcome::Success(result),
-                    Err(e) => {
-                        let (status, _) = e.to_response();
-                        Outcome::Failure((status, e))
-                    }
-                }
-            }
-            _ => Outcome::Failure((Status::Unauthorized, Error::Unauthorized)),
+        let result = request
+            .local_cache_async(async { authenticate(request).await })
+            .await;
+        match result {
+            Ok(result) => Outcome::Success(result),
+            Err(e) => Outcome::Failure((Status::Unauthorized, e.clone())),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IsAdmin(User);
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for IsAdmin {
+    type Error = Error;
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        request.guard::<&Authenticated>().await.and_then(|auth| {
+            if auth.0.is_admin {
+                Outcome::Success(IsAdmin(auth.0.clone()))
+            } else {
+                Outcome::Failure((Status::Forbidden, Error::Forbidden))
+            }
+        })
     }
 }
 
@@ -75,4 +55,66 @@ pub fn catchers() -> Vec<Catcher> {
 #[catch(401)]
 fn unauthorized() -> Error {
     Error::Unauthorized
+}
+
+const BASIC_AUTH_PREFIX: &str = "Basic ";
+
+async fn authenticate(request: &Request<'_>) -> Result<Authenticated, Error> {
+    let service = request
+        .guard::<&State<Arc<Service>>>()
+        .await
+        .success_or_else(|| {
+            error!("failed to get user service");
+            Error::Unauthorized
+        })?;
+
+    let header = &request.headers().get("Authorization").collect::<Vec<_>>();
+    if header.len() != 1 {
+        debug!("expected one auth header, got {}", header.len());
+        return Err(Error::Unauthorized);
+    }
+    let header = header[0];
+
+    // TODO handle more kinds of auth, jwt?
+    basic_auth(service, header).await
+}
+
+async fn basic_auth(service: &Service, header: &str) -> Result<Authenticated, Error> {
+    // strip off prefix
+    if !header.starts_with(BASIC_AUTH_PREFIX) {
+        debug!("auth header doesn't look like basic auth");
+        return Err(Error::Unauthorized);
+    }
+    let header = &header[BASIC_AUTH_PREFIX.len()..];
+
+    // get the username and password components
+    let header = base64::engine::general_purpose::URL_SAFE
+        .decode(header)
+        .or_else(|e| {
+            debug!("auth header isn't base64-encoded: {e}");
+            Err(Error::Unauthorized)
+        })?;
+    let header = std::str::from_utf8(header.as_slice()).or_else(|e| {
+        debug!("auth header is base64 encoded, but encoded value isn't a utf8-string: {e}");
+        Err(Error::Unauthorized)
+    })?;
+    let (name, password) = header.split_once(":").ok_or_else(|| {
+        debug!("auth header doesn't have a ':' delimeter");
+        Error::Unauthorized
+    })?;
+
+    // get user
+    let user = service.get_by_name(name).await.or_else(|e| {
+        debug!("error finding user: {e:?}");
+        Err(e)
+    })?;
+
+    // check that password matches
+    if user.password == password {
+        debug!("authenticated {name}");
+        Ok(Authenticated(user))
+    } else {
+        debug!("password mismatch for {name}");
+        Err(Error::Unauthorized)
+    }
 }

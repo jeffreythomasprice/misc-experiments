@@ -85,7 +85,14 @@ mod test {
         let service = Service::new(create_db_for_test().await?);
 
         let users = service.list().await?;
-        assert!(users.is_empty());
+        assert_eq!(
+            [User {
+                name: "admin".to_string(),
+                password: "admin".to_string(),
+                is_admin: true
+            }],
+            users.as_slice()
+        );
 
         service
             .create(&CreateUserRequest {
@@ -97,11 +104,18 @@ mod test {
 
         let users = service.list().await?;
         assert_eq!(
-            [User {
-                name: "foo".to_string(),
-                password: "bar".to_string(),
-                is_admin: true
-            }],
+            [
+                User {
+                    name: "admin".to_string(),
+                    password: "admin".to_string(),
+                    is_admin: true
+                },
+                User {
+                    name: "foo".to_string(),
+                    password: "bar".to_string(),
+                    is_admin: true
+                }
+            ],
             users.as_slice()
         );
 
@@ -175,6 +189,11 @@ mod test {
         assert_eq!(
             [
                 User {
+                    name: "admin".to_string(),
+                    password: "admin".to_string(),
+                    is_admin: true
+                },
+                User {
                     name: "foo".to_string(),
                     password: "new_password".to_string(),
                     is_admin: true
@@ -243,11 +262,18 @@ mod test {
 
         let users = service.list().await?;
         assert_eq!(
-            [User {
-                name: "foo".to_string(),
-                password: "bar".to_string(),
-                is_admin: true
-            }],
+            [
+                User {
+                    name: "admin".to_string(),
+                    password: "admin".to_string(),
+                    is_admin: true
+                },
+                User {
+                    name: "foo".to_string(),
+                    password: "bar".to_string(),
+                    is_admin: true
+                }
+            ],
             users.as_slice()
         );
 
@@ -255,7 +281,14 @@ mod test {
         assert!(result.is_ok());
 
         let users = service.list().await?;
-        assert_eq!(0, users.len());
+        assert_eq!(
+            [User {
+                name: "admin".to_string(),
+                password: "admin".to_string(),
+                is_admin: true
+            }],
+            users.as_slice()
+        );
 
         Ok(())
     }
