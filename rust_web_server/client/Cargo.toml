@@ -1,0 +1,25 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.shared]
+path = "../shared"
+
+[dependencies]
+log = "0.4.17"
+wasm-bindgen = "0.2.84"
+web-sys = "0.3.61"
+
+[dependencies.yew]
+version = "0.20.0"
+features = [
+	"csr"
+]
+
+[dependencies.console_log]
+version = "0.2.1"
+features = [
+	"color",
+	"wasm-bindgen"
+]
