@@ -38,3 +38,15 @@ features = [
 	"runtime-async-std-native-tls",
 	"sqlite"
 ]
+
+[dependencies.openssl]
+version = "0.10.45"
+features = [
+	"vendored"
+]
+
+[dependencies.jwt]
+version = "0.16.0"
+features = [
+	"openssl"
+]

@@ -48,6 +48,12 @@ impl From<sqlx::Error> for Error {
     }
 }
 
+impl From<Box<dyn std::error::Error>> for Error {
+    fn from(value: Box<dyn std::error::Error>) -> Self {
+        Error::InternalServerError(value.to_string())
+    }
+}
+
 impl<'r, 'o: 'r> Responder<'r, 'o> for Error {
     fn respond_to(self, request: &'r rocket::Request<'_>) -> rocket::response::Result<'o> {
         let (status, response) = self.to_response();

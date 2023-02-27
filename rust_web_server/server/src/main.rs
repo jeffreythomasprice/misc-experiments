@@ -44,12 +44,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let db = create_db().await?;
 
+    let jwt_key = auth::jwt::Key::new()?;
+
     _ = rocket::custom(rocket::Config {
         port: 8001,
         address: IpAddr::from_str("127.0.0.1").unwrap(),
         ..rocket::Config::debug_default()
     })
     .manage(Arc::new(user::Service::new(db.clone())))
+    .manage(jwt_key)
     .register("/", catchers())
     .mount("/", routes![index])
     .mount("/login", auth::routes())
