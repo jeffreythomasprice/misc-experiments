@@ -438,10 +438,12 @@ dependencies = [
 name = "client"
 version = "0.1.0"
 dependencies = [
+ "base64 0.21.0",
  "console_log",
  "log",
  "shared",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
  "yew",
 ]

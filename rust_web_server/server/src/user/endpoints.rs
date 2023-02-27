@@ -5,7 +5,7 @@ use rocket::{serde::json::Json, Route, State};
 use shared::user::{CreateUserRequest, UpdateUserRequest, UserResponse};
 
 use crate::{
-    auth::{Authenticated, IsAdmin},
+    auth::guards::{Authenticated, IsAdmin},
     errors::Error,
     user::service::Service,
 };
