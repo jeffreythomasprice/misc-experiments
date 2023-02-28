@@ -12,6 +12,7 @@ wasm-bindgen = "0.2.84"
 web-sys = "0.3.61"
 wasm-bindgen-futures = "0.4.34"
 base64 = "0.21.0"
+serde-wasm-bindgen = "0.4.5"
 
 [dependencies.yew]
 version = "0.20.0"

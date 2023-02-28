@@ -1,9 +1,10 @@
 use crate::rename::get_value_from_input_element;
 use base64::Engine;
 use log::*;
+use shared::auth;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, Response};
+use web_sys::{Request, RequestInit, Response, Storage};
 use yew::{html, Component, Context, Html, InputEvent, SubmitEvent};
 
 pub struct Login {
@@ -104,6 +105,8 @@ impl Component for Login {
 
 // TODO move to a service
 async fn login(username: &str, password: &str) -> Result<(), JsValue> {
+    let window = web_sys::window().ok_or("failed to get window")?;
+
     // TODO don't hard-code url
     let request = Request::new_with_str_and_init(
         "http://localhost:8001/login",
@@ -114,14 +117,18 @@ async fn login(username: &str, password: &str) -> Result<(), JsValue> {
     request
         .headers()
         .set("Authorization", &get_basic_auth_header(username, password))?;
-    let response = JsFuture::from(
-        web_sys::window()
-            .ok_or("failed to get window")?
-            .fetch_with_request(&request),
-    )
-    .await?
-    .dyn_into::<Response>()?;
-    todo!("TODO JEFF handle response: {:?}", response);
+    let response = JsFuture::from(window.fetch_with_request(&request))
+        .await?
+        .dyn_into::<Response>()?;
+    let response_body: auth::ResponseBody =
+        serde_wasm_bindgen::from_value(JsFuture::from(response.json()?).await?)?;
+    trace!("got jwt: {}", response_body.jwt);
+
+    let storage = window
+        .local_storage()?
+        .ok_or("failed to get local storage")?;
+    storage.set("jwt", response_body.jwt.as_str())?;
+    trace!("saved jwt in local storage");
 
     Ok(())
 }

@@ -1,20 +1,9 @@
-use async_std::io::Cursor;
-use rocket::{
-    http::{Cookie, Header},
-    serde::json::Json,
-    Route, State,
-};
-use serde::Serialize;
-use shared::user::UserResponse;
+use rocket::{serde::json::Json, Route, State};
+use shared::auth::ResponseBody;
 
 use crate::{auth::jwt::Claims, errors::Error};
 
 use super::{guards::Authenticated, jwt::Key};
-
-#[derive(Serialize)]
-struct ResponseBody {
-    jwt: String,
-}
 
 #[derive(Responder)]
 struct Response {

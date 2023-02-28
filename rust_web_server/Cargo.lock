@@ -447,6 +447,7 @@ dependencies = [
  "base64 0.21.0",
  "console_log",
  "log",
+ "serde-wasm-bindgen",
  "shared",
  "wasm-bindgen",
  "wasm-bindgen-futures",
