@@ -39,6 +39,7 @@ pub struct Claims {
 }
 
 impl Claims {
+    // TODO should expire
     pub fn to_jwt(&self, key: &Key) -> Result<String, Box<dyn Error>> {
         Ok(Token::new(
             jwt::Header {
