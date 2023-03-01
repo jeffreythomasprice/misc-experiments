@@ -94,9 +94,8 @@ pub fn get_authorization_header() -> Result<Option<String>, JsValue> {
 
 // TODO move to a service
 async fn login(username: &str, password: &str) -> Result<(), JsValue> {
-    // TODO don't hard-code url
     let request = Request::new_with_str_and_init(
-        "http://localhost:8001/login",
+        "/api/login",
         RequestInit::new()
             .method("POST")
             .mode(web_sys::RequestMode::Cors),

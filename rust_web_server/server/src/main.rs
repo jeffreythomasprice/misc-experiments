@@ -16,11 +16,6 @@ use rocket::{
 #[macro_use]
 extern crate rocket;
 
-#[get("/")]
-fn index() -> &'static str {
-    "Hello, world!"
-}
-
 #[main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let colors = fern::colors::ColoredLevelConfig::default();
@@ -54,9 +49,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .manage(Arc::new(user::Service::new(db.clone())))
     .manage(jwt_key)
     .register("/", catchers())
-    .mount("/", routes![index])
-    .mount("/login", auth::routes())
-    .mount("/users", user::routes())
+    .mount("/api/login", auth::routes())
+    .mount("/api/users", user::routes())
     .attach(Cors)
     .mount("/", routes![all_options])
     .launch()
