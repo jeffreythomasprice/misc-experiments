@@ -1,19 +1,29 @@
-use crate::rename::get_value_from_input_element;
+use crate::dom_utils::{get_local_storage, get_value_from_input_element_event, get_window};
 use base64::Engine;
 use log::*;
 use shared::auth;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, Response};
-use yew::{function_component, html, use_state, Callback, Html, InputEvent, SubmitEvent};
+use yew::{
+    function_component, html, platform::spawn_local, use_state, Callback, Html, InputEvent,
+    Properties, SubmitEvent,
+};
+
+const LOCAL_STORAGE_KEY: &str = "jwt";
+
+#[derive(PartialEq, Properties)]
+pub struct LoginProps {
+    pub login_success: Callback<()>,
+}
 
 #[function_component]
-pub fn Login() -> Html {
+pub fn Login(props: &LoginProps) -> Html {
     let username = use_state(|| "".to_string());
     let username_changed = {
         let state = username.clone();
         Callback::from(move |e: InputEvent| {
-            if let Some(x) = get_value_from_input_element(e) {
+            if let Some(x) = get_value_from_input_element_event(e) {
                 state.set(x)
             }
         })
@@ -23,30 +33,31 @@ pub fn Login() -> Html {
     let password_changed = {
         let state = password.clone();
         Callback::from(move |e: InputEvent| {
-            if let Some(x) = get_value_from_input_element(e) {
+            if let Some(x) = get_value_from_input_element_event(e) {
                 state.set(x)
             }
         })
     };
 
     let submit = {
+        let login_success = props.login_success.clone();
         let username = username.clone();
         let password = password.clone();
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
-            debug!(
-                "TODO JEFF submit, username = {}, password = {}",
-                *username, *password
-            );
 
+            trace!("logging in {}", *username);
+
+            let login_success = login_success.clone();
             let username = username.clone();
             let password = password.clone();
-            wasm_bindgen_futures::spawn_local(async move {
+            spawn_local(async move {
                 match login(&username, &password).await {
-                    Ok(_) => debug!(
-                        "TODO login complete, should be sending a success or failure message"
-                    ),
-                    Err(e) => error!("TODO JEFF login error: {e:?}"),
+                    Ok(_) => {
+                        trace!("login success");
+                        login_success.emit(());
+                    }
+                    Err(e) => todo!("show an error message for login failure"),
                 }
             });
         })
@@ -77,10 +88,12 @@ pub fn Login() -> Html {
     }
 }
 
+pub fn get_authorization_header() -> Result<Option<String>, JsValue> {
+    Ok(get_local_storage()?.get(LOCAL_STORAGE_KEY)?)
+}
+
 // TODO move to a service
 async fn login(username: &str, password: &str) -> Result<(), JsValue> {
-    let window = web_sys::window().ok_or("failed to get window")?;
-
     // TODO don't hard-code url
     let request = Request::new_with_str_and_init(
         "http://localhost:8001/login",
@@ -91,17 +104,14 @@ async fn login(username: &str, password: &str) -> Result<(), JsValue> {
     request
         .headers()
         .set("Authorization", &get_basic_auth_header(username, password))?;
-    let response = JsFuture::from(window.fetch_with_request(&request))
+    let response = JsFuture::from(get_window()?.fetch_with_request(&request))
         .await?
         .dyn_into::<Response>()?;
     let response_body: auth::ResponseBody =
         serde_wasm_bindgen::from_value(JsFuture::from(response.json()?).await?)?;
     trace!("got jwt: {}", response_body.jwt);
 
-    let storage = window
-        .local_storage()?
-        .ok_or("failed to get local storage")?;
-    storage.set("jwt", response_body.jwt.as_str())?;
+    get_local_storage()?.set(LOCAL_STORAGE_KEY, response_body.jwt.as_str())?;
     trace!("saved jwt in local storage");
 
     Ok(())
@@ -110,10 +120,8 @@ async fn login(username: &str, password: &str) -> Result<(), JsValue> {
 // TODO move
 fn get_basic_auth_header(username: &str, password: &str) -> String {
     // TODO url-encode username and password
-    let response = format!(
+    format!(
         "Basic {}",
         base64::engine::general_purpose::URL_SAFE.encode(format!("{username}:{password}"))
-    );
-    trace!("TODO JEFF header = {}", response);
-    response
+    )
 }

@@ -1,35 +1,46 @@
+mod dom_utils;
 mod login;
-mod rename;
+mod users;
 
 use std::error::Error;
 
 use log::*;
-use login::Login;
-use yew::{html, Component, Context, Html};
+use login::{get_authorization_header, Login};
+use users::UsersList;
+use yew::{function_component, html, use_state, Callback, Component, Context, Html};
 
-struct App;
-
-impl Component for App {
-    type Message = ();
-
-    type Properties = ();
-
-    fn create(_ctx: &Context<Self>) -> Self {
-        Self
-    }
-
-    fn view(&self, _ctx: &Context<Self>) -> Html {
-        html! {
-            <div>
+#[function_component]
+fn App() -> Html {
+    let is_logged_in = use_state(|| {
+        // TODO error handling
+        get_authorization_header().unwrap().is_some()
+    });
+    let login_success = {
+        let is_logged_in = is_logged_in.clone();
+        Callback::from(move |_| {
+            is_logged_in.set(true);
+        })
+    };
+    html! {
+        <div>
+            if *is_logged_in {
                 <div class="row">
                     <div class="col"/>
-                    <div class="col-8">
-                        <Login />
+                    <div class="col-10">
+                        <UsersList />
                     </div>
                     <div class="col"/>
                 </div>
-            </div>
-        }
+            } else {
+                <div class="row">
+                    <div class="col"/>
+                    <div class="col-8">
+                        <Login login_success={login_success} />
+                    </div>
+                    <div class="col"/>
+                </div>
+            }
+        </div>
     }
 }
 
