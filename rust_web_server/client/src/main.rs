@@ -1,13 +1,20 @@
 mod dom_utils;
+mod http;
+mod js_utils;
 mod login;
 mod users;
 
 use std::error::Error;
 
 use log::*;
-use login::{get_authorization_header, Login};
+use login::Login;
 use users::UsersList;
 use yew::{function_component, html, use_state, Callback, Html};
+
+use crate::{
+    http::{is_logged_in, logout},
+    js_utils::js_value_to_string,
+};
 
 #[derive(Debug, PartialEq)]
 enum State {
@@ -18,19 +25,30 @@ enum State {
 
 #[function_component]
 fn App() -> Html {
-    let state = use_state(|| match get_authorization_header() {
-        Ok(Some(_)) => State::LoggedIn,
-        Ok(None) => State::LoggedOut,
+    let state = use_state(|| match is_logged_in() {
+        Ok(true) => State::LoggedIn,
+        Ok(false) => State::LoggedOut,
         Err(e) => State::Error(match e.as_string() {
             Some(s) => s,
             None => format!("{e:?}"),
         }),
     });
 
-    let login_success = {
+    let login_callback = {
         let state = state.clone();
         Callback::from(move |_| {
             state.set(State::LoggedIn);
+        })
+    };
+
+    let logout_callback = {
+        let state = state.clone();
+        Callback::from(move |_| {
+            if let Err(e) = logout() {
+                error!("error logging out {}", js_value_to_string(e));
+                // TODO display error message on screen
+            }
+            state.set(State::LoggedOut);
         })
     };
 
@@ -40,6 +58,9 @@ fn App() -> Html {
                 <div class="col"/>
                 <div class="col-8">
                     <UsersList />
+
+                    // TODO delete me
+                    <button onclick={logout_callback}>{ "Log Out" }</button>
                 </div>
                 <div class="col"/>
             </div>
@@ -48,7 +69,7 @@ fn App() -> Html {
             <div class="row">
                 <div class="col"/>
                 <div class="col-8">
-                    <Login login_success={login_success} />
+                    <Login login_success={login_callback} />
                 </div>
                 <div class="col"/>
             </div>

@@ -1,16 +1,11 @@
-use crate::dom_utils::{get_local_storage, get_value_from_input_element_event, get_window};
-use base64::Engine;
+use crate::{
+    dom_utils::get_value_from_input_element_event, http::login, js_utils::js_value_to_string,
+};
 use log::*;
-use shared::auth;
-use wasm_bindgen::{JsCast, JsValue};
-use wasm_bindgen_futures::JsFuture;
-use web_sys::{Request, RequestInit, Response};
 use yew::{
     function_component, html, platform::spawn_local, use_state, Callback, Html, InputEvent,
     Properties, SubmitEvent,
 };
-
-const LOCAL_STORAGE_KEY: &str = "jwt";
 
 #[derive(PartialEq, Properties)]
 pub struct LoginProps {
@@ -20,6 +15,9 @@ pub struct LoginProps {
 #[function_component]
 pub fn Login(props: &LoginProps) -> Html {
     let username = use_state(|| "".to_string());
+    let password = use_state(|| "".to_string());
+    let error_message = use_state(|| -> Option<String> { None });
+
     let username_changed = {
         let state = username.clone();
         Callback::from(move |e: InputEvent| {
@@ -29,7 +27,6 @@ pub fn Login(props: &LoginProps) -> Html {
         })
     };
 
-    let password = use_state(|| "".to_string());
     let password_changed = {
         let state = password.clone();
         Callback::from(move |e: InputEvent| {
@@ -43,6 +40,7 @@ pub fn Login(props: &LoginProps) -> Html {
         let login_success = props.login_success.clone();
         let username = username.clone();
         let password = password.clone();
+        let error_message = error_message.clone();
         Callback::from(move |e: SubmitEvent| {
             e.prevent_default();
 
@@ -51,13 +49,19 @@ pub fn Login(props: &LoginProps) -> Html {
             let login_success = login_success.clone();
             let username = username.clone();
             let password = password.clone();
+            let error_message = error_message.clone();
             spawn_local(async move {
                 match login(&username, &password).await {
                     Ok(_) => {
                         trace!("login success");
                         login_success.emit(());
                     }
-                    Err(e) => todo!("show an error message for login failure"),
+                    Err(e) => {
+                        // TODO interpret errors as bad credentials or other, get human-readable error message
+                        let e = js_value_to_string(e);
+                        error!("error logging in: {}", e);
+                        error_message.set(Some(e));
+                    }
                 }
             });
         })
@@ -84,38 +88,11 @@ pub fn Login(props: &LoginProps) -> Html {
                     <button type="submit" class="button primary">{ "Login" }</button>
                 </div>
             </div>
+            if let Some(s) = &*error_message {
+                <div class="row">
+                    <p class="text-error">{ s }</p>
+                </div>
+            }
         </form>
     }
-}
-
-pub fn get_authorization_header() -> Result<Option<String>, JsValue> {
-    Ok(get_local_storage()?.get(LOCAL_STORAGE_KEY)?)
-}
-
-// TODO move to a service
-async fn login(username: &str, password: &str) -> Result<(), JsValue> {
-    let request = Request::new_with_str_and_init("/api/login", RequestInit::new().method("POST"))?;
-    request
-        .headers()
-        .set("Authorization", &get_basic_auth_header(username, password))?;
-    let response = JsFuture::from(get_window()?.fetch_with_request(&request))
-        .await?
-        .dyn_into::<Response>()?;
-    let response_body: auth::ResponseBody =
-        serde_wasm_bindgen::from_value(JsFuture::from(response.json()?).await?)?;
-    trace!("got jwt: {}", response_body.jwt);
-
-    get_local_storage()?.set(LOCAL_STORAGE_KEY, response_body.jwt.as_str())?;
-    trace!("saved jwt in local storage");
-
-    Ok(())
-}
-
-// TODO move
-fn get_basic_auth_header(username: &str, password: &str) -> String {
-    // TODO url-encode username and password
-    format!(
-        "Basic {}",
-        base64::engine::general_purpose::URL_SAFE.encode(format!("{username}:{password}"))
-    )
 }
