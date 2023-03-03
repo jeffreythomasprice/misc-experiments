@@ -94,12 +94,7 @@ pub fn get_authorization_header() -> Result<Option<String>, JsValue> {
 
 // TODO move to a service
 async fn login(username: &str, password: &str) -> Result<(), JsValue> {
-    let request = Request::new_with_str_and_init(
-        "/api/login",
-        RequestInit::new()
-            .method("POST")
-            .mode(web_sys::RequestMode::Cors),
-    )?;
+    let request = Request::new_with_str_and_init("/api/login", RequestInit::new().method("POST"))?;
     request
         .headers()
         .set("Authorization", &get_basic_auth_header(username, password))?;

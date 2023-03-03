@@ -7,40 +7,55 @@ use std::error::Error;
 use log::*;
 use login::{get_authorization_header, Login};
 use users::UsersList;
-use yew::{function_component, html, use_state, Callback, Component, Context, Html};
+use yew::{function_component, html, use_state, Callback, Html};
+
+#[derive(Debug, PartialEq)]
+enum State {
+    LoggedIn,
+    LoggedOut,
+    Error(String),
+}
 
 #[function_component]
 fn App() -> Html {
-    let is_logged_in = use_state(|| {
-        // TODO error handling
-        get_authorization_header().unwrap().is_some()
+    let state = use_state(|| match get_authorization_header() {
+        Ok(Some(_)) => State::LoggedIn,
+        Ok(None) => State::LoggedOut,
+        Err(e) => State::Error(match e.as_string() {
+            Some(s) => s,
+            None => format!("{e:?}"),
+        }),
     });
+
     let login_success = {
-        let is_logged_in = is_logged_in.clone();
+        let state = state.clone();
         Callback::from(move |_| {
-            is_logged_in.set(true);
+            state.set(State::LoggedIn);
         })
     };
-    html! {
-        <div>
-            if *is_logged_in {
-                <div class="row">
-                    <div class="col"/>
-                    <div class="col-10">
-                        <UsersList />
-                    </div>
-                    <div class="col"/>
+
+    match &*state {
+        State::LoggedIn => html! {
+            <div class="row">
+                <div class="col"/>
+                <div class="col-8">
+                    <UsersList />
                 </div>
-            } else {
-                <div class="row">
-                    <div class="col"/>
-                    <div class="col-8">
-                        <Login login_success={login_success} />
-                    </div>
-                    <div class="col"/>
+                <div class="col"/>
+            </div>
+        },
+        State::LoggedOut => html! {
+            <div class="row">
+                <div class="col"/>
+                <div class="col-8">
+                    <Login login_success={login_success} />
                 </div>
-            }
-        </div>
+                <div class="col"/>
+            </div>
+        },
+        State::Error(e) => html! {
+            <div>{ e }</div>
+        },
     }
 }
 
