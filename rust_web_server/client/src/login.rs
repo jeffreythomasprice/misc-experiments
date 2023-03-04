@@ -58,9 +58,8 @@ pub fn Login(props: &LoginProps) -> Html {
                     }
                     Err(e) => {
                         // TODO interpret errors as bad credentials or other, get human-readable error message
-                        let e = js_value_to_string(e);
-                        error!("error logging in: {}", e);
-                        error_message.set(Some(e));
+                        error!("error logging in: {e:?}");
+                        error_message.set(Some(format!("{e:?}")));
                     }
                 }
             });

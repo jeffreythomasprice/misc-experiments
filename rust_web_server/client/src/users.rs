@@ -2,7 +2,10 @@ use log::*;
 use shared::user::UserResponse;
 use yew::{function_component, html, platform::spawn_local, use_state, Html};
 
-use crate::{http::get_users, js_utils::js_value_to_string};
+use crate::{
+    http::{self, get_users},
+    js_utils::js_value_to_string,
+};
 
 enum State {
     Fetching,
@@ -24,9 +27,9 @@ pub fn UsersList() -> Html {
                         state.set(State::Ready(users));
                     }
                     Err(e) => {
-                        let e = js_value_to_string(e);
-                        error!("error getting users: {}", e);
-                        state.set(State::Error(e));
+                        // TODO common behvaior for all api calls to turn 401 into a navigate to login page
+                        error!("error getting users: {e:?}");
+                        state.set(State::Error(format!("{e:?}")));
                     }
                 }
             });
