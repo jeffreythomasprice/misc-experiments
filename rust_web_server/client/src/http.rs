@@ -110,7 +110,9 @@ fn assert_auth_header() -> Result<String, JsValue> {
 }
 
 fn get_auth_header() -> Result<Option<String>, JsValue> {
-    Ok(get_local_storage()?.get(LOCAL_STORAGE_KEY)?)
+    Ok(get_local_storage()?
+        .get(LOCAL_STORAGE_KEY)?
+        .and_then(|token| Some(format!("Bearer {}", token))))
 }
 
 fn get_basic_auth_header(username: &str, password: &str) -> String {

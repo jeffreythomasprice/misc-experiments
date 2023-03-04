@@ -8,9 +8,12 @@ use rocket::{
 };
 
 use crate::{
+    auth::jwt::Claims,
     errors::Error,
     user::{models::User, Service},
 };
+
+use super::jwt::Key;
 
 #[derive(Debug, Clone)]
 pub struct Authenticated(pub User);
@@ -20,8 +23,17 @@ impl<'r> FromRequest<'r> for &'r Authenticated {
     type Error = Error;
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let key = match request.guard::<&State<Key>>().await {
+            Outcome::Success(key) => key,
+            _ => {
+                return Outcome::Failure((
+                    Status::InternalServerError,
+                    Error::InternalServerError("".to_string()),
+                ));
+            }
+        };
         let result = request
-            .local_cache_async(async { authenticate(request).await })
+            .local_cache_async(async { authenticate(request, key).await })
             .await;
         match result {
             Ok(result) => Outcome::Success(result),
@@ -53,8 +65,9 @@ impl<'r> FromRequest<'r> for IsAdmin {
 }
 
 const BASIC_AUTH_PREFIX: &str = "Basic ";
+const JWT_AUTH_PREFIX: &str = "Bearer ";
 
-async fn authenticate(request: &Request<'_>) -> Result<Authenticated, Error> {
+async fn authenticate(request: &Request<'_>, key: &Key) -> Result<Authenticated, Error> {
     let service = request
         .guard::<&State<Arc<Service>>>()
         .await
@@ -70,7 +83,7 @@ async fn authenticate(request: &Request<'_>) -> Result<Authenticated, Error> {
     }
     let header = header[0];
 
-    if let Ok(result) = jwt_auth(service, header).await {
+    if let Ok(result) = jwt_auth(service, key, header).await {
         return Ok(result);
     }
 
@@ -124,9 +137,29 @@ async fn basic_auth(service: &Service, header: &str) -> Result<Authenticated, Er
     }
 }
 
-async fn jwt_auth(service: &Service, header: &str) -> Result<Authenticated, Error> {
+async fn jwt_auth(service: &Service, key: &Key, header: &str) -> Result<Authenticated, Error> {
     trace!("trying jwt auth");
 
-    // TODO look for 'Bearer: <jwt>'
-    Err(Error::Unauthorized)
+    // strip off prefix
+    if !header.starts_with(JWT_AUTH_PREFIX) {
+        debug!("auth header doesn't look like jwt auth");
+        return Err(Error::Unauthorized);
+    }
+    let header = &header[JWT_AUTH_PREFIX.len()..];
+
+    // get the jwt claims
+    let claims = Claims::from_jwt_and_validate(key, header).or_else(|e| {
+        debug!("jwt failed to parse or validate: {e:?}");
+        Err(e)
+    })?;
+    trace!("claims {claims:?}");
+
+    // get user
+    let user = service.get_by_name(&claims.username).await.or_else(|e| {
+        debug!("error finding user: {e:?}");
+        Err(e)
+    })?;
+
+    // success
+    Ok(Authenticated(user))
 }
