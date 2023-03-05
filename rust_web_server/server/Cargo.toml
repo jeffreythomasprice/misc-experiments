@@ -36,7 +36,8 @@ features = [
 version = "0.6.2"
 features = [
 	"runtime-async-std-native-tls",
-	"sqlite"
+	"sqlite",
+	"chrono"
 ]
 
 [dependencies.openssl]

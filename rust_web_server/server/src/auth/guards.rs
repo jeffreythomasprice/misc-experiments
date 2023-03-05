@@ -10,10 +10,10 @@ use rocket::{
 use crate::{
     auth::jwt::Claims,
     errors::Error,
-    user::{models::User, Service},
+    user::{models::User, Service as UserService},
 };
 
-use super::jwt::Key;
+use super::jwt::Service as JwtService;
 
 #[derive(Debug, Clone)]
 pub struct Authenticated(pub User);
@@ -23,8 +23,8 @@ impl<'r> FromRequest<'r> for &'r Authenticated {
     type Error = Error;
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
-        let key = match request.guard::<&State<Key>>().await {
-            Outcome::Success(key) => key,
+        let jwt_service = match request.guard::<&State<JwtService>>().await {
+            Outcome::Success(service) => service,
             _ => {
                 return Outcome::Failure((
                     Status::InternalServerError,
@@ -33,7 +33,7 @@ impl<'r> FromRequest<'r> for &'r Authenticated {
             }
         };
         let result = request
-            .local_cache_async(async { authenticate(request, key).await })
+            .local_cache_async(async { authenticate(request, &jwt_service).await })
             .await;
         match result {
             Ok(result) => Outcome::Success(result),
@@ -67,9 +67,12 @@ impl<'r> FromRequest<'r> for IsAdmin {
 const BASIC_AUTH_PREFIX: &str = "Basic ";
 const JWT_AUTH_PREFIX: &str = "Bearer ";
 
-async fn authenticate(request: &Request<'_>, key: &Key) -> Result<Authenticated, Error> {
-    let service = request
-        .guard::<&State<Arc<Service>>>()
+async fn authenticate(
+    request: &Request<'_>,
+    jwt_service: &JwtService,
+) -> Result<Authenticated, Error> {
+    let user_service = request
+        .guard::<&State<Arc<UserService>>>()
         .await
         .success_or_else(|| {
             error!("failed to get user service");
@@ -83,11 +86,11 @@ async fn authenticate(request: &Request<'_>, key: &Key) -> Result<Authenticated,
     }
     let header = header[0];
 
-    if let Ok(result) = jwt_auth(service, key, header).await {
+    if let Ok(result) = jwt_auth(user_service, jwt_service, header).await {
         return Ok(result);
     }
 
-    if let Ok(result) = basic_auth(service, header).await {
+    if let Ok(result) = basic_auth(user_service, header).await {
         return Ok(result);
     }
 
@@ -95,7 +98,7 @@ async fn authenticate(request: &Request<'_>, key: &Key) -> Result<Authenticated,
     Err(Error::Unauthorized)
 }
 
-async fn basic_auth(service: &Service, header: &str) -> Result<Authenticated, Error> {
+async fn basic_auth(user_service: &UserService, header: &str) -> Result<Authenticated, Error> {
     trace!("trying basic auth");
 
     // strip off prefix
@@ -122,7 +125,7 @@ async fn basic_auth(service: &Service, header: &str) -> Result<Authenticated, Er
     })?;
 
     // get user
-    let user = service.get_by_name(name).await.or_else(|e| {
+    let user = user_service.get_by_name(name).await.or_else(|e| {
         debug!("error finding user: {e:?}");
         Err(e)
     })?;
@@ -137,7 +140,11 @@ async fn basic_auth(service: &Service, header: &str) -> Result<Authenticated, Er
     }
 }
 
-async fn jwt_auth(service: &Service, key: &Key, header: &str) -> Result<Authenticated, Error> {
+async fn jwt_auth(
+    user_service: &UserService,
+    jwt_service: &JwtService,
+    header: &str,
+) -> Result<Authenticated, Error> {
     trace!("trying jwt auth");
 
     // strip off prefix
@@ -148,17 +155,20 @@ async fn jwt_auth(service: &Service, key: &Key, header: &str) -> Result<Authenti
     let header = &header[JWT_AUTH_PREFIX.len()..];
 
     // get the jwt claims
-    let claims = Claims::from_jwt_and_validate(key, header).or_else(|e| {
+    let claims = Claims::from_jwt_and_validate(jwt_service, header).or_else(|e| {
         debug!("jwt failed to parse or validate: {e:?}");
         Err(e)
     })?;
     trace!("claims {claims:?}");
 
     // get user
-    let user = service.get_by_name(&claims.username).await.or_else(|e| {
-        debug!("error finding user: {e:?}");
-        Err(e)
-    })?;
+    let user = user_service
+        .get_by_name(&claims.username)
+        .await
+        .or_else(|e| {
+            debug!("error finding user: {e:?}");
+            Err(e)
+        })?;
 
     // success
     Ok(Authenticated(user))

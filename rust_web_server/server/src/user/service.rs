@@ -10,8 +10,8 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(db: Pool<Sqlite>) -> Service {
-        Service { db }
+    pub fn new(db: Pool<Sqlite>) -> Self {
+        Self { db }
     }
 
     pub async fn list(&self) -> Result<Vec<User>, Error> {

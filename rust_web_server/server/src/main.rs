@@ -1,4 +1,5 @@
 mod auth;
+mod config;
 mod cors;
 mod db;
 mod errors;
@@ -36,16 +37,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .apply()?;
 
     let db = create_db().await?;
-
-    let jwt_key = auth::jwt::Key::new()?;
+    let config_service = config::Service::new(db.clone());
+    let jwt_service = auth::jwt::Service::new(&config_service).await?;
 
     _ = rocket::custom(rocket::Config {
         port: 8001,
         address: IpAddr::from_str("127.0.0.1").unwrap(),
         ..rocket::Config::debug_default()
     })
+    .manage(config_service)
+    .manage(jwt_service)
     .manage(Arc::new(user::Service::new(db.clone())))
-    .manage(jwt_key)
     .register("/", catchers())
     .mount("/api/login", auth::routes())
     .mount("/api/users", user::routes())

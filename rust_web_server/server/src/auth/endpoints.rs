@@ -3,7 +3,7 @@ use shared::auth::ResponseBody;
 
 use crate::{auth::jwt::Claims, errors::Error};
 
-use super::{guards::Authenticated, jwt::Key};
+use super::{guards::Authenticated, jwt::Service};
 
 #[derive(Responder)]
 struct Response {
@@ -15,13 +15,13 @@ pub fn routes() -> Vec<Route> {
 }
 
 #[post("/")]
-fn login(auth: &Authenticated, key: &State<Key>) -> Result<Response, Error> {
+fn login(auth: &Authenticated, service: &State<Service>) -> Result<Response, Error> {
     let user = auth.0.clone();
 
     let jwt = Claims {
         username: user.name.clone(),
     }
-    .to_jwt(key)?;
+    .to_jwt(service)?;
     trace!("authenticated user {user:?} and produced new jwt {jwt}");
 
     Ok(Response {

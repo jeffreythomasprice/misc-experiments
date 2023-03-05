@@ -1,3 +1,10 @@
+CREATE TABLE config(
+	key TEXT NOT NULL UNIQUE,
+	value TEXT NOT NULL,
+	created TEXT NOT NULL,
+	updated TEXT NOT NULL
+);
+
 CREATE TABLE users(
 	name TEXT NOT NULL UNIQUE,
 	password TEXT NOT NULL,
