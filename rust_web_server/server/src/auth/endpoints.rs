@@ -18,10 +18,7 @@ pub fn routes() -> Vec<Route> {
 fn login(auth: &Authenticated, service: &State<Service>) -> Result<Response, Error> {
     let user = auth.0.clone();
 
-    let jwt = Claims {
-        username: user.name.clone(),
-    }
-    .to_jwt(service)?;
+    let jwt = service.create_jwt(&Claims::new(&user.name))?;
     trace!("authenticated user {user:?} and produced new jwt {jwt}");
 
     Ok(Response {

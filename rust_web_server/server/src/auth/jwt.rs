@@ -1,4 +1,5 @@
-use crate::config::Service as ConfigService;
+use crate::{config::Service as ConfigService, errors::Error};
+use chrono::{DateTime, Duration, Utc};
 use jwt::{AlgorithmType, PKeyWithDigest, SignWithKey, Token, VerifyWithKey};
 use openssl::{
     hash::MessageDigest,
@@ -6,15 +7,35 @@ use openssl::{
     rsa::Rsa,
 };
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 
 pub struct Service {
     private: PKeyWithDigest<Private>,
     public: PKeyWithDigest<Public>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Claims {
+    pub username: String,
+    #[serde(rename = "iat")]
+    pub issued_at: DateTime<Utc>,
+    #[serde(rename = "exp")]
+    pub expires_at: DateTime<Utc>,
+}
+
+impl Claims {
+    pub fn new(username: &str) -> Claims {
+        let now = Utc::now();
+        let expires = now + Duration::minutes(15);
+        Self {
+            username: username.to_string(),
+            issued_at: now,
+            expires_at: expires,
+        }
+    }
+}
+
 impl Service {
-    pub async fn new(config_service: &ConfigService) -> Result<Self, Box<dyn Error>> {
+    pub async fn new(config_service: &ConfigService) -> Result<Self, Box<dyn std::error::Error>> {
         const PUBLIC_KEY_NAME: &str = "jwt_public_key";
         const PRIVATE_KEY_NAME: &str = "jwt_private_key";
         let public_key = config_service.get(PUBLIC_KEY_NAME).await?;
@@ -81,41 +102,37 @@ impl Service {
             (None, Some(_)) => Err(format!("mismatched keys, missing {}", PUBLIC_KEY_NAME))?,
         })
     }
-}
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
-    pub username: String,
-}
-
-impl Claims {
-    // TODO should be a method on JwtService
-    // TODO should expire
-    // TODO should be a custom error type
-    pub fn to_jwt(&self, service: &Service) -> Result<String, Box<dyn Error>> {
+    pub fn create_jwt(&self, claims: &Claims) -> Result<String, Box<dyn std::error::Error>> {
         Ok(Token::new(
             jwt::Header {
                 algorithm: AlgorithmType::Rs512,
                 ..Default::default()
             },
-            self,
+            claims,
         )
-        .sign_with_key(&service.private)?
+        .sign_with_key(&self.private)?
         .as_str()
         .to_string())
     }
 
-    // TODO should be a method on JwtService
-    // TODO should be a custom error type, which includes things like expired
-    pub fn from_jwt_and_validate(service: &Service, jwt: &str) -> Result<Self, Box<dyn Error>> {
-        // TODO make sure to check that jwt is not expired, presumably verify does that?
-
-        let token: Token<jwt::Header, Self, _> = jwt.verify_with_key(&service.public)?;
+    pub fn validate(&self, jwt: &str) -> Result<Claims, Error> {
+        let token: Token<jwt::Header, Claims, _> = match jwt.verify_with_key(&self.public) {
+            Ok(token) => token,
+            Err(e) => {
+                debug!("jwt validation failed: {e:?}");
+                Err(Error::Unauthorized)?
+            }
+        };
         trace!("jwt header: {:?}", token.header());
         trace!("jwt claims: {:?}", token.claims());
 
-        Ok(Self {
-            username: token.claims().username.to_string(),
-        })
+        if token.claims().expires_at < Utc::now() {
+            debug!("jwt is expired");
+            Err(Error::Unauthorized)
+        } else {
+            trace!("jwt is still valid");
+            Ok(token.claims().clone())
+        }
     }
 }

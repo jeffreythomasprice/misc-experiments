@@ -1,3 +1,4 @@
+use chrono::Utc;
 use sqlx::{Pool, Sqlite};
 use std::error::Error;
 
@@ -23,7 +24,7 @@ impl Service {
 
     pub async fn set(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
         let current_value = self.get(key).await?;
-        let now = chrono::Utc::now().naive_utc();
+        let now = Utc::now().naive_utc();
         let result = match current_value {
             Some(_) => sqlx::query("UPDATE config SET value = ?, updated = ? WHERE key = ?")
                 .bind(value)

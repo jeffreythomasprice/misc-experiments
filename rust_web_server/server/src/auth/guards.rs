@@ -8,7 +8,6 @@ use rocket::{
 };
 
 use crate::{
-    auth::jwt::Claims,
     errors::Error,
     user::{models::User, Service as UserService},
 };
@@ -155,7 +154,7 @@ async fn jwt_auth(
     let header = &header[JWT_AUTH_PREFIX.len()..];
 
     // get the jwt claims
-    let claims = Claims::from_jwt_and_validate(jwt_service, header).or_else(|e| {
+    let claims = jwt_service.validate(header).or_else(|e| {
         debug!("jwt failed to parse or validate: {e:?}");
         Err(e)
     })?;
