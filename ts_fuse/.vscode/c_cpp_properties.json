@@ -4,6 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
+                "${workspaceFolder}/node_modules/node-addon-api",
+                "/home/jeff/.nvm/versions/node/v18.16.0/include/node",
                 "/usr/include/c++/11",
                 "/usr/include/x86_64-linux-gnu/c++/11"
             ],
