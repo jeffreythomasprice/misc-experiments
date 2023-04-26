@@ -3,6 +3,7 @@
 #include <sstream>
 #include <thread>
 
+#include "fuse-utils.h"
 #include "logging.h"
 #include "thread-utils.h"
 
@@ -77,14 +78,20 @@ Napi::Value exportedClose(const Napi::CallbackInfo& info) {
 	});
 }
 
-void* fuseInitImpl(fuse_conn_info* conn) {
-	trace() << "fuseInitImpl begin";
-	// TODO implement init
-	trace() << "fuseInitImpl end";
+void* fuseInitImpl(fuse_conn_info* connectionInfo) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	data->init(connectionInfo);
 	return nullptr;
 }
 
-int fuseGetattrImpl(const char* path, struct stat*) {
+void fuseDestroyImpl(void*) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	data->destroy();
+}
+
+int fuseGetattrImpl(const char* path, struct stat* stat) {
 	trace() << "fuseGetattrImpl begin, path = " << path;
 	// TODO implement getattr
 	auto result = -ENOENT;
@@ -118,7 +125,10 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 		strcpy(fuseArgs->argv[i], arg.c_str());
 	}
 
-	return execInNewThread(env, [fuseArgs](const Napi::Env& env) {
+	auto callbacks = info[1].As<Napi::Object>();
+	auto fuseUserData = new FuseUserData(env, callbacks);
+
+	return execInNewThread(env, [fuseArgs, fuseUserData](const Napi::Env& env) {
 		char* mountPoint;
 		int multithreaded;
 		int foreground;
@@ -132,13 +142,13 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 		auto fuseOperations = new fuse_operations;
 		memset(fuseOperations, 0, sizeof(fuse_operations));
 		fuseOperations->init = fuseInitImpl;
+		fuseOperations->destroy = fuseDestroyImpl;
 		fuseOperations->getattr = fuseGetattrImpl;
 		fuseOperations->readdir = fuseReaddirImpl;
 		// TODO more operations
-		// fuseOperations->destroy
 
 		auto fuseInstance = fuse_new(fuseChannel, fuseArgs, fuseOperations,
-									 sizeof(fuse_operations), nullptr);
+									 sizeof(fuse_operations), fuseUserData);
 
 		auto fuseLoopThreadResult = new int;
 		auto fuseLoopThread = new std::thread([mountPoint, fuseInstance,
@@ -153,8 +163,8 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 		result.Set(
 			"close",
 			Napi::Function::New(
-				env, [fuseArgs, fuseOperations, mountPoint, fuseChannel,
-					  fuseInstance, fuseLoopThread,
+				env, [fuseArgs, fuseUserData, fuseOperations, mountPoint,
+					  fuseChannel, fuseInstance, fuseLoopThread,
 					  fuseLoopThreadResult](const Napi::CallbackInfo& info) {
 					trace() << "mount point " << mountPoint << " unmount begin";
 
@@ -174,6 +184,8 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 						delete fuseArgs->argv[i];
 					}
 					delete fuseArgs->argv;
+
+					delete fuseUserData;
 
 					fuseLoopThread->join();
 					delete fuseLoopThread;

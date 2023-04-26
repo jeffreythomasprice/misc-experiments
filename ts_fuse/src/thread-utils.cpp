@@ -18,13 +18,11 @@ Napi::Promise execInNewThread(const Napi::Env& env,
 		// max queue size, 0 = unlimited
 		0,
 		// initial thread count
-		1,
-		// finalizer
-		[](Napi::Env) {});
+		1);
 
 	std::thread([done = std::move(done)]() {
-		done.BlockingCall((void*)nullptr,
-						  [](Napi::Env, Napi::Function f, void*) { f({}); });
+		done.BlockingCall((void*)nullptr, [](const Napi::Env&, Napi::Function f,
+											 void*) { f({}); });
 		done.Release();
 	}).detach();
 

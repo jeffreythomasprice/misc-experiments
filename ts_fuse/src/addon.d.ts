@@ -18,7 +18,18 @@ module "*/addon" {
 		maxBufferSize?: number;
 	}
 
-	interface FuseMount {
+	export namespace Fuse {
+		export interface ConnectionInfo {
+			// TODO fields
+		}
+	}
+
+	export interface MountAndRunCallbacks {
+		init?: (connectionInfo: FuseConnectionInfo) => void;
+		destroy?: () => void;
+	}
+
+	export interface FuseMount {
 		// returns the result of the fuse_loop
 		close(): Promise<number>;
 	}
@@ -27,5 +38,5 @@ module "*/addon" {
 	// emits log events before closing
 	export function close(): Promise<void>;
 
-	export function mountAndRun(args: string[]): Promise<FuseMount>;
+	export function mountAndRun(args: string[], callbacks: MountAndRunCallbacks): Promise<FuseMount>;
 }

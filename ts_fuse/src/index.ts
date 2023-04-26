@@ -20,7 +20,16 @@ function log(timestamp: Date, level: LogLevel, message: string): void {
 }
 
 class Logger {
-	constructor(readonly prefix: string = "") { }
+	level = LogLevel.INFO;
+	readonly prefix: string;
+
+	constructor(options?: {
+		level?: LogLevel;
+		prefix?: string;
+	}) {
+		this.level = options?.level ?? LogLevel.INFO;
+		this.prefix = options?.prefix ?? "";
+	}
 
 	log(timestamp: Date, level: LogLevel, message: string, ...params: unknown[]): void
 	log(level: LogLevel, message: string, ...params: unknown[]): void
@@ -40,25 +49,27 @@ class Logger {
 			message = args[1] as string;
 			params = args.slice(2);
 		}
-		const parts = [message, ...params];
-		if (this.prefix) {
-			parts.unshift(this.prefix);
+		if (level <= this.level) {
+			const parts = [message, ...params];
+			if (this.prefix) {
+				parts.unshift(this.prefix);
+			}
+			log(
+				timestamp,
+				level,
+				parts
+					.map(p => {
+						if (p instanceof Error) {
+							return p.stack;
+						}
+						if (typeof (p as any).toString === "function") {
+							return (p as any).toString();
+						}
+						return p;
+					})
+					.join(" ")
+			);
 		}
-		log(
-			timestamp,
-			level,
-			parts
-				.map(p => {
-					if (p instanceof Error) {
-						return p.stack;
-					}
-					if (typeof (p as any).toString === "function") {
-						return (p as any).toString();
-					}
-					return p;
-				})
-				.join(" ")
-		);
 	}
 
 	fatal(message: string, ...params: unknown[]) {
@@ -86,21 +97,39 @@ class Logger {
 	}
 }
 
-const logger = new Logger();
+const logger = new Logger({
+	level: LogLevel.DEBUG
+});
+
 (async () => {
-	const addonLogger = new Logger("c++");
+	// TODO support child loggers
+	const addonLogger = new Logger({
+		level: LogLevel.DEBUG,
+		prefix: "c++"
+	});
+
 	addon.init({
 		log: (timestamp, level, message) => {
 			addonLogger.log(new Date(timestamp), level, message);
 		},
 	});
 
-	const mount = await addon.mountAndRun([
-		"experiment",
-		"/home/jeff/mount_points/test",
-		// foreground mode
-		"-f",
-	]);
+	const mount = await addon.mountAndRun(
+		[
+			"experiment",
+			"/home/jeff/mount_points/test",
+			// foreground mode
+			"-f",
+		],
+		{
+			init: (connectionInfo) => {
+				logger.debug(`init ${JSON.stringify(connectionInfo)}`);
+			},
+			destroy: () => {
+				logger.debug("destroy");
+			},
+		}
+	);
 	logger.debug("mounted");
 
 	await new Promise<void>((resolve) => {

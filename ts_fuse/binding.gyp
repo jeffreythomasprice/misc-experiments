@@ -14,6 +14,7 @@
       },
       "sources": [
         "src/addon.cpp",
+        "src/fuse-utils.cpp",
         "src/logging.cpp",
         "src/thread-utils.cpp",
       ],
