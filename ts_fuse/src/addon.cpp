@@ -69,15 +69,19 @@ Napi::Value exportedClose(const Napi::CallbackInfo& info) {
 	// have to finish after letting the node event loop finish
 	// this lets all those log messages finish unbuffering and emitting back to
 	// node before we actually clean up
-	return execInNewThread(env, [](const Napi::Env& env) {
-		deinitLogging();
+	return execInNewThread(
+		env,
+		[]() {},
+		[](const Napi::Env& env) {
+			deinitLogging();
 
-		isInit = false;
+			isInit = false;
 
-		trace() << "close done";
+			trace() << "close done";
 
-		return env.Undefined();
-	});
+			return env.Undefined();
+		}
+	);
 }
 
 void* fuseInitImpl(fuse_conn_info* connectionInfo) {
@@ -129,83 +133,93 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 	auto callbacks = info[1].As<Napi::Object>();
 	auto fuseUserData = new FuseUserData(env, callbacks);
 
-	return execInNewThread(env, [fuseArgs, fuseUserData](const Napi::Env& env) {
-		char* mountPoint;
-		int multithreaded;
-		int foreground;
-		fuse_parse_cmdline(fuseArgs, &mountPoint, &multithreaded, &foreground);
-		trace() << "mountAndRun mountPoint=" << mountPoint << ", multithreaded=" << multithreaded << ", foreground=" << foreground;
+	return execInNewThread(
+		env,
+		[]() {},
+		[fuseArgs, fuseUserData](const Napi::Env& env) {
+			char* mountPoint;
+			int multithreaded;
+			int foreground;
+			fuse_parse_cmdline(fuseArgs, &mountPoint, &multithreaded, &foreground);
+			trace() << "mountAndRun mountPoint=" << mountPoint << ", multithreaded=" << multithreaded << ", foreground=" << foreground;
 
-		auto fuseChannel = fuse_mount(mountPoint, fuseArgs);
+			auto fuseChannel = fuse_mount(mountPoint, fuseArgs);
 
-		auto fuseOperations = new fuse_operations;
-		memset(fuseOperations, 0, sizeof(fuse_operations));
-		fuseOperations->init = fuseInitImpl;
-		fuseOperations->destroy = fuseDestroyImpl;
-		fuseOperations->getattr = fuseGetattrImpl;
-		fuseOperations->readdir = fuseReaddirImpl;
-		// TODO more operations
+			auto fuseOperations = new fuse_operations;
+			memset(fuseOperations, 0, sizeof(fuse_operations));
+			fuseOperations->init = fuseInitImpl;
+			fuseOperations->destroy = fuseDestroyImpl;
+			fuseOperations->getattr = fuseGetattrImpl;
+			fuseOperations->readdir = fuseReaddirImpl;
+			// TODO more operations
 
-		auto fuseInstance = fuse_new(fuseChannel, fuseArgs, fuseOperations, sizeof(fuse_operations), fuseUserData);
+			auto fuseInstance = fuse_new(fuseChannel, fuseArgs, fuseOperations, sizeof(fuse_operations), fuseUserData);
 
-		auto fuseLoopThreadResult = new int;
-		auto fuseLoopThread = new std::thread([mountPoint, fuseInstance, fuseLoopThreadResult]() {
-			trace() << "mount point " << mountPoint << " fuse_loop begin";
-			*fuseLoopThreadResult = fuse_loop(fuseInstance);
-			trace() << "mount point " << mountPoint << " fuse_loop done, result = " << *fuseLoopThreadResult;
-		});
+			auto fuseLoopThreadResult = new int;
+			auto fuseLoopThread = new std::thread([mountPoint, fuseInstance, fuseLoopThreadResult]() {
+				trace() << "mount point " << mountPoint << " fuse_loop begin";
+				*fuseLoopThreadResult = fuse_loop(fuseInstance);
+				trace() << "mount point " << mountPoint << " fuse_loop done, result = " << *fuseLoopThreadResult;
+			});
 
-		auto result = Napi::Object::New(env);
-		result.Set(
-			"close",
-			Napi::Function::New(
-				env,
-				[fuseArgs, fuseUserData, fuseOperations, mountPoint, fuseChannel, fuseInstance, fuseLoopThread, fuseLoopThreadResult](
-					const Napi::CallbackInfo& info
-				) {
-					trace() << "mount point " << mountPoint << " unmount begin";
+			auto result = Napi::Object::New(env);
+			result.Set(
+				"close",
+				Napi::Function::New(
+					env,
+					[fuseArgs, fuseUserData, fuseOperations, mountPoint, fuseChannel, fuseInstance, fuseLoopThread, fuseLoopThreadResult](
+						const Napi::CallbackInfo& info
+					) {
+						auto env = info.Env();
+						return execInNewThread(
+							env,
+							[mountPoint, fuseChannel, fuseInstance, fuseOperations, fuseArgs, fuseUserData, fuseLoopThread]() {
+								trace() << "mount point " << mountPoint << " unmount begin";
 
-					auto env = info.Env();
+								fuse_unmount(mountPoint, fuseChannel);
+								trace() << "mount point " << mountPoint << " unmount fuse_unmount complete";
 
-					fuse_unmount(mountPoint, fuseChannel);
-					trace() << "mount point " << mountPoint << " unmount fuse_unmount complete";
+								fuse_exit(fuseInstance);
+								trace() << "mount point " << mountPoint << " unmount fuse_exit complete";
 
-					fuse_exit(fuseInstance);
-					trace() << "mount point " << mountPoint << " unmount fuse_exit complete";
+								delete fuseOperations;
 
-					delete fuseOperations;
+								for (auto i = 0; i < fuseArgs->argc; i++) {
+									delete fuseArgs->argv[i];
+								}
+								delete fuseArgs->argv;
 
-					for (auto i = 0; i < fuseArgs->argc; i++) {
-						delete fuseArgs->argv[i];
+								delete fuseUserData;
+
+								fuseLoopThread->join();
+								delete fuseLoopThread;
+							},
+							[mountPoint, fuseLoopThreadResult](const Napi::Env& env) {
+								auto result = *fuseLoopThreadResult;
+								delete fuseLoopThreadResult;
+								trace() << "mount point " << mountPoint << " unmount fuse_loop complete, result = " << result;
+
+								debug() << "unmounted " << mountPoint;
+
+								trace() << "mount point " << mountPoint << " unmount end";
+								return Napi::Number::From(env, result);
+							}
+						);
 					}
-					delete fuseArgs->argv;
+				)
+			);
+			result.Freeze();
 
-					delete fuseUserData;
-
-					fuseLoopThread->join();
-					delete fuseLoopThread;
-					auto result = *fuseLoopThreadResult;
-					delete fuseLoopThreadResult;
-					trace() << "mount point " << mountPoint << " unmount fuse_loop complete, result = " << result;
-
-					debug() << "unmounted " << mountPoint;
-
-					return execInNewThread(env, [mountPoint, result](const Napi::Env& env) {
-						trace() << "mount point " << mountPoint << " unmount end";
-						return Napi::Number::From(env, result);
-					});
-				}
-			)
-		);
-		result.Freeze();
-
-		debug() << "mounted " << mountPoint;
-		trace() << "mountAndRun done";
-		return result;
-	});
+			debug() << "mounted " << mountPoint;
+			trace() << "mountAndRun done";
+			return result;
+		}
+	);
 }
 
 Napi::Object init(Napi::Env env, Napi::Object exports) {
+	initThreadUtils(env);
+
 	auto logLevels = Napi::Object::New(env);
 	logLevels.Set("FATAL", Napi::Number::New(env, (int)LogLevel::FATAL));
 	logLevels.Set("ERROR", Napi::Number::New(env, (int)LogLevel::ERROR));

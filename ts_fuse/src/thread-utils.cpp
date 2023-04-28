@@ -2,16 +2,31 @@
 
 #include "logging.h"
 
-Napi::Promise execInNewThread(const Napi::Env& env, std::function<Napi::Value(const Napi::Env&)> f) {
+std::optional<std::thread::id> nodeThreadId;
+
+void initThreadUtils(const Napi::Env& env) {
+	nodeThreadId = std::this_thread::get_id();
+}
+
+bool isNodeThread() {
+	if (!nodeThreadId.has_value()) {
+		throw std::logic_error("thread utils not initialized");
+	}
+	return std::this_thread::get_id() == nodeThreadId.value();
+}
+
+Napi::Promise execInNewThread(
+	const Napi::Env& env, std::function<void()> onNewThreadCallback, std::function<Napi::Value(const Napi::Env&)> onNodeThreadCallback
+) {
 	auto deferred = Napi::Promise::Deferred::New(env);
 
 	auto done = Napi::ThreadSafeFunction::New(
 		env,
 		Napi::Function::New(
 			env,
-			[deferred, f](const Napi::CallbackInfo& info) {
+			[deferred, onNodeThreadCallback](const Napi::CallbackInfo& info) {
 				auto env = info.Env();
-				auto result = f(env);
+				auto result = onNodeThreadCallback(env);
 				deferred.Resolve(result);
 			}
 		),
@@ -22,7 +37,8 @@ Napi::Promise execInNewThread(const Napi::Env& env, std::function<Napi::Value(co
 		1
 	);
 
-	std::thread([done = std::move(done)]() {
+	std::thread([onNewThreadCallback, done = std::move(done)]() {
+		onNewThreadCallback();
 		done.BlockingCall((void*)nullptr, [](const Napi::Env&, Napi::Function f, void*) {
 			f({});
 		});

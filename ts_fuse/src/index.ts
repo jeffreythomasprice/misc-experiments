@@ -101,7 +101,6 @@ const logger = new Logger({
 	level: LogLevel.TRACE
 });
 
-let _counter = 0;
 (async () => {
 	// TODO support child loggers
 	const addonLogger = new Logger({
@@ -125,13 +124,10 @@ let _counter = 0;
 		{
 			init: (connectionInfo) => {
 				logger.debug(`init ${JSON.stringify(connectionInfo)}`);
-				// return Promise.resolve(42);
 				return new Promise((resolve) => {
 					setTimeout(
 						() => {
-							_counter++;
-							// TODO JEFF why is this being called twice?
-							logger.debug("TODO simulated delay done, init complete " + _counter);
+							logger.debug("TODO simulated delay done, init complete");
 							resolve();
 						},
 						1000

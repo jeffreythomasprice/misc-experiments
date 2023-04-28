@@ -82,11 +82,9 @@ void FuseUserData::destroy() {
 		destroyed = true;
 		if (destroyCallback.has_value()) {
 			trace() << methodName << " invoking callback";
-			printf("TODO JEFF about to call destroy\n");
 			await(destroyCallback.value(), [](const Napi::Env& env, Napi::Function f) {
 				return f({});
 			});
-			printf("TODO JEFF destroy done\n");
 		} else {
 			trace() << methodName << " no callback provided";
 		}
