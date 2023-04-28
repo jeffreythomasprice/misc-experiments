@@ -129,7 +129,7 @@ const logger = new Logger({
 					setTimeout(
 						() => {
 							logger.debug("TODO simulated delay done, init complete");
-							resolve(42);
+							resolve();
 						},
 						1000
 					);

@@ -25,8 +25,7 @@ module "*/addon" {
 	}
 
 	export interface MountAndRunCallbacks {
-		// TODO returns number only for testing
-		init?: (connectionInfo: FuseConnectionInfo) => Promise<number>;
+		init?: (connectionInfo: FuseConnectionInfo) => Promise<void>;
 		destroy?: () => Promise<void>;
 	}
 

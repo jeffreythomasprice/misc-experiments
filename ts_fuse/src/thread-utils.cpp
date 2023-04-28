@@ -1,7 +1,5 @@
 #include "thread-utils.h"
 
-#include <thread>
-
 #include "logging.h"
 
 Napi::Promise execInNewThread(const Napi::Env& env,
@@ -32,7 +30,7 @@ Napi::Promise execInNewThread(const Napi::Env& env,
 }
 
 void promiseThen(const Napi::Env& env, Napi::Value value,
-				 std::function<void(Napi::Value)> callback) {
+				 std::function<void(const Napi::Value&)> callback) {
 	if (value.IsPromise()) {
 		auto then = value.As<Napi::Promise>().Get("then");
 		if (then.IsFunction()) {
@@ -51,23 +49,9 @@ void promiseThen(const Napi::Env& env, Napi::Value value,
 	}
 }
 
-Napi::Value await(
-	const Napi::ThreadSafeFunction& f,
-	std::function<Napi::Value(const Napi::Env& env, Napi::Function f)>
-		callback) {
-	std::binary_semaphore s(0);
-	Napi::Value result;
-	f.BlockingCall(
-		(void*)nullptr,
-		[callback, &result, &s](const Napi::Env& env, Napi::Function f, void*) {
-			promiseThen(env, callback(env, f), [&result, &s](Napi::Value r) {
-				result = r;
-				s.release();
-				// TODO JEFF non-determinstically produces the wrong result,
-				// meaning memory is broken here?
-				debug() << "TODO JEFF result = " << result;
-			});
-		});
-	s.acquire();
-	return result;
+void await(const Napi::ThreadSafeFunction& f,
+		   std::function<Napi::Value(const Napi::Env& env, Napi::Function f)>
+			   invokeThreadSafeFunctionCallback) {
+	await<int>(f, invokeThreadSafeFunctionCallback,
+			   [](const Napi::Value&) { return 0; });
 }

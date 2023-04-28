@@ -80,12 +80,8 @@ void FuseUserData::destroy() {
 		destroyed = true;
 		if (destroyCallback.has_value()) {
 			trace() << methodName << " invoking callback";
-			destroyCallback.value().BlockingCall(
-				(void*)nullptr,
-				[](const Napi::Env& env, Napi::Function f, void*) {
-					// TODO handle promise
-					auto promise = f({});
-				});
+			await(destroyCallback.value(),
+				  [](const Napi::Env& env, Napi::Function f) { return f({}); });
 		} else {
 			trace() << methodName << " no callback provided";
 		}
