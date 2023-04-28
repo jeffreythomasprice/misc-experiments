@@ -41,8 +41,7 @@ class LogOStream : public std::ostream {
 	~LogOStream();
 };
 
-void initLogging(size_t maxBufferSizeBeforeFlush,
-				 std::optional<Napi::ThreadSafeFunction> emitLogCallback);
+void initLogging(size_t maxBufferSizeBeforeFlush, std::optional<Napi::ThreadSafeFunction> emitLogCallback);
 void deinitLogging();
 void unbufferLogs();
 void log(uint64_t timestamp, LogLevel level, const std::string& message);

@@ -3,8 +3,7 @@
 #include "logging.h"
 #include "thread-utils.h"
 
-Napi::Value fuseConnInfoToObject(const Napi::Env& env,
-								 const fuse_conn_info* conn) {
+Napi::Value fuseConnInfoToObject(const Napi::Env& env, const fuse_conn_info* conn) {
 	auto result = Napi::Object::New(env);
 	result.Set("proto_major", Napi::Number::New(env, conn->proto_major));
 	result.Set("proto_minor", Napi::Number::New(env, conn->proto_minor));
@@ -14,8 +13,7 @@ Napi::Value fuseConnInfoToObject(const Napi::Env& env,
 	result.Set("capable", Napi::Number::New(env, conn->capable));
 	result.Set("want", Napi::Number::New(env, conn->want));
 	result.Set("max_background", Napi::Number::New(env, conn->max_background));
-	result.Set("congestion_threshold",
-			   Napi::Number::New(env, conn->congestion_threshold));
+	result.Set("congestion_threshold", Napi::Number::New(env, conn->congestion_threshold));
 	result.Freeze();
 	return result;
 }
@@ -24,21 +22,26 @@ FuseUserData::FuseUserData(const Napi::Env& env, const Napi::Object& callbacks)
 	: destroyed(false) {
 	if (callbacks.Has("init")) {
 		initCallback = Napi::ThreadSafeFunction::New(
-			env, callbacks.Get("init").As<Napi::Function>(), "init callback",
+			env,
+			callbacks.Get("init").As<Napi::Function>(),
+			"init callback",
 			// max queue size, 0 = unlimited
 			0,
 			// initial thread count
-			1);
+			1
+		);
 	}
 
 	if (callbacks.Has("destroy")) {
 		destroyCallback = Napi::ThreadSafeFunction::New(
-			env, callbacks.Get("destroy").As<Napi::Function>(),
+			env,
+			callbacks.Get("destroy").As<Napi::Function>(),
 			"destroy callback",
 			// max queue size, 0 = unlimited
 			0,
 			// initial thread count
-			1);
+			1
+		);
 	}
 
 	// TODO other callbacks
@@ -60,8 +63,7 @@ void FuseUserData::init(fuse_conn_info* connectionInfo) {
 	trace() << methodName << " begin";
 	if (initCallback.has_value()) {
 		trace() << methodName << " invoking callback";
-		await(initCallback.value(), [connectionInfo](const Napi::Env& env,
-													 Napi::Function f) {
+		await(initCallback.value(), [connectionInfo](const Napi::Env& env, Napi::Function f) {
 			auto jsConnectionInfo = fuseConnInfoToObject(env, connectionInfo);
 			return f({jsConnectionInfo});
 		});
@@ -80,8 +82,9 @@ void FuseUserData::destroy() {
 		destroyed = true;
 		if (destroyCallback.has_value()) {
 			trace() << methodName << " invoking callback";
-			await(destroyCallback.value(),
-				  [](const Napi::Env& env, Napi::Function f) { return f({}); });
+			await(destroyCallback.value(), [](const Napi::Env& env, Napi::Function f) {
+				return f({});
+			});
 		} else {
 			trace() << methodName << " no callback provided";
 		}

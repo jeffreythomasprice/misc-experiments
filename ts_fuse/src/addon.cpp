@@ -32,19 +32,21 @@ Napi::Value exportedInit(const Napi::CallbackInfo& info) {
 			auto log = options.Get("log");
 			if (log.IsFunction()) {
 				emitLogCallback = Napi::ThreadSafeFunction::New(
-					env, log.As<Napi::Function>(), "unbuffer logs",
+					env,
+					log.As<Napi::Function>(),
+					"unbuffer logs",
 					// max queue size, 0 = unlimited
 					0,
 					// initial thread count
-					1);
+					1
+				);
 			}
 		}
 
 		if (options.Has("maxBufferSize")) {
 			auto maxBufferSize = options.Get("maxBufferSize");
 			if (maxBufferSize.IsNumber()) {
-				maxBufferSizeBeforeFlush =
-					maxBufferSize.As<Napi::Number>().Int64Value();
+				maxBufferSizeBeforeFlush = maxBufferSize.As<Napi::Number>().Int64Value();
 			}
 		}
 	}
@@ -99,8 +101,7 @@ int fuseGetattrImpl(const char* path, struct stat* stat) {
 	return result;
 }
 
-int fuseReaddirImpl(const char* path, void*, fuse_fill_dir_t, off_t,
-					struct fuse_file_info*) {
+int fuseReaddirImpl(const char* path, void*, fuse_fill_dir_t, off_t, struct fuse_file_info*) {
 	trace() << "fuseReaddirImpl begin, path = " << path;
 	// TODO implement readdir
 	auto result = -ENOENT;
@@ -133,9 +134,7 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 		int multithreaded;
 		int foreground;
 		fuse_parse_cmdline(fuseArgs, &mountPoint, &multithreaded, &foreground);
-		trace() << "mountAndRun mountPoint=" << mountPoint
-				<< ", multithreaded=" << multithreaded
-				<< ", foreground=" << foreground;
+		trace() << "mountAndRun mountPoint=" << mountPoint << ", multithreaded=" << multithreaded << ", foreground=" << foreground;
 
 		auto fuseChannel = fuse_mount(mountPoint, fuseArgs);
 
@@ -147,36 +146,32 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 		fuseOperations->readdir = fuseReaddirImpl;
 		// TODO more operations
 
-		auto fuseInstance = fuse_new(fuseChannel, fuseArgs, fuseOperations,
-									 sizeof(fuse_operations), fuseUserData);
+		auto fuseInstance = fuse_new(fuseChannel, fuseArgs, fuseOperations, sizeof(fuse_operations), fuseUserData);
 
 		auto fuseLoopThreadResult = new int;
-		auto fuseLoopThread = new std::thread([mountPoint, fuseInstance,
-											   fuseLoopThreadResult]() {
+		auto fuseLoopThread = new std::thread([mountPoint, fuseInstance, fuseLoopThreadResult]() {
 			trace() << "mount point " << mountPoint << " fuse_loop begin";
 			*fuseLoopThreadResult = fuse_loop(fuseInstance);
-			trace() << "mount point " << mountPoint
-					<< " fuse_loop done, result = " << *fuseLoopThreadResult;
+			trace() << "mount point " << mountPoint << " fuse_loop done, result = " << *fuseLoopThreadResult;
 		});
 
 		auto result = Napi::Object::New(env);
 		result.Set(
 			"close",
 			Napi::Function::New(
-				env, [fuseArgs, fuseUserData, fuseOperations, mountPoint,
-					  fuseChannel, fuseInstance, fuseLoopThread,
-					  fuseLoopThreadResult](const Napi::CallbackInfo& info) {
+				env,
+				[fuseArgs, fuseUserData, fuseOperations, mountPoint, fuseChannel, fuseInstance, fuseLoopThread, fuseLoopThreadResult](
+					const Napi::CallbackInfo& info
+				) {
 					trace() << "mount point " << mountPoint << " unmount begin";
 
 					auto env = info.Env();
 
 					fuse_unmount(mountPoint, fuseChannel);
-					trace() << "mount point " << mountPoint
-							<< " unmount fuse_unmount complete";
+					trace() << "mount point " << mountPoint << " unmount fuse_unmount complete";
 
 					fuse_exit(fuseInstance);
-					trace() << "mount point " << mountPoint
-							<< " unmount fuse_exit complete";
+					trace() << "mount point " << mountPoint << " unmount fuse_exit complete";
 
 					delete fuseOperations;
 
@@ -191,19 +186,17 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 					delete fuseLoopThread;
 					auto result = *fuseLoopThreadResult;
 					delete fuseLoopThreadResult;
-					trace()
-						<< "mount point " << mountPoint
-						<< " unmount fuse_loop complete, result = " << result;
+					trace() << "mount point " << mountPoint << " unmount fuse_loop complete, result = " << result;
 
 					debug() << "unmounted " << mountPoint;
 
-					return execInNewThread(
-						env, [mountPoint, result](const Napi::Env& env) {
-							trace() << "mount point " << mountPoint
-									<< " unmount end";
-							return Napi::Number::From(env, result);
-						});
-				}));
+					return execInNewThread(env, [mountPoint, result](const Napi::Env& env) {
+						trace() << "mount point " << mountPoint << " unmount end";
+						return Napi::Number::From(env, result);
+					});
+				}
+			)
+		);
 		result.Freeze();
 
 		debug() << "mounted " << mountPoint;
@@ -223,12 +216,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
 	logLevels.Freeze();
 	exports.Set(Napi::String::New(env, "LogLevel"), logLevels);
 
-	exports.Set(Napi::String::New(env, "init"),
-				Napi::Function::New(env, exportedInit));
-	exports.Set(Napi::String::New(env, "close"),
-				Napi::Function::New(env, exportedClose));
-	exports.Set(Napi::String::New(env, "mountAndRun"),
-				Napi::Function::New(env, exportedMountAndRun));
+	exports.Set(Napi::String::New(env, "init"), Napi::Function::New(env, exportedInit));
+	exports.Set(Napi::String::New(env, "close"), Napi::Function::New(env, exportedClose));
+	exports.Set(Napi::String::New(env, "mountAndRun"), Napi::Function::New(env, exportedMountAndRun));
 	return exports;
 }
 

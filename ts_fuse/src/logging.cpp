@@ -9,7 +9,8 @@ std::vector<LogMessage> logBuffer;
 size_t maxBufferSizeBeforeFlush;
 std::optional<Napi::ThreadSafeFunction> emitLogCallback;
 
-LogOStream::LogStringBuf::LogStringBuf(LogLevel level) : level(level) {}
+LogOStream::LogStringBuf::LogStringBuf(LogLevel level)
+	: level(level) {}
 
 int LogOStream::LogStringBuf::sync() {
 	auto output = str();
@@ -31,12 +32,15 @@ int LogOStream::LogStringBuf::sync() {
 	return output.size();
 }
 
-LogOStream::LogOStream(LogLevel level) : std::ostream(&buf), buf(level) {}
+LogOStream::LogOStream(LogLevel level)
+	: std::ostream(&buf),
+	  buf(level) {}
 
-LogOStream::~LogOStream() { flush(); }
+LogOStream::~LogOStream() {
+	flush();
+}
 
-void initLogging(size_t _maxBufferSizeBeforeFlush,
-				 std::optional<Napi::ThreadSafeFunction> _emitLogCallback) {
+void initLogging(size_t _maxBufferSizeBeforeFlush, std::optional<Napi::ThreadSafeFunction> _emitLogCallback) {
 	maxBufferSizeBeforeFlush = _maxBufferSizeBeforeFlush;
 	emitLogCallback = _emitLogCallback;
 }
@@ -50,13 +54,11 @@ void unbufferLogs() {
 	std::unique_lock lock(logBufferMutex);
 	if (emitLogCallback.has_value()) {
 		for (auto& logMessage : logBuffer) {
-			emitLogCallback.value().BlockingCall(
-				(void*)nullptr,
-				[logMessage](Napi::Env env, Napi::Function f, void*) {
-					f({Napi::Number::From(env, logMessage.timestamp),
-					   Napi::Number::From(env, (int)logMessage.level),
-					   Napi::String::From(env, logMessage.message)});
-				});
+			emitLogCallback.value().BlockingCall((void*)nullptr, [logMessage](Napi::Env env, Napi::Function f, void*) {
+				f({Napi::Number::From(env, logMessage.timestamp),
+				   Napi::Number::From(env, (int)logMessage.level),
+				   Napi::String::From(env, logMessage.message)});
+			});
 		}
 	}
 	logBuffer.clear();
@@ -84,17 +86,29 @@ void log(LogLevel level, const std::string& message) {
 	log(now, level, message);
 }
 
-LogOStream fatal() { return LogOStream(LogLevel::FATAL); }
+LogOStream fatal() {
+	return LogOStream(LogLevel::FATAL);
+}
 
-LogOStream error() { return LogOStream(LogLevel::ERROR); }
+LogOStream error() {
+	return LogOStream(LogLevel::ERROR);
+}
 
-LogOStream warn() { return LogOStream(LogLevel::WARN); }
+LogOStream warn() {
+	return LogOStream(LogLevel::WARN);
+}
 
-LogOStream info() { return LogOStream(LogLevel::INFO); }
+LogOStream info() {
+	return LogOStream(LogLevel::INFO);
+}
 
-LogOStream debug() { return LogOStream(LogLevel::DEBUG); }
+LogOStream debug() {
+	return LogOStream(LogLevel::DEBUG);
+}
 
-LogOStream trace() { return LogOStream(LogLevel::TRACE); }
+LogOStream trace() {
+	return LogOStream(LogLevel::TRACE);
+}
 
 std::ostream& operator<<(std::ostream& s, LogLevel level) {
 	switch (level) {
@@ -116,9 +130,7 @@ std::ostream& operator<<(std::ostream& s, LogLevel level) {
 }
 
 std::ostream& operator<<(std::ostream& s, const LogMessage& logMessage) {
-	return s << "timestamp=" << logMessage.timestamp
-			 << ", level=" << logMessage.level
-			 << ", message=" << logMessage.message;
+	return s << "timestamp=" << logMessage.timestamp << ", level=" << logMessage.level << ", message=" << logMessage.message;
 }
 
 std::ostream& operator<<(std::ostream& s, const Napi::Value& value) {
@@ -141,7 +153,6 @@ std::ostream& operator<<(std::ostream& s, const Napi::Value& value) {
 		case napi_function:
 		case napi_external:
 		case napi_bigint:
-			throw std::logic_error(
-				"TODO implement all the to strings for values");
+			throw std::logic_error("TODO implement all the to strings for values");
 	}
 }
