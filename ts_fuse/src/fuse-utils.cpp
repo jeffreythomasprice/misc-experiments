@@ -1,6 +1,7 @@
 #include "fuse-utils.h"
 
 #include "logging.h"
+#include "thread-utils.h"
 
 Napi::Value fuseConnInfoToObject(const Napi::Env& env,
 								 const fuse_conn_info* conn) {
@@ -59,13 +60,11 @@ void FuseUserData::init(fuse_conn_info* connectionInfo) {
 	trace() << methodName << " begin";
 	if (initCallback.has_value()) {
 		trace() << methodName << " invoking callback";
-		initCallback.value().BlockingCall(
-			(void*)nullptr,
-			[connectionInfo](const Napi::Env& env, Napi::Function f, void*) {
-				auto jsConnectionInfo =
-					fuseConnInfoToObject(env, connectionInfo);
-				f({jsConnectionInfo});
-			});
+		await(initCallback.value(), [connectionInfo](const Napi::Env& env,
+													 Napi::Function f) {
+			auto jsConnectionInfo = fuseConnInfoToObject(env, connectionInfo);
+			return f({jsConnectionInfo});
+		});
 	} else {
 		trace() << methodName << " no callback provided";
 	}
@@ -83,7 +82,10 @@ void FuseUserData::destroy() {
 			trace() << methodName << " invoking callback";
 			destroyCallback.value().BlockingCall(
 				(void*)nullptr,
-				[](const Napi::Env& env, Napi::Function f, void*) { f({}); });
+				[](const Napi::Env& env, Napi::Function f, void*) {
+					// TODO handle promise
+					auto promise = f({});
+				});
 		} else {
 			trace() << methodName << " no callback provided";
 		}

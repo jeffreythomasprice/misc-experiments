@@ -124,9 +124,20 @@ const logger = new Logger({
 		{
 			init: (connectionInfo) => {
 				logger.debug(`init ${JSON.stringify(connectionInfo)}`);
+				// return Promise.resolve(42);
+				return new Promise((resolve) => {
+					setTimeout(
+						() => {
+							logger.debug("TODO simulated delay done, init complete");
+							resolve(42);
+						},
+						1000
+					);
+				});
 			},
 			destroy: () => {
 				logger.debug("destroy");
+				return Promise.resolve();
 			},
 		}
 	);

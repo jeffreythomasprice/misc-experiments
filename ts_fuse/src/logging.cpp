@@ -120,3 +120,28 @@ std::ostream& operator<<(std::ostream& s, const LogMessage& logMessage) {
 			 << ", level=" << logMessage.level
 			 << ", message=" << logMessage.message;
 }
+
+std::ostream& operator<<(std::ostream& s, const Napi::Value& value) {
+	switch (value.Type()) {
+		case napi_undefined:
+			return s << "undefined";
+		case napi_null:
+			return s << "null";
+		case napi_boolean:
+			if (value.As<Napi::Boolean>().Value()) {
+				return s << "true";
+			} else {
+				return s << "false";
+			}
+		case napi_number:
+			return s << value.As<Napi::Number>().DoubleValue();
+		case napi_string:
+		case napi_symbol:
+		case napi_object:
+		case napi_function:
+		case napi_external:
+		case napi_bigint:
+			throw std::logic_error(
+				"TODO implement all the to strings for values");
+	}
+}

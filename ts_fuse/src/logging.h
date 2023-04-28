@@ -56,3 +56,4 @@ LogOStream trace();
 
 std::ostream& operator<<(std::ostream& s, LogLevel level);
 std::ostream& operator<<(std::ostream& s, const LogMessage& logMessage);
+std::ostream& operator<<(std::ostream& s, const Napi::Value& value);
