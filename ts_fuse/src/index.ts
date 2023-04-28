@@ -98,13 +98,14 @@ class Logger {
 }
 
 const logger = new Logger({
-	level: LogLevel.DEBUG
+	level: LogLevel.TRACE
 });
 
+let _counter = 0;
 (async () => {
 	// TODO support child loggers
 	const addonLogger = new Logger({
-		level: LogLevel.DEBUG,
+		level: LogLevel.TRACE,
 		prefix: "c++"
 	});
 
@@ -128,7 +129,9 @@ const logger = new Logger({
 				return new Promise((resolve) => {
 					setTimeout(
 						() => {
-							logger.debug("TODO simulated delay done, init complete");
+							_counter++;
+							// TODO JEFF why is this being called twice?
+							logger.debug("TODO simulated delay done, init complete " + _counter);
 							resolve();
 						},
 						1000

@@ -154,5 +154,7 @@ std::ostream& operator<<(std::ostream& s, const Napi::Value& value) {
 		case napi_external:
 		case napi_bigint:
 			throw std::logic_error("TODO implement all the to strings for values");
+		default:
+			return s << "Napi::Value(type=" << (int)value.Type() << ")";
 	}
 }
