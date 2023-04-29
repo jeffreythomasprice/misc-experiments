@@ -88,7 +88,7 @@ void* fuseInitImpl(fuse_conn_info* connectionInfo) {
 	auto context = fuse_get_context();
 	auto data = (FuseUserData*)context->private_data;
 	data->init(connectionInfo);
-	return nullptr;
+	return data;
 }
 
 void fuseDestroyImpl(void*) {
@@ -98,11 +98,9 @@ void fuseDestroyImpl(void*) {
 }
 
 int fuseGetattrImpl(const char* path, struct stat* stat) {
-	trace() << "fuseGetattrImpl begin, path = " << path;
-	// TODO implement getattr
-	auto result = -ENOENT;
-	trace() << "fuseGetattrImpl end, result " << result;
-	return result;
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->getattr(path, stat);
 }
 
 int fuseReaddirImpl(const char* path, void*, fuse_fill_dir_t, off_t, struct fuse_file_info*) {
@@ -229,6 +227,55 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
 	logLevels.Set("TRACE", Napi::Number::New(env, (int)LogLevel::TRACE));
 	logLevels.Freeze();
 	exports.Set(Napi::String::New(env, "LogLevel"), logLevels);
+
+	auto errnos = Napi::Object::New(env);
+	errnos.Set("EPERM", Napi::Number::New(env, EPERM));
+	errnos.Set("ENOENT", Napi::Number::New(env, ENOENT));
+	errnos.Set("ESRCH", Napi::Number::New(env, ESRCH));
+	errnos.Set("EINTR", Napi::Number::New(env, EINTR));
+	errnos.Set("EIO", Napi::Number::New(env, EIO));
+	errnos.Set("ENXIO", Napi::Number::New(env, ENXIO));
+	errnos.Set("E2BIG", Napi::Number::New(env, E2BIG));
+	errnos.Set("ENOEXEC", Napi::Number::New(env, ENOEXEC));
+	errnos.Set("EBADF", Napi::Number::New(env, EBADF));
+	errnos.Set("ECHILD", Napi::Number::New(env, ECHILD));
+	errnos.Set("EAGAIN", Napi::Number::New(env, EAGAIN));
+	errnos.Set("ENOMEM", Napi::Number::New(env, ENOMEM));
+	errnos.Set("EACCES", Napi::Number::New(env, EACCES));
+	errnos.Set("EFAULT", Napi::Number::New(env, EFAULT));
+	errnos.Set("ENOTBLK", Napi::Number::New(env, ENOTBLK));
+	errnos.Set("EBUSY", Napi::Number::New(env, EBUSY));
+	errnos.Set("EEXIST", Napi::Number::New(env, EEXIST));
+	errnos.Set("EXDEV", Napi::Number::New(env, EXDEV));
+	errnos.Set("ENODEV", Napi::Number::New(env, ENODEV));
+	errnos.Set("ENOTDIR", Napi::Number::New(env, ENOTDIR));
+	errnos.Set("EISDIR", Napi::Number::New(env, EISDIR));
+	errnos.Set("EINVAL", Napi::Number::New(env, EINVAL));
+	errnos.Set("ENFILE", Napi::Number::New(env, ENFILE));
+	errnos.Set("EMFILE", Napi::Number::New(env, EMFILE));
+	errnos.Set("ENOTTY", Napi::Number::New(env, ENOTTY));
+	errnos.Set("ETXTBSY", Napi::Number::New(env, ETXTBSY));
+	errnos.Set("EFBIG", Napi::Number::New(env, EFBIG));
+	errnos.Set("ENOSPC", Napi::Number::New(env, ENOSPC));
+	errnos.Set("ESPIPE", Napi::Number::New(env, ESPIPE));
+	errnos.Set("EROFS", Napi::Number::New(env, EROFS));
+	errnos.Set("EMLINK", Napi::Number::New(env, EMLINK));
+	errnos.Set("EPIPE", Napi::Number::New(env, EPIPE));
+	errnos.Set("EDOM", Napi::Number::New(env, EDOM));
+	errnos.Set("ERANGE", Napi::Number::New(env, ERANGE));
+	errnos.Freeze();
+	exports.Set(Napi::String::New(env, "Errno"), errnos);
+
+	auto fileTypes = Napi::Object::New(env);
+	fileTypes.Set("IFDIR", Napi::Number::New(env, S_IFDIR));
+	fileTypes.Set("IFCHR", Napi::Number::New(env, S_IFCHR));
+	fileTypes.Set("IFBLK", Napi::Number::New(env, S_IFBLK));
+	fileTypes.Set("IFREG", Napi::Number::New(env, S_IFREG));
+	fileTypes.Set("IFIFO", Napi::Number::New(env, S_IFIFO));
+	fileTypes.Set("IFLNK", Napi::Number::New(env, S_IFLNK));
+	fileTypes.Set("IFSOCK", Napi::Number::New(env, S_IFSOCK));
+	fileTypes.Freeze();
+	exports.Set(Napi::String::New(env, "FileType"), fileTypes);
 
 	exports.Set(Napi::String::New(env, "init"), Napi::Function::New(env, exportedInit));
 	exports.Set(Napi::String::New(env, "close"), Napi::Function::New(env, exportedClose));

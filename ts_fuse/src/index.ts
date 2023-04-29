@@ -124,19 +124,40 @@ const logger = new Logger({
 		{
 			init: (connectionInfo) => {
 				logger.debug(`init ${JSON.stringify(connectionInfo)}`);
-				return new Promise((resolve) => {
-					setTimeout(
-						() => {
-							logger.debug("TODO simulated delay done, init complete");
-							resolve();
-						},
-						1000
-					);
-				});
 			},
 			destroy: () => {
 				logger.debug("destroy");
-				return Promise.resolve();
+			},
+			getattr: (path: string) => {
+				switch (path) {
+					case "/":
+						return {
+							st_mode: addon.FileType.IFDIR | 0o755,
+							st_nlink: 2,
+							st_dev: 0,
+							st_ino: 0,
+							st_uid: 0,
+							st_gid: 0,
+							st_rdev: 0,
+							st_size: 0,
+							st_blksize: 0,
+							st_blocks: 0,
+							st_atim: {
+								tv_sec: 0,
+								tv_nsec: 0,
+							},
+							st_mtim: {
+								tv_sec: 0,
+								tv_nsec: 0,
+							},
+							st_ctim: {
+								tv_sec: 0,
+								tv_nsec: 0,
+							},
+						};
+					default:
+						return -addon.Errno.ENOENT;
+				}
 			},
 		}
 	);
