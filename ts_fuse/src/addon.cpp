@@ -103,12 +103,10 @@ int fuseGetattrImpl(const char* path, struct stat* stat) {
 	return data->getattr(path, stat);
 }
 
-int fuseReaddirImpl(const char* path, void*, fuse_fill_dir_t, off_t, struct fuse_file_info*) {
-	trace() << "fuseReaddirImpl begin, path = " << path;
-	// TODO implement readdir
-	auto result = -ENOENT;
-	trace() << "fuseReaddirImpl end, result " << result;
-	return result;
+int fuseReaddirImpl(const char* path, void* buf, fuse_fill_dir_t filler, off_t, struct fuse_file_info*) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->readdir(path, buf, filler);
 }
 
 Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {

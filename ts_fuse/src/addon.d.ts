@@ -98,6 +98,11 @@ module "*/addon" {
 			st_mtim: TimeSpec;
 			st_ctim: TimeSpec;
 		}
+
+		export interface ReaddirResult {
+			path: string;
+			stat?: Stat;
+		}
 	}
 
 	export type MaybePromise<T> = T | Promise<T>;
@@ -106,6 +111,7 @@ module "*/addon" {
 		init?: (connectionInfo: FuseConnectionInfo) => MaybePromise<void>;
 		destroy?: () => MaybePromise<void>;
 		getattr?: (path: string) => MaybePromise<Errno | Fuse.Stat>;
+		readdir?: (path: string) => MaybePromise<Errno | ReaddirResult[]>;
 	}
 
 	export interface FuseMount {

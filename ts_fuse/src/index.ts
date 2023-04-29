@@ -134,6 +134,7 @@ const logger = new Logger({
 						return {
 							st_mode: addon.FileType.IFDIR | 0o755,
 							st_nlink: 2,
+							// unused
 							st_dev: 0,
 							st_ino: 0,
 							st_uid: 0,
@@ -155,9 +156,42 @@ const logger = new Logger({
 								tv_nsec: 0,
 							},
 						};
+					case "/test":
+						return {
+							st_mode: addon.FileType.IFREG | 0o444,
+							st_nlink: 1,
+							st_size: 0,
+							// unused
+							st_dev: 0,
+							st_ino: 0,
+							st_uid: 0,
+							st_gid: 0,
+							st_rdev: 0,
+							st_blksize: 0,
+							st_blocks: 0,
+							st_atim: {
+								tv_sec: 0,
+								tv_nsec: 0,
+							},
+							st_mtim: {
+								tv_sec: 0,
+								tv_nsec: 0,
+							},
+							st_ctim: {
+								tv_sec: 0,
+								tv_nsec: 0,
+							},
+						};
 					default:
 						return -addon.Errno.ENOENT;
 				}
+			},
+			readdir: (path: string) => {
+				return [
+					{ path: "." },
+					{ path: ".." },
+					{ path: "test" }
+				];
 			},
 		}
 	);

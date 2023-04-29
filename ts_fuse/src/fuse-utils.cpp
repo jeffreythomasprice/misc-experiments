@@ -46,6 +46,21 @@ void jsObjectToStat(const Napi::Object& value, struct stat* stat) {
 	stat->st_ctim = getTimespec("st_ctim");
 }
 
+void jsArrayToReaddirResults(const Napi::Array& results, void* buf, fuse_fill_dir_t filler) {
+	for (size_t i = 0; i < results.Length(); i++) {
+		auto dir = results.Get(i).As<Napi::Object>();
+		std::string path = dir.Get("path").As<Napi::String>();
+		trace() << "jsArrayToReaddirResults, path = " << path;
+		if (dir.Has("stat")) {
+			struct stat stat;
+			jsObjectToStat(dir.Get("stat").As<Napi::Object>(), &stat);
+			filler(buf, path.c_str(), &stat, 0);
+		} else {
+			filler(buf, path.c_str(), nullptr, 0);
+		}
+	}
+}
+
 FuseUserData::FuseUserData(const Napi::Env& env, const Napi::Object& callbacks)
 	: destroyed(false) {
 	auto getCallback = [&callbacks, &env](const std::string& name) -> std::optional<Napi::ThreadSafeFunction> {
@@ -69,6 +84,7 @@ FuseUserData::FuseUserData(const Napi::Env& env, const Napi::Object& callbacks)
 	initCallback = getCallback("init");
 	destroyCallback = getCallback("destroy");
 	getattrCallback = getCallback("getattr");
+	readdirCallback = getCallback("readdir");
 	// TODO other callbacks
 }
 
@@ -84,6 +100,7 @@ FuseUserData::~FuseUserData() {
 	releaseCallback(initCallback);
 	releaseCallback(destroyCallback);
 	releaseCallback(getattrCallback);
+	releaseCallback(readdirCallback);
 }
 
 void FuseUserData::init(fuse_conn_info* connectionInfo) {
@@ -146,5 +163,34 @@ int FuseUserData::getattr(const std::string& path, struct stat* stat) {
 		trace() << methodName << " no callback provided";
 	}
 	trace() << methodName << " end, result = " << result;
+	return result;
+}
+
+int FuseUserData::readdir(const std::string& path, void* buf, fuse_fill_dir_t filler) {
+	const auto methodName = "FuseUserData::readdir";
+	trace() << methodName << " begin";
+	int result = -ENOENT;
+	if (readdirCallback.has_value()) {
+		trace() << methodName << " invoking callback";
+		result = await<int>(
+			readdirCallback.value(),
+			[&path](const Napi::Env& env, Napi::Function f) {
+				return f({Napi::String::From(env, path)});
+			},
+			[&buf, &filler](const Napi::Value& value) {
+				if (value.IsNumber()) {
+					return value.As<Napi::Number>().Int32Value();
+				} else if (value.IsArray()) {
+					jsArrayToReaddirResults(value.As<Napi::Array>(), buf, filler);
+					return 0;
+				} else {
+					throw new std::logic_error("expected either number or object");
+				}
+			}
+		);
+	} else {
+		trace() << methodName << " no callback provided";
+	}
+	trace() << methodName << " end";
 	return result;
 }
