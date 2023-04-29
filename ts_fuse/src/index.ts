@@ -128,7 +128,7 @@ const logger = new Logger({
 			destroy: () => {
 				logger.debug("destroy");
 			},
-			getattr: (path: string) => {
+			getattr: (path) => {
 				switch (path) {
 					case "/":
 						return {
@@ -186,12 +186,29 @@ const logger = new Logger({
 						return -addon.Errno.ENOENT;
 				}
 			},
-			readdir: (path: string) => {
-				return [
-					{ path: "." },
-					{ path: ".." },
-					{ path: "test" }
-				];
+			readdir: (path) => {
+				if (path === "/") {
+					return [
+						{ path: "." },
+						{ path: ".." },
+						{ path: "test" }
+					];
+				}
+				return -addon.Errno.ENOENT;
+			},
+			open: (path, fileInfo) => {
+				logger.debug("TODO JEFF open file", path, fileInfo);
+				if (path === "/test") {
+					/*
+					TODO JEFF check permissions
+					if ((fi->flags & O_ACCMODE) != O_RDONLY)
+						return -EACCES;
+					*/
+
+					// TODO JEFF use a meaningful file handle value
+					return { fh: 42 };
+				}
+				return -addon.Errno.ENOENT;
 			},
 		}
 	);

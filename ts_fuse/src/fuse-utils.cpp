@@ -61,6 +61,13 @@ void jsArrayToReaddirResults(const Napi::Array& results, void* buf, fuse_fill_di
 	}
 }
 
+Napi::Value fuseFileInfoToJSObject(const Napi::Env& env, struct fuse_file_info* fileInfo) {
+	auto result = Napi::Object::New(env);
+	// TODO JEFF copy fields to js object
+	result.Freeze();
+	return result;
+}
+
 FuseUserData::FuseUserData(const Napi::Env& env, const Napi::Object& callbacks)
 	: destroyed(false) {
 	auto getCallback = [&callbacks, &env](const std::string& name) -> std::optional<Napi::ThreadSafeFunction> {
@@ -85,6 +92,7 @@ FuseUserData::FuseUserData(const Napi::Env& env, const Napi::Object& callbacks)
 	destroyCallback = getCallback("destroy");
 	getattrCallback = getCallback("getattr");
 	readdirCallback = getCallback("readdir");
+	openCallback = getCallback("open");
 	// TODO other callbacks
 }
 
@@ -101,6 +109,8 @@ FuseUserData::~FuseUserData() {
 	releaseCallback(destroyCallback);
 	releaseCallback(getattrCallback);
 	releaseCallback(readdirCallback);
+	releaseCallback(openCallback);
+	// TODO other callbacks
 }
 
 void FuseUserData::init(fuse_conn_info* connectionInfo) {
@@ -191,6 +201,35 @@ int FuseUserData::readdir(const std::string& path, void* buf, fuse_fill_dir_t fi
 	} else {
 		trace() << methodName << " no callback provided";
 	}
-	trace() << methodName << " end";
+	trace() << methodName << " end, result = " << result;
+	return result;
+}
+
+int FuseUserData::open(const std::string& path, struct fuse_file_info* fileInfo) {
+	const auto methodName = "FuseUserData::open";
+	trace() << methodName << " begin";
+	int result = -ENOENT;
+	if (openCallback.has_value()) {
+		trace() << methodName << " invoking callback";
+		result = await<int>(
+			openCallback.value(),
+			[&path, fileInfo](const Napi::Env& env, Napi::Function f) {
+				return f({Napi::String::From(env, path), fuseFileInfoToJSObject(env, fileInfo)});
+			},
+			[fileInfo](const Napi::Value& value) {
+				if (value.IsNumber()) {
+					return value.As<Napi::Number>().Int32Value();
+				} else if (value.IsObject()) {
+					fileInfo->fh = value.As<Napi::Object>().Get("fh").As<Napi::Number>().Int64Value();
+					return 0;
+				} else {
+					throw new std::logic_error("expected either number or object");
+				}
+			}
+		);
+	} else {
+		trace() << methodName << " no callback provided";
+	}
+	trace() << methodName << " end, result = " << result;
 	return result;
 }

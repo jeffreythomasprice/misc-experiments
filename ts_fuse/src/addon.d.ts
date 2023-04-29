@@ -67,41 +67,49 @@ module "*/addon" {
 
 	export namespace Fuse {
 		export interface ConnectionInfo {
-			proto_major: number;
-			proto_minor: number;
-			async_read: number;
-			max_write: number;
-			max_readahead: number;
-			capable: number;
-			want: number;
-			max_background: number;
-			congestion_threshold: number;
+			readonly proto_major: number;
+			readonly proto_minor: number;
+			readonly async_read: number;
+			readonly max_write: number;
+			readonly max_readahead: number;
+			readonly capable: number;
+			readonly want: number;
+			readonly max_background: number;
+			readonly congestion_threshold: number;
 		}
 
 		export interface Timespec {
-			tv_sec: number;
-			tv_nsec: number;
+			readonly tv_sec: number;
+			readonly tv_nsec: number;
 		}
 
 		export interface Stat {
-			st_dev: number;
-			st_ino: number;
-			st_nlink: number;
-			st_mode: number;
-			st_uid: number;
-			st_gid: number;
-			st_rdev: number;
-			st_size: number;
-			st_blksize: number;
-			st_blocks: number;
-			st_atim: TimeSpec;
-			st_mtim: TimeSpec;
-			st_ctim: TimeSpec;
+			readonly st_dev: number;
+			readonly st_ino: number;
+			readonly st_nlink: number;
+			readonly st_mode: number;
+			readonly st_uid: number;
+			readonly st_gid: number;
+			readonly st_rdev: number;
+			readonly st_size: number;
+			readonly st_blksize: number;
+			readonly st_blocks: number;
+			readonly st_atim: TimeSpec;
+			readonly st_mtim: TimeSpec;
+			readonly st_ctim: TimeSpec;
 		}
 
 		export interface ReaddirResult {
-			path: string;
-			stat?: Stat;
+			readonly path: string;
+			readonly stat?: Stat;
+		}
+
+		export interface FileInfo {
+			// TODO JEFF file info fields
+		}
+
+		export interface OpenResult {
+			readonly fh: number;
 		}
 	}
 
@@ -112,6 +120,9 @@ module "*/addon" {
 		destroy?: () => MaybePromise<void>;
 		getattr?: (path: string) => MaybePromise<Errno | Fuse.Stat>;
 		readdir?: (path: string) => MaybePromise<Errno | ReaddirResult[]>;
+		open?: (path: string, fileInfo: FileInfo) => MaybePromise<Errno | OpenResult>;
+		// TODO JEFF read
+		// read?: (path: string, fh: number) => MaybePromise<Errno | Buffer>;
 	}
 
 	export interface FuseMount {

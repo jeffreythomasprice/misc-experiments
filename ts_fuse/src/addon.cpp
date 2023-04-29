@@ -109,6 +109,12 @@ int fuseReaddirImpl(const char* path, void* buf, fuse_fill_dir_t filler, off_t, 
 	return data->readdir(path, buf, filler);
 }
 
+int fuseOpenImpl(const char* path, struct fuse_file_info* fileInfo) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->open(path, fileInfo);
+}
+
 Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 	trace() << "mountAndRun begin";
 
@@ -147,6 +153,7 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 			fuseOperations->destroy = fuseDestroyImpl;
 			fuseOperations->getattr = fuseGetattrImpl;
 			fuseOperations->readdir = fuseReaddirImpl;
+			fuseOperations->open = fuseOpenImpl;
 			// TODO more operations
 
 			auto fuseInstance = fuse_new(fuseChannel, fuseArgs, fuseOperations, sizeof(fuse_operations), fuseUserData);
