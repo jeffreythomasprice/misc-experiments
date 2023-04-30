@@ -121,6 +121,42 @@ int fuseReadImpl(const char* path, char* buf, size_t size, off_t offset, struct 
 	return data->read(path, buf, size, offset, fileInfo);
 }
 
+int fuseWriteImpl(const char* path, const char* buf, size_t size, off_t offset, struct fuse_file_info* fileInfo) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->write(path, buf, size, offset, fileInfo);
+}
+
+int fuseCreateImpl(const char* path, mode_t mode, struct fuse_file_info* fileInfo) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->create(path, mode, fileInfo);
+}
+
+int fuseUnlinkImpl(const char* path) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->unlink(path);
+}
+
+int fuseChmodImpl(const char* path, mode_t mode) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->chmod(path, mode);
+}
+
+int fuseChownImpl(const char* path, uid_t user, gid_t group) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->chown(path, user, group);
+}
+
+int fuseReleaseImpl(const char* path, struct fuse_file_info* fileInfo) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->release(path, fileInfo);
+}
+
 Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 	trace() << "mountAndRun begin";
 
@@ -161,9 +197,18 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 			fuseOperations->readdir = fuseReaddirImpl;
 			fuseOperations->open = fuseOpenImpl;
 			fuseOperations->read = fuseReadImpl;
-			// TODO more file operations: flush, release, write
-			// TODO more directory operations?
-			// TODO stuff like create or symlinks?
+			fuseOperations->write = fuseWriteImpl;
+			fuseOperations->create = fuseCreateImpl;
+			fuseOperations->unlink = fuseUnlinkImpl;
+			fuseOperations->chmod = fuseChmodImpl;
+			fuseOperations->chown = fuseChownImpl;
+			fuseOperations->release = fuseReleaseImpl;
+			/*
+			TODO truncate
+			TODO flush
+			TODO mkdir
+			TODO rmdir
+			*/
 
 			auto fuseInstance = fuse_new(fuseChannel, fuseArgs, fuseOperations, sizeof(fuse_operations), fuseUserData);
 

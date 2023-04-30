@@ -156,6 +156,12 @@ module "*/addon" {
 		readdir?: (path: string) => MaybePromise<Fuse.Errno | Fuse.ReaddirResult[]>;
 		open?: (path: string, fileInfo: Fuse.FileInfo) => MaybePromise<Fuse.Errno | Fuse.OpenResult>;
 		read?: (path: string, buffer: Buffer, fileInfo: Fuse.FileInfo) => MaybePromise<number>;
+		write?: (path: string, buffer: Buffer, fileInfo: Fuse.FileInfo) => MaybePromise<number>;
+		create?: (path: string, mode: number, fileInfo: Fuse.FileInfo) => MaybePromise<Fuse.Errno | Fuse.OpenResult>;
+		unlink?: (path: string) => MaybePromise<Fuse.Errno>;
+		chmod?: (path: string, mode: number) => MaybePromise<Fuse.Errno>;
+		chown?: (path: string, user: number, group: number) => MaybePromise<Fuse.Errno>;
+		release?: (path: string, fileInfo: Fuse.FileInfo) => MaybePromise<Fuse.Errno>;
 	}
 
 	export interface FuseMount {

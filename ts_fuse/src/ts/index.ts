@@ -54,8 +54,6 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 			case "/":
 				return directoryStat({
 					mode: FileType.IFDIR | 0o755,
-					// TODO why did example have link count 2 on the dir?
-					// linkCount: 2,
 					lastAccessTime: this.fileTime,
 					modificationTime: this.fileTime,
 					statusChangeTime: this.fileTime,
@@ -93,6 +91,30 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 
 	read(path: string, buffer: Buffer, fileHandle: ReadOnlyInMemoryFileHandle, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null> {
 		return fileHandle.read(buffer);
+	}
+
+	write(path: string, buffer: Buffer, fileHandle: ReadOnlyInMemoryFileHandle, fileInfo: Fuse.FileInfo): MaybePromise<number | null | undefined> {
+		throw new Error("TODO JEFF implement me");
+	}
+
+	create(path: string, mode: number, fileInfo: Fuse.FileInfo): MaybePromise<ReadOnlyInMemoryFileHandle | null | undefined> {
+		throw new Error("TODO JEFF implement me");
+	}
+
+	unlink(path: string): MaybePromise<void> {
+		throw new Error("TODO JEFF implement me");
+	}
+
+	chmod(path: string, mode: number): MaybePromise<void> {
+		throw new Error("TODO JEFF implement me");
+	}
+
+	chown(path: string, user: number, group: number): MaybePromise<void> {
+		throw new Error("TODO JEFF implement me");
+	}
+
+	release(path: string, fileInfo: Fuse.FileInfo): MaybePromise<void> {
+		throw new Error("TODO JEFF implement me");
 	}
 }
 
