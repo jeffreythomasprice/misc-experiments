@@ -3,5 +3,5 @@ npm run clean
 ```
 
 ```
-npm run build && node --enable-source-maps dist/index.js
+npm run build && npm run run
 ```

@@ -13,10 +13,10 @@
         ]
       },
       "sources": [
-        "src/addon.cpp",
-        "src/fuse-utils.cpp",
-        "src/logging.cpp",
-        "src/thread-utils.cpp",
+        "src/cpp/addon.cpp",
+        "src/cpp/fuse-utils.cpp",
+        "src/cpp/logging.cpp",
+        "src/cpp/thread-utils.cpp",
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"

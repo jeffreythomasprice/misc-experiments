@@ -2,8 +2,9 @@
   "name": "ts_cpp_lib",
   "main": "dist/index.js",
   "scripts": {
-    "clean": "rm -rf dist build && node-gyp configure",
-    "build": "tsc && node-gyp build"
+    "clean": "rm -rf dist build",
+    "build": "tsc && node-gyp configure && node-gyp build",
+    "run": "node --enable-source-maps dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^18.15.11",
