@@ -161,7 +161,9 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 			fuseOperations->readdir = fuseReaddirImpl;
 			fuseOperations->open = fuseOpenImpl;
 			fuseOperations->read = fuseReadImpl;
-			// TODO more operations
+			// TODO more file operations: flush, release, write
+			// TODO more directory operations?
+			// TODO stuff like create or symlinks?
 
 			auto fuseInstance = fuse_new(fuseChannel, fuseArgs, fuseOperations, sizeof(fuse_operations), fuseUserData);
 
