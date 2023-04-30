@@ -1,91 +1,17 @@
-import addon, { Errno, FileType, Fuse, LogLevel, MaybePromise } from "../build/Release/addon";
+import {
+	Errno,
+	FileFlag,
+	FileType,
+	Fuse,
+	LogLevel,
+	MaybePromise,
+	close as addonClose,
+	init as addonInit,
+} from "../build/Release/addon";
 
-import { ErrnoException, wrapErrnoCallback } from "./errors";
+import { ErrnoException } from "./errors";
+import { FileSystem, mountAndRun } from "./filesystem";
 import { getLogger } from "./logging";
-
-const logger = getLogger();
-logger.level = LogLevel.TRACE;
-
-// TODO JEFF move me
-interface FileSystem {
-	init(connectionInfo: Fuse.ConnectionInfo): MaybePromise<void>;
-	destroy(): MaybePromise<void>;
-	getattr(path: string): MaybePromise<Fuse.Stat | undefined | null>;
-	readdir(path: string): MaybePromise<Fuse.ReaddirResult[] | undefined | null>;
-	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<Fuse.OpenResult | undefined | null>;
-	read(path: string, buffer: Buffer, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null>;
-}
-
-// TODO JEFF move me
-function mountAndRun(name: string, path: string, fs: FileSystem) {
-	return addon.mountAndRun(
-		[
-			name,
-			path,
-			// foreground mode
-			"-f",
-		],
-		{
-			init: async (connectionInfo) => {
-				try {
-					logger.debug(`init ${JSON.stringify(connectionInfo)}`);
-					await fs.init(connectionInfo);
-				} catch (e) {
-					logger.error("error", e);
-				}
-			},
-			destroy: async () => {
-				try {
-					logger.debug("destroy");
-					await fs.destroy();
-				} catch (e) {
-					logger.error("error", e);
-				}
-			},
-			getattr: (path) => wrapErrnoCallback(
-				`getattr(${path})`,
-				async () => {
-					const result = await fs.getattr(path);
-					if (result) {
-						return result;
-					}
-					throw new ErrnoException(Errno.ENOENT);
-				}
-			),
-			readdir: (path) => wrapErrnoCallback(
-				`readdir(${path})`,
-				async () => {
-					const result = await fs.readdir(path);
-					if (result) {
-						return result;
-					}
-					throw new ErrnoException(Errno.ENOENT);
-				},
-			),
-			// TODO JEFF do some file handle wrapping?
-			open: (path, fileInfo) => wrapErrnoCallback(
-				`open(${path})`,
-				async () => {
-					const result = await fs.open(path, fileInfo);
-					if (result) {
-						return result;
-					}
-					throw new ErrnoException(Errno.ENOENT);
-				}
-			),
-			read: (path, buffer, fileInfo) => wrapErrnoCallback(
-				`read(${path})`,
-				async () => {
-					const result = await fs.read(path, buffer, fileInfo);
-					if (typeof result === "number") {
-						return result;
-					}
-					throw new ErrnoException(Errno.ENOENT);
-				}
-			),
-		}
-	);
-}
 
 class HelloWorldFileSystem implements FileSystem {
 	private readonly contents: Buffer;
@@ -98,11 +24,11 @@ class HelloWorldFileSystem implements FileSystem {
 		}
 	}
 
-	init(connectionInfo: Fuse.ConnectionInfo): addon.MaybePromise<void> { }
+	init(connectionInfo: Fuse.ConnectionInfo): MaybePromise<void> { }
 
-	destroy(): addon.MaybePromise<void> { }
+	destroy(): MaybePromise<void> { }
 
-	getattr(path: string): addon.MaybePromise<Fuse.Stat | undefined | null> {
+	getattr(path: string): MaybePromise<Fuse.Stat | undefined | null> {
 		switch (path) {
 			case "/":
 				return {
@@ -159,7 +85,7 @@ class HelloWorldFileSystem implements FileSystem {
 		}
 	}
 
-	readdir(path: string): addon.MaybePromise<Fuse.ReaddirResult[] | undefined | null> {
+	readdir(path: string): MaybePromise<Fuse.ReaddirResult[] | undefined | null> {
 		if (path === "/") {
 			return [
 				{ path: "." },
@@ -169,10 +95,10 @@ class HelloWorldFileSystem implements FileSystem {
 		}
 	}
 
-	open(path: string, fileInfo: Fuse.FileInfo): addon.MaybePromise<Fuse.OpenResult | undefined | null> {
+	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<Fuse.OpenResult | undefined | null> {
 		if (path === "/test") {
-			if ((fileInfo.flags & addon.FileFlag.ACCMODE) != addon.FileFlag.RDONLY) {
-				throw new ErrnoException(addon.Errno.EACCES);
+			if ((fileInfo.flags & FileFlag.ACCMODE) != FileFlag.RDONLY) {
+				throw new ErrnoException(Errno.EACCES);
 			}
 
 			// TODO JEFF use a meaningful file handle value
@@ -180,7 +106,7 @@ class HelloWorldFileSystem implements FileSystem {
 		}
 	}
 
-	read(path: string, buffer: Buffer, fileInfo: Fuse.FileInfo): addon.MaybePromise<number | undefined | null> {
+	read(path: string, buffer: Buffer, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null> {
 		if (path === "/test") {
 			// TODO JEFF should be remembering offset on the file handle so we can do partial reads
 			return this.contents.copy(buffer);
@@ -189,9 +115,11 @@ class HelloWorldFileSystem implements FileSystem {
 }
 
 (async () => {
+	getLogger().level = LogLevel.DEBUG;
+
 	const addonLogger = getLogger("c++");
-	addonLogger.level = LogLevel.DEBUG;
-	addon.init({
+	addonLogger.level = LogLevel.INFO;
+	addonInit({
 		log: (timestamp, level, message) => {
 			addonLogger.log(new Date(timestamp), level, message);
 		},
@@ -202,7 +130,6 @@ class HelloWorldFileSystem implements FileSystem {
 		"/home/jeff/mount_points/test",
 		new HelloWorldFileSystem("Hello, World!\n")
 	);
-	logger.debug("mounted");
 
 	await new Promise<void>((resolve) => {
 		process.once("SIGINT", () => {
@@ -210,13 +137,12 @@ class HelloWorldFileSystem implements FileSystem {
 		});
 	});
 
-	const mountResult = await mount.close();
-	logger.debug(`unmounted, result = ${mountResult}`);
+	await mount.close();
 
-	await addon.close();
+	await addonClose();
 	process.exit(0);
 })()
 	.catch((e) => {
-		logger.fatal("error", e);
+		getLogger().fatal("error", e);
 		process.exit(1);
 	});
