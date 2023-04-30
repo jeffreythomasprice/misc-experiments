@@ -6,7 +6,7 @@ import {
 	LogLevel,
 	MaybePromise,
 	close as addonClose,
-	init as addonInit,
+	init as addonInit
 } from "../build/Release/addon";
 
 import { ErrnoException } from "./errors";
@@ -41,6 +41,68 @@ function dateToTimespec(date: Date): Fuse.Timespec {
 	};
 }
 
+interface StatOptionsBase {
+	// st_mode
+	mode: FileType;
+	// st_nlink
+	linkCount?: number;
+	// st_atim
+	lastAccessTime: Date;
+	// st_mtim
+	modificationTime: Date;
+	// st_ctim
+	statusChangeTime: Date;
+}
+
+interface FileStatOptions extends StatOptionsBase {
+	// st_size
+	size: number;
+}
+
+interface DirectoryStatOptions extends StatOptionsBase { }
+
+const zeroStat: Fuse.Stat = {
+	st_mode: 0,
+	st_nlink: 2,
+	st_atim: { tv_sec: 0, tv_nsec: 0 },
+	st_mtim: { tv_sec: 0, tv_nsec: 0 },
+	st_ctim: { tv_sec: 0, tv_nsec: 0 },
+	st_dev: 0,
+	st_ino: 0,
+	st_uid: 0,
+	st_gid: 0,
+	st_rdev: 0,
+	st_size: 0,
+	st_blksize: 0,
+	st_blocks: 0,
+};
+
+function stat(options: StatOptionsBase): Fuse.Stat {
+	return {
+		...zeroStat,
+		...	{
+			st_mode: options.mode,
+			st_nlink: options.linkCount ?? 1,
+			st_atim: dateToTimespec(options.lastAccessTime),
+			st_mtim: dateToTimespec(options.modificationTime),
+			st_ctim: dateToTimespec(options.statusChangeTime),
+		}
+	};
+}
+
+function fileStat(options: FileStatOptions): Fuse.Stat {
+	return {
+		...stat(options),
+		...	{
+			st_size: options.size,
+		}
+	};
+}
+
+function directoryStat(options: DirectoryStatOptions): Fuse.Stat {
+	return stat(options);
+}
+
 class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 	private readonly contents: Buffer;
 	private readonly fileTime = new Date();
@@ -60,39 +122,22 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 	getattr(path: string): MaybePromise<Fuse.Stat | undefined | null> {
 		switch (path) {
 			case "/":
-				return {
-					st_mode: FileType.IFDIR | 0o755,
-					st_nlink: 2,
-					st_atim: dateToTimespec(this.fileTime),
-					st_mtim: dateToTimespec(this.fileTime),
-					st_ctim: dateToTimespec(this.fileTime),
-					// unused
-					st_dev: 0,
-					st_ino: 0,
-					st_uid: 0,
-					st_gid: 0,
-					st_rdev: 0,
-					st_size: 0,
-					st_blksize: 0,
-					st_blocks: 0,
-				};
+				return directoryStat({
+					mode: FileType.IFDIR | 0o755,
+					// TODO why did example have link count 2 on the dir?
+					// linkCount: 2,
+					lastAccessTime: this.fileTime,
+					modificationTime: this.fileTime,
+					statusChangeTime: this.fileTime,
+				});
 			case "/test":
-				return {
-					st_mode: FileType.IFREG | 0o400,
-					st_nlink: 1,
-					st_size: this.contents.length,
-					st_atim: dateToTimespec(this.fileTime),
-					st_mtim: dateToTimespec(this.fileTime),
-					st_ctim: dateToTimespec(this.fileTime),
-					// unused
-					st_dev: 0,
-					st_ino: 0,
-					st_uid: 0,
-					st_gid: 0,
-					st_rdev: 0,
-					st_blksize: 0,
-					st_blocks: 0,
-				};
+				return fileStat({
+					mode: FileType.IFREG | 0o400,
+					lastAccessTime: this.fileTime,
+					modificationTime: this.fileTime,
+					statusChangeTime: this.fileTime,
+					size: this.contents.length,
+				});
 		}
 	}
 

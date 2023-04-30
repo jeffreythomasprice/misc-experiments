@@ -120,9 +120,9 @@ module "*/addon" {
 			readonly st_size: number;
 			readonly st_blksize: number;
 			readonly st_blocks: number;
-			readonly st_atim: TimeSpec;
-			readonly st_mtim: TimeSpec;
-			readonly st_ctim: TimeSpec;
+			readonly st_atim: Timespec;
+			readonly st_mtim: Timespec;
+			readonly st_ctim: Timespec;
 		}
 
 		export interface ReaddirResult {
