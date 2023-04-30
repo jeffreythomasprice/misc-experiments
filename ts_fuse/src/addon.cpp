@@ -289,6 +289,33 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
 	fileTypes.Freeze();
 	exports.Set(Napi::String::New(env, "FileType"), fileTypes);
 
+	auto fileFlags = Napi::Object::New(env);
+	fileFlags.Set("ACCMODE", Napi::Number::New(env, O_ACCMODE));
+	fileFlags.Set("RDONLY", Napi::Number::New(env, O_RDONLY));
+	fileFlags.Set("WRONLY", Napi::Number::New(env, O_WRONLY));
+	fileFlags.Set("RDWR", Napi::Number::New(env, O_RDWR));
+	fileFlags.Set("CREAT", Napi::Number::New(env, O_CREAT));
+	fileFlags.Set("EXCL", Napi::Number::New(env, O_EXCL));
+	fileFlags.Set("NOCTTY", Napi::Number::New(env, O_NOCTTY));
+	fileFlags.Set("TRUNC", Napi::Number::New(env, O_TRUNC));
+	fileFlags.Set("APPEND", Napi::Number::New(env, O_APPEND));
+	fileFlags.Set("NONBLOCK", Napi::Number::New(env, O_NONBLOCK));
+	fileFlags.Set("NDELAY", Napi::Number::New(env, O_NDELAY));
+	fileFlags.Set("SYNC", Napi::Number::New(env, O_SYNC));
+	fileFlags.Set("FSYNC", Napi::Number::New(env, O_FSYNC));
+	fileFlags.Set("ASYNC", Napi::Number::New(env, O_ASYNC));
+	fileFlags.Set("LARGEFILE", Napi::Number::New(env, __O_LARGEFILE));
+	fileFlags.Set("DIRECTORY", Napi::Number::New(env, __O_DIRECTORY));
+	fileFlags.Set("NOFOLLOW", Napi::Number::New(env, __O_NOFOLLOW));
+	fileFlags.Set("CLOEXEC", Napi::Number::New(env, __O_CLOEXEC));
+	fileFlags.Set("DIRECT", Napi::Number::New(env, __O_DIRECT));
+	fileFlags.Set("NOATIME", Napi::Number::New(env, __O_NOATIME));
+	fileFlags.Set("PATH", Napi::Number::New(env, __O_PATH));
+	fileFlags.Set("DSYNC", Napi::Number::New(env, __O_DSYNC));
+	fileFlags.Set("TMPFILE", Napi::Number::New(env, __O_TMPFILE));
+	fileFlags.Freeze();
+	exports.Set(Napi::String::New(env, "FileFlag"), fileFlags);
+
 	exports.Set(Napi::String::New(env, "init"), Napi::Function::New(env, exportedInit));
 	exports.Set(Napi::String::New(env, "close"), Napi::Function::New(env, exportedClose));
 	exports.Set(Napi::String::New(env, "mountAndRun"), Napi::Function::New(env, exportedMountAndRun));
