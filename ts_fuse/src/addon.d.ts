@@ -105,7 +105,15 @@ module "*/addon" {
 		}
 
 		export interface FileInfo {
-			// TODO JEFF file info fields
+			readonly flags: number;
+			readonly writepage: number;
+			readonly direct_io: boolean;
+			readonly keep_cache: boolean;
+			readonly flush: boolean;
+			readonly nonseekable: boolean;
+			readonly flock_release: boolean;
+			readonly fh: number;
+			readonly lock_owner: number;
 		}
 
 		export interface OpenResult {
@@ -121,8 +129,7 @@ module "*/addon" {
 		getattr?: (path: string) => MaybePromise<Errno | Fuse.Stat>;
 		readdir?: (path: string) => MaybePromise<Errno | ReaddirResult[]>;
 		open?: (path: string, fileInfo: FileInfo) => MaybePromise<Errno | OpenResult>;
-		// TODO JEFF read
-		// read?: (path: string, fh: number) => MaybePromise<Errno | Buffer>;
+		read?: (path: string, buffer: Buffer, fileInfo: FileInfo) => MaybePromise<number>;
 	}
 
 	export interface FuseMount {

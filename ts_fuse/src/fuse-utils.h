@@ -11,6 +11,7 @@ class FuseUserData {
 	std::optional<Napi::ThreadSafeFunction> getattrCallback;
 	std::optional<Napi::ThreadSafeFunction> readdirCallback;
 	std::optional<Napi::ThreadSafeFunction> openCallback;
+	std::optional<Napi::ThreadSafeFunction> readCallback;
 
 	bool destroyed;
 
@@ -23,4 +24,5 @@ class FuseUserData {
 	int getattr(const std::string& path, struct stat* stat);
 	int readdir(const std::string& path, void* buf, fuse_fill_dir_t filler);
 	int open(const std::string& path, struct fuse_file_info* fileInfo);
+	int read(const std::string& path, char* buf, size_t size, off_t offset, struct fuse_file_info* fileInfo);
 };

@@ -19,8 +19,8 @@ Napi::Value fuseConnInfoToJSObject(const Napi::Env& env, const fuse_conn_info* c
 }
 
 void jsObjectToStat(const Napi::Object& value, struct stat* stat) {
-	auto getInt32 = [&value](const std::string& name) {
-		return value.Get(name).As<Napi::Number>().Int32Value();
+	auto getNum = [&value](const std::string& name) {
+		return value.Get(name).As<Napi::Number>();
 	};
 
 	auto getTimespec = [&value](const std::string& name) {
@@ -31,16 +31,16 @@ void jsObjectToStat(const Napi::Object& value, struct stat* stat) {
 		return result;
 	};
 
-	stat->st_dev = getInt32("st_dev");
-	stat->st_ino = getInt32("st_ino");
-	stat->st_nlink = getInt32("st_nlink");
-	stat->st_mode = getInt32("st_mode");
-	stat->st_uid = getInt32("st_uid");
-	stat->st_gid = getInt32("st_gid");
-	stat->st_rdev = getInt32("st_rdev");
-	stat->st_size = getInt32("st_size");
-	stat->st_blksize = getInt32("st_blksize");
-	stat->st_blocks = getInt32("st_blocks");
+	stat->st_dev = getNum("st_dev").Uint32Value();
+	stat->st_ino = getNum("st_ino").Uint32Value();
+	stat->st_nlink = getNum("st_nlink").Uint32Value();
+	stat->st_mode = getNum("st_mode");
+	stat->st_uid = getNum("st_uid");
+	stat->st_gid = getNum("st_gid");
+	stat->st_rdev = getNum("st_rdev").Uint32Value();
+	stat->st_size = getNum("st_size");
+	stat->st_blksize = getNum("st_blksize");
+	stat->st_blocks = getNum("st_blocks");
 	stat->st_atim = getTimespec("st_atim");
 	stat->st_mtim = getTimespec("st_mtim");
 	stat->st_ctim = getTimespec("st_ctim");
@@ -63,7 +63,15 @@ void jsArrayToReaddirResults(const Napi::Array& results, void* buf, fuse_fill_di
 
 Napi::Value fuseFileInfoToJSObject(const Napi::Env& env, struct fuse_file_info* fileInfo) {
 	auto result = Napi::Object::New(env);
-	// TODO JEFF copy fields to js object
+	result.Set("flags", Napi::Number::New(env, fileInfo->flags));
+	result.Set("writepage", Napi::Number::New(env, fileInfo->writepage));
+	result.Set("direct_io", Napi::Boolean::New(env, fileInfo->direct_io));
+	result.Set("keep_cache", Napi::Boolean::New(env, fileInfo->keep_cache));
+	result.Set("flush", Napi::Boolean::New(env, fileInfo->flush));
+	result.Set("nonseekable", Napi::Boolean::New(env, fileInfo->nonseekable));
+	result.Set("flock_release", Napi::Boolean::New(env, fileInfo->flock_release));
+	result.Set("fh", Napi::Number::New(env, fileInfo->fh));
+	result.Set("lock_owner", Napi::Number::New(env, fileInfo->lock_owner));
 	result.Freeze();
 	return result;
 }
@@ -93,6 +101,7 @@ FuseUserData::FuseUserData(const Napi::Env& env, const Napi::Object& callbacks)
 	getattrCallback = getCallback("getattr");
 	readdirCallback = getCallback("readdir");
 	openCallback = getCallback("open");
+	readCallback = getCallback("read");
 	// TODO other callbacks
 }
 
@@ -110,6 +119,7 @@ FuseUserData::~FuseUserData() {
 	releaseCallback(getattrCallback);
 	releaseCallback(readdirCallback);
 	releaseCallback(openCallback);
+	releaseCallback(readCallback);
 	// TODO other callbacks
 }
 
@@ -207,7 +217,7 @@ int FuseUserData::readdir(const std::string& path, void* buf, fuse_fill_dir_t fi
 
 int FuseUserData::open(const std::string& path, struct fuse_file_info* fileInfo) {
 	const auto methodName = "FuseUserData::open";
-	trace() << methodName << " begin";
+	trace() << methodName << " begin, path = " << path;
 	int result = -ENOENT;
 	if (openCallback.has_value()) {
 		trace() << methodName << " invoking callback";
@@ -225,6 +235,32 @@ int FuseUserData::open(const std::string& path, struct fuse_file_info* fileInfo)
 				} else {
 					throw new std::logic_error("expected either number or object");
 				}
+			}
+		);
+	} else {
+		trace() << methodName << " no callback provided";
+	}
+	trace() << methodName << " end, result = " << result;
+	return result;
+}
+
+int FuseUserData::read(const std::string& path, char* buf, size_t size, off_t offset, struct fuse_file_info* fileInfo) {
+	const auto methodName = "FuseUserData::read";
+	trace() << methodName << " begin, path = " << path;
+	int result = -ENOENT;
+	if (readCallback.has_value()) {
+		trace() << methodName << " invoking callback";
+		result = await<int>(
+			readCallback.value(),
+			[&path, buf, size, offset, fileInfo](const Napi::Env& env, Napi::Function f) {
+				return f(
+					{Napi::String::From(env, path),
+					 Napi::Buffer<uint8_t>::New(env, (uint8_t*)(buf + offset), (size_t)(size - offset)),
+					 fuseFileInfoToJSObject(env, fileInfo)}
+				);
+			},
+			[](const Napi::Value& value) {
+				return value.As<Napi::Number>().Int32Value();
 			}
 		);
 	} else {

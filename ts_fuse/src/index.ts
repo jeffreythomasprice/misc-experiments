@@ -114,6 +114,8 @@ const logger = new Logger({
 		},
 	});
 
+	const testFileContents = Buffer.from("Hello, World!", "ascii");
+
 	const mount = await addon.mountAndRun(
 		[
 			"experiment",
@@ -160,7 +162,7 @@ const logger = new Logger({
 						return {
 							st_mode: addon.FileType.IFREG | 0o444,
 							st_nlink: 1,
-							st_size: 0,
+							st_size: testFileContents.length,
 							// unused
 							st_dev: 0,
 							st_ino: 0,
@@ -197,16 +199,28 @@ const logger = new Logger({
 				return -addon.Errno.ENOENT;
 			},
 			open: (path, fileInfo) => {
-				logger.debug("TODO JEFF open file", path, fileInfo);
-				if (path === "/test") {
-					/*
-					TODO JEFF check permissions
-					if ((fi->flags & O_ACCMODE) != O_RDONLY)
-						return -EACCES;
-					*/
+				try {
+					logger.debug("TODO JEFF open", path, JSON.stringify(fileInfo));
+					if (path === "/test") {
+						/*
+						TODO JEFF check permissions
+						if ((fi->flags & O_ACCMODE) != O_RDONLY)
+							return -EACCES;
+						*/
 
-					// TODO JEFF use a meaningful file handle value
-					return { fh: 42 };
+						// TODO JEFF use a meaningful file handle value
+						return { fh: 42 };
+					}
+				} catch (e) {
+					logger.error("TODO JEFF open error", e);
+				}
+				return -addon.Errno.ENOENT;
+			},
+			read: (path, buffer, fileInfo) => {
+				logger.debug("TODO JEFF read", path, JSON.stringify(fileInfo));
+				if (path === "/test") {
+					// TODO JEFF should be remembering offset on the file handle so we can do partial reads
+					return testFileContents.copy(buffer);
 				}
 				return -addon.Errno.ENOENT;
 			},
