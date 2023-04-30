@@ -56,7 +56,7 @@ export async function wrapErrnoCallback<T>(functionDescription: string, f: () =>
 		return await f();
 	} catch (e) {
 		if (e instanceof ErrnoException) {
-			logger.error(`${functionDescription} ${e.message}`);
+			logger.warn(`${functionDescription} ${e.message}`);
 			return -e.errno;
 		} else {
 			logger.error(`${functionDescription} error`, e);

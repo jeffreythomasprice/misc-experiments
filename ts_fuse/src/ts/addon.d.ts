@@ -150,12 +150,12 @@ module "*/addon" {
 	export type MaybePromise<T> = T | Promise<T>;
 
 	export interface MountAndRunCallbacks {
-		init?: (connectionInfo: FuseConnectionInfo) => MaybePromise<void>;
+		init?: (connectionInfo: Fuse.ConnectionInfo) => MaybePromise<void>;
 		destroy?: () => MaybePromise<void>;
-		getattr?: (path: string) => MaybePromise<Errno | Fuse.Stat>;
-		readdir?: (path: string) => MaybePromise<Errno | ReaddirResult[]>;
-		open?: (path: string, fileInfo: FileInfo) => MaybePromise<Errno | OpenResult>;
-		read?: (path: string, buffer: Buffer, fileInfo: FileInfo) => MaybePromise<number>;
+		getattr?: (path: string) => MaybePromise<Fuse.Errno | Fuse.Stat>;
+		readdir?: (path: string) => MaybePromise<Fuse.Errno | Fuse.ReaddirResult[]>;
+		open?: (path: string, fileInfo: Fuse.FileInfo) => MaybePromise<Fuse.Errno | Fuse.OpenResult>;
+		read?: (path: string, buffer: Buffer, fileInfo: Fuse.FileInfo) => MaybePromise<number>;
 	}
 
 	export interface FuseMount {

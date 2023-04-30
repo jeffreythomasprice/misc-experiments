@@ -5,16 +5,17 @@ import { getLogger } from "./logging";
 
 const logger = getLogger("fs");
 
-export interface FileSystem {
+export interface FileSystem<FileHandle> {
 	init(connectionInfo: Fuse.ConnectionInfo): MaybePromise<void>;
 	destroy(): MaybePromise<void>;
 	getattr(path: string): MaybePromise<Fuse.Stat | undefined | null>;
 	readdir(path: string): MaybePromise<Fuse.ReaddirResult[] | undefined | null>;
-	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<Fuse.OpenResult | undefined | null>;
-	read(path: string, buffer: Buffer, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null>;
+	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<FileHandle | undefined | null>;
+	read(path: string, buffer: Buffer, fileHandle: FileHandle, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null>;
 }
 
-export function mountAndRun(name: string, path: string, fs: FileSystem) {
+export function mountAndRun<FileHandle>(name: string, path: string, fs: FileSystem<FileHandle>) {
+	const fileHandles = new Map<number, FileHandle>();
 	return addon.mountAndRun(
 		[
 			name,
@@ -59,13 +60,13 @@ export function mountAndRun(name: string, path: string, fs: FileSystem) {
 					throw new ErrnoException(Errno.ENOENT);
 				},
 			),
-			// TODO JEFF do some file handle wrapping?
 			open: (path, fileInfo) => wrapErrnoCallback(
 				`open(${path})`,
 				async () => {
 					const result = await fs.open(path, fileInfo);
 					if (result) {
-						return result;
+						fileHandles.set(fileInfo.fh, result);
+						return { fh: fileInfo.fh };
 					}
 					throw new ErrnoException(Errno.ENOENT);
 				}
@@ -73,7 +74,12 @@ export function mountAndRun(name: string, path: string, fs: FileSystem) {
 			read: (path, buffer, fileInfo) => wrapErrnoCallback(
 				`read(${path})`,
 				async () => {
-					const result = await fs.read(path, buffer, fileInfo);
+					const fileHandle = fileHandles.get(fileInfo.fh);
+					if (!fileHandle) {
+						logger.error(`no open file handle for ${fileInfo.fh}`);
+						throw new ErrnoException(Errno.ENOENT);
+					}
+					const result = await fs.read(path, buffer, fileHandle, fileInfo);
 					if (typeof result === "number") {
 						return result;
 					}

@@ -13,7 +13,26 @@ import { ErrnoException } from "./errors";
 import { FileSystem, mountAndRun } from "./filesystem";
 import { getLogger } from "./logging";
 
-class HelloWorldFileSystem implements FileSystem {
+class ReadOnlyInMemoryFileHandle {
+	private _position: number;
+
+	constructor(public readonly buffer: Buffer) {
+		this._position = 0;
+	}
+
+	get position() {
+		return this._position;
+	}
+
+	read(destination: Buffer): number {
+		const remaining = this.buffer.length - this.position;
+		const result = Math.min(remaining, destination.length);
+		this.buffer.copy(destination, 0, this.position, result);
+		return result;
+	}
+}
+
+class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 	private readonly contents: Buffer;
 
 	constructor(contents: string | Buffer) {
@@ -95,22 +114,17 @@ class HelloWorldFileSystem implements FileSystem {
 		}
 	}
 
-	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<Fuse.OpenResult | undefined | null> {
+	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<ReadOnlyInMemoryFileHandle | undefined | null> {
 		if (path === "/test") {
 			if ((fileInfo.flags & FileFlag.ACCMODE) != FileFlag.RDONLY) {
 				throw new ErrnoException(Errno.EACCES);
 			}
-
-			// TODO JEFF use a meaningful file handle value
-			return { fh: 42 };
+			return new ReadOnlyInMemoryFileHandle(this.contents);
 		}
 	}
 
-	read(path: string, buffer: Buffer, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null> {
-		if (path === "/test") {
-			// TODO JEFF should be remembering offset on the file handle so we can do partial reads
-			return this.contents.copy(buffer);
-		}
+	read(path: string, buffer: Buffer, fileHandle: ReadOnlyInMemoryFileHandle, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null> {
+		return fileHandle.read(buffer);
 	}
 }
 
