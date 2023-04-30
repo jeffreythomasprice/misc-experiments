@@ -77,7 +77,7 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 				};
 			case "/test":
 				return {
-					st_mode: FileType.IFREG | 0o444,
+					st_mode: FileType.IFREG | 0o400,
 					st_nlink: 1,
 					st_size: this.contents.length,
 					// unused
@@ -116,6 +116,7 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 
 	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<ReadOnlyInMemoryFileHandle | undefined | null> {
 		if (path === "/test") {
+			// TODO how to prevent reading files we shouldn't have access to?
 			if ((fileInfo.flags & FileFlag.ACCMODE) != FileFlag.RDONLY) {
 				throw new ErrnoException(Errno.EACCES);
 			}
