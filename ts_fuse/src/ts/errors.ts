@@ -53,7 +53,7 @@ export class ErrnoException extends Error {
 
 export async function wrapErrnoCallback<T>(functionDescription: string, f: () => MaybePromise<T>) {
 	try {
-		return await f();
+		return (await f()) ?? 0;
 	} catch (e) {
 		if (e instanceof ErrnoException) {
 			logger.warn(`${functionDescription} ${e.message}`);

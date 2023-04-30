@@ -109,6 +109,12 @@ int fuseReaddirImpl(const char* path, void* buf, fuse_fill_dir_t filler, off_t, 
 	return data->readdir(path, buf, filler);
 }
 
+int fuseCreateImpl(const char* path, mode_t mode, struct fuse_file_info* fileInfo) {
+	auto context = fuse_get_context();
+	auto data = (FuseUserData*)context->private_data;
+	return data->create(path, mode, fileInfo);
+}
+
 int fuseOpenImpl(const char* path, struct fuse_file_info* fileInfo) {
 	auto context = fuse_get_context();
 	auto data = (FuseUserData*)context->private_data;
@@ -125,12 +131,6 @@ int fuseWriteImpl(const char* path, const char* buf, size_t size, off_t offset, 
 	auto context = fuse_get_context();
 	auto data = (FuseUserData*)context->private_data;
 	return data->write(path, buf, size, offset, fileInfo);
-}
-
-int fuseCreateImpl(const char* path, mode_t mode, struct fuse_file_info* fileInfo) {
-	auto context = fuse_get_context();
-	auto data = (FuseUserData*)context->private_data;
-	return data->create(path, mode, fileInfo);
 }
 
 int fuseUnlinkImpl(const char* path) {
@@ -156,6 +156,17 @@ int fuseReleaseImpl(const char* path, struct fuse_file_info* fileInfo) {
 	auto data = (FuseUserData*)context->private_data;
 	return data->release(path, fileInfo);
 }
+
+/*
+TODO various operations may need the calling user
+
+https://stackoverflow.com/a/58641001
+
+ struct fuse_context *cxt = fuse_get_context();
+		if (cxt)
+			uid = cxt->uid;
+			gid = cxt->gid;
+*/
 
 Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 	trace() << "mountAndRun begin";
@@ -195,10 +206,10 @@ Napi::Value exportedMountAndRun(const Napi::CallbackInfo& info) {
 			fuseOperations->destroy = fuseDestroyImpl;
 			fuseOperations->getattr = fuseGetattrImpl;
 			fuseOperations->readdir = fuseReaddirImpl;
+			fuseOperations->create = fuseCreateImpl;
 			fuseOperations->open = fuseOpenImpl;
 			fuseOperations->read = fuseReadImpl;
 			fuseOperations->write = fuseWriteImpl;
-			fuseOperations->create = fuseCreateImpl;
 			fuseOperations->unlink = fuseUnlinkImpl;
 			fuseOperations->chmod = fuseChmodImpl;
 			fuseOperations->chown = fuseChownImpl;

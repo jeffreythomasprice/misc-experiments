@@ -1,3 +1,5 @@
+import { dirname } from "path";
+
 import {
 	Errno,
 	FileFlag,
@@ -14,10 +16,15 @@ import { FileSystem, mountAndRun } from "./filesystem";
 import { getLogger } from "./logging";
 import { directoryStat, fileStat } from "./stat";
 
-class ReadOnlyInMemoryFileHandle {
+interface InMemoryFile {
+	stat: Fuse.Stat;
+	data?: Buffer;
+}
+
+class InMemoryOpenFile {
 	private _position: number;
 
-	constructor(public readonly buffer: Buffer) {
+	constructor(public buffer: Buffer) {
 		this._position = 0;
 	}
 
@@ -29,92 +36,132 @@ class ReadOnlyInMemoryFileHandle {
 		const remaining = this.buffer.length - this.position;
 		const result = Math.min(remaining, destination.length);
 		this.buffer.copy(destination, 0, this.position, result);
+		this._position += result;
 		return result;
+	}
+
+	write(source: Buffer): number {
+		const end = this.position + source.length;
+		const newLength = Math.max(end, this.buffer.length);
+		const newBuffer = Buffer.alloc(this.buffer.length);
+		this.buffer.copy(newBuffer);
+		source.copy(newBuffer, 0, this.position);
+		this.buffer = source;
+		this._position += source.length;
+		return source.length;
 	}
 }
 
-class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
-	private readonly contents: Buffer;
-	private readonly fileTime = new Date();
+class InMemoryFileSystem implements FileSystem<InMemoryOpenFile> {
+	private readonly nodes = new Map<string, InMemoryFile>();
 
-	constructor(contents: string | Buffer) {
-		if (typeof contents === "string") {
-			this.contents = Buffer.from(contents, "utf-8");
-		} else {
-			this.contents = contents;
-		}
+	init(connectionInfo: Fuse.ConnectionInfo): MaybePromise<void> {
+		this.nodes.clear();
+		this.nodes.set(
+			"/",
+			{
+				stat: directoryStat({
+					mode: FileType.IFDIR | 0o777,
+					statusChangeTime: new Date(),
+					lastAccessTime: new Date(),
+					modificationTime: new Date(),
+				})
+			}
+		);
 	}
-
-	init(connectionInfo: Fuse.ConnectionInfo): MaybePromise<void> { }
 
 	destroy(): MaybePromise<void> { }
 
 	getattr(path: string): MaybePromise<Fuse.Stat | undefined | null> {
-		switch (path) {
-			case "/":
-				return directoryStat({
-					mode: FileType.IFDIR | 0o755,
-					lastAccessTime: this.fileTime,
-					modificationTime: this.fileTime,
-					statusChangeTime: this.fileTime,
-				});
-			case "/test":
-				return fileStat({
-					mode: FileType.IFREG | 0o444,
-					lastAccessTime: this.fileTime,
-					modificationTime: this.fileTime,
-					statusChangeTime: this.fileTime,
-					size: this.contents.length,
-				});
-		}
+		return this.nodes.get(path)?.stat;
 	}
 
 	readdir(path: string): MaybePromise<Fuse.ReaddirResult[] | undefined | null> {
-		if (path === "/") {
-			return [
+		const node = this.nodes.get(path);
+		if (!node) {
+			return undefined;
+		}
+		if (node.stat.st_mode & FileType.IFDIR) {
+			const results: Fuse.ReaddirResult[] = [
 				{ path: "." },
 				{ path: ".." },
-				{ path: "test" }
 			];
-		}
-	}
-
-	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<ReadOnlyInMemoryFileHandle | undefined | null> {
-		if (path === "/test") {
-			// TODO how to prevent reading files we shouldn't have access to?
-			if ((fileInfo.flags & FileFlag.ACCMODE) != FileFlag.RDONLY) {
-				throw new ErrnoException(Errno.EACCES);
+			for (const [childPath, childStat] of this.nodes.entries()) {
+				if (childPath !== path && dirname(childPath) === path) {
+					results.push({ path: childPath, stat: childStat.stat });
+				}
 			}
-			return new ReadOnlyInMemoryFileHandle(this.contents);
+			return results;
 		}
 	}
 
-	read(path: string, buffer: Buffer, fileHandle: ReadOnlyInMemoryFileHandle, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null> {
+	create(path: string, mode: number, fileInfo: Fuse.FileInfo): MaybePromise<InMemoryOpenFile | null | undefined> {
+		const data = Buffer.alloc(0);
+		this.nodes.set(path, {
+			stat: fileStat({
+				mode,
+				size: 0,
+				statusChangeTime: new Date(),
+				lastAccessTime: new Date(),
+				modificationTime: new Date(),
+			}),
+			data,
+		});
+		return new InMemoryOpenFile(data);
+	}
+
+	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<InMemoryOpenFile | undefined | null> {
+		const node = this.nodes.get(path);
+		if (!node) {
+			throw new ErrnoException(Errno.ENOENT);
+		}
+		if (!node.data) {
+			throw new ErrnoException(Errno.EIO);
+		}
+
+		// TODO how to prevent reading files we shouldn't have access to?
+		if ((fileInfo.flags & FileFlag.ACCMODE) != FileFlag.RDONLY) {
+			throw new ErrnoException(Errno.EACCES);
+		}
+
+		return new InMemoryOpenFile(node.data);
+	}
+
+	read(path: string, buffer: Buffer, fileHandle: InMemoryOpenFile, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null> {
 		return fileHandle.read(buffer);
 	}
 
-	write(path: string, buffer: Buffer, fileHandle: ReadOnlyInMemoryFileHandle, fileInfo: Fuse.FileInfo): MaybePromise<number | null | undefined> {
-		throw new Error("TODO JEFF implement me");
-	}
-
-	create(path: string, mode: number, fileInfo: Fuse.FileInfo): MaybePromise<ReadOnlyInMemoryFileHandle | null | undefined> {
-		throw new Error("TODO JEFF implement me");
+	write(path: string, buffer: Buffer, fileHandle: InMemoryOpenFile, fileInfo: Fuse.FileInfo): MaybePromise<number | null | undefined> {
+		return fileHandle.write(buffer);
 	}
 
 	unlink(path: string): MaybePromise<void> {
-		throw new Error("TODO JEFF implement me");
+		this.nodes.delete(path);
 	}
 
 	chmod(path: string, mode: number): MaybePromise<void> {
-		throw new Error("TODO JEFF implement me");
+		const node = this.nodes.get(path);
+		if (!node) {
+			throw new ErrnoException(Errno.ENOENT);
+		}
+		node.stat.st_mode = mode;
 	}
 
 	chown(path: string, user: number, group: number): MaybePromise<void> {
-		throw new Error("TODO JEFF implement me");
+		const node = this.nodes.get(path);
+		if (!node) {
+			throw new ErrnoException(Errno.ENOENT);
+		}
+		node.stat.st_uid = user;
+		node.stat.st_gid = group;
 	}
 
-	release(path: string, fileInfo: Fuse.FileInfo): MaybePromise<void> {
-		throw new Error("TODO JEFF implement me");
+	release(path: string, fileHandle: InMemoryOpenFile, fileInfo: Fuse.FileInfo): MaybePromise<void> {
+		const node = this.nodes.get(path);
+		if (!node) {
+			throw new ErrnoException(Errno.ENOENT);
+		}
+		node.data = fileHandle.buffer;
 	}
 }
 
@@ -122,7 +169,7 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 	getLogger().level = LogLevel.DEBUG;
 
 	const addonLogger = getLogger("native");
-	addonLogger.level = LogLevel.INFO;
+	addonLogger.level = LogLevel.TRACE;
 	addonInit({
 		log: (timestamp, level, message) => {
 			addonLogger.log(new Date(timestamp), level, message);
@@ -132,7 +179,7 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 	const mount = await mountAndRun(
 		"experiment",
 		"/home/jeff/mount_points/test",
-		new HelloWorldFileSystem("Hello, World!\n")
+		new InMemoryFileSystem()
 	);
 
 	await new Promise<void>((resolve) => {

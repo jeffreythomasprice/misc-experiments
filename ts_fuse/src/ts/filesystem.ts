@@ -10,14 +10,14 @@ export interface FileSystem<FileHandle> {
 	destroy(): MaybePromise<void>;
 	getattr(path: string): MaybePromise<Fuse.Stat | undefined | null>;
 	readdir(path: string): MaybePromise<Fuse.ReaddirResult[] | undefined | null>;
+	create(path: string, mode: number, fileInfo: Fuse.FileInfo): MaybePromise<FileHandle | undefined | null>;
 	open(path: string, fileInfo: Fuse.FileInfo): MaybePromise<FileHandle | undefined | null>;
 	read(path: string, buffer: Buffer, fileHandle: FileHandle, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null>;
 	write(path: string, buffer: Buffer, fileHandle: FileHandle, fileInfo: Fuse.FileInfo): MaybePromise<number | undefined | null>;
-	create(path: string, mode: number, fileInfo: Fuse.FileInfo): MaybePromise<FileHandle | undefined | null>;
 	unlink(path: string): MaybePromise<void>;
 	chmod(path: string, mode: number): MaybePromise<void>;
 	chown(path: string, user: number, group: number): MaybePromise<void>;
-	release(path: string, fileInfo: Fuse.FileInfo): MaybePromise<void>;
+	release(path: string, fileHandle: FileHandle, fileInfo: Fuse.FileInfo): MaybePromise<void>;
 }
 
 export function mountAndRun<FileHandle>(name: string, path: string, fs: FileSystem<FileHandle>) {
@@ -66,6 +66,17 @@ export function mountAndRun<FileHandle>(name: string, path: string, fs: FileSyst
 					throw new ErrnoException(Errno.ENOENT);
 				},
 			),
+			create: (path, mode, fileInfo) => wrapErrnoCallback(
+				`create(${path})`,
+				async () => {
+					const result = await fs.create(path, mode, fileInfo);
+					if (result) {
+						fileHandles.set(fileInfo.fh, result);
+						return { fh: fileInfo.fh };
+					}
+					throw new ErrnoException(Errno.ENOENT);
+				}
+			),
 			open: (path, fileInfo) => wrapErrnoCallback(
 				`open(${path})`,
 				async () => {
@@ -107,17 +118,6 @@ export function mountAndRun<FileHandle>(name: string, path: string, fs: FileSyst
 					throw new ErrnoException(Errno.ENOENT);
 				}
 			),
-			create: (path, mode, fileInfo) => wrapErrnoCallback(
-				`create(${path})`,
-				async () => {
-					const result = await fs.create(path, mode, fileInfo);
-					if (result) {
-						fileHandles.set(fileInfo.fh, result);
-						return { fh: fileInfo.fh };
-					}
-					throw new ErrnoException(Errno.ENOENT);
-				}
-			),
 			unlink: (path) => wrapErrnoCallback(
 				`unlink(${path})`,
 				async () => {
@@ -139,7 +139,12 @@ export function mountAndRun<FileHandle>(name: string, path: string, fs: FileSyst
 			release: (path, fileInfo) => wrapErrnoCallback(
 				`release(${path})`,
 				async () => {
-					await fs.release(path, fileInfo);
+					const fileHandle = fileHandles.get(fileInfo.fh);
+					if (!fileHandle) {
+						logger.error(`no open file handle for ${fileInfo.fh}`);
+						throw new ErrnoException(Errno.ENOENT);
+					}
+					await fs.release(path, fileHandle, fileInfo);
 				}
 			),
 		}

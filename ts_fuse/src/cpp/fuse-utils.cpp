@@ -100,10 +100,10 @@ FuseUserData::FuseUserData(const Napi::Env& env, const Napi::Object& callbacks)
 	destroyCallback = getCallback("destroy");
 	getattrCallback = getCallback("getattr");
 	readdirCallback = getCallback("readdir");
+	createCallback = getCallback("create");
 	openCallback = getCallback("open");
 	readCallback = getCallback("read");
 	writeCallback = getCallback("write");
-	createCallback = getCallback("create");
 	unlinkCallback = getCallback("unlink");
 	chmodCallback = getCallback("chmod");
 	chownCallback = getCallback("chown");
@@ -123,10 +123,10 @@ FuseUserData::~FuseUserData() {
 	release(destroyCallback);
 	release(getattrCallback);
 	release(readdirCallback);
+	release(createCallback);
 	release(openCallback);
 	release(readCallback);
 	release(writeCallback);
-	release(createCallback);
 	release(unlinkCallback);
 	release(chmodCallback);
 	release(chownCallback);
@@ -225,6 +225,35 @@ int FuseUserData::readdir(const std::string& path, void* buf, fuse_fill_dir_t fi
 	return result;
 }
 
+int FuseUserData::create(const std::string& path, mode_t mode, struct fuse_file_info* fileInfo) {
+	const auto methodName = "FuseUserData::create";
+	trace() << methodName << " begin, path = " << path;
+	int result = -ENOENT;
+	if (createCallback.has_value()) {
+		trace() << methodName << " invoking callback";
+		result = await<int>(
+			createCallback.value(),
+			[&path, mode, fileInfo](const Napi::Env& env, Napi::Function f) {
+				return f({Napi::String::From(env, path), Napi::Number::New(env, mode), fuseFileInfoToJSObject(env, fileInfo)});
+			},
+			[fileInfo](const Napi::Value& value) {
+				if (value.IsNumber()) {
+					return value.As<Napi::Number>().Int32Value();
+				} else if (value.IsObject()) {
+					fileInfo->fh = value.As<Napi::Object>().Get("fh").As<Napi::Number>().Int64Value();
+					return 0;
+				} else {
+					throw new std::logic_error("expected either number or object");
+				}
+			}
+		);
+	} else {
+		trace() << methodName << " no callback provided";
+	}
+	trace() << methodName << " end, result = " << result;
+	return result;
+}
+
 int FuseUserData::open(const std::string& path, struct fuse_file_info* fileInfo) {
 	const auto methodName = "FuseUserData::open";
 	trace() << methodName << " begin, path = " << path;
@@ -294,28 +323,6 @@ int FuseUserData::write(const std::string& path, const char* buf, size_t size, o
 					 Napi::Buffer<uint8_t>::New(env, (uint8_t*)(buf + offset), (size_t)(size - offset)),
 					 fuseFileInfoToJSObject(env, fileInfo)}
 				);
-			},
-			[](const Napi::Value& value) {
-				return value.As<Napi::Number>().Int32Value();
-			}
-		);
-	} else {
-		trace() << methodName << " no callback provided";
-	}
-	trace() << methodName << " end, result = " << result;
-	return result;
-}
-
-int FuseUserData::create(const std::string& path, mode_t mode, struct fuse_file_info* fileInfo) {
-	const auto methodName = "FuseUserData::create";
-	trace() << methodName << " begin, path = " << path;
-	int result = -ENOENT;
-	if (createCallback.has_value()) {
-		trace() << methodName << " invoking callback";
-		result = await<int>(
-			createCallback.value(),
-			[&path, mode, fileInfo](const Napi::Env& env, Napi::Function f) {
-				return f({Napi::String::From(env, path), Napi::Number::New(env, mode), fuseFileInfoToJSObject(env, fileInfo)});
 			},
 			[](const Napi::Value& value) {
 				return value.As<Napi::Number>().Int32Value();

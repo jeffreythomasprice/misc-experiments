@@ -93,57 +93,57 @@ module "*/addon" {
 
 	export namespace Fuse {
 		export interface ConnectionInfo {
-			readonly proto_major: number;
-			readonly proto_minor: number;
-			readonly async_read: number;
-			readonly max_write: number;
-			readonly max_readahead: number;
-			readonly capable: number;
-			readonly want: number;
-			readonly max_background: number;
-			readonly congestion_threshold: number;
+			proto_major: number;
+			proto_minor: number;
+			async_read: number;
+			max_write: number;
+			max_readahead: number;
+			capable: number;
+			want: number;
+			max_background: number;
+			congestion_threshold: number;
 		}
 
 		export interface Timespec {
-			readonly tv_sec: number;
-			readonly tv_nsec: number;
+			tv_sec: number;
+			tv_nsec: number;
 		}
 
 		export interface Stat {
-			readonly st_dev: number;
-			readonly st_ino: number;
-			readonly st_nlink: number;
-			readonly st_mode: number;
-			readonly st_uid: number;
-			readonly st_gid: number;
-			readonly st_rdev: number;
-			readonly st_size: number;
-			readonly st_blksize: number;
-			readonly st_blocks: number;
-			readonly st_atim: Timespec;
-			readonly st_mtim: Timespec;
-			readonly st_ctim: Timespec;
+			st_dev: number;
+			st_ino: number;
+			st_nlink: number;
+			st_mode: number;
+			st_uid: number;
+			st_gid: number;
+			st_rdev: number;
+			st_size: number;
+			st_blksize: number;
+			st_blocks: number;
+			st_atim: Timespec;
+			st_mtim: Timespec;
+			st_ctim: Timespec;
 		}
 
 		export interface ReaddirResult {
-			readonly path: string;
-			readonly stat?: Stat;
+			path: string;
+			stat?: Stat;
 		}
 
 		export interface FileInfo {
-			readonly flags: number;
-			readonly writepage: number;
-			readonly direct_io: boolean;
-			readonly keep_cache: boolean;
-			readonly flush: boolean;
-			readonly nonseekable: boolean;
-			readonly flock_release: boolean;
-			readonly fh: number;
-			readonly lock_owner: number;
+			flags: number;
+			writepage: number;
+			direct_io: boolean;
+			keep_cache: boolean;
+			flush: boolean;
+			nonseekable: boolean;
+			flock_release: boolean;
+			fh: number;
+			lock_owner: number;
 		}
 
 		export interface OpenResult {
-			readonly fh: number;
+			fh: number;
 		}
 	}
 
@@ -154,10 +154,10 @@ module "*/addon" {
 		destroy?: () => MaybePromise<void>;
 		getattr?: (path: string) => MaybePromise<Fuse.Errno | Fuse.Stat>;
 		readdir?: (path: string) => MaybePromise<Fuse.Errno | Fuse.ReaddirResult[]>;
+		create?: (path: string, mode: number, fileInfo: Fuse.FileInfo) => MaybePromise<Fuse.Errno | Fuse.OpenResult>;
 		open?: (path: string, fileInfo: Fuse.FileInfo) => MaybePromise<Fuse.Errno | Fuse.OpenResult>;
 		read?: (path: string, buffer: Buffer, fileInfo: Fuse.FileInfo) => MaybePromise<number>;
 		write?: (path: string, buffer: Buffer, fileInfo: Fuse.FileInfo) => MaybePromise<number>;
-		create?: (path: string, mode: number, fileInfo: Fuse.FileInfo) => MaybePromise<Fuse.Errno | Fuse.OpenResult>;
 		unlink?: (path: string) => MaybePromise<Fuse.Errno>;
 		chmod?: (path: string, mode: number) => MaybePromise<Fuse.Errno>;
 		chown?: (path: string, user: number, group: number) => MaybePromise<Fuse.Errno>;
