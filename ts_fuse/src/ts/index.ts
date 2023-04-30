@@ -32,8 +32,18 @@ class ReadOnlyInMemoryFileHandle {
 	}
 }
 
+function dateToTimespec(date: Date): Fuse.Timespec {
+	const milliseconds = date.valueOf();
+	const seconds = Math.floor(milliseconds / 1000);
+	return {
+		tv_sec: seconds,
+		tv_nsec: (milliseconds - seconds * 1000) * 1000000,
+	};
+}
+
 class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 	private readonly contents: Buffer;
+	private readonly fileTime = new Date();
 
 	constructor(contents: string | Buffer) {
 		if (typeof contents === "string") {
@@ -53,6 +63,9 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 				return {
 					st_mode: FileType.IFDIR | 0o755,
 					st_nlink: 2,
+					st_atim: dateToTimespec(this.fileTime),
+					st_mtim: dateToTimespec(this.fileTime),
+					st_ctim: dateToTimespec(this.fileTime),
 					// unused
 					st_dev: 0,
 					st_ino: 0,
@@ -62,24 +75,15 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 					st_size: 0,
 					st_blksize: 0,
 					st_blocks: 0,
-					st_atim: {
-						tv_sec: 0,
-						tv_nsec: 0,
-					},
-					st_mtim: {
-						tv_sec: 0,
-						tv_nsec: 0,
-					},
-					st_ctim: {
-						tv_sec: 0,
-						tv_nsec: 0,
-					},
 				};
 			case "/test":
 				return {
 					st_mode: FileType.IFREG | 0o400,
 					st_nlink: 1,
 					st_size: this.contents.length,
+					st_atim: dateToTimespec(this.fileTime),
+					st_mtim: dateToTimespec(this.fileTime),
+					st_ctim: dateToTimespec(this.fileTime),
 					// unused
 					st_dev: 0,
 					st_ino: 0,
@@ -88,18 +92,6 @@ class HelloWorldFileSystem implements FileSystem<ReadOnlyInMemoryFileHandle> {
 					st_rdev: 0,
 					st_blksize: 0,
 					st_blocks: 0,
-					st_atim: {
-						tv_sec: 0,
-						tv_nsec: 0,
-					},
-					st_mtim: {
-						tv_sec: 0,
-						tv_nsec: 0,
-					},
-					st_ctim: {
-						tv_sec: 0,
-						tv_nsec: 0,
-					},
 				};
 		}
 	}
