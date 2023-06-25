@@ -20,11 +20,6 @@ type JsonSchemaValidator struct {
 	compiler *jsonschema.Compiler
 }
 
-type JsonRouteMatchedRequest[T any] struct {
-	*RouteMatchedRequest
-	requestBody T
-}
-
 type JsonRequestRouteFunc[T any] func(log *zap.Logger, response http.ResponseWriter, request *RouteMatchedRequest, requestBody T) error
 
 func NewJsonSchemaValidator() *JsonSchemaValidator {
@@ -116,23 +111,26 @@ func (parser JsonSchemaParserFunc[T]) RouteFunc(f JsonRequestRouteFunc[T]) Route
 		var requestBody T
 		if err := parser(request.Body, &requestBody); err != nil {
 			log.Debug("request failed validation", zap.Error(err))
+
+			// validation failed because there was no payload
 			if errors.Is(err, io.EOF) {
-				// TODO JEFF constants for status codes?
-				response.WriteHeader(400)
-				// TODO JEFF content-type
-				// TODO JEFF should be a json response? only if client accepts json?
-				fmt.Fprint(response, "unexpected EOF")
+				if request.ContentLength == 0 {
+					RespondWithErrorObject(response, request.Request, http.StatusBadRequest, "expected request body")
+				} else {
+					// or maybe an unexpected error occurred reading, but this ought to be impossible
+					RespondWithErrorObject(response, request.Request, http.StatusBadRequest, "unexpected EOF")
+				}
 				return nil
 			}
+
+			// thye just gave us bad data
 			var validationError *jsonschema.ValidationError
 			if errors.As(err, &validationError) {
-				// TODO JEFF constants for status codes?
-				response.WriteHeader(400)
-				// TODO JEFF content-type
-				// TODO JEFF should be a json response? only if client accepts json?
-				json.NewEncoder(response).Encode(validationError)
+				RespondWithErrorObject(response, request.Request, http.StatusBadRequest, validationError)
 				return nil
 			}
+
+			// any other kind of error can be the generic error response
 			return err
 		}
 		return f(log, response, request, requestBody)

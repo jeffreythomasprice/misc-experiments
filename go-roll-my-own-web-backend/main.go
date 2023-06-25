@@ -66,6 +66,14 @@ func main() {
 	)
 
 	// TODO JEFF testing
+	router.Get(
+		regexp.MustCompile("^/error$"),
+		func(log *zap.Logger, response http.ResponseWriter, request *RouteMatchedRequest) error {
+			return fmt.Errorf("simulating an error")
+		},
+	)
+
+	// TODO JEFF testing
 	{
 		f, err := NewJsonSchemaParserFunc[ExampleRequest](jsonSchemaValidator, "schemas/example-request.json")
 		if err != nil {

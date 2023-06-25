@@ -23,6 +23,8 @@ type RouterBuilder struct {
 
 type logableHttpRequest struct{ *http.Request }
 
+type logableHttpHeader struct{ http.Header }
+
 func NewRouterBuilder(log *zap.Logger) *RouterBuilder {
 	return &RouterBuilder{
 		routes: nil,
@@ -59,7 +61,10 @@ func (builder *RouterBuilder) Build() http.HandlerFunc {
 		}
 		if len(possibleMatches) == 0 {
 			log.Debug("no matched route")
-			panic("TODO JEFF implement 404 responses")
+			if err := RespondWithError(response, request, http.StatusNotFound); err != nil {
+				log.Error("error responding to request", zap.Error(err))
+			}
+			return
 		}
 		// no smart sorting of matches, first one wins
 		// if you need multiple matchers with overlapping regexp you've probably made a silly api
@@ -77,7 +82,10 @@ func (builder *RouterBuilder) Build() http.HandlerFunc {
 		log.Debug("matched route")
 
 		if err := bestMatch.route.f(log, response, bestMatch.request); err != nil {
-			panic("TODO JEFF implement error responses")
+			log.Error("error trying to respond", zap.Error(err))
+			if err := RespondWithError(response, request, http.StatusInternalServerError); err != nil {
+				log.Error("error trying to write generic error response to a previous error", zap.Error(err))
+			}
 		}
 	}
 }
@@ -166,6 +174,19 @@ func (route *Route) Match(request *http.Request) *RouteMatchedRequest {
 // zap.ObjectMarshaler
 func (r logableHttpRequest) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("url", r.URL.String())
-	// TODO JEFF headers
+	enc.AddString("method", r.Method)
+	enc.AddObject("headers", logableHttpHeader{r.Header})
+	return nil
+}
+
+// zap.ObjectMarshaler
+func (h logableHttpHeader) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	for name, values := range h.Header {
+		if len(values) == 1 {
+			enc.AddString(name, values[0])
+		} else {
+			zap.Strings(name, values).AddTo(enc)
+		}
+	}
 	return nil
 }
