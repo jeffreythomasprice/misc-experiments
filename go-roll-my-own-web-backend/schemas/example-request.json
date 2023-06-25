@@ -1,0 +1,18 @@
+{
+	"$id": "ExampleRequest",
+	"type": "object",
+	"properties": {
+		"foo": {
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 255
+		},
+		"bar": {
+			"type": "integer"
+		}
+	},
+	"required": [
+		"foo"
+	],
+	"additionalProperties": false
+}
