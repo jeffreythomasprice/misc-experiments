@@ -45,7 +45,6 @@ func (builder *RouterBuilder) Build() http.HandlerFunc {
 	possibleMatches := make([]match, 0)
 
 	return func(response http.ResponseWriter, request *http.Request) {
-		// TODO include headers
 		log := builder.log.With(zap.Object("request", logableHttpRequest{request}))
 		log.Debug("received request")
 

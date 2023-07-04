@@ -7,6 +7,8 @@ require (
 	go.uber.org/zap v1.24.0
 )
 
+require github.com/psanford/memfs v0.0.0-20230130182539-4dbf7e3e865e // indirect
+
 require (
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect

@@ -30,7 +30,7 @@ func (e DirEntryInFS) Open() (fs.File, error) {
 	return e.files.Open(e.Path())
 }
 
-func getAllFilesRecursively(files fs.ReadDirFS, root string) ([]DirEntryInFS, error) {
+func GetAllFilesRecursively(files fs.ReadDirFS, root string) ([]DirEntryInFS, error) {
 	dirEnts, err := files.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -38,7 +38,7 @@ func getAllFilesRecursively(files fs.ReadDirFS, root string) ([]DirEntryInFS, er
 	results := []DirEntryInFS{}
 	for _, e := range dirEnts {
 		if e.IsDir() {
-			children, err := getAllFilesRecursively(files, path.Join(root, e.Name()))
+			children, err := GetAllFilesRecursively(files, path.Join(root, e.Name()))
 			if err != nil {
 				return nil, err
 			}

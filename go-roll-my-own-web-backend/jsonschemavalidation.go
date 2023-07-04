@@ -50,7 +50,7 @@ func (validator *JsonSchemaValidator) AddSchema(url string, r io.Reader) (*jsons
 }
 
 func (validator *JsonSchemaValidator) AddSchemaDirectory(files fs.ReadDirFS, dir string) error {
-	dirEntry, err := getAllFilesRecursively(files, ".")
+	dirEntry, err := GetAllFilesRecursively(files, ".")
 	if err != nil {
 		return fmt.Errorf("failed to read dir: %v\n%w", dir, err)
 	}
