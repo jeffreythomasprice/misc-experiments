@@ -3,5 +3,5 @@
 ```
 
 ```
-./gradlew run
+npx nodemon -w src -e kt --signal SIGTERM -x ./gradlew run
 ```
