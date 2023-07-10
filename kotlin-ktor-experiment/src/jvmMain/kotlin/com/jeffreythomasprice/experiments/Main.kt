@@ -23,6 +23,9 @@ fun main() {
 		port = 8001,
 
 		module = {
+
+			// TODO enable ktor live reload
+
 			install(CORS) {
 				anyHost()
 				allowOrigins { true }
