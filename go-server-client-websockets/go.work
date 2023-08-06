@@ -1,0 +1,7 @@
+go 1.21rc4
+
+use (
+	./client
+	./server
+	./shared
+)
