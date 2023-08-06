@@ -42,6 +42,7 @@ var ErrClosed = errors.New("closed websocket connection")
 func NewJsonWebsocketConnection[T any](connection WebsocketConnection) JsonWebsocketConnection[T] {
 	incoming := make(chan T)
 	go func() {
+		defer close(incoming)
 		for message := range connection.Incoming() {
 			var typedMessage T
 			if err := json.Unmarshal(message, &typedMessage); err != nil {
