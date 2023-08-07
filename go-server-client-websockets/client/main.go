@@ -19,10 +19,11 @@ func main() {
 		},
 	)))
 
-	// TODO JEFF demo
 	host := js.Global().Get("window").Get("location").Get("host")
-	wsUrl := fmt.Sprintf("ws://%v/ws", host)
-	connection, err := websockets.NewWebsocketConnection(wsUrl)
+	reload.StartAutoReloadClient(fmt.Sprintf("ws://%v/ws/autoreload", host))
+
+	// TODO JEFF demo
+	connection, err := websockets.NewWebsocketConnection(fmt.Sprintf("ws://%v/ws", host))
 	if err != nil {
 		panic(err)
 	}
@@ -36,7 +37,26 @@ func main() {
 		Message: "Hello from client",
 	})
 
-	reload.StartAutoReloadClient(fmt.Sprintf("ws://%v/ws/autoreload", host))
+	body, err := GetDomElementByQuerySelector("body")
+	if err != nil {
+		panic(err)
+	}
+	if err := body.RemoveAllChildren(); err != nil {
+		panic(err)
+	}
+	content, err := NewDomElementFromHtmlString(`
+		<p>foo</p>
+		<p>bar</p>
+		<p>baz</p>
+	`)
+	if err != nil {
+		panic(err)
+	}
+	for _, c := range content {
+		if err := body.AppendChild(c); err != nil {
+			panic(err)
+		}
+	}
 
 	select {}
 }

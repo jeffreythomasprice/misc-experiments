@@ -27,11 +27,14 @@ func main() {
 
 	r.Use(middleware.RequestLogger(&SlogLogFormatter{}))
 
+	// static files
 	binDir, err := getDirectoryRunningProcessIsIn()
 	if err != nil {
 		panic(err)
 	}
 	r.Handle("/*", http.FileServer(http.Dir(path.Join(binDir, "web"))))
+
+	r.HandleFunc("/ws/autoreload", reload.NewAutoReloadServerHandlerFunc())
 
 	// TODO JEFF demo
 	websocketServer, websocketHandlerFunc := websockets.NewWebsocketServerHandlerFunc()
@@ -49,8 +52,6 @@ func main() {
 			})
 		}
 	}()
-
-	r.HandleFunc("/ws/autoreload", reload.NewAutoReloadServerHandlerFunc())
 
 	addr := "127.0.0.1"
 	port := 8000
