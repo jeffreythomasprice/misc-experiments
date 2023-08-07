@@ -1,12 +1,14 @@
 package main
 
 import (
+	"client/dom"
 	"fmt"
 	"log/slog"
 	"os"
 	"shared"
 	"shared/websockets"
 	"shared/websockets/reload"
+	"strings"
 	"syscall/js"
 )
 
@@ -37,26 +39,42 @@ func main() {
 		Message: "Hello from client",
 	})
 
-	body, err := GetDomElementByQuerySelector("body")
-	if err != nil {
-		panic(err)
-	}
-	if err := body.RemoveAllChildren(); err != nil {
-		panic(err)
-	}
-	content, err := NewDomElementFromHtmlString(`
-		<p>foo</p>
-		<p>bar</p>
-		<p>baz</p>
-	`)
-	if err != nil {
-		panic(err)
-	}
-	for _, c := range content {
-		if err := body.AppendChild(c); err != nil {
-			panic(err)
+	dom.MustGetDomElementByQuerySelector("body").
+		ReplaceChildren(
+			dom.MustNewDomElementFromHtmlString(`
+				<input id="messageInput" type="text"></input>
+				<button id="submitMessageButton" type="button">Submit</button>
+			`),
+		)
+
+	messageInput := dom.MustGetDomElementById("messageInput")
+	submitMessageButton := dom.MustGetDomElementById("submitMessageButton")
+
+	submit := func() {
+		value := messageInput.Get("value").String()
+		messageInput.Set("value", "")
+		messageInput.Call("focus")
+
+		if len(value) > 0 {
+			slog.Debug("TODO JEFF submitting", "value", value)
 		}
 	}
+
+	messageInput.Set("onkeypress", js.FuncOf(func(this js.Value, args []js.Value) any {
+		event := args[0]
+		key := strings.ToLower(event.Get("key").String())
+		if key == "enter" {
+			submit()
+		}
+		return nil
+	}))
+
+	submitMessageButton.Set("onclick", js.FuncOf(func(this js.Value, args []js.Value) any {
+		submit()
+		return nil
+	}))
+
+	messageInput.Call("focus")
 
 	select {}
 }
