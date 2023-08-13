@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"path"
+	"shared/demo"
+	"shared/websockets"
 	"shared/websockets/reload"
 
 	"github.com/go-chi/chi"
@@ -28,28 +31,38 @@ func main() {
 	// static files
 	binDir, err := getDirectoryRunningProcessIsIn()
 	if err != nil {
-		panic(err)
+		slog.Error("error getting current directory", "err", err)
+		os.Exit(1)
 	}
 	r.Handle("/*", http.FileServer(http.Dir(path.Join(binDir, "web"))))
 
 	r.HandleFunc("/ws/autoreload", reload.NewAutoReloadServerHandlerFunc())
 
-	// TODO JEFF demo
-	// websocketServer, websocketHandlerFunc := websockets.NewWebsocketServerHandlerFunc()
-	// r.HandleFunc("/ws", websocketHandlerFunc)
-	// go func() {
-	// 	for connection := range websocketServer.Incoming() {
-	// 		jsonConnection := websockets.NewJsonWebsocketConnection[shared.Message](connection)
-	// 		go func() {
-	// 			for message := range jsonConnection.Incoming() {
-	// 				slog.Info("incoming message", "text", message.Message)
-	// 			}
-	// 		}()
-	// 		jsonConnection.Send(shared.Message{
-	// 			Message: "Hello from server",
-	// 		})
-	// 	}
-	// }()
+	// TODO JEFF json websocket connection needs a wrapper for going from json.RawMessage to tagged union, same on client
+	websocketServer, websocketHandlerFunc := websockets.NewWebsocketServerHandlerFunc()
+	r.HandleFunc("/ws", websocketHandlerFunc)
+	go func() {
+		for connection := range websocketServer.Incoming() {
+			jsonConnection := websockets.NewJsonWebsocketConnection[json.RawMessage](connection)
+			go func() {
+				for rawMessage := range jsonConnection.Incoming() {
+					message, err := demo.MessageTaggedUnion.Unmarshall(rawMessage)
+					if err != nil {
+						slog.Error("error unmarshalling message", "err", err)
+						continue
+					}
+					switch t := message.(type) {
+					case *demo.ClientMessage:
+						panic("TODO JEFF handle this message type")
+					case *demo.ClientSetName:
+						panic("TODO JEFF handle this message type")
+					default:
+						slog.Debug("unhandled message type", "type", t)
+					}
+				}
+			}()
+		}
+	}()
 
 	addr := "127.0.0.1"
 	port := 8000

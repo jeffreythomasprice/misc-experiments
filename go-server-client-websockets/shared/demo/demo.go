@@ -6,8 +6,6 @@ import (
 	"shared"
 )
 
-// TODO JEFF demo
-
 type Message interface {
 	String() string
 }

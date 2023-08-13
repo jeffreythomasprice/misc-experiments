@@ -2,12 +2,17 @@ package main
 
 import (
 	"client/dom"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
+	"shared/demo"
+	"shared/websockets"
 	"shared/websockets/reload"
 	"strings"
 	"syscall/js"
+
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -22,20 +27,48 @@ func main() {
 	host := js.Global().Get("window").Get("location").Get("host")
 	reload.StartAutoReloadClient(fmt.Sprintf("ws://%v/ws/autoreload", host))
 
-	// TODO JEFF demo
-	// connection, err := websockets.NewWebsocketConnection(fmt.Sprintf("ws://%v/ws", host))
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// jsonConnection := websockets.NewJsonWebsocketConnection[shared.Message](connection)
-	// go func() {
-	// 	for message := range jsonConnection.Incoming() {
-	// 		slog.Info("incoming message", "text", message.Message)
-	// 	}
-	// }()
-	// jsonConnection.Send(shared.Message{
-	// 	Message: "Hello from client",
-	// })
+	connection, err := websockets.NewWebsocketConnection(fmt.Sprintf("ws://%v/ws", host))
+	if err != nil {
+		// TODO error handling
+		panic(err)
+	}
+
+	// TODO JEFF json websocket connection needs a wrapper for going from json.RawMessage to tagged union, same on server
+	jsonConnection := websockets.NewJsonWebsocketConnection[json.RawMessage](connection)
+	go func() {
+		for rawMessage := range jsonConnection.Incoming() {
+			message, err := demo.MessageTaggedUnion.Unmarshall(rawMessage)
+			if err != nil {
+				slog.Error("error unmarshalling message", "err", err)
+				continue
+			}
+			switch t := message.(type) {
+			case *demo.ServerInformClientsAboutMessage:
+				panic("TODO JEFF handle this message type")
+			case *demo.ServerInformClientsAboutNameChange:
+				panic("TODO JEFF handle this message type")
+			default:
+				slog.Debug("unhandled message type", "type", t)
+			}
+		}
+	}()
+
+	clientName, err := uuid.NewRandom()
+	if err != nil {
+
+		// TODO error handling
+		panic(err)
+	}
+	// TODO JEFF needs a helper for sending tagged unions
+	if rawMessage, err := demo.MessageTaggedUnion.Marshal(&demo.ClientSetName{
+		Name: clientName.String(),
+	}); err != nil {
+		// TODO error handling
+		panic(err)
+	} else if err := jsonConnection.Send(rawMessage); err != nil {
+		// TODO error handling
+		panic(err)
+	}
 
 	dom.MustGetDomElementByQuerySelector("body").
 		ReplaceChildren(

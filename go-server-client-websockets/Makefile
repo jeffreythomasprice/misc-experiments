@@ -2,6 +2,7 @@
 	all \
 	build \
 	clean \
+	test \
 	client \
 	server
 
@@ -11,6 +12,9 @@ build: client server
 
 clean:
 	rm -rf bin
+
+test:
+	cd shared && go test
 
 client:
 	cd client && GOOS=js GOARCH=wasm go build -o ../bin/web/client.wasm
