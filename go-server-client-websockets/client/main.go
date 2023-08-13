@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"shared"
-	"shared/websockets"
 	"shared/websockets/reload"
 	"strings"
 	"syscall/js"
@@ -25,19 +23,19 @@ func main() {
 	reload.StartAutoReloadClient(fmt.Sprintf("ws://%v/ws/autoreload", host))
 
 	// TODO JEFF demo
-	connection, err := websockets.NewWebsocketConnection(fmt.Sprintf("ws://%v/ws", host))
-	if err != nil {
-		panic(err)
-	}
-	jsonConnection := websockets.NewJsonWebsocketConnection[shared.Message](connection)
-	go func() {
-		for message := range jsonConnection.Incoming() {
-			slog.Info("incoming message", "text", message.Message)
-		}
-	}()
-	jsonConnection.Send(shared.Message{
-		Message: "Hello from client",
-	})
+	// connection, err := websockets.NewWebsocketConnection(fmt.Sprintf("ws://%v/ws", host))
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// jsonConnection := websockets.NewJsonWebsocketConnection[shared.Message](connection)
+	// go func() {
+	// 	for message := range jsonConnection.Incoming() {
+	// 		slog.Info("incoming message", "text", message.Message)
+	// 	}
+	// }()
+	// jsonConnection.Send(shared.Message{
+	// 	Message: "Hello from client",
+	// })
 
 	dom.MustGetDomElementByQuerySelector("body").
 		ReplaceChildren(

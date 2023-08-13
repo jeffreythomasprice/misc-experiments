@@ -1,130 +1,91 @@
 package demo
 
 import (
-	"encoding/json"
 	"fmt"
-	"time"
+	"reflect"
+	"shared"
 )
 
 // TODO JEFF demo
+
+type Message interface {
+	String() string
+}
 
 /*
 ClientSetName is sent by clients when they are changing what name they want to be known by
 */
 type ClientSetName struct {
+	Type string `json:"type" union:"-"`
 	Name string `json:"name"`
 }
+
+var _ Message = (*ClientSetName)(nil)
 
 /*
 ServerInformClientsAboutNameChange is sent by the server to clients to inform them about the names of other clients
 */
 type ServerInformClientsAboutNameChange struct {
+	Type string `json:"type" union:"-"`
 	Id   string `json:"uuid"`
 	Name string `json:"name"`
 }
+
+var _ Message = (*ServerInformClientsAboutNameChange)(nil)
 
 /*
 ClientMessage is sent by clients to submit a message
 */
 type ClientMessage struct {
+	Type    string `json:"type" union:"-"`
 	Message string `json:"message"`
 }
+
+var _ Message = (*ClientMessage)(nil)
 
 /*
 ServerInformClientsAboutMessage is sent by the server to clients to inform them about new messages
 */
 type ServerInformClientsAboutMessage struct {
+	Type      string `json:"type" union:"serverMessage"`
 	SourceId  string `json:"id"`
 	Timestamp int64  `json:"timestamp"`
 	Message   string `json:"message"`
 }
 
-type MessageWrapper struct {
-	Type       string          `json:"type"`
-	RawMessage json.RawMessage `json:"message"`
-	Message    interface{}     `json:"-"`
-}
+var _ Message = (*ServerInformClientsAboutMessage)(nil)
 
-var _ json.Unmarshaler = (*MessageWrapper)(nil)
-var _ json.Marshaler = (*MessageWrapper)(nil)
+var MessageTaggedUnion *shared.JsonTaggedUnion[interface{}]
 
-const (
-	MessageTypeClientSetName                      = "setName"
-	MessageTypeServerInformClientsAboutNameChange = "informAboutNameChange"
-	MessageTypeClientMessage                      = "clientMessage"
-	MessageTypeServerInformClientsAboutMessage    = "informAboutMessage"
-)
-
-func NewClientSetName(name string) *MessageWrapper {
-	return &MessageWrapper{
-		Type: MessageTypeClientSetName,
-		Message: &ClientSetName{
-			Name: name,
-		},
-	}
-}
-
-func NewServerInformClientsAboutNameChange(id string, name string) *MessageWrapper {
-	return &MessageWrapper{
-		Type: MessageTypeServerInformClientsAboutNameChange,
-		Message: &ServerInformClientsAboutNameChange{
-			Id:   id,
-			Name: name,
-		},
-	}
-}
-
-func NewClientMessage(message string) *MessageWrapper {
-	return &MessageWrapper{
-		Type: MessageTypeClientMessage,
-		Message: &ClientMessage{
-			Message: message,
-		},
-	}
-}
-
-func NewServerInformClientsAboutMessage(sourceId string, timestamp time.Time, message string) *MessageWrapper {
-	return &MessageWrapper{
-		Type: MessageTypeServerInformClientsAboutMessage,
-		Message: &ServerInformClientsAboutMessage{
-			SourceId:  sourceId,
-			Timestamp: timestamp.UnixMilli(),
-			Message:   message,
-		},
-	}
-}
-
-// UnmarshalJSON implements json.Unmarshaler.
-func (message *MessageWrapper) UnmarshalJSON(b []byte) error {
-	type t MessageWrapper
-	if err := json.Unmarshal(b, (*t)(message)); err != nil {
-		return err
-	}
-	switch message.Type {
-	case MessageTypeClientSetName:
-		message.Message = &ClientSetName{}
-	case MessageTypeServerInformClientsAboutNameChange:
-		message.Message = &ServerInformClientsAboutNameChange{}
-	case MessageTypeClientMessage:
-		message.Message = &ClientMessage{}
-	case MessageTypeServerInformClientsAboutMessage:
-		message.Message = &ServerInformClientsAboutMessage{}
-	default:
-		return fmt.Errorf("unrecognized message type: %v", message.Type)
-	}
-	if err := json.Unmarshal(message.RawMessage, message.Message); err != nil {
-		return err
-	}
-	return nil
-}
-
-// MarshalJSON implements json.Marshaler.
-func (message *MessageWrapper) MarshalJSON() ([]byte, error) {
-	type t MessageWrapper
-	b, err := json.Marshal(message.Message)
+func init() {
+	var err error
+	MessageTaggedUnion, err = shared.NewJsonTaggedUnion[interface{}](
+		&ClientSetName{},
+		&ServerInformClientsAboutNameChange{},
+		&ClientMessage{},
+		&ServerInformClientsAboutMessage{},
+	)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	message.RawMessage = b
-	return json.Marshal((*t)(message))
+}
+
+// String implements Message.
+func (message *ClientSetName) String() string {
+	return fmt.Sprintf("%v(%v)", reflect.TypeOf(message).Name(), message.Name)
+}
+
+// String implements Message.
+func (message *ServerInformClientsAboutNameChange) String() string {
+	return fmt.Sprintf("%v(%v is now %v)", reflect.TypeOf(message).Name(), message.Id, message.Name)
+}
+
+// String implements Message.
+func (message *ClientMessage) String() string {
+	return fmt.Sprintf("%v(%v)", reflect.TypeOf(message).Name(), message.Message)
+}
+
+// String implements Message.
+func (message *ServerInformClientsAboutMessage) String() string {
+	return fmt.Sprintf("%v(%v: %v sent %v)", reflect.TypeOf(message).Name(), message.Timestamp, message.SourceId, message.Message)
 }

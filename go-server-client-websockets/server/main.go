@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"shared"
-	"shared/websockets"
 	"shared/websockets/reload"
 
 	"github.com/go-chi/chi"
@@ -37,21 +35,21 @@ func main() {
 	r.HandleFunc("/ws/autoreload", reload.NewAutoReloadServerHandlerFunc())
 
 	// TODO JEFF demo
-	websocketServer, websocketHandlerFunc := websockets.NewWebsocketServerHandlerFunc()
-	r.HandleFunc("/ws", websocketHandlerFunc)
-	go func() {
-		for connection := range websocketServer.Incoming() {
-			jsonConnection := websockets.NewJsonWebsocketConnection[shared.Message](connection)
-			go func() {
-				for message := range jsonConnection.Incoming() {
-					slog.Info("incoming message", "text", message.Message)
-				}
-			}()
-			jsonConnection.Send(shared.Message{
-				Message: "Hello from server",
-			})
-		}
-	}()
+	// websocketServer, websocketHandlerFunc := websockets.NewWebsocketServerHandlerFunc()
+	// r.HandleFunc("/ws", websocketHandlerFunc)
+	// go func() {
+	// 	for connection := range websocketServer.Incoming() {
+	// 		jsonConnection := websockets.NewJsonWebsocketConnection[shared.Message](connection)
+	// 		go func() {
+	// 			for message := range jsonConnection.Incoming() {
+	// 				slog.Info("incoming message", "text", message.Message)
+	// 			}
+	// 		}()
+	// 		jsonConnection.Send(shared.Message{
+	// 			Message: "Hello from server",
+	// 		})
+	// 	}
+	// }()
 
 	addr := "127.0.0.1"
 	port := 8000
