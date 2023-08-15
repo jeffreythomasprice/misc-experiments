@@ -1,7 +1,0 @@
-[serve]
-address = "127.0.0.1"
-port = 8000
-
-[[proxy]]
-rewrite = "/api/"
-backend = "http://localhost:8001/api/"
