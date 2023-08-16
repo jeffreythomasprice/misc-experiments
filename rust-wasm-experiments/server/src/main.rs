@@ -2,17 +2,10 @@ use rocket::fairing::{Fairing, Info, Kind};
 use rocket::http::Header;
 use rocket::serde::json::Json;
 use rocket::{Request, Response};
-use serde::{Deserialize, Serialize};
+use shared::JsonResponse;
 
 #[macro_use]
 extern crate rocket;
-
-// TODO JEFF deduplicate me
-#[derive(Debug, Serialize, Deserialize)]
-struct JsonResponse {
-    foo: String,
-    bar: i32,
-}
 
 #[get("/")]
 fn index() -> String {
@@ -21,10 +14,7 @@ fn index() -> String {
 
 #[get("/json")]
 fn json_example() -> Json<JsonResponse> {
-    Json(JsonResponse {
-        foo: "baz".into(),
-        bar: 42,
-    })
+    Json(JsonResponse::new("baz", 42))
 }
 
 struct Cors;

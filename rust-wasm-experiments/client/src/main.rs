@@ -2,18 +2,12 @@ use std::{collections::HashMap, ops::Deref};
 
 use console_log;
 use log::*;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use shared::JsonResponse;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{console, Request, RequestInit, RequestMode, Response};
 use yew::prelude::*;
-
-// TODO JEFF deduplicate me
-#[derive(Debug, Serialize, Deserialize)]
-struct JsonResponse {
-    foo: String,
-    bar: i32,
-}
 
 #[function_component]
 fn App() -> Html {
