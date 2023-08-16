@@ -158,6 +158,9 @@ version = "0.1.0"
 dependencies = [
  "console_log",
  "log",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -1211,6 +1214,7 @@ dependencies = [
  "rocket_codegen",
  "rocket_http",
  "serde",
+ "serde_json",
  "state",
  "tempfile",
  "time",
@@ -1376,6 +1380,8 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "rocket",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

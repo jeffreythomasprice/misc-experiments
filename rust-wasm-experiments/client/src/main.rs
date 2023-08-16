@@ -2,10 +2,18 @@ use std::{collections::HashMap, ops::Deref};
 
 use console_log;
 use log::*;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{console, Request, RequestInit, RequestMode, Response};
 use yew::prelude::*;
+
+// TODO JEFF deduplicate me
+#[derive(Debug, Serialize, Deserialize)]
+struct JsonResponse {
+    foo: String,
+    bar: i32,
+}
 
 #[function_component]
 fn App() -> Html {
@@ -41,9 +49,23 @@ async fn example() -> Result<(), JsValue> {
         response.status(),
         response.status_text()
     );
-
     let response_body = response.text().await?;
     info!("TODO JEFF response body: {response_body}");
+
+    let response = RequestBuilder::new()
+        .get()
+        .url("http://127.0.0.1:8001/json")
+        .header("Accept", "application/json")
+        .build()?
+        .launch()
+        .await?;
+    info!(
+        "TODO JEFF status: {} {}",
+        response.status(),
+        response.status_text()
+    );
+    let response_body: JsonResponse = response.json().await?;
+    info!("TODO JEFF response body: {response_body:?}");
 
     Ok(())
 }
@@ -135,6 +157,15 @@ impl ResponseWrapper {
             .await?
             .as_string()
             .ok_or::<JsValue>("output of text() was not a string".into())?)
+    }
+
+    pub async fn json<T>(&self) -> Result<T, JsValue>
+    where
+        T: DeserializeOwned,
+    {
+        Ok(serde_wasm_bindgen::from_value(
+            JsFuture::from(self.0.json()?).await?,
+        )?)
     }
 }
 
