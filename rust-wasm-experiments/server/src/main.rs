@@ -1,5 +1,6 @@
 use rocket::fairing::{Fairing, Info, Kind};
-use rocket::http::Header;
+use rocket::http::{Header, Status};
+use rocket::response::status;
 use rocket::serde::json::Json;
 use rocket::{Request, Response};
 use shared::JsonResponse;
@@ -8,8 +9,8 @@ use shared::JsonResponse;
 extern crate rocket;
 
 #[get("/")]
-fn index() -> String {
-    return "Hello, World!".into();
+fn index() -> status::Custom<String> {
+    status::Custom(Status::ImATeapot, "Hello, World!".into())
 }
 
 #[get("/json")]
