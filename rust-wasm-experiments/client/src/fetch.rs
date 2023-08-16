@@ -1,13 +1,10 @@
 use std::{collections::HashMap, ops::Deref};
 
-use console_log;
-use log::*;
 use serde::de::DeserializeOwned;
-use shared::JsonResponse;
+
 use wasm_bindgen::{JsCast, JsValue};
-use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{console, Request, RequestInit, RequestMode, Response};
-use yew::prelude::*;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{Request, RequestInit, RequestMode, Response};
 
 pub struct RequestBuilder {
     init: RequestInit,
@@ -84,7 +81,7 @@ impl Deref for RequestWrapper {
     type Target = Request;
 
     fn deref(&self) -> &Self::Target {
-        return &self.0;
+        &self.0
     }
 }
 
@@ -92,10 +89,10 @@ pub struct ResponseWrapper(Response);
 
 impl ResponseWrapper {
     pub async fn text(&self) -> Result<String, JsValue> {
-        Ok(JsFuture::from(self.0.text()?)
+        JsFuture::from(self.0.text()?)
             .await?
             .as_string()
-            .ok_or::<JsValue>("output of text() was not a string".into())?)
+            .ok_or::<JsValue>("output of text() was not a string".into())
     }
 
     pub async fn json<T>(&self) -> Result<T, JsValue>
@@ -112,6 +109,6 @@ impl Deref for ResponseWrapper {
     type Target = Response;
 
     fn deref(&self) -> &Self::Target {
-        return &self.0;
+        &self.0
     }
 }

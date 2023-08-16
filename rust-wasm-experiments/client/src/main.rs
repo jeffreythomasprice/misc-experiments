@@ -1,12 +1,12 @@
-use std::{collections::HashMap, ops::Deref};
 
-use console_log;
+
+
 use log::*;
-use serde::de::DeserializeOwned;
+
 use shared::JsonResponse;
-use wasm_bindgen::{JsCast, JsValue};
-use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{console, Request, RequestInit, RequestMode, Response};
+use wasm_bindgen::{JsValue};
+use wasm_bindgen_futures::{spawn_local};
+use web_sys::{console};
 use yew::prelude::*;
 
 mod fetch;

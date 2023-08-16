@@ -42,10 +42,11 @@ impl Fairing for Cors {
 
 #[launch]
 fn rocket() -> _ {
-    let mut config = rocket::Config::default();
-    config.address = "127.0.0.1".parse().unwrap();
-    config.port = 8001;
-    rocket::custom(config)
-        .attach(Cors)
-        .mount("/", routes![index, json_example])
+    rocket::custom(rocket::Config {
+        address: "127.0.0.1".parse().unwrap(),
+        port: 8001,
+        ..Default::default()
+    })
+    .attach(Cors)
+    .mount("/", routes![index, json_example])
 }
