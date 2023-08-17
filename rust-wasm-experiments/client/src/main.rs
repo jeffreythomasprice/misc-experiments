@@ -1,19 +1,30 @@
 use log::*;
 
+use leptos::*;
 use shared::JsonResponse;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
-use yew::prelude::*;
 
 mod fetch;
 use fetch::*;
 
-#[function_component]
-fn App() -> Html {
-    html! {
+#[component]
+fn App(cx: Scope) -> impl IntoView {
+    let (count, set_count) = create_signal(cx, 0);
+
+    let click = move |_| {
+        set_count.update(|count| {
+            *count += 1;
+            ()
+        });
+    };
+
+    view! {
+        cx,
         <div>
-            <p>{ "Hello, World!" }</p>
+            <p>"Clicks: " {move || count()}</p>
+            <button on:click=click>"Click me!"</button>
         </div>
     }
 }
@@ -27,7 +38,9 @@ fn main() {
         }
     });
 
-    yew::Renderer::<App>::new().render();
+    mount_to_body(|cx| {
+        view! {cx, <App/>}
+    })
 }
 
 async fn example() -> Result<(), JsValue> {
