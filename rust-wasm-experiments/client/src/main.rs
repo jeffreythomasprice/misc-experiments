@@ -1,7 +1,10 @@
+#![allow(dead_code)]
+
 use log::*;
 
 use leptos::*;
-use shared::JsonResponse;
+use serde::{de::DeserializeOwned, Serialize};
+use shared::models::messages::{ClientHelloRequest, GenericResponse};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
@@ -44,35 +47,40 @@ fn main() {
 }
 
 async fn example() -> Result<(), JsValue> {
-    let response = RequestBuilder::new()
-        .get()
-        .url("http://127.0.0.1:8001/")
-        .header("Accept", "text/plain")
-        .build()?
-        .launch()
-        .await?;
-    info!(
-        "TODO JEFF status: {} {}",
-        response.status(),
-        response.status_text()
-    );
-    let response_body = response.text().await?;
-    info!("TODO JEFF response body: {response_body}");
-
-    let response = RequestBuilder::new()
-        .get()
-        .url("http://127.0.0.1:8001/json")
-        .header("Accept", "application/json")
-        .build()?
-        .launch()
-        .await?;
-    info!(
-        "TODO JEFF status: {} {}",
-        response.status(),
-        response.status_text()
-    );
-    let response_body: JsonResponse = response.json().await?;
-    info!("TODO JEFF response body: {response_body:?}");
+    let response = client_hello("testing".into()).await?;
+    info!("TODO JEFF client hello response: {response:?}");
 
     Ok(())
+}
+
+async fn client_hello(name: String) -> Result<GenericResponse, JsValue> {
+    Ok(json_request_response("POST", "/client", &ClientHelloRequest { name }).await?)
+}
+
+async fn json_request_response<RequestType, ResponseType>(
+    method: &str,
+    uri: &str,
+    request: &RequestType,
+) -> Result<ResponseType, JsValue>
+where
+    RequestType: Serialize,
+    ResponseType: DeserializeOwned,
+{
+    let base_url = "http://127.0.0.1:8001";
+    let url = if uri.starts_with("/") {
+        format!("{base_url}{uri}")
+    } else {
+        format!("{base_url}/{uri}")
+    };
+
+    let response = RequestBuilder::new()
+        .method(method)
+        .url(url.as_str())
+        .json(request)
+        .map_err(|e| -> JsValue { format!("{e}").into() })?
+        .build()?
+        .launch()
+        .await?;
+    let response_body: ResponseType = response.json().await?;
+    Ok(response_body)
 }

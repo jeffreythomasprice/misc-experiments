@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ops::Deref};
 
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
@@ -30,7 +31,29 @@ impl RequestBuilder {
         self.method("GET")
     }
 
-    // TODO other method helpers, POST, PUT, DELETE, PATCH, OPTIONS, HEAD
+    pub fn post(&mut self) -> &mut Self {
+        self.method("POST")
+    }
+
+    pub fn put(&mut self) -> &mut Self {
+        self.method("PUT")
+    }
+
+    pub fn patch(&mut self) -> &mut Self {
+        self.method("PATCH")
+    }
+
+    pub fn delete(&mut self) -> &mut Self {
+        self.method("DELETE")
+    }
+
+    pub fn options(&mut self) -> &mut Self {
+        self.method("OPTIONS")
+    }
+
+    pub fn head(&mut self) -> &mut Self {
+        self.method("HEAD")
+    }
 
     pub fn mode(&mut self, mode: RequestMode) -> &mut Self {
         self.init.mode(mode);
@@ -47,7 +70,25 @@ impl RequestBuilder {
         self
     }
 
-    // TODO body
+    pub fn body(&mut self, value: &JsValue) -> &mut Self {
+        self.init.body(value.into());
+        self
+    }
+
+    pub fn json<T>(&mut self, value: &T) -> Result<&mut Self, serde_json::Error>
+    where
+        T: Serialize,
+    {
+        self.header("Content-Type", "application/json");
+
+        if !self.headers.contains_key("Accept") {
+            self.header("Accept", "application/json");
+        }
+
+        self.body(&serde_json::to_string(value)?.into());
+
+        Ok(self)
+    }
 
     pub fn build(&self) -> Result<RequestWrapper, JsValue> {
         let url = self
@@ -58,7 +99,6 @@ impl RequestBuilder {
         for (key, value) in self.headers.iter() {
             request.headers().set(key, value)?;
         }
-        // TODO body
         Ok(RequestWrapper(request))
     }
 }

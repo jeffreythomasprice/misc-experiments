@@ -9,5 +9,7 @@ serde_json = "1.0.105"
 tokio = { version = "1.31.0", features = ["full"] }
 shared = { path = "../shared" }
 axum = "0.6.20"
-tower-http = { version = "0.4.3", features = ["cors"] }
+tower-http = { version = "0.4.3", features = ["cors", "trace"] }
 tower = "0.4.13"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
