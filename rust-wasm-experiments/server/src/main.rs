@@ -1,52 +1,33 @@
-use rocket::fairing::{Fairing, Info, Kind};
-use rocket::http::{Header, Status};
-use rocket::response::status;
-use rocket::serde::json::Json;
-use rocket::{Request, Response};
+use std::net::SocketAddr;
+use std::str::FromStr;
+
+use axum::{routing::*, Json};
 use shared::JsonResponse;
+use tower::ServiceBuilder;
+use tower_http::cors;
 
-#[macro_use]
-extern crate rocket;
-
-#[get("/")]
-fn index() -> status::Custom<String> {
-    status::Custom(Status::ImATeapot, "Hello, World!".into())
+async fn root() -> String {
+    return "Hello, World!".into();
 }
 
-#[get("/json")]
-fn json_example() -> Json<JsonResponse> {
+async fn json_example() -> Json<JsonResponse> {
     Json(JsonResponse::new("baz", 42))
 }
 
-struct Cors;
+#[tokio::main]
+async fn main() {
+    let cors = cors::CorsLayer::new()
+        .allow_methods(cors::Any)
+        .allow_origin(cors::Any)
+        .allow_headers(cors::Any);
 
-#[rocket::async_trait]
-impl Fairing for Cors {
-    fn info(&self) -> Info {
-        Info {
-            name: "",
-            kind: Kind::Response,
-        }
-    }
+    let app = Router::new()
+        .route("/", get(root))
+        .route("/json", get(json_example))
+        .layer(ServiceBuilder::new().layer(cors));
 
-    async fn on_response<'r>(&self, _request: &'r Request<'_>, response: &mut Response<'r>) {
-        response.set_header(Header::new("Access-Control-Allow-Origin", "*"));
-        response.set_header(Header::new(
-            "Access-Control-Allow-Methods",
-            "POST, GET, PATCH, OPTIONS",
-        ));
-        response.set_header(Header::new("Access-Control-Allow-Headers", "*"));
-        response.set_header(Header::new("Access-Control-Allow-Credentials", "true"));
-    }
-}
-
-#[launch]
-fn rocket() -> _ {
-    rocket::custom(rocket::Config {
-        address: "127.0.0.1".parse().unwrap(),
-        port: 8001,
-        ..Default::default()
-    })
-    .attach(Cors)
-    .mount("/", routes![index, json_example])
+    axum::Server::bind(&SocketAddr::from_str("127.0.0.1:8001").unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }

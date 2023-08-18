@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rocket = { version = "0.5.0-rc.3", features = ["json"] }
 serde = "1.0.183"
 serde_json = "1.0.105"
-tokio = "1.31.0"
+tokio = { version = "1.31.0", features = ["full"] }
 shared = { path = "../shared" }
+axum = "0.6.20"
+tower-http = { version = "0.4.3", features = ["cors"] }
+tower = "0.4.13"
