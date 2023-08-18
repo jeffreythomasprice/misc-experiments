@@ -1,11 +1,13 @@
+#![allow(dead_code)]
+
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use std::{collections::HashMap, net::SocketAddr};
 
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::{routing::*, Json};
 use shared::models::messages::{ClientHelloRequest, GenericResponse};
 use tower::ServiceBuilder;
@@ -36,7 +38,6 @@ impl AppState {
     pub fn cleanup(&self) {
         trace!("running cleanup");
 
-        // TODO error handling
         let mut clients = self.clients.lock().unwrap();
 
         let now = chrono::Utc::now();
@@ -53,13 +54,14 @@ impl AppState {
                 true
             }
         });
+        trace!("there are now {} clients", clients.len());
     }
 }
 
 async fn client_hello(
     State(state): State<AppState>,
     request: Json<ClientHelloRequest>,
-) -> Json<GenericResponse> {
+) -> Result<Json<GenericResponse>, (StatusCode, Json<GenericResponse>)> {
     info!("request = {request:?}");
 
     let id = Uuid::new_v4();
@@ -70,16 +72,22 @@ async fn client_hello(
         name: request.name.clone(),
         last_seen: chrono::Utc::now(),
     };
-    // TODO error handling
+
     let mut clients = state.clients.lock().unwrap();
+
     if clients.contains_key(&id) {
-        // TODO return error
         error!("already contains key {id}");
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(GenericResponse {
+                message: "failed to make client".into(),
+            }),
+        ));
     }
     clients.insert(id, client);
     trace!("there are now {} clients", clients.len());
 
-    Json(GenericResponse::ok())
+    Ok(Json(GenericResponse::ok()))
 }
 
 #[tokio::main]
@@ -127,13 +135,12 @@ async fn main() {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(2)).await;
-
             state.cleanup();
         }
     });
 
-    axum::Server::bind(&SocketAddr::from_str("127.0.0.1:8001").unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let addr = SocketAddr::from_str("127.0.0.1:8001").unwrap();
+    let server = axum::Server::bind(&addr).serve(app.into_make_service());
+    info!("server started {addr}");
+    server.await.unwrap();
 }
