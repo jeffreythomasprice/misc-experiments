@@ -17,3 +17,8 @@ impl GenericResponse {
 pub struct ClientHelloRequest {
     pub name: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClientHelloResponse {
+    pub id: String,
+}

@@ -1,93 +1,36 @@
 #![allow(dead_code)]
 
-use std::fmt::Debug;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use std::{collections::HashMap, net::SocketAddr};
 
-use axum::extract::State;
-use axum::http::StatusCode;
-use axum::{routing::*, Json};
-use shared::models::messages::{ClientHelloRequest, GenericResponse};
+use std::net::SocketAddr;
+use std::time::Duration;
+
+use axum::extract::FromRef;
+use axum::routing::*;
 use tower::ServiceBuilder;
 use tower_http::{cors, trace::TraceLayer};
 use tracing::*;
 use tracing_subscriber::prelude::*;
-use uuid::Uuid;
 
-struct Client {
-    id: Uuid,
-    name: String,
-    last_seen: chrono::DateTime<chrono::Utc>,
-}
+mod clients;
 
 #[derive(Clone)]
 struct AppState {
-    clients: Arc<Mutex<HashMap<Uuid, Client>>>,
+    clients: clients::Service,
 }
 
-impl Debug for AppState {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AppState").finish()
+impl FromRef<AppState> for clients::Service {
+    fn from_ref(input: &AppState) -> Self {
+        input.clients.clone()
     }
 }
 
 impl AppState {
-    #[instrument]
-    pub fn cleanup(&self) {
-        trace!("running cleanup");
-
-        let mut clients = self.clients.lock().unwrap();
-
-        let now = chrono::Utc::now();
-        let expiry_time = now - chrono::Duration::seconds(10);
-        clients.retain(|id, client| {
-            if client.last_seen < expiry_time {
-                debug!(
-                    "expiring {}, last seen {:?}",
-                    id,
-                    client.last_seen.to_rfc3339()
-                );
-                false
-            } else {
-                true
-            }
-        });
-        trace!("there are now {} clients", clients.len());
+    fn new() -> Self {
+        Self {
+            clients: clients::Service::new(),
+        }
     }
-}
-
-async fn client_hello(
-    State(state): State<AppState>,
-    request: Json<ClientHelloRequest>,
-) -> Result<Json<GenericResponse>, (StatusCode, Json<GenericResponse>)> {
-    info!("request = {request:?}");
-
-    let id = Uuid::new_v4();
-    debug!("assigned id {id}");
-
-    let client = Client {
-        id,
-        name: request.name.clone(),
-        last_seen: chrono::Utc::now(),
-    };
-
-    let mut clients = state.clients.lock().unwrap();
-
-    if clients.contains_key(&id) {
-        error!("already contains key {id}");
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(GenericResponse {
-                message: "failed to make client".into(),
-            }),
-        ));
-    }
-    clients.insert(id, client);
-    trace!("there are now {} clients", clients.len());
-
-    Ok(Json(GenericResponse::ok()))
 }
 
 #[tokio::main]
@@ -95,8 +38,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::from_str(
-                vec![
-                    // defaults first
+                [
                     "info".to_string(),
                     "tower_http=debug".to_string(),
                     "server=debug".to_string(),
@@ -119,12 +61,10 @@ async fn main() {
         .allow_origin(cors::Any)
         .allow_headers(cors::Any);
 
-    let state = AppState {
-        clients: Arc::new(Mutex::new(HashMap::new())),
-    };
+    let mut state = AppState::new();
 
     let app = Router::new()
-        .route("/client", post(client_hello))
+        .route("/client", post(clients::create))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -135,7 +75,7 @@ async fn main() {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(2)).await;
-            state.cleanup();
+            state.clients.cleanup();
         }
     });
 

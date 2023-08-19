@@ -4,7 +4,7 @@ use log::*;
 
 use leptos::*;
 use serde::{de::DeserializeOwned, Serialize};
-use shared::models::messages::{ClientHelloRequest, GenericResponse};
+use shared::models::messages::{ClientHelloRequest, ClientHelloResponse};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::console;
@@ -19,14 +19,13 @@ fn App(cx: Scope) -> impl IntoView {
     let click = move |_| {
         set_count.update(|count| {
             *count += 1;
-            ()
         });
     };
 
     view! {
         cx,
         <div>
-            <p>"Clicks: " {move || count()}</p>
+            <p>"Clicks: " {count}</p>
             <button on:click=click>"Click me!"</button>
         </div>
     }
@@ -47,14 +46,17 @@ fn main() {
 }
 
 async fn example() -> Result<(), JsValue> {
-    let response = client_hello("testing".into()).await?;
+    let response = client_hello(&ClientHelloRequest {
+        name: "my name".to_string(),
+    })
+    .await?;
     info!("TODO JEFF client hello response: {response:?}");
 
     Ok(())
 }
 
-async fn client_hello(name: String) -> Result<GenericResponse, JsValue> {
-    Ok(json_request_response("POST", "/client", &ClientHelloRequest { name }).await?)
+async fn client_hello(request: &ClientHelloRequest) -> Result<ClientHelloResponse, JsValue> {
+    json_request_response("POST", "/client", request).await
 }
 
 async fn json_request_response<RequestType, ResponseType>(
@@ -67,7 +69,7 @@ where
     ResponseType: DeserializeOwned,
 {
     let base_url = "http://127.0.0.1:8001";
-    let url = if uri.starts_with("/") {
+    let url = if uri.starts_with('/') {
         format!("{base_url}{uri}")
     } else {
         format!("{base_url}/{uri}")
