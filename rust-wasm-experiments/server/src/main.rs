@@ -18,14 +18,23 @@ mod models;
 
 #[derive(Clone)]
 struct AppState {
+    auth: auth::Service,
     clients: clients::Service,
 }
 
 impl AppState {
-    fn new() -> Self {
-        Self {
+    fn new() -> Result<Self, String> {
+        Ok(Self {
+            auth: auth::Service::new()
+                .or_else(|e| Err(format!("failed to make auth service: {e:?}")))?,
             clients: clients::Service::new(),
-        }
+        })
+    }
+}
+
+impl FromRef<AppState> for auth::Service {
+    fn from_ref(input: &AppState) -> Self {
+        input.auth.clone()
     }
 }
 
@@ -37,6 +46,8 @@ impl FromRef<AppState> for clients::Service {
 
 #[tokio::main]
 async fn main() {
+    // TODO no unwraps
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::from_str(
@@ -63,16 +74,19 @@ async fn main() {
         .allow_origin(cors::Any)
         .allow_headers(cors::Any);
 
-    let mut state = AppState::new();
+    let mut state = AppState::new().unwrap();
 
     let app = Router::new()
         .nest(
             "/client",
             Router::new()
-                .route("/ws", get(clients::websocket))
                 // everything above here uses auth, below does not
-                .layer(middleware::from_fn(auth::jwt_auth))
-                .route("/", post(clients::create)),
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth::middleware,
+                ))
+                .route("/", post(clients::create))
+                .route("/ws", get(clients::websocket)),
         )
         .layer(
             ServiceBuilder::new()

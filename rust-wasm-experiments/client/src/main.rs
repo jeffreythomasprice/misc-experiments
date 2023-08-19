@@ -4,7 +4,7 @@ use log::*;
 
 use leptos::*;
 use serde::{de::DeserializeOwned, Serialize};
-use shared::models::messages::{CreateClientRequest, CreateClientResponse};
+use shared::models::messages::{ClientWebsocketMessage, CreateClientRequest, CreateClientResponse};
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{console, ErrorEvent, MessageEvent, WebSocket};
@@ -54,7 +54,7 @@ async fn startup() -> Result<(), JsValue> {
     .await?;
     info!("TODO JEFF create client response: {response:?}");
 
-    start_websocket()?;
+    start_websocket(response.token.clone())?;
 
     Ok(())
 }
@@ -91,12 +91,28 @@ where
     Ok(response_body)
 }
 
-fn start_websocket() -> Result<(), JsValue> {
+fn start_websocket(auth_token: String) -> Result<(), JsValue> {
     let ws = WebSocket::new(format!("ws://{HOST}/client/ws").as_str())?;
 
-    let onopen = Closure::<dyn FnMut()>::new(move || {
-        info!("TODO JEFF onopen, implement me");
-    });
+    let onopen = {
+        let ws = ws.clone();
+        Closure::<dyn FnMut()>::new(move || {
+            info!("TODO JEFF onopen, implement me");
+
+            // TODO testing send
+            match serde_json::to_string(&ClientWebsocketMessage::Authenticate {
+                token: auth_token.clone(),
+            }) {
+                Ok(json) => {
+                    if let Err(e) = ws.send_with_str(&json) {
+                        log::error!("error sending message: {e:?}");
+                    }
+                }
+                Err(e) => log::error!("error converting message to string: {e:?}"),
+            };
+            // ws.send_with_str("TODO JEFF testing send").unwrap();
+        })
+    };
     ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
     // forget, to avoid cleaning at the end of the function to js can call this layer
     onopen.forget();
