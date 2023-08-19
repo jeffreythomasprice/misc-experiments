@@ -5,24 +5,20 @@ use std::str::FromStr;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use axum::extract::FromRef;
 use axum::routing::*;
+use axum::{extract::FromRef, middleware};
 use tower::ServiceBuilder;
 use tower_http::{cors, trace::TraceLayer};
 use tracing::*;
 use tracing_subscriber::prelude::*;
 
+mod auth;
 mod clients;
+mod models;
 
 #[derive(Clone)]
 struct AppState {
     clients: clients::Service,
-}
-
-impl FromRef<AppState> for clients::Service {
-    fn from_ref(input: &AppState) -> Self {
-        input.clients.clone()
-    }
 }
 
 impl AppState {
@@ -30,6 +26,12 @@ impl AppState {
         Self {
             clients: clients::Service::new(),
         }
+    }
+}
+
+impl FromRef<AppState> for clients::Service {
+    fn from_ref(input: &AppState) -> Self {
+        input.clients.clone()
     }
 }
 
@@ -64,7 +66,14 @@ async fn main() {
     let mut state = AppState::new();
 
     let app = Router::new()
-        .route("/client", post(clients::create))
+        .nest(
+            "/client",
+            Router::new()
+                .route("/ws", get(clients::websocket))
+                // everything above here uses auth, below does not
+                .layer(middleware::from_fn(auth::jwt_auth))
+                .route("/", post(clients::create)),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

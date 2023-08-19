@@ -4,13 +4,15 @@ use log::*;
 
 use leptos::*;
 use serde::{de::DeserializeOwned, Serialize};
-use shared::models::messages::{ClientHelloRequest, ClientHelloResponse};
-use wasm_bindgen::JsValue;
+use shared::models::messages::{CreateClientRequest, CreateClientResponse};
+use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
-use web_sys::console;
+use web_sys::{console, ErrorEvent, MessageEvent, WebSocket};
 
 mod fetch;
 use fetch::*;
+
+const HOST: &str = "127.0.0.01:8001";
 
 #[component]
 fn App(cx: Scope) -> impl IntoView {
@@ -35,7 +37,7 @@ fn main() {
     console_log::init_with_level(Level::Trace).unwrap();
 
     spawn_local(async {
-        if let Err(e) = example().await {
+        if let Err(e) = startup().await {
             console::log_2(&"error making request".into(), &e);
         }
     });
@@ -45,17 +47,19 @@ fn main() {
     })
 }
 
-async fn example() -> Result<(), JsValue> {
-    let response = client_hello(&ClientHelloRequest {
+async fn startup() -> Result<(), JsValue> {
+    let response = create_client(&CreateClientRequest {
         name: "my name".to_string(),
     })
     .await?;
-    info!("TODO JEFF client hello response: {response:?}");
+    info!("TODO JEFF create client response: {response:?}");
+
+    start_websocket()?;
 
     Ok(())
 }
 
-async fn client_hello(request: &ClientHelloRequest) -> Result<ClientHelloResponse, JsValue> {
+async fn create_client(request: &CreateClientRequest) -> Result<CreateClientResponse, JsValue> {
     json_request_response("POST", "/client", request).await
 }
 
@@ -68,7 +72,7 @@ where
     RequestType: Serialize,
     ResponseType: DeserializeOwned,
 {
-    let base_url = "http://127.0.0.1:8001";
+    let base_url = format!("http://{HOST}");
     let url = if uri.starts_with('/') {
         format!("{base_url}{uri}")
     } else {
@@ -85,4 +89,39 @@ where
         .await?;
     let response_body: ResponseType = response.json().await?;
     Ok(response_body)
+}
+
+fn start_websocket() -> Result<(), JsValue> {
+    let ws = WebSocket::new(format!("ws://{HOST}/client/ws").as_str())?;
+
+    let onopen = Closure::<dyn FnMut()>::new(move || {
+        info!("TODO JEFF onopen, implement me");
+    });
+    ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
+    // forget, to avoid cleaning at the end of the function to js can call this layer
+    onopen.forget();
+
+    let onclose = Closure::<dyn FnMut()>::new(move || {
+        info!("TODO JEFF onclose, implement me");
+    });
+    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
+    // forget, to avoid cleaning at the end of the function to js can call this layer
+    onclose.forget();
+
+    let onmessage = Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
+        info!("TODO JEFF onmessage, implement me, e = {e:?}");
+    });
+    ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+    // forget, to avoid cleaning at the end of the function to js can call this layer
+    onmessage.forget();
+
+    let onerror = Closure::<dyn FnMut(_)>::new(move |e: ErrorEvent| {
+        console::log_2(&"TODO JEFF onerror".into(), &e);
+        log::error!("TODO JEFF onerror, implement me, e = {:?}", e.to_string());
+    });
+    ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+    // forget, to avoid cleaning at the end of the function to js can call this layer
+    onerror.forget();
+
+    Ok(())
 }

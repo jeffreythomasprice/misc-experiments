@@ -14,11 +14,11 @@ impl GenericResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ClientHelloRequest {
+pub struct CreateClientRequest {
     pub name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ClientHelloResponse {
+pub struct CreateClientResponse {
     pub id: String,
 }
