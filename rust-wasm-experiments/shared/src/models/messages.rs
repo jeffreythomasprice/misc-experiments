@@ -40,3 +40,7 @@ impl Debug for CreateClientResponse {
 pub enum ClientWebsocketMessage {
     Authenticate { token: String },
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ServerWebsocketMessage {}

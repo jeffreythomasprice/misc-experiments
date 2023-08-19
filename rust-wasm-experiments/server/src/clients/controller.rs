@@ -1,12 +1,16 @@
+use std::time::Duration;
+
 use axum::{
     extract::{ws::WebSocket, State, WebSocketUpgrade},
-    headers::{authorization::Bearer, Authorization},
     http::StatusCode,
     response::IntoResponse,
-    Json, TypedHeader,
+    Json,
 };
-use futures::{sink::SinkExt, stream::StreamExt};
-use shared::models::messages::{ClientWebsocketMessage, CreateClientRequest, CreateClientResponse};
+use futures::stream::StreamExt;
+use shared::models::messages::{
+    ClientWebsocketMessage, CreateClientRequest, CreateClientResponse, ServerWebsocketMessage,
+};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::*;
 
 use crate::{auth, models::GenericErrorResponse};
@@ -47,60 +51,91 @@ async fn handle_websocket(
     auth_service: auth::Service,
     mut socket: WebSocket,
 ) {
-    let (sender, mut receiver) = socket.split();
+    let (sender, mut receiver) = websocket_to_channels(socket).await;
 
-    // TODO needs sender stuff
-    // let send_task = tokio::spawn(async move {
-    //     loop {
+    let first_message = match tokio::time::timeout(Duration::from_secs(2), receiver.recv()).await {
+        Ok(value) => match value {
+            Some(value) => value,
+            None => {
+                error!("websocket closed before receiving initial message");
+                return;
+            }
+        },
+        Err(_) => {
+            error!("did not receive initial websocket message within timeout");
+            return;
+        }
+    };
 
-    //     }
-    //     });
+    let claims = match first_message {
+        ClientWebsocketMessage::Authenticate { token } => {
+            let claims = match auth_service.validate(&token) {
+                Ok(claims) => claims,
+                Err(e) => {
+                    error!("failed to parse protocol as claims: {e:?}");
+                    return;
+                }
+            };
+            debug!("incoming client jwt claims: {claims:?}");
+            claims
+        }
+    };
 
-    let receiver_task = tokio::spawn(async move {
-        while let Some(msg) = receiver.next().await {
+    // TODO JEFF actually look up client by id
+
+    // TODO JEFF start the main loop, reading messages and handling them, ignore auth messages
+}
+
+async fn websocket_to_channels(
+    socket: WebSocket,
+) -> (
+    Sender<ServerWebsocketMessage>,
+    Receiver<ClientWebsocketMessage>,
+) {
+    let (socket_sender, mut socket_receiver) = socket.split();
+
+    let (incoming_msg_sender, inccoming_msg_receiver) = channel(32);
+    let (outgoing_msg_sender, mut outgoing_msg_receiver) = channel(32);
+
+    let mut sender_task = tokio::spawn(async move {
+        while let Some(msg) = outgoing_msg_receiver.recv().await {
+            // TODO write msg to socket_sender
+        }
+    });
+
+    let mut receiver_task = tokio::spawn(async move {
+        while let Some(msg) = socket_receiver.next().await {
             let msg_bytes = match msg {
                 Ok(msg) => msg.into_data(),
                 Err(e) => {
-                    error!("TODO JEFF error getting message bytes: {e}");
-                    continue;
+                    error!("error getting message bytes: {e}");
+                    return;
                 }
             };
             let msg: ClientWebsocketMessage = match serde_json::from_slice(&msg_bytes) {
                 Ok(value) => value,
                 Err(e) => {
-                    error!("TODO JEFF error parsing message: {e}");
-                    continue;
+                    error!("error parsing message: {e}");
+                    return;
                 }
             };
-            info!("TODO JEFF msg = {msg:?}");
+            if let Err(e) = incoming_msg_sender.send(msg).await {
+                error!("error sending message on: {e:?}");
+                return;
+            }
         }
     });
 
-    // TODO should be using tokio::select! and aborting the other task when the first closes
-    receiver_task.await.unwrap();
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = (&mut sender_task) => {
+                receiver_task.abort();
+            },
+            _ = (&mut receiver_task) => {
+                sender_task.abort();
+            },
+        }
+    });
 
-    // TODO can't read auth header from protocol, but shohuld do something like this on first message
-
-    // let protocol = match socket.protocol() {
-    //     Some(header) => match header.to_str() {
-    //         Ok(header) => header,
-    //         Err(e) => {
-    //             error!("failed to get string value for protocol: {e:?}");
-    //             return;
-    //         }
-    //     },
-    //     None => {
-    //         error!("no protocol provided");
-    //         return;
-    //     }
-    // };
-
-    // let claims = match auth_service.validate(protocol) {
-    //     Ok(claims) => claims,
-    //     Err(e) => {
-    //         error!("failed to parse protocol as claims: {e:?}");
-    //         return;
-    //     }
-    // };
-    // debug!("accepting new client connection: {claims:?}");
+    (outgoing_msg_sender, inccoming_msg_receiver)
 }
