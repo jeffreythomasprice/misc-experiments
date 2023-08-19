@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use shared::models::messages::ServerWebsocketMessage;
+use tokio::sync::mpsc::Sender;
 use tracing::*;
 use uuid::Uuid;
 
@@ -12,6 +14,7 @@ use super::Client;
 #[derive(Debug)]
 pub enum ServiceError {
     DuplicateId(Uuid),
+    NoSuchId(Uuid),
 }
 
 impl Display for ServiceError {
@@ -21,6 +24,7 @@ impl Display for ServiceError {
             "{}",
             match self {
                 ServiceError::DuplicateId(id) => format!("duplicate id {id}"),
+                ServiceError::NoSuchId(id) => format!("no such id {id}"),
             }
         )
     }
@@ -39,6 +43,12 @@ impl Service {
     }
 
     #[instrument]
+    pub fn get_by_id(&self, id: Uuid) -> Option<Client> {
+        let clients = self.clients.lock().unwrap();
+        clients.get(&id).cloned()
+    }
+
+    #[instrument(ret)]
     pub fn create(&mut self, name: String) -> Result<Client, ServiceError> {
         info!("creating new client");
 
@@ -51,6 +61,7 @@ impl Service {
             id,
             name,
             last_seen: chrono::Utc::now(),
+            sender: None,
         };
 
         if clients.contains_key(&id) {
@@ -60,6 +71,41 @@ impl Service {
         clients.insert(id, result.clone());
 
         Ok(result)
+    }
+
+    #[instrument(ret, skip(sender))]
+    pub fn update_with_sender(
+        &mut self,
+        id: Uuid,
+        sender: Sender<ServerWebsocketMessage>,
+    ) -> Result<(), ServiceError> {
+        info!("updating client with sender");
+
+        let mut clients = self.clients.lock().unwrap();
+
+        let client = clients.get_mut(&id).ok_or(ServiceError::NoSuchId(id))?;
+        client.sender = Some(sender);
+
+        Ok(())
+    }
+
+    #[instrument]
+    pub fn update_last_seen_time(&mut self, id: Uuid) -> Result<(), ServiceError> {
+        let mut clients = self.clients.lock().unwrap();
+
+        let client = clients.get_mut(&id).ok_or(ServiceError::NoSuchId(id))?;
+        client.last_seen = chrono::Utc::now();
+
+        Ok(())
+    }
+
+    #[instrument(ret)]
+    pub fn delete(&mut self, id: Uuid) -> Option<Client> {
+        info!("deleting");
+
+        let mut clients = self.clients.lock().unwrap();
+
+        clients.remove(&id)
     }
 
     #[instrument]

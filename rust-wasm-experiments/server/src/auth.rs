@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use axum::{
     extract::State,
     headers::{authorization::Bearer, Authorization},
@@ -14,6 +16,7 @@ use jwt::{SignWithKey, VerifyWithKey};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use tracing::*;
+use uuid::Uuid;
 
 use crate::{
     clients::{self, Client},
@@ -51,6 +54,7 @@ impl From<ValidationError> for GenericErrorResponse {
 impl Service {
     pub fn new() -> Result<Self, InvalidLength> {
         Ok(Self {
+            // TODO should use random bytes
             key: Hmac::<Sha256>::new_from_slice(b"foobar")?,
         })
     }
@@ -61,14 +65,14 @@ impl Service {
         };
         let signed_jwt_string = claims
             .sign_with_key(&self.key)
-            .or_else(|e| Err(SigningError(format!("failed to sign jwt: {e:?}"))))?;
+            .map_err(|e| SigningError(format!("failed to sign jwt: {e:?}")))?;
         Ok(signed_jwt_string)
     }
 
     pub fn validate(&self, token: &str) -> Result<Claims, ValidationError> {
         token
             .verify_with_key(&self.key)
-            .or_else(|e| Err(ValidationError(format!("failed to validate token: {e:?}"))))
+            .map_err(|e| ValidationError(format!("failed to validate token: {e:?}")))
     }
 }
 
@@ -79,22 +83,43 @@ pub async fn middleware<T>(
     request: Request<T>,
     next: Next<T>,
 ) -> Result<Response, GenericErrorResponse> {
-    info!("TODO JEFF should check auth header {:?}", auth);
-
     match auth {
         Some(auth) => {
             let claims = auth_service.validate(auth.token())?;
-            info!("TODO JEFF got claims from auth token: {claims:?}");
-            // TODO look up client from claims
+            trace!("got claims from auth token: {claims:?}");
 
-            let response = next.run(request).await;
-            Ok(response)
+            let id = match Uuid::from_str(&claims.id) {
+                Ok(id) => id,
+                Err(e) => {
+                    error!("error parsing client claims, while parsing id into a uiud: {e:?}");
+                    // TODO deduplicate these
+                    Err(GenericErrorResponse::new(
+                        StatusCode::UNAUTHORIZED,
+                        "unauthorized".into(),
+                    ))?
+                }
+            };
+            debug!("parsed id as uuid: {id}");
+
+            let client = clients_service.get_by_id(id);
+            trace!("got client from claims: {client:?}");
+
+            match client {
+                Some(_) => {
+                    let response = next.run(request).await;
+                    Ok(response)
+                }
+                // TODO deduplicate these
+                None => Err(GenericErrorResponse::new(
+                    StatusCode::UNAUTHORIZED,
+                    "unauthorized".into(),
+                ))?,
+            }
         }
+        // TODO deduplicate these
         None => Err(GenericErrorResponse::new(
             StatusCode::UNAUTHORIZED,
             "unauthorized".into(),
         )),
     }
 }
-
-// TODO an extractor to get client id from auth header

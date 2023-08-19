@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use axum::{
     extract::{ws::WebSocket, State, WebSocketUpgrade},
@@ -6,35 +6,36 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use futures::stream::StreamExt;
-use shared::models::messages::{
-    ClientWebsocketMessage, CreateClientRequest, CreateClientResponse, ServerWebsocketMessage,
-};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tracing::*;
 
-use crate::{auth, models::GenericErrorResponse};
+use shared::models::messages::{ClientWebsocketMessage, CreateClientRequest, CreateClientResponse};
+
+use tracing::*;
+use uuid::Uuid;
+
+use crate::{auth, models::GenericErrorResponse, websockets::websocket_to_channels};
 
 use super::{Service, ServiceError};
 
 impl From<ServiceError> for GenericErrorResponse {
     fn from(value: ServiceError) -> Self {
-        // TODO different status codes for different kinds of errors
-        GenericErrorResponse::new(StatusCode::INTERNAL_SERVER_ERROR, value.to_string())
+        let status_code = match value {
+            ServiceError::DuplicateId(_) => StatusCode::BAD_REQUEST,
+            ServiceError::NoSuchId(_) => StatusCode::NOT_FOUND,
+        };
+        GenericErrorResponse::new(status_code, value.to_string())
     }
 }
 
 pub async fn create(
     State(mut service): State<Service>,
     State(auth_service): State<auth::Service>,
-    // TODO needs extract to get client id from auth header
     request: Json<CreateClientRequest>,
 ) -> Result<Json<CreateClientResponse>, GenericErrorResponse> {
     let result = service.create(request.name.clone())?;
     let token = auth_service.create(&result)?;
     Ok(Json(CreateClientResponse {
         id: result.id.to_string(),
-        token: token,
+        token,
     }))
 }
 
@@ -47,9 +48,9 @@ pub async fn websocket(
 }
 
 async fn handle_websocket(
-    client_service: Service,
+    mut client_service: Service,
     auth_service: auth::Service,
-    mut socket: WebSocket,
+    socket: WebSocket,
 ) {
     let (sender, mut receiver) = websocket_to_channels(socket).await;
 
@@ -72,7 +73,7 @@ async fn handle_websocket(
             let claims = match auth_service.validate(&token) {
                 Ok(claims) => claims,
                 Err(e) => {
-                    error!("failed to parse protocol as claims: {e:?}");
+                    error!("auth token didn't pass validation: {e:?}");
                     return;
                 }
             };
@@ -81,61 +82,52 @@ async fn handle_websocket(
         }
     };
 
-    // TODO JEFF actually look up client by id
-
-    // TODO JEFF start the main loop, reading messages and handling them, ignore auth messages
-}
-
-async fn websocket_to_channels(
-    socket: WebSocket,
-) -> (
-    Sender<ServerWebsocketMessage>,
-    Receiver<ClientWebsocketMessage>,
-) {
-    let (socket_sender, mut socket_receiver) = socket.split();
-
-    let (incoming_msg_sender, inccoming_msg_receiver) = channel(32);
-    let (outgoing_msg_sender, mut outgoing_msg_receiver) = channel(32);
-
-    let mut sender_task = tokio::spawn(async move {
-        while let Some(msg) = outgoing_msg_receiver.recv().await {
-            // TODO write msg to socket_sender
+    let client_id = match Uuid::from_str(&claims.id) {
+        Ok(result) => result,
+        Err(e) => {
+            error!("failed to parse id as uuid: {e:?}");
+            return;
         }
-    });
+    };
+    trace!("id: {client_id}");
+
+    if let Err(e) = client_service.update_with_sender(client_id, sender) {
+        error!("failed to update client with new websocket channel: {e:?}");
+        return;
+    }
+
+    let mut heartbeat_task = {
+        let mut client_service = client_service.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                if let Err(e) = client_service.update_last_seen_time(client_id) {
+                    error!("error trying to update client last seen time: {e}");
+                    return;
+                }
+            }
+        })
+    };
 
     let mut receiver_task = tokio::spawn(async move {
-        while let Some(msg) = socket_receiver.next().await {
-            let msg_bytes = match msg {
-                Ok(msg) => msg.into_data(),
-                Err(e) => {
-                    error!("error getting message bytes: {e}");
-                    return;
+        while let Some(msg) = receiver.recv().await {
+            match msg {
+                ClientWebsocketMessage::Authenticate { token: _ } => {
+                    warn!("client is already connected, extra auth message received: {msg:?}")
                 }
-            };
-            let msg: ClientWebsocketMessage = match serde_json::from_slice(&msg_bytes) {
-                Ok(value) => value,
-                Err(e) => {
-                    error!("error parsing message: {e}");
-                    return;
-                }
-            };
-            if let Err(e) = incoming_msg_sender.send(msg).await {
-                error!("error sending message on: {e:?}");
-                return;
             }
         }
     });
 
     tokio::spawn(async move {
         tokio::select! {
-            _ = (&mut sender_task) => {
+            _ = (&mut heartbeat_task) => {
                 receiver_task.abort();
             },
             _ = (&mut receiver_task) => {
-                sender_task.abort();
+                heartbeat_task.abort();
             },
         }
+        client_service.delete(client_id);
     });
-
-    (outgoing_msg_sender, inccoming_msg_receiver)
 }

@@ -15,6 +15,7 @@ use tracing_subscriber::prelude::*;
 mod auth;
 mod clients;
 mod models;
+mod websockets;
 
 #[derive(Clone)]
 struct AppState {
@@ -26,7 +27,7 @@ impl AppState {
     fn new() -> Result<Self, String> {
         Ok(Self {
             auth: auth::Service::new()
-                .or_else(|e| Err(format!("failed to make auth service: {e:?}")))?,
+                .map_err(|e| format!("failed to make auth service: {e:?}"))?,
             clients: clients::Service::new(),
         })
     }
@@ -46,8 +47,6 @@ impl FromRef<AppState> for clients::Service {
 
 #[tokio::main]
 async fn main() {
-    // TODO no unwraps
-
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::from_str(
@@ -97,7 +96,7 @@ async fn main() {
 
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(30)).await;
             state.clients.cleanup();
         }
     });
