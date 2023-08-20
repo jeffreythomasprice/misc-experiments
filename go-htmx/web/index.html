@@ -7,18 +7,17 @@
 </head>
 
 <body>
-	<p>Hello, World!</p>
-
-	<button
-		hx-put="/api/test"
-		hx-target="#testResults"
+	<input
+		type="text"
+		name="message"
+		hx-post="/api/message"
+		hx-target="#sentLog"
 		hx-swap="beforeend"
-	>
-		PUT /api/test
-	</button>
-	<div id="testResults">
-		initial content where results go
-	</div>
+		hx-on::after-request="this.value = ''"
+		autofocus
+	/>
+
+	<ul id="sentLog"></ul>
 </body>
 
 </html>
