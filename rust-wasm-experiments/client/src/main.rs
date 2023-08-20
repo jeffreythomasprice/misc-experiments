@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use log::*;
 
@@ -66,7 +66,7 @@ fn App(cx: Scope) -> impl IntoView {
 
     let (messages, set_messages) = create_signal(cx, Vec::<MessageWithId>::new());
 
-    let ws = Arc::new(RefCell::<
+    let ws = Rc::new(RefCell::<
         Option<WebSocket<ClientWebsocketMessage, ServerWebsocketMessage>>,
     >::new(None));
 
@@ -99,7 +99,7 @@ fn App(cx: Scope) -> impl IntoView {
 
     let submit = {
         let ws = ws.clone();
-        Arc::new(move || {
+        Rc::new(move || {
             let value = input_value.get();
             set_input_value("".to_string());
             input_node_ref().unwrap().focus().unwrap();
