@@ -149,6 +149,6 @@ async fn handle_websocket(
                 heartbeat_task.abort();
             },
         }
-        client_service.delete(client_id);
+        client_service.delete(client_id).await;
     });
 }
