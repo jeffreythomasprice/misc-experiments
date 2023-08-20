@@ -11,6 +11,7 @@ serde-wasm-bindgen = "0.5.0"
 serde_json = "1.0.105"
 wasm-bindgen = "0.2.87"
 wasm-bindgen-futures = "0.4.37"
-web-sys = { version = "0.3.64", features = ["console", "Request", "RequestInit", "Response", "RequestMode", "Headers", "WebSocket"] }
+web-sys = { version = "0.3.64", features = ["console", "Request", "RequestInit", "Response", "RequestMode", "Headers", "WebSocket", "Blob"] }
 shared = { path = "../shared" }
 leptos = { version = "0.4.8", features = ["csr", "nightly"] }
+js-sys = "0.3.64"

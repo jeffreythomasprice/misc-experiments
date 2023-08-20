@@ -69,7 +69,7 @@ async fn handle_websocket(
     };
 
     let claims = match first_message {
-        ClientWebsocketMessage::Authenticate { token } => {
+        ClientWebsocketMessage::Authenticate(token) => {
             let claims = match auth_service.validate(&token) {
                 Ok(claims) => claims,
                 Err(e) => {
@@ -79,6 +79,10 @@ async fn handle_websocket(
             };
             debug!("incoming client jwt claims: {claims:?}");
             claims
+        }
+        _ => {
+            error!("first message wasn't an auth token");
+            return;
         }
     };
 
@@ -112,8 +116,11 @@ async fn handle_websocket(
     let mut receiver_task = tokio::spawn(async move {
         while let Some(msg) = receiver.recv().await {
             match msg {
-                ClientWebsocketMessage::Authenticate { token: _ } => {
+                ClientWebsocketMessage::Authenticate(_) => {
                     warn!("client is already connected, extra auth message received: {msg:?}")
+                }
+                ClientWebsocketMessage::Message(message) => {
+                    info!("TODO JEFF handle client message: {message}");
                 }
             }
         }

@@ -1,16 +1,30 @@
 #![allow(dead_code)]
 
+use std::{
+    cell::RefCell,
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc, Condvar, Mutex,
+    },
+};
+
 use log::*;
 
 use leptos::{html::Input, *};
 use serde::{de::DeserializeOwned, Serialize};
-use shared::models::messages::{ClientWebsocketMessage, CreateClientRequest, CreateClientResponse};
+use shared::models::messages::{
+    ClientWebsocketMessage, CreateClientRequest, CreateClientResponse, ServerWebsocketMessage,
+};
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{console, ErrorEvent, Event, KeyboardEvent, MessageEvent, WebSocket};
+use web_sys::{console, ErrorEvent, Event, KeyboardEvent, MessageEvent};
 
 mod fetch;
 use fetch::*;
+
+use crate::websockets::WebSocket;
+
+mod websockets;
 
 const HOST: &str = "127.0.0.01:8001";
 
@@ -19,35 +33,64 @@ fn App(cx: Scope) -> impl IntoView {
     let input_node_ref: NodeRef<Input> = create_node_ref(cx);
     let (input_value, set_input_value) = create_signal(cx, "".to_string());
 
+    let ws = Arc::new(RefCell::<
+        Option<WebSocket<ClientWebsocketMessage, ServerWebsocketMessage>>,
+    >::new(None));
+
+    {
+        let ws = ws.clone();
+        spawn_local(async move {
+            match open_websocket("default initial name").await {
+                Ok(result) => {
+                    ws.replace(Some(result));
+                }
+                Err(e) => log::error!("error getting websocket: {e:?}"),
+            };
+        });
+    }
+
     input_node_ref.on_load(cx, |input| {
         spawn_local(async move {
             input.focus().unwrap();
         });
     });
 
-    let submit = move || {
-        let value = input_value.get();
-        set_input_value("".to_string());
-        input_node_ref().unwrap().focus().unwrap();
+    let submit = {
+        let ws = ws.clone();
+        Arc::new(move || {
+            let value = input_value.get();
+            set_input_value("".to_string());
+            input_node_ref().unwrap().focus().unwrap();
 
-        if value.len() > 0 {
-            info!("TODO JEFF submit text: {value}");
-        }
+            if value.len() > 0 {
+                if let Some(ws) = &*ws.borrow() {
+                    if let Err(e) = ws.send(ClientWebsocketMessage::Message(value)) {
+                        log::error!("error sending websocket message: {e:?}");
+                    }
+                }
+            }
+        })
     };
 
     let input_change = move |e| {
         set_input_value(event_target_value(&e));
     };
 
-    let input_key_press = move |e: KeyboardEvent| {
-        // enter
-        if e.key_code() == 13 {
-            submit();
+    let input_key_press = {
+        let submit = submit.clone();
+        move |e: KeyboardEvent| {
+            // enter
+            if e.key_code() == 13 {
+                submit();
+            }
         }
     };
 
-    let submit_button_click = move |_| {
-        submit();
+    let submit_button_click = {
+        let submit = submit.clone();
+        move |_| {
+            submit();
+        }
     };
 
     view! {
@@ -70,28 +113,50 @@ fn App(cx: Scope) -> impl IntoView {
 
 fn main() {
     console_log::init_with_level(Level::Trace).unwrap();
-
-    spawn_local(async {
-        if let Err(e) = startup().await {
-            console::log_2(&"error making request".into(), &e);
-        }
-    });
-
     mount_to_body(|cx| {
         view! {cx, <App/>}
     })
 }
 
-async fn startup() -> Result<(), JsValue> {
-    let response = create_client(&CreateClientRequest {
-        name: "my name".to_string(),
+struct WebSocketEventHandler {}
+
+impl websockets::EventHandler<ServerWebsocketMessage> for WebSocketEventHandler {
+    fn onopen(&self) {
+        info!("TODO JEFF onopen");
+    }
+
+    fn onclose(&self) {
+        info!("TODO JEFF onclose");
+    }
+
+    fn onerror(&self) {
+        log::error!("TODO JEFF onerror");
+    }
+
+    fn onmessage(&self, message: ServerWebsocketMessage) {
+        info!("TODO JEFF onmessage: {message:?}");
+    }
+}
+
+async fn open_websocket(
+    name: &str,
+) -> Result<WebSocket<ClientWebsocketMessage, ServerWebsocketMessage>, JsValue> {
+    let client = create_client(&CreateClientRequest {
+        name: name.to_string(),
     })
     .await?;
-    info!("TODO JEFF create client response: {response:?}");
-
-    start_websocket(response.token.clone())?;
-
-    Ok(())
+    let ws = WebSocket::new(
+        format!("ws://{HOST}/client/ws").as_str(),
+        WebSocketEventHandler {},
+    )
+    .await?;
+    match ws.send(ClientWebsocketMessage::Authenticate(client.token)) {
+        Ok(_) => Ok(ws),
+        Err(e) => {
+            ws.close();
+            Err(format!("error sending auth message: {e:?}").into())
+        }
+    }
 }
 
 async fn create_client(request: &CreateClientRequest) -> Result<CreateClientResponse, JsValue> {
@@ -124,55 +189,4 @@ where
         .await?;
     let response_body: ResponseType = response.json().await?;
     Ok(response_body)
-}
-
-fn start_websocket(auth_token: String) -> Result<(), JsValue> {
-    let ws = WebSocket::new(format!("ws://{HOST}/client/ws").as_str())?;
-
-    let onopen = {
-        let ws = ws.clone();
-        Closure::<dyn FnMut()>::new(move || {
-            info!("TODO JEFF onopen, implement me");
-
-            // TODO testing send
-            match serde_json::to_string(&ClientWebsocketMessage::Authenticate {
-                token: auth_token.clone(),
-            }) {
-                Ok(json) => {
-                    if let Err(e) = ws.send_with_str(&json) {
-                        log::error!("error sending message: {e:?}");
-                    }
-                }
-                Err(e) => log::error!("error converting message to string: {e:?}"),
-            };
-            // ws.send_with_str("TODO JEFF testing send").unwrap();
-        })
-    };
-    ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
-    // forget, to avoid cleaning at the end of the function to js can call this layer
-    onopen.forget();
-
-    let onclose = Closure::<dyn FnMut()>::new(move || {
-        info!("TODO JEFF onclose, implement me");
-    });
-    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
-    // forget, to avoid cleaning at the end of the function to js can call this layer
-    onclose.forget();
-
-    let onmessage = Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
-        info!("TODO JEFF onmessage, implement me, e = {e:?}");
-    });
-    ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-    // forget, to avoid cleaning at the end of the function to js can call this layer
-    onmessage.forget();
-
-    let onerror = Closure::<dyn FnMut(_)>::new(move |e: ErrorEvent| {
-        console::log_2(&"TODO JEFF onerror".into(), &e);
-        log::error!("TODO JEFF onerror, implement me, e = {:?}", e.to_string());
-    });
-    ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
-    // forget, to avoid cleaning at the end of the function to js can call this layer
-    onerror.forget();
-
-    Ok(())
 }

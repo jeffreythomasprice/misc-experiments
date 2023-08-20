@@ -36,11 +36,10 @@ impl Debug for CreateClientResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
 pub enum ClientWebsocketMessage {
-    Authenticate { token: String },
+    Authenticate(String),
+    Message(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
 pub enum ServerWebsocketMessage {}

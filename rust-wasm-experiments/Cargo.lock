@@ -314,6 +314,7 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "console_log",
+ "js-sys",
  "leptos",
  "log",
  "serde",
