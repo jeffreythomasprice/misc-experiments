@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
 
 use log::*;
 
@@ -9,6 +9,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use shared::models::messages::{
     ClientWebsocketMessage, CreateClientRequest, CreateClientResponse, ServerWebsocketMessage,
 };
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::KeyboardEvent;
@@ -25,32 +26,6 @@ const HOST: &str = "127.0.0.1:8001";
 #[derive(Debug, Clone)]
 struct MessageWithId(u32, ServerWebsocketMessage);
 
-#[derive(Clone)]
-struct WebSocketEventHandler {
-    onmessage_callback: Arc<Box<dyn Fn(MessageWithId)>>,
-    next_id: u32,
-}
-
-impl websockets::EventHandler<ServerWebsocketMessage> for WebSocketEventHandler {
-    fn onopen(&mut self) {
-        info!("TODO JEFF onopen");
-    }
-
-    fn onclose(&mut self) {
-        info!("TODO JEFF onclose");
-    }
-
-    fn onerror(&mut self) {
-        log::error!("TODO JEFF onerror");
-    }
-
-    fn onmessage(&mut self, message: ServerWebsocketMessage) {
-        let f = &*self.onmessage_callback;
-        f(MessageWithId(self.next_id, message));
-        self.next_id += 1;
-    }
-}
-
 #[component]
 fn Message(cx: Scope, message: ServerWebsocketMessage) -> impl IntoView {
     view! {
@@ -66,25 +41,24 @@ fn App(cx: Scope) -> impl IntoView {
 
     let (messages, set_messages) = create_signal(cx, Vec::<MessageWithId>::new());
 
-    let ws = Rc::new(RefCell::<
-        Option<WebSocket<ClientWebsocketMessage, ServerWebsocketMessage>>,
-    >::new(None));
+    let ws = Rc::new(RefCell::<Option<Sender<ClientWebsocketMessage>>>::new(None));
 
     {
         let ws = ws.clone();
         spawn_local(async move {
-            let event_handler = WebSocketEventHandler {
-                onmessage_callback: Arc::new(Box::new(move |msg| {
-                    info!("TODO JEFF callback for msg: {msg:?}");
-                    set_messages.update(|messages| {
-                        messages.push(msg);
+            match open_websocket("default initial name").await {
+                Ok((sender, mut receiver)) => {
+                    ws.replace(Some(sender));
+
+                    spawn_local(async move {
+                        let mut next_id = 0;
+                        while let Some(msg) = receiver.recv().await {
+                            set_messages.update(|messages| {
+                                messages.push(MessageWithId(next_id, msg));
+                            });
+                            next_id += 1;
+                        }
                     });
-                })),
-                next_id: 0,
-            };
-            match open_websocket("default initial name", event_handler).await {
-                Ok(result) => {
-                    ws.replace(Some(result));
                 }
                 Err(e) => log::error!("error getting websocket: {e:?}"),
             };
@@ -105,11 +79,14 @@ fn App(cx: Scope) -> impl IntoView {
             input_node_ref().unwrap().focus().unwrap();
 
             if !value.is_empty() {
-                if let Some(ws) = &*ws.borrow() {
-                    if let Err(e) = ws.send(ClientWebsocketMessage::Message(value)) {
-                        log::error!("error sending websocket message: {e:?}");
+                let ws = ws.clone();
+                spawn_local(async move {
+                    if let Some(ws) = &*ws.borrow() {
+                        if let Err(e) = ws.send(ClientWebsocketMessage::Message(value)).await {
+                            log::error!("error sending websocket message: {e:?}");
+                        }
                     }
-                }
+                });
             }
         })
     };
@@ -167,20 +144,24 @@ fn main() {
 
 async fn open_websocket(
     name: &str,
-    event_handler: WebSocketEventHandler,
-) -> Result<WebSocket<ClientWebsocketMessage, ServerWebsocketMessage>, JsValue> {
+) -> Result<
+    (
+        Sender<ClientWebsocketMessage>,
+        Receiver<ServerWebsocketMessage>,
+    ),
+    JsValue,
+> {
     let client = create_client(&CreateClientRequest {
         name: name.to_string(),
     })
     .await?;
-    let ws = WebSocket::new(format!("ws://{HOST}/client/ws").as_str(), event_handler).await?;
-    match ws.send(ClientWebsocketMessage::Authenticate(client.token)) {
-        Ok(_) => Ok(ws),
-        Err(e) => {
-            ws.close();
-            Err(format!("error sending auth message: {e:?}").into())
-        }
-    }
+    let (sender, receiver) =
+        WebSocket::new_channels(format!("ws://{HOST}/client/ws").as_str()).await?;
+    sender
+        .send(ClientWebsocketMessage::Authenticate(client.token))
+        .await
+        .or_else(|e| Err::<_, JsValue>(format!("error sending auth message: {e:?}").into()))?;
+    Ok((sender, receiver))
 }
 
 async fn create_client(request: &CreateClientRequest) -> Result<CreateClientResponse, JsValue> {

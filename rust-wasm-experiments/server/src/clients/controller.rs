@@ -124,7 +124,7 @@ async fn handle_websocket(
                         warn!("client is already connected, extra auth message received: {msg:?}")
                     }
                     ClientWebsocketMessage::Message(message) => {
-                        info!("TODO JEFF message: {message}");
+                        trace!("message: {message}");
                         let client_service = client_service.clone();
                         tokio::spawn(async move {
                             client_service

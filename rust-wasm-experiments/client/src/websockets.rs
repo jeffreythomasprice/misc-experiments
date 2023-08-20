@@ -1,9 +1,9 @@
-use std::{cell::RefCell, marker::PhantomData, sync::Arc};
-
+use log::*;
 use serde::{de::DeserializeOwned, Serialize};
-
+use std::{cell::RefCell, marker::PhantomData, sync::Arc};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
-use wasm_bindgen_futures::JsFuture;
+use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{ErrorEvent, MessageEvent};
 
 pub trait EventHandler<MessageType> {
@@ -28,11 +28,65 @@ pub enum SendError {
     Serialize(serde_json::Error),
 }
 
+struct CallbackEventHandler<MessageType> {
+    onmessage_callback: Arc<Box<dyn Fn(MessageType)>>,
+}
+
+impl<MessageType> EventHandler<MessageType> for CallbackEventHandler<MessageType> {
+    fn onopen(&mut self) {}
+
+    fn onclose(&mut self) {}
+
+    fn onerror(&mut self) {}
+
+    fn onmessage(&mut self, message: MessageType) {
+        let f = &*self.onmessage_callback;
+        f(message);
+    }
+}
+
 impl<SenderType, ReceiverType> WebSocket<SenderType, ReceiverType>
 where
     SenderType: Serialize,
     ReceiverType: DeserializeOwned,
 {
+    pub async fn new_channels(
+        url: &str,
+    ) -> Result<(Sender<SenderType>, Receiver<ReceiverType>), JsValue>
+    where
+        SenderType: 'static,
+        ReceiverType: 'static,
+    {
+        let (incoming_msg_sender, incoming_msg_receiver) = channel(32);
+        let (outgoing_msg_sender, mut outgoing_msg_receiver) = channel(32);
+
+        let ws = WebSocket::new(
+            url,
+            CallbackEventHandler {
+                onmessage_callback: Arc::new(Box::new(move |msg| {
+                    let incoming_msg_sender = incoming_msg_sender.clone();
+                    spawn_local(async move {
+                        if let Err(e) = incoming_msg_sender.send(msg).await {
+                            error!("error writing incoming websocket message to channel: {e:?}");
+                        }
+                    });
+                })),
+            },
+        )
+        .await?;
+
+        spawn_local(async move {
+            while let Some(msg) = outgoing_msg_receiver.recv().await {
+                if let Err(e) = ws.send(msg) {
+                    error!("error writing outgoing message to websocket: {e:?}");
+                    return;
+                }
+            }
+        });
+
+        Ok((outgoing_msg_sender, incoming_msg_receiver))
+    }
+
     pub async fn new(
         url: &str,
         event_handler: impl EventHandler<ReceiverType> + 'static,
