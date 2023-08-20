@@ -1,13 +1,9 @@
-use std::{
-    cell::RefCell,
-    marker::PhantomData,
-    sync::{Arc, Condvar, Mutex},
-};
+use std::{marker::PhantomData, sync::Arc};
 
 use serde::{de::DeserializeOwned, Serialize};
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
-use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Blob, ErrorEvent, MessageEvent};
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{ErrorEvent, MessageEvent};
 
 pub trait EventHandler<MessageType> {
     fn onopen(&self);
@@ -77,13 +73,13 @@ where
             onerror.forget();
 
             let onmessage = {
-                let event_handler = event_handler.clone();
+                let _event_handler = event_handler.clone();
                 Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
-                    if let Ok(buf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
+                    if let Ok(_buf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
                         todo!("TODO handle array buffer case");
-                    } else if let Ok(blob) = e.data().dyn_into::<web_sys::Blob>() {
+                    } else if let Ok(_blob) = e.data().dyn_into::<web_sys::Blob>() {
                         todo!("TODO handle blob case");
-                    } else if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
+                    } else if let Ok(_text) = e.data().dyn_into::<js_sys::JsString>() {
                         todo!("TODO handle text case");
                     }
                     // event_handler.onmessage(e);
@@ -106,12 +102,10 @@ where
     }
 
     pub fn send(&self, message: SenderType) -> Result<(), SendError> {
-        Ok(match serde_json::to_string(&message) {
-            Ok(text) => self
-                .ws
-                .send_with_str(&text)
-                .or_else(|e| Err(SendError::Js(e)))?,
+        match serde_json::to_string(&message) {
+            Ok(text) => self.ws.send_with_str(&text).map_err(SendError::Js)?,
             Err(e) => Err(SendError::Serialize(e))?,
-        })
+        };
+        Ok(())
     }
 }

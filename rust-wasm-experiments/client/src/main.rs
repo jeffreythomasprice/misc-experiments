@@ -1,12 +1,6 @@
 #![allow(dead_code)]
 
-use std::{
-    cell::RefCell,
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc, Condvar, Mutex,
-    },
-};
+use std::{cell::RefCell, sync::Arc};
 
 use log::*;
 
@@ -15,9 +9,9 @@ use serde::{de::DeserializeOwned, Serialize};
 use shared::models::messages::{
     ClientWebsocketMessage, CreateClientRequest, CreateClientResponse, ServerWebsocketMessage,
 };
-use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{console, ErrorEvent, Event, KeyboardEvent, MessageEvent};
+use web_sys::KeyboardEvent;
 
 mod fetch;
 use fetch::*;
@@ -62,7 +56,7 @@ fn App(cx: Scope) -> impl IntoView {
             set_input_value("".to_string());
             input_node_ref().unwrap().focus().unwrap();
 
-            if value.len() > 0 {
+            if !value.is_empty() {
                 if let Some(ws) = &*ws.borrow() {
                     if let Err(e) = ws.send(ClientWebsocketMessage::Message(value)) {
                         log::error!("error sending websocket message: {e:?}");
