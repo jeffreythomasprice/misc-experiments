@@ -7,7 +7,9 @@ use axum::{
     Json,
 };
 
-use shared::models::messages::{ClientWebsocketMessage, CreateClientRequest, CreateClientResponse};
+use shared::models::messages::{
+    ClientWebsocketMessage, CreateClientRequest, CreateClientResponse, ServerWebsocketMessage,
+};
 
 use tracing::*;
 use uuid::Uuid;
@@ -31,7 +33,7 @@ pub async fn create(
     State(auth_service): State<auth::Service>,
     request: Json<CreateClientRequest>,
 ) -> Result<Json<CreateClientResponse>, GenericErrorResponse> {
-    let result = service.create(request.name.clone())?;
+    let result = service.create(request.name.clone()).await?;
     let token = auth_service.create(&result)?;
     Ok(Json(CreateClientResponse {
         id: result.id.to_string(),
@@ -95,7 +97,7 @@ async fn handle_websocket(
     };
     trace!("id: {client_id}");
 
-    if let Err(e) = client_service.update_with_sender(client_id, sender) {
+    if let Err(e) = client_service.update_with_sender(client_id, sender).await {
         error!("failed to update client with new websocket channel: {e:?}");
         return;
     }
@@ -105,7 +107,7 @@ async fn handle_websocket(
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(5)).await;
-                if let Err(e) = client_service.update_last_seen_time(client_id) {
+                if let Err(e) = client_service.update_last_seen_time(client_id).await {
                     error!("error trying to update client last seen time: {e}");
                     return;
                 }
@@ -113,18 +115,30 @@ async fn handle_websocket(
         })
     };
 
-    let mut receiver_task = tokio::spawn(async move {
-        while let Some(msg) = receiver.recv().await {
-            match msg {
-                ClientWebsocketMessage::Authenticate(_) => {
-                    warn!("client is already connected, extra auth message received: {msg:?}")
-                }
-                ClientWebsocketMessage::Message(message) => {
-                    info!("TODO JEFF handle client message: {message}");
+    let mut receiver_task = {
+        let client_service = client_service.clone();
+        tokio::spawn(async move {
+            while let Some(msg) = receiver.recv().await {
+                match msg {
+                    ClientWebsocketMessage::Authenticate(_) => {
+                        warn!("client is already connected, extra auth message received: {msg:?}")
+                    }
+                    ClientWebsocketMessage::Message(message) => {
+                        info!("TODO JEFF message: {message}");
+                        let client_service = client_service.clone();
+                        tokio::spawn(async move {
+                            client_service
+                                .broadcast(ServerWebsocketMessage::Message {
+                                    sender_id: client_id.to_string(),
+                                    message,
+                                })
+                                .await;
+                        });
+                    }
                 }
             }
-        }
-    });
+        })
+    };
 
     tokio::spawn(async move {
         tokio::select! {

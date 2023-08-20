@@ -41,5 +41,7 @@ pub enum ClientWebsocketMessage {
     Message(String),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum ServerWebsocketMessage {}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ServerWebsocketMessage {
+    Message { sender_id: String, message: String },
+}

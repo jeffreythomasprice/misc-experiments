@@ -1,11 +1,12 @@
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
+use futures::future::join_all;
 use shared::models::messages::ServerWebsocketMessage;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc::Sender, Mutex};
 use tracing::*;
 use uuid::Uuid;
 
@@ -43,16 +44,17 @@ impl Service {
     }
 
     #[instrument]
-    pub fn get_by_id(&self, id: Uuid) -> Option<Client> {
-        let clients = self.clients.lock().unwrap();
+    pub async fn get_by_id(&self, id: Uuid) -> Option<Client> {
+        let clients = self.clients.lock().await;
+
         clients.get(&id).cloned()
     }
 
     #[instrument(ret)]
-    pub fn create(&mut self, name: String) -> Result<Client, ServiceError> {
+    pub async fn create(&mut self, name: String) -> Result<Client, ServiceError> {
         info!("creating new client");
 
-        let mut clients = self.clients.lock().unwrap();
+        let mut clients = self.clients.lock().await;
 
         let id = Uuid::new_v4();
         debug!("assigned id {id}");
@@ -74,14 +76,14 @@ impl Service {
     }
 
     #[instrument(ret, skip(sender))]
-    pub fn update_with_sender(
+    pub async fn update_with_sender(
         &mut self,
         id: Uuid,
         sender: Sender<ServerWebsocketMessage>,
     ) -> Result<(), ServiceError> {
         info!("updating client with sender");
 
-        let mut clients = self.clients.lock().unwrap();
+        let mut clients = self.clients.lock().await;
 
         let client = clients.get_mut(&id).ok_or(ServiceError::NoSuchId(id))?;
         client.sender = Some(sender);
@@ -90,8 +92,8 @@ impl Service {
     }
 
     #[instrument]
-    pub fn update_last_seen_time(&mut self, id: Uuid) -> Result<(), ServiceError> {
-        let mut clients = self.clients.lock().unwrap();
+    pub async fn update_last_seen_time(&mut self, id: Uuid) -> Result<(), ServiceError> {
+        let mut clients = self.clients.lock().await;
 
         let client = clients.get_mut(&id).ok_or(ServiceError::NoSuchId(id))?;
         client.last_seen = chrono::Utc::now();
@@ -100,19 +102,19 @@ impl Service {
     }
 
     #[instrument(ret)]
-    pub fn delete(&mut self, id: Uuid) -> Option<Client> {
+    pub async fn delete(&mut self, id: Uuid) -> Option<Client> {
         info!("deleting");
 
-        let mut clients = self.clients.lock().unwrap();
+        let mut clients = self.clients.lock().await;
 
         clients.remove(&id)
     }
 
     #[instrument]
-    pub fn cleanup(&mut self) {
+    pub async fn cleanup(&mut self) {
         trace!("running cleanup");
 
-        let mut clients = self.clients.lock().unwrap();
+        let mut clients = self.clients.lock().await;
 
         let now = chrono::Utc::now();
         let expiry_time = now - chrono::Duration::seconds(10);
@@ -130,6 +132,28 @@ impl Service {
             }
         });
         trace!("there are now {} clients", clients.len());
+    }
+
+    #[instrument]
+    pub async fn broadcast(&self, message: ServerWebsocketMessage) {
+        debug!("broadcasting {message:?}");
+
+        let clients = self.clients.lock().await;
+
+        join_all(clients.values().flat_map(|client| {
+            if let Some(sender) = &client.sender {
+                let sender = sender.clone();
+                let message = message.clone();
+                Some(async move {
+                    if let Err(e) = sender.send(message).await {
+                        error!("client {client:?} failed to send: {e:?}");
+                    }
+                })
+            } else {
+                None
+            }
+        }))
+        .await;
     }
 }
 

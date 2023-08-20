@@ -97,7 +97,7 @@ async fn main() {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(30)).await;
-            state.clients.cleanup();
+            state.clients.cleanup().await;
         }
     });
 

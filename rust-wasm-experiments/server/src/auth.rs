@@ -101,7 +101,7 @@ pub async fn middleware<T>(
             };
             debug!("parsed id as uuid: {id}");
 
-            let client = clients_service.get_by_id(id);
+            let client = clients_service.get_by_id(id).await;
             trace!("got client from claims: {client:?}");
 
             match client {

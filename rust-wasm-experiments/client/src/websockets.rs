@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use serde::{de::DeserializeOwned, Serialize};
+
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{ErrorEvent, MessageEvent};
@@ -73,16 +74,22 @@ where
             onerror.forget();
 
             let onmessage = {
-                let _event_handler = event_handler.clone();
+                let event_handler = event_handler.clone();
                 Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
                     if let Ok(_buf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
-                        todo!("TODO handle array buffer case");
+                        log::info!("TODO handle array buffer case");
                     } else if let Ok(_blob) = e.data().dyn_into::<web_sys::Blob>() {
-                        todo!("TODO handle blob case");
-                    } else if let Ok(_text) = e.data().dyn_into::<js_sys::JsString>() {
-                        todo!("TODO handle text case");
+                        log::info!("TODO handle blob case");
+                    } else if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
+                        let text: String = text.into();
+                        match serde_json::from_str(&text) {
+                            Ok(msg) => event_handler.onmessage(msg),
+                            Err(e) => {
+                                // TODO also send some event to the event handler
+                                log::error!("error deserializing message: {e:?}");
+                            }
+                        }
                     }
-                    // event_handler.onmessage(e);
                 })
             };
             ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
