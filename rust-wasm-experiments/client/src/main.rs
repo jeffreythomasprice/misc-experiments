@@ -2,12 +2,12 @@
 
 use log::*;
 
-use leptos::*;
+use leptos::{html::Input, *};
 use serde::{de::DeserializeOwned, Serialize};
 use shared::models::messages::{ClientWebsocketMessage, CreateClientRequest, CreateClientResponse};
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{console, ErrorEvent, MessageEvent, WebSocket};
+use web_sys::{console, ErrorEvent, Event, KeyboardEvent, MessageEvent, WebSocket};
 
 mod fetch;
 use fetch::*;
@@ -16,19 +16,54 @@ const HOST: &str = "127.0.0.01:8001";
 
 #[component]
 fn App(cx: Scope) -> impl IntoView {
-    let (count, set_count) = create_signal(cx, 0);
+    let input_node_ref: NodeRef<Input> = create_node_ref(cx);
+    let (input_value, set_input_value) = create_signal(cx, "".to_string());
 
-    let click = move |_| {
-        set_count.update(|count| {
-            *count += 1;
+    input_node_ref.on_load(cx, |input| {
+        spawn_local(async move {
+            input.focus().unwrap();
         });
+    });
+
+    let submit = move || {
+        let value = input_value.get();
+        set_input_value("".to_string());
+        input_node_ref().unwrap().focus().unwrap();
+
+        if value.len() > 0 {
+            info!("TODO JEFF submit text: {value}");
+        }
+    };
+
+    let input_change = move |e| {
+        set_input_value(event_target_value(&e));
+    };
+
+    let input_key_press = move |e: KeyboardEvent| {
+        // enter
+        if e.key_code() == 13 {
+            submit();
+        }
+    };
+
+    let submit_button_click = move |_| {
+        submit();
     };
 
     view! {
         cx,
         <div>
-            <p>"Clicks: " {count}</p>
-            <button on:click=click>"Click me!"</button>
+            <div>
+                <input
+                    node_ref=input_node_ref
+                    type="text"
+                    width="100"
+                    on:input=input_change
+                    on:keypress=input_key_press
+                    prop:value=input_value
+                />
+                <button on:click=submit_button_click>Submit</button>
+            </div>
         </div>
     }
 }
