@@ -95,8 +95,9 @@ async fn main() {
         .with_state(state.clone());
 
     tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
-            tokio::time::sleep(Duration::from_secs(30)).await;
+            interval.tick().await;
             state.clients.cleanup().await;
         }
     });

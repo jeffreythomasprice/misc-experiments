@@ -20,12 +20,51 @@ use crate::websockets::WebSocket;
 
 mod websockets;
 
-const HOST: &str = "127.0.0.01:8001";
+const HOST: &str = "127.0.0.1:8001";
+
+#[derive(Debug, Clone)]
+struct MessageWithId(u32, ServerWebsocketMessage);
+
+#[derive(Clone)]
+struct WebSocketEventHandler {
+    onmessage_callback: Arc<Box<dyn Fn(MessageWithId)>>,
+    next_id: u32,
+}
+
+impl websockets::EventHandler<ServerWebsocketMessage> for WebSocketEventHandler {
+    fn onopen(&mut self) {
+        info!("TODO JEFF onopen");
+    }
+
+    fn onclose(&mut self) {
+        info!("TODO JEFF onclose");
+    }
+
+    fn onerror(&mut self) {
+        log::error!("TODO JEFF onerror");
+    }
+
+    fn onmessage(&mut self, message: ServerWebsocketMessage) {
+        let f = &*self.onmessage_callback;
+        f(MessageWithId(self.next_id, message));
+        self.next_id += 1;
+    }
+}
+
+#[component]
+fn Message(cx: Scope, message: ServerWebsocketMessage) -> impl IntoView {
+    view! {
+        cx,
+        <div>{format!("{message:?}")}</div>
+    }
+}
 
 #[component]
 fn App(cx: Scope) -> impl IntoView {
     let input_node_ref: NodeRef<Input> = create_node_ref(cx);
     let (input_value, set_input_value) = create_signal(cx, "".to_string());
+
+    let (messages, set_messages) = create_signal(cx, Vec::<MessageWithId>::new());
 
     let ws = Arc::new(RefCell::<
         Option<WebSocket<ClientWebsocketMessage, ServerWebsocketMessage>>,
@@ -34,7 +73,16 @@ fn App(cx: Scope) -> impl IntoView {
     {
         let ws = ws.clone();
         spawn_local(async move {
-            match open_websocket("default initial name").await {
+            let event_handler = WebSocketEventHandler {
+                onmessage_callback: Arc::new(Box::new(move |msg| {
+                    info!("TODO JEFF callback for msg: {msg:?}");
+                    set_messages.update(|messages| {
+                        messages.push(msg);
+                    });
+                })),
+                next_id: 0,
+            };
+            match open_websocket("default initial name", event_handler).await {
                 Ok(result) => {
                     ws.replace(Some(result));
                 }
@@ -101,6 +149,11 @@ fn App(cx: Scope) -> impl IntoView {
                 />
                 <button on:click=submit_button_click>Submit</button>
             </div>
+            <For
+                each=messages
+                key=|message| { message.0 }
+                view=move |cx, msg| view! {cx, <Message message=msg.1/>}
+            />
         </div>
     }
 }
@@ -112,38 +165,15 @@ fn main() {
     })
 }
 
-struct WebSocketEventHandler {}
-
-impl websockets::EventHandler<ServerWebsocketMessage> for WebSocketEventHandler {
-    fn onopen(&self) {
-        info!("TODO JEFF onopen");
-    }
-
-    fn onclose(&self) {
-        info!("TODO JEFF onclose");
-    }
-
-    fn onerror(&self) {
-        log::error!("TODO JEFF onerror");
-    }
-
-    fn onmessage(&self, message: ServerWebsocketMessage) {
-        info!("TODO JEFF onmessage: {message:?}");
-    }
-}
-
 async fn open_websocket(
     name: &str,
+    event_handler: WebSocketEventHandler,
 ) -> Result<WebSocket<ClientWebsocketMessage, ServerWebsocketMessage>, JsValue> {
     let client = create_client(&CreateClientRequest {
         name: name.to_string(),
     })
     .await?;
-    let ws = WebSocket::new(
-        format!("ws://{HOST}/client/ws").as_str(),
-        WebSocketEventHandler {},
-    )
-    .await?;
+    let ws = WebSocket::new(format!("ws://{HOST}/client/ws").as_str(), event_handler).await?;
     match ws.send(ClientWebsocketMessage::Authenticate(client.token)) {
         Ok(_) => Ok(ws),
         Err(e) => {

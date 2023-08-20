@@ -1,11 +1,9 @@
 ```
-cd client
-trunk serve
+pushd client && trunk serve; popd
 ```
 
 ```
-cd server
-cargo watch -x run
+cargo watch -x "run --bin server"
 ```
 
 ```
