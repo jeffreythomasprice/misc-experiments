@@ -44,16 +44,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lib"
-version = "0.1.0"
-dependencies = [
- "js-sys",
- "serde-wasm-bindgen",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
 name = "log"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,7 +80,6 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "js-sys",
- "lib",
  "log",
  "serde",
  "serde-wasm-bindgen",

@@ -2,17 +2,16 @@
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use lib::{
+    errors::Result,
+    webgl::{buffers::Buffer, shaders::ShaderProgram},
+};
 use log::*;
 
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{
     window, HtmlCanvasElement, HtmlElement, WebGl2RenderingContext, WebGlVertexArrayObject,
 };
-
-mod errors;
-use errors::*;
-use webgl::{buffers::Buffer, shaders::ShaderProgram};
-mod webgl;
 
 #[repr(C)]
 #[derive(Debug)]
