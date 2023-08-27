@@ -7,6 +7,7 @@ use lib::{
     webgl::{
         buffers::Buffer,
         shaders::ShaderProgram,
+        textures::Texture,
         vertexarrays::{VertexArray, VertexArrayAttribute},
     },
 };
@@ -47,6 +48,7 @@ impl<T> Rgba<T> {
 #[derive(Debug)]
 struct Vertex {
     position: Vector2<f32>,
+    texture_coordinate: Vector2<f32>,
     color: Rgba<f32>,
 }
 
@@ -57,6 +59,7 @@ struct State {
     program: ShaderProgram,
     _buffer: Buffer,
     vertex_array: VertexArray,
+    texture: Texture,
 }
 
 impl State {
@@ -70,6 +73,7 @@ impl State {
         )?;
 
         let position_attribute = program.get_attribute("in_position")?;
+        let texture_coordinate_attribute = program.get_attribute("in_texture_coordinate")?;
         let color_attribute = program.get_attribute("in_color")?;
 
         let buffer = Buffer::new_with_typed(
@@ -78,15 +82,33 @@ impl State {
             &[
                 Vertex {
                     position: Vector2::new(-0.5f32, -0.5f32),
-                    color: Rgba::new(1f32, 1f32, 0f32, 1f32),
+                    texture_coordinate: Vector2::new(0f32, 0f32),
+                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
                     position: Vector2::new(0.5f32, -0.5f32),
-                    color: Rgba::new(1f32, 0f32, 1f32, 1f32),
+                    texture_coordinate: Vector2::new(1f32, 0f32),
+                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(0.0f32, 0.5f32),
-                    color: Rgba::new(0f32, 1f32, 1f32, 1f32),
+                    position: Vector2::new(0.5f32, 0.5f32),
+                    texture_coordinate: Vector2::new(1f32, 1f32),
+                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
+                },
+                Vertex {
+                    position: Vector2::new(0.5f32, 0.5f32),
+                    texture_coordinate: Vector2::new(1f32, 1f32),
+                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
+                },
+                Vertex {
+                    position: Vector2::new(-0.5f32, 0.5f32),
+                    texture_coordinate: Vector2::new(0f32, 1f32),
+                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
+                },
+                Vertex {
+                    position: Vector2::new(-0.5f32, -0.5f32),
+                    texture_coordinate: Vector2::new(0f32, 0f32),
+                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
             ],
             WebGl2RenderingContext::STATIC_DRAW,
@@ -105,6 +127,15 @@ impl State {
                     offset: std::mem::offset_of!(Vertex, position),
                 },
                 VertexArrayAttribute {
+                    shader_attribute: texture_coordinate_attribute,
+                    buffer: &buffer,
+                    size: 2,
+                    type_: WebGl2RenderingContext::FLOAT,
+                    normalized: false,
+                    stride: std::mem::size_of::<Vertex>(),
+                    offset: std::mem::offset_of!(Vertex, texture_coordinate),
+                },
+                VertexArrayAttribute {
                     shader_attribute: color_attribute,
                     buffer: &buffer,
                     size: 4,
@@ -116,12 +147,36 @@ impl State {
             ],
         )?;
 
+        let texture_width = 256u32;
+        let texture_height = 256u32;
+        let mut pixels: Vec<Rgba<u8>> =
+            Vec::with_capacity((texture_width as usize) * (texture_height as usize));
+        for y in 0..texture_height {
+            let a = ((y as f64) / (texture_height as f64) * 255f64) as u8;
+            for x in 0..texture_width {
+                let b = ((x as f64) / (texture_width as f64) * 255f64) as u8;
+                pixels.push(Rgba::new(a, b, 255 - a, 255));
+            }
+        }
+        let texture = unsafe {
+            Texture::new_2d_rgba_u8(
+                context.clone(),
+                texture_width,
+                texture_height,
+                core::slice::from_raw_parts(
+                    pixels.as_ptr() as *const u8,
+                    std::mem::size_of_val(pixels.as_slice()),
+                ),
+            )?
+        };
+
         Ok(Self {
             canvas,
             context,
             program,
             _buffer: buffer,
             vertex_array,
+            texture,
         })
     }
 
@@ -150,10 +205,20 @@ impl State {
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
         self.program.use_program();
+
+        self.context
+            .active_texture(WebGl2RenderingContext::TEXTURE1);
+        self.texture.bind();
+        self.context.uniform1i(
+            Some(&self.program.get_uniform("uniform_texture")?.location),
+            1,
+        );
+
         self.vertex_array.bind();
         self.context
-            .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+            .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 6);
         self.context.bind_vertex_array(None);
+
         self.context.use_program(None);
 
         Ok(())

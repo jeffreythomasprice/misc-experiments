@@ -2,10 +2,13 @@
 
 precision highp float;
 
+uniform sampler2D uniform_texture;
+
+in vec2 varying_texture_coordinate;
 in vec4 varying_color;
 
 out vec4 out_color;
 
 void main() {
-	out_color = varying_color;
+	out_color = texture(uniform_texture, varying_texture_coordinate) * varying_color;
 }
