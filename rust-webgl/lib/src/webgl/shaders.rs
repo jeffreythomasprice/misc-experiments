@@ -4,7 +4,7 @@ use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
 
 use crate::errors::Result;
 
-pub struct AttributeInfo {
+pub struct ShaderAttributeInfo {
     pub name: String,
     pub size: i32,
     pub type_: u32,
@@ -14,7 +14,7 @@ pub struct AttributeInfo {
 pub struct ShaderProgram {
     context: Rc<WebGl2RenderingContext>,
     program: WebGlProgram,
-    attributes: HashMap<String, AttributeInfo>,
+    attributes: HashMap<String, ShaderAttributeInfo>,
 }
 
 impl ShaderProgram {
@@ -98,7 +98,7 @@ impl ShaderProgram {
             let location = context.get_attrib_location(&program, &attribute.name());
             attributes.insert(
                 attribute.name(),
-                AttributeInfo {
+                ShaderAttributeInfo {
                     name: attribute.name(),
                     size: attribute.size(),
                     type_: attribute.type_(),
@@ -114,7 +114,7 @@ impl ShaderProgram {
         })
     }
 
-    pub fn get_attribute(&self, name: &str) -> Result<&AttributeInfo> {
+    pub fn get_attribute(&self, name: &str) -> Result<&ShaderAttributeInfo> {
         Ok(self
             .attributes
             .get(name)

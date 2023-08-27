@@ -4,14 +4,16 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use lib::{
     errors::Result,
-    webgl::{buffers::Buffer, shaders::ShaderProgram},
+    webgl::{
+        buffers::Buffer,
+        shaders::ShaderProgram,
+        vertexarrays::{VertexArray, VertexArrayAttribute},
+    },
 };
 use log::*;
 
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{
-    window, HtmlCanvasElement, HtmlElement, WebGl2RenderingContext, WebGlVertexArrayObject,
-};
+use web_sys::{window, HtmlCanvasElement, HtmlElement, WebGl2RenderingContext};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -54,7 +56,7 @@ struct State {
 
     program: ShaderProgram,
     _buffer: Buffer,
-    vertex_array: WebGlVertexArrayObject,
+    vertex_array: VertexArray,
 }
 
 impl State {
@@ -90,31 +92,29 @@ impl State {
             WebGl2RenderingContext::STATIC_DRAW,
         )?;
 
-        let vertex_array = context
-            .create_vertex_array()
-            .ok_or("failed to create vetex array")?;
-        context.bind_vertex_array(Some(&vertex_array));
-        buffer.bind();
-        context.enable_vertex_attrib_array(position_attribute.location as u32);
-        context.vertex_attrib_pointer_with_i32(
-            position_attribute.location as u32,
-            2,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            std::mem::size_of::<Vertex>() as i32,
-            std::mem::offset_of!(Vertex, position) as i32,
-        );
-        context.enable_vertex_attrib_array(color_attribute.location as u32);
-        context.vertex_attrib_pointer_with_i32(
-            color_attribute.location as u32,
-            4,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            std::mem::size_of::<Vertex>() as i32,
-            std::mem::offset_of!(Vertex, color) as i32,
-        );
-        context.bind_vertex_array(None);
-        context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
+        let vertex_array = VertexArray::new(
+            context.clone(),
+            &[
+                VertexArrayAttribute {
+                    shader_attribute: position_attribute,
+                    buffer: &buffer,
+                    size: 2,
+                    type_: WebGl2RenderingContext::FLOAT,
+                    normalized: false,
+                    stride: std::mem::size_of::<Vertex>(),
+                    offset: std::mem::offset_of!(Vertex, position),
+                },
+                VertexArrayAttribute {
+                    shader_attribute: color_attribute,
+                    buffer: &buffer,
+                    size: 4,
+                    type_: WebGl2RenderingContext::FLOAT,
+                    normalized: false,
+                    stride: std::mem::size_of::<Vertex>(),
+                    offset: std::mem::offset_of!(Vertex, color),
+                },
+            ],
+        )?;
 
         Ok(Self {
             canvas,
@@ -150,7 +150,7 @@ impl State {
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
         self.program.use_program();
-        self.context.bind_vertex_array(Some(&self.vertex_array));
+        self.vertex_array.bind();
         self.context
             .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
         self.context.bind_vertex_array(None);
