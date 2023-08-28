@@ -1,8 +1,12 @@
 #![feature(offset_of)]
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use lib::{
+    dom::{
+        closures::{request_animation_frame_loop, RequestAnimationFrameStatus},
+        getters::{get_body, get_document, get_window},
+    },
     errors::Result,
     webgl::{
         buffers::Buffer,
@@ -14,7 +18,7 @@ use lib::{
 use log::*;
 
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{window, HtmlCanvasElement, HtmlElement, WebGl2RenderingContext};
+use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -237,12 +241,13 @@ fn main() {
 fn main_impl() -> Result<()> {
     let window = get_window()?;
     let body = get_body()?;
+    let document = get_document()?;
 
     while let Some(child) = body.first_child() {
         body.remove_child(&child)?;
     }
 
-    let canvas = get_document()?
+    let canvas = document
         .create_element("canvas")?
         .dyn_into::<HtmlCanvasElement>()
         .map_err(|_| "failed to create canvas")?;
@@ -269,56 +274,28 @@ fn main_impl() -> Result<()> {
 
     state.resize()?;
 
-    let onresize = {
+    {
         let state = state.clone();
-        Closure::<dyn Fn()>::new(move || {
+
+        let closure: Closure<dyn Fn()> = Closure::new(move || {
             if let Err(e) = state.resize() {
                 error!("error resizing: {e:?}");
             }
-        })
-    };
-    window.set_onresize(Some(onresize.as_ref().unchecked_ref()));
-    // leak memory on purpose so the callback lives long enough
-    onresize.forget();
+        });
+        window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())?;
+        // intentionally leak memory to keep this closure alive forever so js can call it
+        closure.forget();
 
-    // TODO helper around anim frame
-    let onanim1 = Rc::new(RefCell::<Option<Closure<dyn Fn(f64)>>>::new(None));
-    let onanim2 = onanim1.clone();
-    *onanim1.borrow_mut() = {
+        request_animation_frame_loop(move |_time| Ok(RequestAnimationFrameStatus::Continue))?;
+    }
+
+    {
         let state = state.clone();
-        let f = onanim2.clone();
-        Some(Closure::<dyn Fn(f64)>::new(move |time: f64| {
-            if let Err(e) = state.animate(time) {
-                error!("error animating: {e:?}");
-            } else {
-                let window = match get_window() {
-                    Ok(window) => window,
-                    Err(e) => {
-                        error!("error getting window to request new animation frame: {e:?}");
-                        return;
-                    }
-                };
-                if let Err(e) = window
-                    .request_animation_frame(f.borrow().as_ref().unwrap().as_ref().unchecked_ref())
-                {
-                    error!("error requesting new animation frame{e:?}");
-                }
-            }
-        }))
-    };
-    window.request_animation_frame(onanim1.borrow().as_ref().unwrap().as_ref().unchecked_ref())?;
+        request_animation_frame_loop(move |time| {
+            state.animate(time)?;
+            Ok(RequestAnimationFrameStatus::Continue)
+        })?;
+    }
 
     Ok(())
-}
-
-fn get_window() -> Result<web_sys::Window> {
-    Ok(window().ok_or("expected window")?)
-}
-
-fn get_document() -> Result<web_sys::Document> {
-    Ok(get_window()?.document().ok_or("expected document")?)
-}
-
-fn get_body() -> Result<HtmlElement> {
-    Ok(get_document()?.body().ok_or("expected body")?)
 }

@@ -131,14 +131,14 @@ impl ShaderProgram {
         HashMap<String, ShaderUniformInfo>,
     )> {
         let active_attributes = context
-            .get_program_parameter(&program, WebGl2RenderingContext::ACTIVE_ATTRIBUTES)
+            .get_program_parameter(program, WebGl2RenderingContext::ACTIVE_ATTRIBUTES)
             .as_f64()
             .ok_or("expected number of active attributes, got non-number")?
             as u32;
         let mut attributes = HashMap::new();
         for i in 0..active_attributes {
-            let info = context.get_active_attrib(&program, i).ok_or_else(|| format!("expected attribute at index {i} because we think there are {active_attributes} attributes"))?;
-            let location = context.get_attrib_location(&program, &info.name());
+            let info = context.get_active_attrib(program, i).ok_or_else(|| format!("expected attribute at index {i} because we think there are {active_attributes} attributes"))?;
+            let location = context.get_attrib_location(program, &info.name());
             attributes.insert(
                 info.name(),
                 ShaderAttributeInfo {
@@ -151,15 +151,15 @@ impl ShaderProgram {
         }
 
         let active_uniforms = context
-            .get_program_parameter(&program, WebGl2RenderingContext::ACTIVE_UNIFORMS)
+            .get_program_parameter(program, WebGl2RenderingContext::ACTIVE_UNIFORMS)
             .as_f64()
             .ok_or("expected number of active uniforms, got non-number")?
             as u32;
         let mut uniforms = HashMap::new();
         for i in 0..active_uniforms {
-            let info = context.get_active_uniform(&program,i).ok_or_else(|| format!("expected uniform at index {i} because we think there are {active_uniforms} uniforms"))?;
+            let info = context.get_active_uniform(program,i).ok_or_else(|| format!("expected uniform at index {i} because we think there are {active_uniforms} uniforms"))?;
             let location = context
-                .get_uniform_location(&program, &info.name())
+                .get_uniform_location(program, &info.name())
                 .ok_or_else(|| format!("expected uniform {} but no such uniform", info.name()))?;
             uniforms.insert(
                 info.name(),

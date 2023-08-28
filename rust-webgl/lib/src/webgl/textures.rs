@@ -57,7 +57,7 @@ impl Texture {
             context.tex_parameteri(
                 target,
                 WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-                WebGl2RenderingContext::LINEAR as i32,
+                WebGl2RenderingContext::NEAREST_MIPMAP_LINEAR as i32,
             );
             context.tex_parameteri(
                 target,
@@ -79,7 +79,7 @@ impl Texture {
             context.tex_parameteri(
                 target,
                 WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-                WebGl2RenderingContext::LINEAR as i32,
+                WebGl2RenderingContext::NEAREST as i32,
             );
             context.tex_parameteri(
                 target,
@@ -101,6 +101,8 @@ impl Texture {
             texture,
         })
     }
+
+    // TODO tex_image_3d_with_u8_array_and_src_offset
 
     pub fn bind(&self) {
         self.context.bind_texture(self.target, Some(&self.texture))
