@@ -78,7 +78,6 @@ impl Matrix4<f32> {
         }
     }
 
-    // TODO JEFF not right, looks wrong, looks right in shader if we do vert * mat, but it's supposed to be mat * vert and that looks wrong
     pub fn ortho(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
         Self {
             data: [
@@ -106,7 +105,32 @@ impl Matrix4<f32> {
     }
 
     // TODO new as perspective
+    /*
+    const f = 1 / Math.tan(fov / 2);
+    const aspect = width / height;
+    return new Matrix4(
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) / (near - far), 2 * far * near / (near - far),
+        0, 0, -1, 0,
+    );
+    */
+
     // TODO new as lookat
+    /*
+    const f = target.sub(position).normalized;
+    up = up.normalized;
+    const s = f.cross(up).normalized;
+    const u = s.cross(f).normalized;
+    return new Matrix4(
+        s.x, u.x, -f.x, 0,
+        s.y, u.y, -f.y, 0,
+        s.z, u.z, -f.z, 0,
+        0, 0, 0, 1,
+    )
+        .mul(Matrix4.createTranslation(position.negated));
+    */
+
     // TODO append a translation
     // TODO append a scale
     // TODO append a rotation

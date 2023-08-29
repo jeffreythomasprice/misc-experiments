@@ -186,7 +186,7 @@ impl State {
         // TODO helper for turning matrix into uniform value?
         self.context.uniform_matrix4fv_with_f32_array(
             Some(&self.program.get_uniform("uniform_matrix")?.location),
-            false,
+            true,
             Matrix4::<f32>::ortho(0f32, 400f32, 300f32, 0f32, -1f32, 1f32).flatten(),
         );
 
