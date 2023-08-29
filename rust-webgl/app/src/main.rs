@@ -8,7 +8,7 @@ use lib::{
         getters::{get_body, get_document, get_window},
     },
     errors::Result,
-    glmath::{matrix4::Matrix4, rgba::Rgba, vector2::Vector2},
+    glmath::{matrix4::Matrix4, rgba::Rgba, vector2::Vector2, vector3::Vector3},
     webgl::{
         buffers::Buffer,
         shaders::ShaderProgram,
@@ -58,32 +58,32 @@ impl State {
             WebGl2RenderingContext::ARRAY_BUFFER,
             &[
                 Vertex {
-                    position: Vector2::new(50f32, 50f32),
+                    position: Vector2::new(-50f32, -50f32),
                     texture_coordinate: Vector2::new(0f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(150f32, 50f32),
+                    position: Vector2::new(50f32, -50f32),
                     texture_coordinate: Vector2::new(1f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(150f32, 150f32),
+                    position: Vector2::new(50f32, 50f32),
                     texture_coordinate: Vector2::new(1f32, 1f32),
-                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
-                },
-                Vertex {
-                    position: Vector2::new(150f32, 150f32),
-                    texture_coordinate: Vector2::new(1f32, 1f32),
-                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
-                },
-                Vertex {
-                    position: Vector2::new(50f32, 150f32),
-                    texture_coordinate: Vector2::new(0f32, 1f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
                     position: Vector2::new(50f32, 50f32),
+                    texture_coordinate: Vector2::new(1f32, 1f32),
+                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
+                },
+                Vertex {
+                    position: Vector2::new(-50f32, 50f32),
+                    texture_coordinate: Vector2::new(0f32, 1f32),
+                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
+                },
+                Vertex {
+                    position: Vector2::new(-50f32, -50f32),
                     texture_coordinate: Vector2::new(0f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
@@ -187,7 +187,10 @@ impl State {
         self.context.uniform_matrix4fv_with_f32_array(
             Some(&self.program.get_uniform("uniform_matrix")?.location),
             true,
-            Matrix4::<f32>::ortho(0f32, 400f32, 300f32, 0f32, -1f32, 1f32).flatten(),
+            Matrix4::<f32>::new_ortho(0f32, 400f32, 300f32, 0f32, -1f32, 1f32)
+                // TODO JEFF appending a translation doesn't work
+                .translate(Vector3::new(10f32, 10f32, 0f32))
+                .flatten(),
         );
 
         self.context

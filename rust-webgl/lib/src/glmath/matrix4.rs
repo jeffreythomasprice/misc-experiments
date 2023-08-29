@@ -3,7 +3,7 @@ use std::ops::Mul;
 use super::{angles::Radians, vector3::Vector3};
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Matrix4<T> {
     data: [[T; 4]; 4],
 }
@@ -12,10 +12,15 @@ impl<T> Matrix4<T> {
     pub fn flatten(&self) -> &[T] {
         self.data.flatten()
     }
+
+    pub fn set_to(&mut self, other: Matrix4<T>) -> &mut Self {
+        self.data = other.data;
+        self
+    }
 }
 
 impl Matrix4<f32> {
-    pub fn identity() -> Self {
+    pub fn new_identity() -> Self {
         Self {
             data: [
                 [1f32, 0f32, 0f32, 0f32],
@@ -26,7 +31,7 @@ impl Matrix4<f32> {
         }
     }
 
-    pub fn translation(v: Vector3<f32>) -> Self {
+    pub fn new_translation(v: Vector3<f32>) -> Self {
         Self {
             data: [
                 [1f32, 0f32, 0f32, 0f32],
@@ -37,7 +42,7 @@ impl Matrix4<f32> {
         }
     }
 
-    pub fn scale(v: Vector3<f32>) -> Self {
+    pub fn new_scale(v: Vector3<f32>) -> Self {
         Self {
             data: [
                 [v.x, 0f32, 0f32, 0f32],
@@ -48,7 +53,7 @@ impl Matrix4<f32> {
         }
     }
 
-    pub fn rotation(angle: Radians<f32>, axis: Vector3<f32>) -> Self {
+    pub fn new_rotation(angle: Radians<f32>, axis: Vector3<f32>) -> Self {
         let c = angle.cos();
         let s = angle.sin();
         let one_minus_c = 1f32 - c;
@@ -78,7 +83,7 @@ impl Matrix4<f32> {
         }
     }
 
-    pub fn ortho(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
+    pub fn new_ortho(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
         Self {
             data: [
                 [
@@ -131,9 +136,22 @@ impl Matrix4<f32> {
         .mul(Matrix4.createTranslation(position.negated));
     */
 
-    // TODO append a translation
-    // TODO append a scale
-    // TODO append a rotation
+    pub fn append(&mut self, other: Self) -> &mut Self {
+        self.set_to(other * *self);
+        self
+    }
+
+    pub fn translate(&mut self, v: Vector3<f32>) -> &mut Self {
+        self.append(Matrix4::new_translation(v))
+    }
+
+    pub fn scale(&mut self, v: Vector3<f32>) -> &mut Self {
+        self.append(Matrix4::new_scale(v))
+    }
+
+    pub fn rotate(&mut self, angle: Radians<f32>, axis: Vector3<f32>) -> &mut Self {
+        self.append(Matrix4::new_rotation(angle, axis))
+    }
 }
 
 impl Mul for Matrix4<f32> {
