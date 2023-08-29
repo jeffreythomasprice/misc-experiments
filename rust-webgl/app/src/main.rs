@@ -4,10 +4,11 @@ use std::{collections::HashMap, rc::Rc};
 
 use lib::{
     dom::{
-        closures::{request_animation_frame_loop, RequestAnimationFrameStatus},
+        anim_frame::{request_animation_frame_loop, RequestAnimationFrameStatus},
         getters::{get_body, get_document, get_window},
     },
     errors::Result,
+    glmath::{matrix4::Matrix4, rgba::Rgba, vector2::Vector2},
     webgl::{
         buffers::Buffer,
         shaders::ShaderProgram,
@@ -19,34 +20,6 @@ use log::*;
 
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
-
-#[repr(C)]
-#[derive(Debug)]
-struct Vector2<T> {
-    x: T,
-    y: T,
-}
-
-impl<T> Vector2<T> {
-    pub fn new(x: T, y: T) -> Self {
-        Self { x, y }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-struct Rgba<T> {
-    r: T,
-    g: T,
-    b: T,
-    a: T,
-}
-
-impl<T> Rgba<T> {
-    pub fn new(r: T, g: T, b: T, a: T) -> Self {
-        Self { r, g, b, a }
-    }
-}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -85,32 +58,32 @@ impl State {
             WebGl2RenderingContext::ARRAY_BUFFER,
             &[
                 Vertex {
-                    position: Vector2::new(-0.5f32, -0.5f32),
+                    position: Vector2::new(50f32, 50f32),
                     texture_coordinate: Vector2::new(0f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(0.5f32, -0.5f32),
+                    position: Vector2::new(150f32, 50f32),
                     texture_coordinate: Vector2::new(1f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(0.5f32, 0.5f32),
+                    position: Vector2::new(150f32, 150f32),
                     texture_coordinate: Vector2::new(1f32, 1f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(0.5f32, 0.5f32),
+                    position: Vector2::new(150f32, 150f32),
                     texture_coordinate: Vector2::new(1f32, 1f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(-0.5f32, 0.5f32),
+                    position: Vector2::new(50f32, 150f32),
                     texture_coordinate: Vector2::new(0f32, 1f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(-0.5f32, -0.5f32),
+                    position: Vector2::new(50f32, 50f32),
                     texture_coordinate: Vector2::new(0f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
@@ -210,9 +183,17 @@ impl State {
 
         self.program.use_program();
 
+        // TODO helper for turning matrix into uniform value?
+        self.context.uniform_matrix4fv_with_f32_array(
+            Some(&self.program.get_uniform("uniform_matrix")?.location),
+            false,
+            Matrix4::<f32>::ortho(0f32, 400f32, 300f32, 0f32, -1f32, 1f32).flatten(),
+        );
+
         self.context
             .active_texture(WebGl2RenderingContext::TEXTURE1);
         self.texture.bind();
+        // TODO helper for sending primitives to uniform?
         self.context.uniform1i(
             Some(&self.program.get_uniform("uniform_texture")?.location),
             1,
