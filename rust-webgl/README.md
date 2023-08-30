@@ -1,4 +1,3 @@
 ```
-cd app
-trunk serve --watch ../lib --watch .
+./watch.sh
 ```

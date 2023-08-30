@@ -1,6 +1,6 @@
 #![feature(offset_of)]
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, sync::Mutex};
 
 use lib::{
     dom::{
@@ -37,6 +37,8 @@ struct State {
     _buffer: Buffer,
     vertex_array: VertexArray,
     texture: Texture,
+
+    ortho_matrix: Matrix4<f32>,
 }
 
 impl State {
@@ -150,14 +152,17 @@ impl State {
         Ok(Self {
             canvas,
             context,
+
             program,
             _buffer: buffer,
             vertex_array,
             texture,
+
+            ortho_matrix: Matrix4::new_identity(),
         })
     }
 
-    pub fn resize(&self) -> Result<()> {
+    pub fn resize(&mut self) -> Result<()> {
         let window = get_window()?;
 
         let width = window
@@ -174,6 +179,9 @@ impl State {
 
         self.context.viewport(0, 0, width as i32, height as i32);
 
+        self.ortho_matrix =
+            Matrix4::<f32>::new_ortho(0f32, width as f32, height as f32, 0f32, -1f32, 1f32);
+
         Ok(())
     }
 
@@ -186,10 +194,12 @@ impl State {
         // TODO helper for turning matrix into uniform value?
         self.context.uniform_matrix4fv_with_f32_array(
             Some(&self.program.get_uniform("uniform_matrix")?.location),
-            true,
-            Matrix4::<f32>::new_ortho(0f32, 400f32, 300f32, 0f32, -1f32, 1f32)
-                // TODO JEFF appending a translation doesn't work
-                .translate(Vector3::new(10f32, 10f32, 0f32))
+            false,
+            &self
+                .ortho_matrix
+                .clone()
+                .translate(Vector3::new(350f32, 250f32, 0f32))
+                .scale(Vector3::new(2f32, 1f32, 1f32))
                 .flatten(),
         );
 
@@ -254,14 +264,18 @@ fn main_impl() -> Result<()> {
             .map_err(|_| "expected webgl2 context but got some other kind of context")?
     };
 
-    let state = Rc::new(State::new(canvas, context)?);
+    let state = Rc::new(Mutex::new(State::new(canvas, context)?));
 
-    state.resize()?;
+    {
+        let mut state = state.lock().unwrap();
+        state.resize()?;
+    }
 
     {
         let state = state.clone();
 
         let closure: Closure<dyn Fn()> = Closure::new(move || {
+            let mut state = state.lock().unwrap();
             if let Err(e) = state.resize() {
                 error!("error resizing: {e:?}");
             }
@@ -276,6 +290,7 @@ fn main_impl() -> Result<()> {
     {
         let state = state.clone();
         request_animation_frame_loop(move |time| {
+            let state = state.lock().unwrap();
             state.animate(time)?;
             Ok(RequestAnimationFrameStatus::Continue)
         })?;

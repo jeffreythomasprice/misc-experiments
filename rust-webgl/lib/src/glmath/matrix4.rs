@@ -12,11 +12,6 @@ impl<T> Matrix4<T> {
     pub fn flatten(&self) -> &[T] {
         self.data.flatten()
     }
-
-    pub fn set_to(&mut self, other: Matrix4<T>) -> &mut Self {
-        self.data = other.data;
-        self
-    }
 }
 
 impl Matrix4<f32> {
@@ -86,25 +81,15 @@ impl Matrix4<f32> {
     pub fn new_ortho(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
         Self {
             data: [
+                [2f32 / (right - left), 0f32, 0f32, 0f32],
+                [0f32, 2f32 / (top - bottom), 0f32, 0f32],
+                [0f32, 0f32, -2f32 / (far - near), 0f32],
                 [
-                    2f32 / (right - left),
-                    0f32,
-                    0f32,
                     -(right + left) / (right - left),
-                ],
-                [
-                    0f32,
-                    2f32 / (top - bottom),
-                    0f32,
                     -(top + bottom) / (top - bottom),
-                ],
-                [
-                    0f32,
-                    0f32,
-                    -2f32 / (far - near),
                     -(far + near) / (far - near),
+                    1f32,
                 ],
-                [0f32, 0f32, 0f32, 1f32],
             ],
         }
     }
@@ -137,7 +122,8 @@ impl Matrix4<f32> {
     */
 
     pub fn append(&mut self, other: Self) -> &mut Self {
-        self.set_to(other * *self);
+        let other = other * *self;
+        self.data = other.data;
         self
     }
 
