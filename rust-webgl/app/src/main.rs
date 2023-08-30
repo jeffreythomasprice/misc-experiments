@@ -8,7 +8,7 @@ use lib::{
         getters::{get_body, get_document, get_window},
     },
     errors::Result,
-    glmath::{matrix4::Matrix4, rgba::Rgba, vector2::Vector2, vector3::Vector3},
+    glmath::{angles::Degrees, matrix4::Matrix4, rgba::Rgba, vector2::Vector2, vector3::Vector3},
     webgl::{
         buffers::Buffer,
         shaders::ShaderProgram,
@@ -38,7 +38,11 @@ struct State {
     vertex_array: VertexArray,
     texture: Texture,
 
+    last_time: f64,
+
     ortho_matrix: Matrix4<f32>,
+    perspective_matrix: Matrix4<f32>,
+    rotation: Degrees<f32>,
 }
 
 impl State {
@@ -60,32 +64,32 @@ impl State {
             WebGl2RenderingContext::ARRAY_BUFFER,
             &[
                 Vertex {
-                    position: Vector2::new(-50f32, -50f32),
+                    position: Vector2::new(-1f32, -1f32),
                     texture_coordinate: Vector2::new(0f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(50f32, -50f32),
+                    position: Vector2::new(1f32, -1f32),
                     texture_coordinate: Vector2::new(1f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(50f32, 50f32),
+                    position: Vector2::new(1f32, 1f32),
                     texture_coordinate: Vector2::new(1f32, 1f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(50f32, 50f32),
+                    position: Vector2::new(1f32, 1f32),
                     texture_coordinate: Vector2::new(1f32, 1f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(-50f32, 50f32),
+                    position: Vector2::new(-1f32, 1f32),
                     texture_coordinate: Vector2::new(0f32, 1f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
                 Vertex {
-                    position: Vector2::new(-50f32, -50f32),
+                    position: Vector2::new(-1f32, -1f32),
                     texture_coordinate: Vector2::new(0f32, 0f32),
                     color: Rgba::new(1f32, 1f32, 1f32, 1f32),
                 },
@@ -158,7 +162,11 @@ impl State {
             vertex_array,
             texture,
 
+            last_time: 0f64,
+
             ortho_matrix: Matrix4::new_identity(),
+            perspective_matrix: Matrix4::new_identity(),
+            rotation: Degrees(0f32),
         })
     }
 
@@ -180,12 +188,23 @@ impl State {
         self.context.viewport(0, 0, width as i32, height as i32);
 
         self.ortho_matrix =
-            Matrix4::<f32>::new_ortho(0f32, width as f32, height as f32, 0f32, -1f32, 1f32);
+            Matrix4::new_ortho(0f32, width as f32, height as f32, 0f32, -1f32, 1f32);
+        self.perspective_matrix = Matrix4::new_perspective(
+            Degrees(90f32).into(),
+            width as f32,
+            height as f32,
+            0.1f32,
+            1000f32,
+        );
 
         Ok(())
     }
 
-    pub fn animate(&self, _time: f64) -> Result<()> {
+    pub fn animate(&mut self, time: f64) -> Result<()> {
+        let delta = ((time - self.last_time) / 1000f64) as f32;
+        self.last_time = time;
+        self.rotation = Degrees((self.rotation.0 + 45f32 * delta) % 360f32);
+
         self.context.clear_color(0.25, 0.5, 0.75, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
@@ -196,10 +215,10 @@ impl State {
             Some(&self.program.get_uniform("uniform_matrix")?.location),
             false,
             &self
-                .ortho_matrix
+                .perspective_matrix
                 .clone()
-                .translate(Vector3::new(350f32, 250f32, 0f32))
-                .scale(Vector3::new(2f32, 1f32, 1f32))
+                .translate(Vector3::new(0f32, 0f32, -6f32))
+                .rotate(self.rotation.into(), Vector3::new(0f32, 1f32, 0f32))
                 .flatten(),
         );
 
@@ -290,7 +309,7 @@ fn main_impl() -> Result<()> {
     {
         let state = state.clone();
         request_animation_frame_loop(move |time| {
-            let state = state.lock().unwrap();
+            let mut state = state.lock().unwrap();
             state.animate(time)?;
             Ok(RequestAnimationFrameStatus::Continue)
         })?;

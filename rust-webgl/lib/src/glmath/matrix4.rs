@@ -94,17 +94,24 @@ impl Matrix4<f32> {
         }
     }
 
-    // TODO new as perspective
-    /*
-    const f = 1 / Math.tan(fov / 2);
-    const aspect = width / height;
-    return new Matrix4(
-        f / aspect, 0, 0, 0,
-        0, f, 0, 0,
-        0, 0, (far + near) / (near - far), 2 * far * near / (near - far),
-        0, 0, -1, 0,
-    );
-    */
+    pub fn new_perspective(
+        fov: Radians<f32>,
+        width: f32,
+        height: f32,
+        near: f32,
+        far: f32,
+    ) -> Self {
+        let f = 1f32 / (fov.0 / 2f32).tan();
+        let aspect = width / height;
+        Self {
+            data: [
+                [f / aspect, 0f32, 0f32, 0f32],
+                [0f32, f, 0f32, 0f32],
+                [0f32, 0f32, (far + near) / (near - far), -1f32],
+                [0f32, 0f32, 2f32 * far * near / (near - far), 1f32],
+            ],
+        }
+    }
 
     // TODO new as lookat
     /*

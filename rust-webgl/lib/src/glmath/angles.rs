@@ -1,8 +1,10 @@
-#[derive(Debug, Clone, Copy)]
-pub struct Radians<T>(T);
+use std::f32::consts::PI;
 
 #[derive(Debug, Clone, Copy)]
-pub struct Degrees<T>(T);
+pub struct Radians<T>(pub T);
+
+#[derive(Debug, Clone, Copy)]
+pub struct Degrees<T>(pub T);
 
 impl<T> Radians<T> {
     pub fn new(value: T) -> Self {
@@ -26,4 +28,14 @@ impl<T> Degrees<T> {
     }
 }
 
-// TODO impl into each other degrees and radians
+impl Into<Degrees<f32>> for Radians<f32> {
+    fn into(self) -> Degrees<f32> {
+        Degrees(self.0 * 180f32 / PI)
+    }
+}
+
+impl Into<Radians<f32>> for Degrees<f32> {
+    fn into(self) -> Radians<f32> {
+        Radians(self.0 * PI / 180f32)
+    }
+}
