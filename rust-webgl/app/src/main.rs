@@ -8,7 +8,13 @@ use lib::{
         getters::{get_body, get_document, get_window},
     },
     errors::Result,
-    glmath::{angles::Degrees, matrix4::Matrix4, rgba::Rgba, vector2::Vector2, vector3::Vector3},
+    glmath::{
+        angles::{Degrees, Radians},
+        matrix4::Matrix4,
+        rgba::Rgba,
+        vector2::Vector2,
+        vector3::Vector3,
+    },
     webgl::{
         buffers::Buffer,
         shaders::ShaderProgram,
@@ -203,7 +209,7 @@ impl State {
     pub fn animate(&mut self, time: f64) -> Result<()> {
         let delta = ((time - self.last_time) / 1000f64) as f32;
         self.last_time = time;
-        self.rotation = Degrees((self.rotation.0 + 45f32 * delta) % 360f32);
+        self.rotation = (self.rotation + Degrees(45f32) * delta) % Degrees(360f32);
 
         self.context.clear_color(0.25, 0.5, 0.75, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
@@ -211,16 +217,23 @@ impl State {
         self.program.use_program();
 
         // TODO helper for turning matrix into uniform value?
-        self.context.uniform_matrix4fv_with_f32_array(
-            Some(&self.program.get_uniform("uniform_matrix")?.location),
-            false,
-            &self
-                .perspective_matrix
-                .clone()
-                .translate(Vector3::new(0f32, 0f32, -6f32))
-                .rotate(self.rotation.into(), Vector3::new(0f32, 1f32, 0f32))
-                .flatten(),
-        );
+        {
+            let rotation: Radians<f32> = self.rotation.into();
+            self.context.uniform_matrix4fv_with_f32_array(
+                Some(&self.program.get_uniform("uniform_matrix")?.location),
+                false,
+                &self
+                    .perspective_matrix
+                    .clone()
+                    .append(Matrix4::new_look_at(
+                        Vector3::new(rotation.0.cos(), 0f32, rotation.0.sin()) * 6f32
+                            + Vector3::new(0f32, 4f32, 0f32),
+                        Vector3::new(0f32, 0f32, 0f32),
+                        Vector3::new(0f32, 1f32, 0f32),
+                    ))
+                    .flatten(),
+            );
+        }
 
         self.context
             .active_texture(WebGl2RenderingContext::TEXTURE1);

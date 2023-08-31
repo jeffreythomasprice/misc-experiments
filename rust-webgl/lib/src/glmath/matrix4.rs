@@ -113,20 +113,21 @@ impl Matrix4<f32> {
         }
     }
 
-    // TODO new as lookat
-    /*
-    const f = target.sub(position).normalized;
-    up = up.normalized;
-    const s = f.cross(up).normalized;
-    const u = s.cross(f).normalized;
-    return new Matrix4(
-        s.x, u.x, -f.x, 0,
-        s.y, u.y, -f.y, 0,
-        s.z, u.z, -f.z, 0,
-        0, 0, 0, 1,
-    )
-        .mul(Matrix4.createTranslation(position.negated));
-    */
+    pub fn new_look_at(position: Vector3<f32>, target: Vector3<f32>, up: Vector3<f32>) -> Self {
+        let f = (target - position).normalized();
+        let up = up.normalized();
+        let s = f.cross_product(up).normalized();
+        let u = s.cross_product(f).normalized();
+        *Self {
+            data: [
+                [s.x, u.x, -f.x, 0f32],
+                [s.y, u.y, -f.y, 0f32],
+                [s.z, u.z, -f.z, 0f32],
+                [0f32, 0f32, 0f32, 1f32],
+            ],
+        }
+        .translate(-position)
+    }
 
     pub fn append(&mut self, other: Self) -> &mut Self {
         let other = other * *self;
