@@ -1,6 +1,10 @@
 use std::ops::Mul;
 
-use super::{angles::Radians, vector3::Vector3};
+use super::{
+    angles::Radians,
+    numbers::{CouldBeAnAngle, Float},
+    vector3::Vector3,
+};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -13,6 +17,15 @@ impl<T> Matrix4<T> {
         self.data.flatten()
     }
 }
+
+impl<T> Matrix4<T>
+where
+    T: Float,
+{
+    // TODO JEFF in here
+}
+
+// TODO JEFF use generic Float stuff below here
 
 impl Matrix4<f32> {
     pub fn new_identity() -> Self {

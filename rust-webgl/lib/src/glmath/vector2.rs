@@ -1,5 +1,7 @@
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
+use super::numbers::Float;
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Vector2<T> {
@@ -13,25 +15,31 @@ impl<T> Vector2<T> {
     }
 }
 
-impl Vector2<f32> {
-    pub fn magnitude_squared(self) -> f32 {
+impl<T> Vector2<T>
+where
+    T: Float + Copy,
+{
+    pub fn magnitude_squared(self) -> T {
         self.x * self.x + self.y * self.y
     }
 
-    pub fn magnitude(self) -> f32 {
+    pub fn magnitude(self) -> T {
         self.magnitude_squared().sqrt()
     }
 
-    pub fn normalized(self) -> Vector2<f32> {
+    pub fn normalized(self) -> Vector2<T> {
         self / self.magnitude()
     }
 
-    pub fn dot_product(self, rhs: Self) -> f32 {
+    pub fn dot_product(self, rhs: Self) -> T {
         self.x * rhs.x + self.y * rhs.y
     }
 }
 
-impl Add for Vector2<f32> {
+impl<T> Add for Vector2<T>
+where
+    T: Float + Copy,
+{
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -42,7 +50,10 @@ impl Add for Vector2<f32> {
     }
 }
 
-impl Sub for Vector2<f32> {
+impl<T> Sub for Vector2<T>
+where
+    T: Float + Copy,
+{
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
@@ -53,10 +64,13 @@ impl Sub for Vector2<f32> {
     }
 }
 
-impl Mul<f32> for Vector2<f32> {
+impl<T> Mul<T> for Vector2<T>
+where
+    T: Float + Copy,
+{
     type Output = Self;
 
-    fn mul(self, rhs: f32) -> Self::Output {
+    fn mul(self, rhs: T) -> Self::Output {
         Self::Output {
             x: self.x * rhs,
             y: self.y * rhs,
@@ -64,10 +78,13 @@ impl Mul<f32> for Vector2<f32> {
     }
 }
 
-impl Div<f32> for Vector2<f32> {
+impl<T> Div<T> for Vector2<T>
+where
+    T: Float + Copy,
+{
     type Output = Self;
 
-    fn div(self, rhs: f32) -> Self::Output {
+    fn div(self, rhs: T) -> Self::Output {
         Self::Output {
             x: self.x / rhs,
             y: self.y / rhs,
@@ -75,7 +92,10 @@ impl Div<f32> for Vector2<f32> {
     }
 }
 
-impl Neg for Vector2<f32> {
+impl<T> Neg for Vector2<T>
+where
+    T: Float + Copy,
+{
     type Output = Self;
 
     fn neg(self) -> Self::Output {
