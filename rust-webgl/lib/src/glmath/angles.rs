@@ -15,6 +15,10 @@ where
     pub fn new(value: T) -> Self {
         Self(value)
     }
+
+    pub fn to_degrees(self) -> Degrees<T> {
+        Degrees(self.0 * T::_180 / T::PI)
+    }
 }
 
 impl<T> Degrees<T>
@@ -23,6 +27,10 @@ where
 {
     pub fn new(value: T) -> Self {
         Self(value)
+    }
+
+    pub fn to_radians(self) -> Radians<T> {
+        Radians(self.0 * T::PI / T::_180)
     }
 }
 
@@ -43,7 +51,7 @@ where
     T: Float,
 {
     fn from(val: Radians<T>) -> Self {
-        Degrees(val.0 * T::_180 / T::PI)
+        val.to_degrees()
     }
 }
 
@@ -64,7 +72,7 @@ where
     T: Float,
 {
     fn from(val: Degrees<T>) -> Self {
-        Radians(val.0 * T::PI / T::_180)
+        val.to_radians()
     }
 }
 
@@ -85,21 +93,17 @@ where
 
 impl<T> CouldBeAnAngle for Degrees<T>
 where
-    T: CouldBeAnAngle<Output = T>,
+    T: Float + CouldBeAnAngle<Output = T>,
     Radians<T>: From<Degrees<T>>,
 {
     type Output = T;
 
     fn cos(self) -> Self::Output {
-        // TODO JEFF into_radians()
-        let r: Radians<T> = self.into();
-        r.cos()
+        self.to_radians().cos()
     }
 
     fn sin(self) -> Self::Output {
-        // TODO JEFF into_radians()
-        let r: Radians<T> = self.into();
-        r.sin()
+        self.to_radians().sin()
     }
 }
 

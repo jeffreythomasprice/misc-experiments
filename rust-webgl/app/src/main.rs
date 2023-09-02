@@ -9,11 +9,7 @@ use lib::{
     },
     errors::Result,
     glmath::{
-        angles::{Degrees},
-        matrix4::Matrix4,
-        numbers::CouldBeAnAngle,
-        rgba::Rgba,
-        vector2::Vector2,
+        angles::Degrees, matrix4::Matrix4, numbers::CouldBeAnAngle, rgba::Rgba, vector2::Vector2,
         vector3::Vector3,
     },
     webgl::{
@@ -217,32 +213,19 @@ impl State {
 
         self.program.use_program();
 
-        // TODO helper for turning matrix into uniform value?
-        {
-            self.context.uniform_matrix4fv_with_f32_array(
-                Some(&self.program.get_uniform("uniform_matrix")?.location),
-                false,
-                self
-                    .perspective_matrix
-                    .clone()
-                    .append(Matrix4::new_look_at(
-                        Vector3::new(self.rotation.cos(), 0f32, self.rotation.sin()) * 6f32
-                            + Vector3::new(0f32, 4f32, 0f32),
-                        Vector3::new(0f32, 0f32, 0f32),
-                        Vector3::new(0f32, 1f32, 0f32),
-                    ))
-                    .flatten(),
-            );
-        }
+        self.program.get_uniform("uniform_matrix")?.set_matrixf(
+            self.perspective_matrix.clone().append(Matrix4::new_look_at(
+                Vector3::new(self.rotation.cos(), 0f32, self.rotation.sin()) * 6f32
+                    + Vector3::new(0f32, 4f32, 0f32),
+                Vector3::new(0f32, 0f32, 0f32),
+                Vector3::new(0f32, 1f32, 0f32),
+            )),
+        );
 
         self.context
             .active_texture(WebGl2RenderingContext::TEXTURE1);
         self.texture.bind();
-        // TODO helper for sending primitives to uniform?
-        self.context.uniform1i(
-            Some(&self.program.get_uniform("uniform_texture")?.location),
-            1,
-        );
+        self.program.get_uniform("uniform_texture")?.set1i(1);
 
         self.vertex_array.bind();
         self.context

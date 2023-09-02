@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
-use crate::errors::Result;
+use crate::{errors::Result, glmath::matrix4::Matrix4};
 
 pub struct ShaderAttributeInfo {
     pub name: String,
@@ -12,6 +12,7 @@ pub struct ShaderAttributeInfo {
 }
 
 pub struct ShaderUniformInfo {
+    context: Rc<WebGl2RenderingContext>,
     pub name: String,
     pub size: i32,
     pub type_: u32,
@@ -95,7 +96,7 @@ impl ShaderProgram {
             Err(format!("error linking shader program: {log:?}"))?;
         }
 
-        let (attributes, uniforms) = Self::get_attributes_and_uniforms(&context, &program)?;
+        let (attributes, uniforms) = Self::get_attributes_and_uniforms(context.clone(), &program)?;
 
         Ok(Self {
             context,
@@ -124,7 +125,7 @@ impl ShaderProgram {
     }
 
     fn get_attributes_and_uniforms(
-        context: &WebGl2RenderingContext,
+        context: Rc<WebGl2RenderingContext>,
         program: &WebGlProgram,
     ) -> Result<(
         HashMap<String, ShaderAttributeInfo>,
@@ -164,6 +165,7 @@ impl ShaderProgram {
             uniforms.insert(
                 info.name(),
                 ShaderUniformInfo {
+                    context: context.clone(),
                     name: info.name(),
                     size: info.size(),
                     type_: info.type_(),
@@ -180,4 +182,17 @@ impl Drop for ShaderProgram {
     fn drop(&mut self) {
         self.context.delete_program(Some(&self.program));
     }
+}
+
+impl ShaderUniformInfo {
+    pub fn set1i(&self, x: i32) {
+        self.context.uniform1i(Some(&self.location), x);
+    }
+
+    pub fn set_matrixf(&self, data: &Matrix4<f32>) {
+        self.context
+            .uniform_matrix4fv_with_f32_array(Some(&self.location), false, data.flatten());
+    }
+
+    // TODO various other uniform helpers
 }
