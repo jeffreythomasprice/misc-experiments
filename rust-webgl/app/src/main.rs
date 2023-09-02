@@ -22,15 +22,15 @@ use lib::{
 use log::*;
 
 use wasm_bindgen::{
-    prelude::{wasm_bindgen, Closure},
-    JsCast, JsValue,
+    prelude::{Closure},
+    JsCast,
 };
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 #[repr(C)]
 #[derive(Debug)]
 struct Vertex {
-    position: Vector2<f32>,
+    position: Vector3<f32>,
     texture_coordinate: Vector2<f32>,
     color: Rgba<f32>,
 }
@@ -68,38 +68,11 @@ impl State {
         let buffer = Buffer::new_with_typed(
             context.clone(),
             WebGl2RenderingContext::ARRAY_BUFFER,
-            &[
-                Vertex {
-                    position: Vector2::new(-1f32, -1f32),
-                    texture_coordinate: Vector2::new(0f32, 0f32),
-                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
-                },
-                Vertex {
-                    position: Vector2::new(1f32, -1f32),
-                    texture_coordinate: Vector2::new(1f32, 0f32),
-                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
-                },
-                Vertex {
-                    position: Vector2::new(1f32, 1f32),
-                    texture_coordinate: Vector2::new(1f32, 1f32),
-                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
-                },
-                Vertex {
-                    position: Vector2::new(1f32, 1f32),
-                    texture_coordinate: Vector2::new(1f32, 1f32),
-                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
-                },
-                Vertex {
-                    position: Vector2::new(-1f32, 1f32),
-                    texture_coordinate: Vector2::new(0f32, 1f32),
-                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
-                },
-                Vertex {
-                    position: Vector2::new(-1f32, -1f32),
-                    texture_coordinate: Vector2::new(0f32, 0f32),
-                    color: Rgba::new(1f32, 1f32, 1f32, 1f32),
-                },
-            ],
+            &cube(
+                Vector3::new(0f32, 0f32, 0f32),
+                Vector3::new(2f32, 2f32, 2f32),
+                Rgba::new(1f32, 1f32, 1f32, 1f32),
+            ),
             WebGl2RenderingContext::STATIC_DRAW,
         )?;
 
@@ -109,7 +82,7 @@ impl State {
                 VertexArrayAttribute {
                     shader_attribute: position_attribute,
                     buffer: &buffer,
-                    size: 2,
+                    size: 3,
                     type_: WebGl2RenderingContext::FLOAT,
                     normalized: false,
                     stride: std::mem::size_of::<Vertex>(),
@@ -214,6 +187,11 @@ impl State {
         self.context.clear_color(0.25, 0.5, 0.75, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
+        self.context.clear_depth(1.0f32);
+        self.context.clear(WebGl2RenderingContext::DEPTH_BUFFER_BIT);
+        self.context.enable(WebGl2RenderingContext::DEPTH_TEST);
+        self.context.depth_func(WebGl2RenderingContext::LEQUAL);
+
         self.program.use_program();
 
         self.program.get_uniform("uniform_matrix")?.set_matrixf(
@@ -231,11 +209,14 @@ impl State {
         self.program.get_uniform("uniform_texture")?.set1i(1);
 
         self.vertex_array.bind();
+        // TODO should be pulling the number of verticies to draw from the number of vertices or indices
         self.context
-            .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 6);
+            .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 36);
         self.context.bind_vertex_array(None);
 
         self.context.use_program(None);
+
+        self.context.disable(WebGl2RenderingContext::DEPTH_TEST);
 
         Ok(())
     }
@@ -315,4 +296,198 @@ fn main_impl() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn cube(center: Vector3<f32>, size: Vector3<f32>, color: Rgba<f32>) -> [Vertex; 36] {
+    let half_size = size / 2f32;
+    let min = center - half_size;
+    let max = center + half_size;
+    [
+        // min z face
+        Vertex {
+            position: Vector3::new(min.x, min.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, min.y, min.z),
+            texture_coordinate: Vector2::new(1f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, min.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, min.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, max.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, min.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        // max z face
+        Vertex {
+            position: Vector3::new(min.x, min.y, max.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, min.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, max.y, max.z),
+            texture_coordinate: Vector2::new(0f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, min.y, max.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        // min y face
+        Vertex {
+            position: Vector3::new(min.x, min.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, min.y, min.z),
+            texture_coordinate: Vector2::new(1f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, min.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, min.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, min.y, max.z),
+            texture_coordinate: Vector2::new(0f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, min.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        // max y face
+        Vertex {
+            position: Vector3::new(min.x, max.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, min.z),
+            texture_coordinate: Vector2::new(1f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, max.y, max.z),
+            texture_coordinate: Vector2::new(0f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, max.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        // min x face
+        Vertex {
+            position: Vector3::new(min.x, min.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, max.y, min.z),
+            texture_coordinate: Vector2::new(1f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, max.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, max.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, min.y, max.z),
+            texture_coordinate: Vector2::new(0f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(min.x, min.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        // max x face
+        Vertex {
+            position: Vector3::new(max.x, min.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, min.z),
+            texture_coordinate: Vector2::new(1f32, 0f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, max.y, max.z),
+            texture_coordinate: Vector2::new(1f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, min.y, max.z),
+            texture_coordinate: Vector2::new(0f32, 1f32),
+            color,
+        },
+        Vertex {
+            position: Vector3::new(max.x, min.y, min.z),
+            texture_coordinate: Vector2::new(0f32, 0f32),
+            color,
+        },
+    ]
 }
