@@ -32,21 +32,18 @@ impl From<Radians<f32>> for f32 {
     }
 }
 
-impl From<Radians<f32>> for Degrees<f32> {
-    fn from(val: Radians<f32>) -> Self {
-        Degrees(val.0 * 180f32 / std::f32::consts::PI)
-    }
-}
-
 impl From<Radians<f64>> for f64 {
     fn from(val: Radians<f64>) -> Self {
         val.0
     }
 }
 
-impl From<Radians<f64>> for Degrees<f64> {
-    fn from(val: Radians<f64>) -> Self {
-        Degrees(val.0 * 180f64 / std::f64::consts::PI)
+impl<T> From<Radians<T>> for Degrees<T>
+where
+    T: Float,
+{
+    fn from(val: Radians<T>) -> Self {
+        Degrees(val.0 * T::_180 / T::PI)
     }
 }
 
@@ -56,26 +53,26 @@ impl From<Degrees<f32>> for f32 {
     }
 }
 
-impl From<Degrees<f32>> for Radians<f32> {
-    fn from(val: Degrees<f32>) -> Self {
-        Radians(val.0 * std::f32::consts::PI / 180f32)
-    }
-}
-
 impl From<Degrees<f64>> for f64 {
     fn from(val: Degrees<f64>) -> Self {
         val.0
     }
 }
 
-impl From<Degrees<f64>> for Radians<f64> {
-    fn from(val: Degrees<f64>) -> Self {
-        Radians(val.0 * std::f64::consts::PI / 180f64)
+impl<T> From<Degrees<T>> for Radians<T>
+where
+    T: Float,
+{
+    fn from(val: Degrees<T>) -> Self {
+        Radians(val.0 * T::PI / T::_180)
     }
 }
 
-impl CouldBeAnAngle for Radians<f32> {
-    type Output = f32;
+impl<T> CouldBeAnAngle for Radians<T>
+where
+    T: CouldBeAnAngle<Output = T>,
+{
+    type Output = T;
 
     fn cos(self) -> Self::Output {
         self.0.cos()
@@ -86,42 +83,22 @@ impl CouldBeAnAngle for Radians<f32> {
     }
 }
 
-impl CouldBeAnAngle for Radians<f64> {
-    type Output = f64;
+impl<T> CouldBeAnAngle for Degrees<T>
+where
+    T: CouldBeAnAngle<Output = T>,
+    Radians<T>: From<Degrees<T>>,
+{
+    type Output = T;
 
     fn cos(self) -> Self::Output {
-        self.0.cos()
-    }
-
-    fn sin(self) -> Self::Output {
-        self.0.sin()
-    }
-}
-
-impl CouldBeAnAngle for Degrees<f32> {
-    type Output = f32;
-
-    fn cos(self) -> Self::Output {
-        let r: Radians<f32> = self.into();
+        // TODO JEFF into_radians()
+        let r: Radians<T> = self.into();
         r.cos()
     }
 
     fn sin(self) -> Self::Output {
-        let r: Radians<f32> = self.into();
-        r.sin()
-    }
-}
-
-impl CouldBeAnAngle for Degrees<f64> {
-    type Output = f64;
-
-    fn cos(self) -> Self::Output {
-        let r: Radians<f64> = self.into();
-        r.cos()
-    }
-
-    fn sin(self) -> Self::Output {
-        let r: Radians<f64> = self.into();
+        // TODO JEFF into_radians()
+        let r: Radians<T> = self.into();
         r.sin()
     }
 }
