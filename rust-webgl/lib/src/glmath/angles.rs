@@ -1,6 +1,6 @@
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
-use super::numbers::{BasicMath, CouldBeAnAngle, Float};
+use super::numbers::{CouldBeAnAngle, Float};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Radians<T>(pub T);
@@ -26,51 +26,51 @@ where
     }
 }
 
-impl Into<f32> for Radians<f32> {
-    fn into(self) -> f32 {
-        self.0
+impl From<Radians<f32>> for f32 {
+    fn from(val: Radians<f32>) -> Self {
+        val.0
     }
 }
 
-impl Into<Degrees<f32>> for Radians<f32> {
-    fn into(self) -> Degrees<f32> {
-        Degrees(self.0 * 180f32 / std::f32::consts::PI)
+impl From<Radians<f32>> for Degrees<f32> {
+    fn from(val: Radians<f32>) -> Self {
+        Degrees(val.0 * 180f32 / std::f32::consts::PI)
     }
 }
 
-impl Into<f64> for Radians<f64> {
-    fn into(self) -> f64 {
-        self.0
+impl From<Radians<f64>> for f64 {
+    fn from(val: Radians<f64>) -> Self {
+        val.0
     }
 }
 
-impl Into<Degrees<f64>> for Radians<f64> {
-    fn into(self) -> Degrees<f64> {
-        Degrees(self.0 * 180f64 / std::f64::consts::PI)
+impl From<Radians<f64>> for Degrees<f64> {
+    fn from(val: Radians<f64>) -> Self {
+        Degrees(val.0 * 180f64 / std::f64::consts::PI)
     }
 }
 
-impl Into<f32> for Degrees<f32> {
-    fn into(self) -> f32 {
-        self.0
+impl From<Degrees<f32>> for f32 {
+    fn from(val: Degrees<f32>) -> Self {
+        val.0
     }
 }
 
-impl Into<Radians<f32>> for Degrees<f32> {
-    fn into(self) -> Radians<f32> {
-        Radians(self.0 * std::f32::consts::PI / 180f32)
+impl From<Degrees<f32>> for Radians<f32> {
+    fn from(val: Degrees<f32>) -> Self {
+        Radians(val.0 * std::f32::consts::PI / 180f32)
     }
 }
 
-impl Into<f64> for Degrees<f64> {
-    fn into(self) -> f64 {
-        self.0
+impl From<Degrees<f64>> for f64 {
+    fn from(val: Degrees<f64>) -> Self {
+        val.0
     }
 }
 
-impl Into<Radians<f64>> for Degrees<f64> {
-    fn into(self) -> Radians<f64> {
-        Radians(self.0 * std::f64::consts::PI / 180f64)
+impl From<Degrees<f64>> for Radians<f64> {
+    fn from(val: Degrees<f64>) -> Self {
+        Radians(val.0 * std::f64::consts::PI / 180f64)
     }
 }
 

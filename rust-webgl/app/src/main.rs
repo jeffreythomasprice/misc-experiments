@@ -9,7 +9,7 @@ use lib::{
     },
     errors::Result,
     glmath::{
-        angles::{Degrees, Radians},
+        angles::{Degrees},
         matrix4::Matrix4,
         numbers::CouldBeAnAngle,
         rgba::Rgba,
@@ -222,7 +222,7 @@ impl State {
             self.context.uniform_matrix4fv_with_f32_array(
                 Some(&self.program.get_uniform("uniform_matrix")?.location),
                 false,
-                &self
+                self
                     .perspective_matrix
                     .clone()
                     .append(Matrix4::new_look_at(
