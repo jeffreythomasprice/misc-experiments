@@ -21,7 +21,10 @@ use lib::{
 };
 use log::*;
 
-use wasm_bindgen::{prelude::Closure, JsCast};
+use wasm_bindgen::{
+    prelude::{wasm_bindgen, Closure},
+    JsCast, JsValue,
+};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 #[repr(C)]

@@ -19,8 +19,11 @@ impl From<&str> for Error {
 
 impl From<JsValue> for Error {
     fn from(value: JsValue) -> Self {
-        // TODO check if value is a string, or an exception with a stack trace
-        Self(format!("JsValue({value:?})"))
+        if let Ok::<web_sys::Exception, _>(e) = value.clone().try_into() {
+            Self(format!("{}\n{}", e.message(), e.stack()))
+        } else {
+            Self(format!("JsValue({value:?})"))
+        }
     }
 }
 
