@@ -22,15 +22,26 @@ pub trait ExtraMathFunctions: Sized {
     fn sqrt(self) -> Self;
 }
 
-pub trait Float: BasicMath + CouldBeAnAngle + ExtraMathFunctions {}
+pub trait Float: BasicMath + CouldBeAnAngle + ExtraMathFunctions {
+    const ZERO: Self;
+    const ONE: Self;
+}
 
 impl BasicMath for f32 {}
 
 impl BasicMath for f64 {}
 
-impl Float for f32 {}
+impl Float for f32 {
+    const ZERO: Self = 0f32;
 
-impl Float for f64 {}
+    const ONE: Self = 1f32;
+}
+
+impl Float for f64 {
+    const ZERO: Self = 0f64;
+
+    const ONE: Self = 1f64;
+}
 
 impl CouldBeAnAngle for f32 {
     type Output = f32;

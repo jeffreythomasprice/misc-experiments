@@ -22,23 +22,21 @@ impl<T> Matrix4<T>
 where
     T: Float,
 {
-    // TODO JEFF in here
+    pub fn new_identity() -> Self {
+        Self {
+            data: [
+                [T::ONE, T::ZERO, T::ZERO, T::ZERO],
+                [T::ZERO, T::ONE, T::ZERO, T::ZERO],
+                [T::ZERO, T::ZERO, T::ONE, T::ZERO],
+                [T::ZERO, T::ZERO, T::ZERO, T::ONE],
+            ],
+        }
+    }
 }
 
 // TODO JEFF use generic Float stuff below here
 
 impl Matrix4<f32> {
-    pub fn new_identity() -> Self {
-        Self {
-            data: [
-                [1f32, 0f32, 0f32, 0f32],
-                [0f32, 1f32, 0f32, 0f32],
-                [0f32, 0f32, 1f32, 0f32],
-                [0f32, 0f32, 0f32, 1f32],
-            ],
-        }
-    }
-
     pub fn new_translation(v: Vector3<f32>) -> Self {
         Self {
             data: [

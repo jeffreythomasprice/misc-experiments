@@ -26,9 +26,21 @@ where
     }
 }
 
+impl Into<f32> for Radians<f32> {
+    fn into(self) -> f32 {
+        self.0
+    }
+}
+
 impl Into<Degrees<f32>> for Radians<f32> {
     fn into(self) -> Degrees<f32> {
         Degrees(self.0 * 180f32 / std::f32::consts::PI)
+    }
+}
+
+impl Into<f64> for Radians<f64> {
+    fn into(self) -> f64 {
+        self.0
     }
 }
 
@@ -38,9 +50,21 @@ impl Into<Degrees<f64>> for Radians<f64> {
     }
 }
 
+impl Into<f32> for Degrees<f32> {
+    fn into(self) -> f32 {
+        self.0
+    }
+}
+
 impl Into<Radians<f32>> for Degrees<f32> {
     fn into(self) -> Radians<f32> {
         Radians(self.0 * std::f32::consts::PI / 180f32)
+    }
+}
+
+impl Into<f64> for Degrees<f64> {
+    fn into(self) -> f64 {
+        self.0
     }
 }
 
