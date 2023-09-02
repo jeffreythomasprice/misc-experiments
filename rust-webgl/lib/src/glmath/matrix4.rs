@@ -2,7 +2,7 @@ use std::ops::Mul;
 
 use super::{
     angles::Radians,
-    numbers::{BasicMath, CouldBeAnAngle, Float},
+    numbers::{CouldBeAnAngle, Float},
     vector3::Vector3,
 };
 
@@ -57,8 +57,8 @@ where
     }
 
     pub fn new_rotation(angle: Radians<T>, axis: Vector3<T>) -> Self {
-        let c: T = angle.cos().into();
-        let s: T = angle.sin().into();
+        let c: T = angle.cos();
+        let s: T = angle.sin();
         let one_minus_c = T::ONE - c;
         let axis = axis.normalized();
         Self {
