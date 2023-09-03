@@ -28,6 +28,9 @@ pub trait CouldBeAnAngle: Sized {
 pub trait ExtraMathFunctions: Sized {
     fn sqrt(self) -> Self;
     fn tan(self) -> Self;
+    fn acos(self) -> Self;
+    fn asin(self) -> Self;
+    fn atan(self) -> Self;
 }
 
 pub trait Float: BasicMath + CouldBeAnAngle + ExtraMathFunctions {
@@ -126,6 +129,18 @@ impl ExtraMathFunctions for f32 {
     fn tan(self) -> Self {
         self.tan()
     }
+
+    fn acos(self) -> Self {
+        self.acos()
+    }
+
+    fn asin(self) -> Self {
+        self.asin()
+    }
+
+    fn atan(self) -> Self {
+        self.atan()
+    }
 }
 
 impl CouldBeAnAngle for f64 {
@@ -147,6 +162,18 @@ impl ExtraMathFunctions for f64 {
 
     fn tan(self) -> Self {
         self.tan()
+    }
+
+    fn acos(self) -> Self {
+        self.acos()
+    }
+
+    fn asin(self) -> Self {
+        self.asin()
+    }
+
+    fn atan(self) -> Self {
+        self.atan()
     }
 }
 

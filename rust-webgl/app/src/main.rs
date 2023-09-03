@@ -1,6 +1,6 @@
 #![feature(offset_of)]
 
-use std::{collections::HashMap, rc::Rc, sync::Mutex};
+use std::{collections::HashMap, rc::Rc, sync::Mutex, time::Duration};
 
 use lib::{
     dom::{
@@ -9,8 +9,8 @@ use lib::{
     },
     errors::Result,
     glmath::{
-        angles::Degrees, matrix4::Matrix4, numbers::CouldBeAnAngle, rgba::Rgba, vector2::Vector2,
-        vector3::Vector3,
+        angles::Degrees, fpscamera::FPSCamera, matrix4::Matrix4, numbers::CouldBeAnAngle,
+        rgba::Rgba, vector2::Vector2, vector3::Vector3,
     },
     webgl::{
         buffers::Buffer,
@@ -21,10 +21,7 @@ use lib::{
 };
 use log::*;
 
-use wasm_bindgen::{
-    prelude::{Closure},
-    JsCast,
-};
+use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 #[repr(C)]
@@ -48,7 +45,9 @@ struct State {
 
     ortho_matrix: Matrix4<f32>,
     perspective_matrix: Matrix4<f32>,
+    // TODO JEFF replace rotation with camera
     rotation: Degrees<f32>,
+    camera: FPSCamera<f32>,
 }
 
 impl State {
@@ -146,6 +145,13 @@ impl State {
             ortho_matrix: Matrix4::new_identity(),
             perspective_matrix: Matrix4::new_identity(),
             rotation: Degrees(0f32),
+            camera: FPSCamera::new(
+                Vector3::new(4f32, 3f32, 4f32),
+                Vector3::new(0f32, 0f32, 1f32),
+                Vector3::new(0f32, 1f32, 0f32),
+            )
+            .look_at(Vector3::new(0f32, 0f32, 0f32))
+            .clone(),
         })
     }
 
@@ -180,9 +186,10 @@ impl State {
     }
 
     pub fn animate(&mut self, time: f64) -> Result<()> {
-        let delta = ((time - self.last_time) / 1000f64) as f32;
+        let delta = Duration::from_secs_f64((time - self.last_time) / 1000f64);
         self.last_time = time;
-        self.rotation = (self.rotation + Degrees(45f32) * Degrees(delta)) % Degrees(360f32);
+        self.rotation =
+            (self.rotation + Degrees(45f32) * Degrees(delta.as_secs_f32())) % Degrees(360f32);
 
         self.context.clear_color(0.25, 0.5, 0.75, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
@@ -195,13 +202,16 @@ impl State {
         self.program.use_program();
 
         self.program.get_uniform("uniform_matrix")?.set_matrixf(
-            self.perspective_matrix.clone().append(Matrix4::new_look_at(
-                Vector3::new(self.rotation.cos(), 0f32, self.rotation.sin()) * 6f32
-                    + Vector3::new(0f32, 4f32, 0f32),
-                Vector3::new(0f32, 0f32, 0f32),
-                Vector3::new(0f32, 1f32, 0f32),
-            )),
+            self.perspective_matrix
+                .clone()
+                .append(*self.camera.matrix()),
         );
+
+        // .append(Matrix4::new_look_at(
+        //     Vector3::new(self.rotation.cos(), 0f32, self.rotation.sin()) * 6f32
+        //         + Vector3::new(0f32, 4f32, 0f32),
+        // Vector3::new(0f32, 0f32, 0f32),
+        // Vector3::new(0f32, 1f32, 0f32),
 
         self.context
             .active_texture(WebGl2RenderingContext::TEXTURE1);

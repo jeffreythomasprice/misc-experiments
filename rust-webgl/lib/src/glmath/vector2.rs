@@ -1,9 +1,12 @@
-use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::{
+    fmt::{Debug, Display},
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
+};
 
 use super::numbers::Float;
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vector2<T> {
     pub x: T,
     pub y: T,
@@ -12,6 +15,15 @@ pub struct Vector2<T> {
 impl<T> Vector2<T> {
     pub fn new(x: T, y: T) -> Self {
         Self { x, y }
+    }
+}
+
+impl<T> Display for Vector2<T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
     }
 }
 
@@ -50,6 +62,15 @@ where
     }
 }
 
+impl<T> AddAssign for Vector2<T>
+where
+    T: Float + Copy,
+{
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs
+    }
+}
+
 impl<T> Sub for Vector2<T>
 where
     T: Float + Copy,
@@ -61,6 +82,15 @@ where
             x: self.x - rhs.x,
             y: self.y - rhs.y,
         }
+    }
+}
+
+impl<T> SubAssign for Vector2<T>
+where
+    T: Float + Copy,
+{
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self + rhs
     }
 }
 
@@ -78,6 +108,15 @@ where
     }
 }
 
+impl<T> MulAssign<T> for Vector2<T>
+where
+    T: Float + Copy,
+{
+    fn mul_assign(&mut self, rhs: T) {
+        *self = *self * rhs
+    }
+}
+
 impl<T> Div<T> for Vector2<T>
 where
     T: Float + Copy,
@@ -89,6 +128,15 @@ where
             x: self.x / rhs,
             y: self.y / rhs,
         }
+    }
+}
+
+impl<T> DivAssign<T> for Vector2<T>
+where
+    T: Float + Copy,
+{
+    fn div_assign(&mut self, rhs: T) {
+        *self = *self / rhs
     }
 }
 

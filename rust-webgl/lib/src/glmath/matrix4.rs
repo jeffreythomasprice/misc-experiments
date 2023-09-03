@@ -2,7 +2,7 @@ use std::ops::Mul;
 
 use super::{
     angles::Radians,
-    numbers::{CouldBeAnAngle, Float},
+    numbers::{BasicMath, CouldBeAnAngle, Float},
     vector3::Vector3,
 };
 
@@ -150,6 +150,36 @@ where
     }
 }
 
+impl<T> Matrix4<T>
+where
+    T: Float + Copy,
+{
+    pub fn apply_to_point(&self, input: Vector3<T>) -> Vector3<T> {
+        Vector3::new(
+            self.data[0][0] * input.x
+                + self.data[1][0] * input.y
+                + self.data[2][0] * input.z
+                + self.data[3][0],
+            self.data[0][1] * input.x
+                + self.data[1][1] * input.y
+                + self.data[2][1] * input.z
+                + self.data[3][1],
+            self.data[0][2] * input.x
+                + self.data[1][2] * input.y
+                + self.data[2][2] * input.z
+                + self.data[3][2],
+        )
+    }
+
+    pub fn apply_to_vector(&self, input: Vector3<T>) -> Vector3<T> {
+        Vector3::new(
+            self.data[0][0] * input.x + self.data[1][0] * input.y + self.data[2][0] * input.z,
+            self.data[0][1] * input.x + self.data[1][1] * input.y + self.data[2][1] * input.z,
+            self.data[0][2] * input.x + self.data[1][2] * input.y + self.data[2][2] * input.z,
+        )
+    }
+}
+
 impl<T> Mul for Matrix4<T>
 where
     T: Float + Copy,
@@ -171,5 +201,208 @@ where
             }
         }
         Self::Output { data }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use std::fmt::Display;
+
+    use crate::glmath::angles::Degrees;
+
+    use super::*;
+
+    #[test]
+    fn identity() {
+        let m = Matrix4::new_identity();
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 2f64, 3f64)),
+            Vector3::new(1f64, 2f64, 3f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 2f64, 3f64)),
+            Vector3::new(1f64, 2f64, 3f64),
+            1e-8f64,
+        );
+    }
+
+    #[test]
+    fn translation() {
+        let m = Matrix4::new_translation(Vector3::new(1f64, 2f64, 3f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(2f64, 3f64, 4f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, 1f64, 1f64),
+            1e-8f64,
+        );
+    }
+
+    #[test]
+    fn scale() {
+        let m = Matrix4::new_scale(Vector3::new(2f64, 3f64, 4f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(2f64, 2f64, 2f64)),
+            Vector3::new(4f64, 6f64, 8f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(2f64, 2f64, 2f64)),
+            Vector3::new(4f64, 6f64, 8f64),
+            1e-8f64,
+        );
+    }
+
+    #[test]
+    fn rotation_x() {
+        let m = Matrix4::new_rotation(Degrees(90f64).into(), Vector3::new(1f64, 0f64, 0f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, 1f64, -1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, 1f64, -1f64),
+            1e-8f64,
+        );
+
+        let m = Matrix4::new_rotation(Degrees(-90f64).into(), Vector3::new(1f64, 0f64, 0f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, -1f64, 1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, -1f64, 1f64),
+            1e-8f64,
+        );
+
+        let m = Matrix4::new_rotation(Degrees(90f64).into(), Vector3::new(-1f64, 0f64, 0f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, -1f64, 1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, -1f64, 1f64),
+            1e-8f64,
+        );
+    }
+
+    #[test]
+    fn rotation_y() {
+        let m = Matrix4::new_rotation(Degrees(90f64).into(), Vector3::new(0f64, 1f64, 0f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(-1f64, 1f64, 1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(-1f64, 1f64, 1f64),
+            1e-8f64,
+        );
+
+        let m = Matrix4::new_rotation(Degrees(-90f64).into(), Vector3::new(0f64, 1f64, 0f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, 1f64, -1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, 1f64, -1f64),
+            1e-8f64,
+        );
+
+        let m = Matrix4::new_rotation(Degrees(90f64).into(), Vector3::new(0f64, -1f64, 0f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, 1f64, -1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, 1f64, -1f64),
+            1e-8f64,
+        );
+    }
+
+    #[test]
+    fn rotation_z() {
+        let m = Matrix4::new_rotation(Degrees(90f64).into(), Vector3::new(0f64, 0f64, 1f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, -1f64, 1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(1f64, -1f64, 1f64),
+            1e-8f64,
+        );
+
+        let m = Matrix4::new_rotation(Degrees(-90f64).into(), Vector3::new(0f64, 0f64, 1f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(-1f64, 1f64, 1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(-1f64, 1f64, 1f64),
+            1e-8f64,
+        );
+
+        let m = Matrix4::new_rotation(Degrees(90f64).into(), Vector3::new(0f64, 0f64, -1f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(-1f64, 1f64, 1f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(-1f64, 1f64, 1f64),
+            1e-8f64,
+        );
+    }
+
+    #[test]
+    fn translation_and_rotation() {
+        let m = *Matrix4::new_identity()
+            .rotate(Degrees(90f64).into(), Vector3::new(0f64, 1f64, 0f64))
+            .translate(Vector3::new(1f64, 2f64, 3f64));
+        assert_vector3_close_to(
+            m.apply_to_point(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(-4f64, 3f64, 2f64),
+            1e-8f64,
+        );
+        assert_vector3_close_to(
+            m.apply_to_vector(Vector3::new(1f64, 1f64, 1f64)),
+            Vector3::new(-1f64, 1f64, 1f64),
+            1e-8f64,
+        );
+    }
+
+    fn assert_vector3_close_to<T>(a: Vector3<T>, b: Vector3<T>, max_distance: T)
+    where
+        T: Float + Copy + PartialOrd + Display,
+    {
+        let actual_distance = (a - b).magnitude();
+        assert!(
+            actual_distance < max_distance,
+            "expected {} and {} to be within {}, actual distance {}",
+            a,
+            b,
+            max_distance,
+            actual_distance
+        );
     }
 }
