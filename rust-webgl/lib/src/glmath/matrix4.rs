@@ -2,7 +2,7 @@ use std::ops::Mul;
 
 use super::{
     angles::Radians,
-    numbers::{BasicMath, CouldBeAnAngle, Float},
+    numbers::{CouldBeAnAngle, Float},
     vector3::Vector3,
 };
 

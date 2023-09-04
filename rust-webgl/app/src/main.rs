@@ -45,7 +45,7 @@ struct State {
 
     ortho_matrix: Matrix4<f32>,
     perspective_matrix: Matrix4<f32>,
-    // TODO JEFF replace rotation with camera
+    // TODO JEFF replace auto rotation with mouse move
     rotation: Degrees<f32>,
     camera: FPSCamera<f32>,
 }
@@ -131,6 +131,13 @@ impl State {
             )?
         };
 
+        let mut camera = FPSCamera::new(
+            Vector3::new(4f32, 3f32, 4f32),
+            Vector3::new(0f32, 0f32, 1f32),
+            Vector3::new(0f32, 1f32, 0f32),
+        );
+        camera.look_at(Vector3::new(0f32, 0f32, 0f32));
+
         Ok(Self {
             canvas,
             context,
@@ -145,13 +152,7 @@ impl State {
             ortho_matrix: Matrix4::new_identity(),
             perspective_matrix: Matrix4::new_identity(),
             rotation: Degrees(0f32),
-            camera: FPSCamera::new(
-                Vector3::new(4f32, 3f32, 4f32),
-                Vector3::new(0f32, 0f32, 1f32),
-                Vector3::new(0f32, 1f32, 0f32),
-            )
-            .look_at(Vector3::new(0f32, 0f32, 0f32))
-            .clone(),
+            camera,
         })
     }
 
@@ -201,17 +202,17 @@ impl State {
 
         self.program.use_program();
 
-        self.program.get_uniform("uniform_matrix")?.set_matrixf(
-            self.perspective_matrix
-                .clone()
-                .append(*self.camera.matrix()),
-        );
+        {
+            self.camera.set_position(
+                Vector3::new(self.rotation.cos(), 0f32, self.rotation.sin()) * 6f32
+                    + Vector3::new(0f32, 4f32, 0f32),
+            );
+            self.camera.look_at(Vector3::new(0f32, 0f32, 0f32));
 
-        // .append(Matrix4::new_look_at(
-        //     Vector3::new(self.rotation.cos(), 0f32, self.rotation.sin()) * 6f32
-        //         + Vector3::new(0f32, 4f32, 0f32),
-        // Vector3::new(0f32, 0f32, 0f32),
-        // Vector3::new(0f32, 1f32, 0f32),
+            self.program
+                .get_uniform("uniform_matrix")?
+                .set_matrixf(self.perspective_matrix.clone().append(self.camera.matrix()));
+        }
 
         self.context
             .active_texture(WebGl2RenderingContext::TEXTURE1);

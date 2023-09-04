@@ -101,7 +101,7 @@ where
     T: Float + Copy,
 {
     fn sub_assign(&mut self, rhs: Self) {
-        *self = *self + rhs
+        *self += rhs
     }
 }
 
