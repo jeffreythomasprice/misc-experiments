@@ -9,8 +9,13 @@ use lib::{
     },
     errors::Result,
     glmath::{
-        angles::Degrees, fpscamera::FPSCamera, matrix4::Matrix4, numbers::CouldBeAnAngle,
-        rgba::Rgba, vector2::Vector2, vector3::Vector3,
+        angles::{Degrees, Radians},
+        fpscamera::FPSCamera,
+        matrix4::Matrix4,
+        numbers::CouldBeAnAngle,
+        rgba::Rgba,
+        vector2::Vector2,
+        vector3::Vector3,
     },
     webgl::{
         buffers::Buffer,
@@ -43,10 +48,10 @@ struct State {
 
     last_time: f64,
 
+    last_mouse_location: Option<Vector2<i32>>,
+
     ortho_matrix: Matrix4<f32>,
     perspective_matrix: Matrix4<f32>,
-    // TODO JEFF replace auto rotation with mouse move
-    rotation: Degrees<f32>,
     camera: FPSCamera<f32>,
 }
 
@@ -149,9 +154,10 @@ impl State {
 
             last_time: 0f64,
 
+            last_mouse_location: None,
+
             ortho_matrix: Matrix4::new_identity(),
             perspective_matrix: Matrix4::new_identity(),
-            rotation: Degrees(0f32),
             camera,
         })
     }
@@ -189,8 +195,6 @@ impl State {
     pub fn animate(&mut self, time: f64) -> Result<()> {
         let delta = Duration::from_secs_f64((time - self.last_time) / 1000f64);
         self.last_time = time;
-        self.rotation =
-            (self.rotation + Degrees(45f32) * Degrees(delta.as_secs_f32())) % Degrees(360f32);
 
         self.context.clear_color(0.25, 0.5, 0.75, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
@@ -202,17 +206,9 @@ impl State {
 
         self.program.use_program();
 
-        {
-            self.camera.set_position(
-                Vector3::new(self.rotation.cos(), 0f32, self.rotation.sin()) * 6f32
-                    + Vector3::new(0f32, 4f32, 0f32),
-            );
-            self.camera.look_at(Vector3::new(0f32, 0f32, 0f32));
-
-            self.program
-                .get_uniform("uniform_matrix")?
-                .set_matrixf(self.perspective_matrix.clone().append(self.camera.matrix()));
-        }
+        self.program
+            .get_uniform("uniform_matrix")?
+            .set_matrixf(self.perspective_matrix.clone().append(self.camera.matrix()));
 
         self.context
             .active_texture(WebGl2RenderingContext::TEXTURE1);
@@ -228,6 +224,19 @@ impl State {
         self.context.use_program(None);
 
         self.context.disable(WebGl2RenderingContext::DEPTH_TEST);
+
+        Ok(())
+    }
+
+    pub fn mousemove(&mut self, location: Vector2<i32>) -> Result<()> {
+        if let Some(last) = self.last_mouse_location {
+            let delta = location - last;
+
+            let delta = Vector2::new(delta.x as f32, delta.y as f32) / 5f32;
+            self.camera
+                .turn(Degrees(delta.y).into(), Degrees(delta.x).into())
+        }
+        self.last_mouse_location = Some(location);
 
         Ok(())
     }
@@ -274,7 +283,7 @@ fn main_impl() -> Result<()> {
             .map_err(|_| "expected webgl2 context but got some other kind of context")?
     };
 
-    let state = Rc::new(Mutex::new(State::new(canvas, context)?));
+    let state = Rc::new(Mutex::new(State::new(canvas.clone(), context)?));
 
     {
         let mut state = state.lock().unwrap();
@@ -283,7 +292,6 @@ fn main_impl() -> Result<()> {
 
     {
         let state = state.clone();
-
         let closure: Closure<dyn Fn()> = Closure::new(move || {
             let mut state = state.lock().unwrap();
             if let Err(e) = state.resize() {
@@ -293,9 +301,23 @@ fn main_impl() -> Result<()> {
         window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())?;
         // intentionally leak memory to keep this closure alive forever so js can call it
         closure.forget();
-
-        request_animation_frame_loop(move |_time| Ok(RequestAnimationFrameStatus::Continue))?;
     }
+
+    {
+        let state = state.clone();
+        let closure: Closure<dyn Fn(_)> = Closure::new(move |e: web_sys::MouseEvent| {
+            let mut state = state.lock().unwrap();
+            if let Err(e) = state.mousemove(Vector2::new(e.client_x(), e.client_y())) {
+                error!("error on mousemove: {e:?}");
+            }
+        });
+        canvas.add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref())?;
+        // intentionally leak memory to keep this closure alive forever so js can call it
+        closure.forget();
+    }
+
+    // TODO JEFF mouse down, mouse up
+    // TODO JEFF grab cursor on mouse down
 
     {
         let state = state.clone();

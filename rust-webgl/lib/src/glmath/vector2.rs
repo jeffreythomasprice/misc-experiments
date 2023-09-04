@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use super::numbers::Float;
+use super::numbers::{BasicMath, Float};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -27,6 +27,7 @@ where
     }
 }
 
+// TODO JEFF clean up types, doesn't all have to be Float
 impl<T> Vector2<T>
 where
     T: Float + Copy,
@@ -50,7 +51,7 @@ where
 
 impl<T> Add for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
@@ -64,7 +65,7 @@ where
 
 impl<T> AddAssign for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs
@@ -73,7 +74,7 @@ where
 
 impl<T> Sub for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
@@ -87,7 +88,7 @@ where
 
 impl<T> SubAssign for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     fn sub_assign(&mut self, rhs: Self) {
         *self += rhs
@@ -96,7 +97,7 @@ where
 
 impl<T> Mul<T> for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
@@ -110,7 +111,7 @@ where
 
 impl<T> MulAssign<T> for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     fn mul_assign(&mut self, rhs: T) {
         *self = *self * rhs
@@ -119,7 +120,7 @@ where
 
 impl<T> Div<T> for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
@@ -133,7 +134,7 @@ where
 
 impl<T> DivAssign<T> for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     fn div_assign(&mut self, rhs: T) {
         *self = *self / rhs
@@ -142,7 +143,7 @@ where
 
 impl<T> Neg for Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 

@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, fmt::Display};
 
 use super::{
     angles::Radians,
@@ -101,7 +101,18 @@ where
     }
 
     // TODO JEFF helper for moving based on current look direction
-    // TODO JEFF helper for turning based on camera local xy (i.e. mouse movement)
+
+    /*
+    the delta adjusts the x and y angles
+
+    if based on mouse movement:
+    the x component should be based on mouse y, because it cooresponds to looking up and down
+    the y component should be based on mouse x, because it corresponds to looking left and right
+    */
+    pub fn turn(&mut self, x: Radians<T>, y: Radians<T>) {
+        self.set_angle_x(self.angle_x + x);
+        self.set_angle_y(self.angle_y + y);
+    }
 
     pub fn look_at(&mut self, target: Vector3<T>) {
         // the direction we want the camera to be pointing in

@@ -49,6 +49,14 @@ pub trait Float: BasicMath + CouldBeAnAngle + ExtraMathFunctions {
     const FRAC_2_SQRT_PI: Self;
 }
 
+impl BasicMath for i8 {}
+
+impl BasicMath for i16 {}
+
+impl BasicMath for i32 {}
+
+impl BasicMath for i64 {}
+
 impl BasicMath for f32 {}
 
 impl BasicMath for f64 {}

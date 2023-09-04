@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use super::numbers::Float;
+use super::numbers::{BasicMath, Float};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -19,6 +19,16 @@ impl<T> Vector3<T> {
     }
 }
 
+impl<T> Display for Vector3<T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
+    }
+}
+
+// TODO JEFF clean up types, doesn't all have to be Float
 impl<T> Vector3<T>
 where
     T: Float + Copy,
@@ -48,18 +58,9 @@ where
     }
 }
 
-impl<T> Display for Vector3<T>
-where
-    T: Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {}, {})", self.x, self.y, self.z)
-    }
-}
-
 impl<T> Add for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
@@ -74,7 +75,7 @@ where
 
 impl<T> AddAssign for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     fn add_assign(&mut self, rhs: Self) {
         *self = *self + rhs
@@ -83,7 +84,7 @@ where
 
 impl<T> Sub for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
@@ -98,7 +99,7 @@ where
 
 impl<T> SubAssign for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     fn sub_assign(&mut self, rhs: Self) {
         *self += rhs
@@ -107,7 +108,7 @@ where
 
 impl<T> Mul<T> for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
@@ -122,7 +123,7 @@ where
 
 impl<T> MulAssign<T> for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     fn mul_assign(&mut self, rhs: T) {
         *self = *self * rhs
@@ -131,7 +132,7 @@ where
 
 impl<T> Div<T> for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
@@ -146,7 +147,7 @@ where
 
 impl<T> DivAssign<T> for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     fn div_assign(&mut self, rhs: T) {
         *self = *self / rhs
@@ -155,7 +156,7 @@ where
 
 impl<T> Neg for Vector3<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     type Output = Self;
 
