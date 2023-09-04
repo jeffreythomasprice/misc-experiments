@@ -32,6 +32,7 @@ struct State {
     context: Rc<WebGl2RenderingContext>,
 
     program: ShaderProgram,
+    vertex_count: i32,
     _buffer: Buffer,
     vertex_array: VertexArray,
     texture: Texture,
@@ -55,14 +56,15 @@ impl State {
         let texture_coordinate_attribute = program.get_attribute("in_texture_coordinate")?;
         let color_attribute = program.get_attribute("in_color")?;
 
+        let vertices = cube(
+            Vector3::new(0f32, 0f32, 0f32),
+            Vector3::new(2f32, 2f32, 2f32),
+            Rgba::new(1f32, 1f32, 1f32, 1f32),
+        );
         let buffer = Buffer::new_with_typed(
             context.clone(),
             WebGl2RenderingContext::ARRAY_BUFFER,
-            &cube(
-                Vector3::new(0f32, 0f32, 0f32),
-                Vector3::new(2f32, 2f32, 2f32),
-                Rgba::new(1f32, 1f32, 1f32, 1f32),
-            ),
+            &vertices,
             WebGl2RenderingContext::STATIC_DRAW,
         )?;
 
@@ -133,6 +135,7 @@ impl State {
             context,
 
             program,
+            vertex_count: vertices.len().try_into()?,
             _buffer: buffer,
             vertex_array,
             texture,
@@ -210,9 +213,8 @@ impl EventListener for State {
         self.program.get_uniform("uniform_texture")?.set1i(1);
 
         self.vertex_array.bind();
-        // TODO should be pulling the number of verticies to draw from the number of vertices or indices
         self.context
-            .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 36);
+            .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, self.vertex_count);
         self.context.bind_vertex_array(None);
 
         self.context.use_program(None);
