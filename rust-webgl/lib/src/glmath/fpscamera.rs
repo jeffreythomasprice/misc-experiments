@@ -101,7 +101,10 @@ where
         self.matrix.replace(None);
     }
 
-    // TODO JEFF helper for moving based on current look direction
+    pub fn move_by(&mut self, forward: T, right: T, up: T) {
+        // self.set_position(self.position + Vector3::new());
+        todo!("TODO JEFF implement move_by")
+    }
 
     /*
     the delta adjusts the x and y angles

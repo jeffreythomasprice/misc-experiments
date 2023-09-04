@@ -3,7 +3,7 @@
 use std::{rc::Rc, time::Duration};
 
 use lib::{
-    dom::game::{event_listeners::EventListener, main::launch},
+    dom::game::{event_listeners::EventListener, event_state::EventState, main::launch},
     errors::Result,
     glmath::{
         angles::Degrees, fpscamera::FPSCamera, matrix4::Matrix4, rgba::Rgba, vector2::Vector2,
@@ -145,7 +145,42 @@ impl State {
 }
 
 impl EventListener for State {
-    fn animate(&mut self, _delta: Duration) -> Result<()> {
+    fn animate(&mut self, delta: Duration, event_state: &EventState) -> Result<()> {
+        let key_left = event_state.is_keyboard_key_code_pressed(65)
+            || event_state.is_keyboard_key_code_pressed(37);
+        let key_right = event_state.is_keyboard_key_code_pressed(68)
+            || event_state.is_keyboard_key_code_pressed(39);
+        let key_up = event_state.is_keyboard_key_code_pressed(87)
+            || event_state.is_keyboard_key_code_pressed(38);
+        let key_down = event_state.is_keyboard_key_code_pressed(83)
+            || event_state.is_keyboard_key_code_pressed(40);
+        let key_raise = event_state.is_keyboard_key_code_pressed(32);
+        let key_lower = event_state.is_keyboard_key_code_pressed(16);
+
+        let forward = if key_up && !key_down {
+            1f32
+        } else if !key_up && key_down {
+            -1f32
+        } else {
+            0f32
+        };
+        let right = if key_left && !key_right {
+            -1f32
+        } else if !key_left && key_right {
+            1f32
+        } else {
+            0f32
+        };
+        let up = if key_raise && !key_lower {
+            1f32
+        } else if !key_raise && key_lower {
+            -1f32
+        } else {
+            0f32
+        };
+
+        self.camera.move_by(forward, right, up);
+
         Ok(())
     }
 
@@ -200,6 +235,7 @@ impl EventListener for State {
 
     fn mousemove(
         &mut self,
+        event_state: &EventState,
         _location: Vector2<i32>,
         delta: Vector2<i32>,
         is_pointer_locked: bool,
@@ -213,11 +249,29 @@ impl EventListener for State {
         Ok(())
     }
 
-    fn mousedown(&mut self, _button: i16, _location: Vector2<i32>) -> Result<()> {
+    fn mousedown(
+        &mut self,
+        event_state: &EventState,
+        _button: i16,
+        _location: Vector2<i32>,
+    ) -> Result<()> {
         Ok(())
     }
 
-    fn mouseup(&mut self, _button: i16, _location: Vector2<i32>) -> Result<()> {
+    fn mouseup(
+        &mut self,
+        event_state: &EventState,
+        _button: i16,
+        _location: Vector2<i32>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    fn keydown(&mut self, event_state: &EventState, key: String, key_code: u32) -> Result<()> {
+        Ok(())
+    }
+
+    fn keyup(&mut self, event_state: &EventState, key: String, key_code: u32) -> Result<()> {
         Ok(())
     }
 }

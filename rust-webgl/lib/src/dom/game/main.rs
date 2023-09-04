@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc, sync::Mutex, time::Duration};
 
 use log::*;
 use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
+use web_sys::{HtmlCanvasElement, KeyboardEvent, MouseEvent, WebGl2RenderingContext};
 
 use crate::{
     dom::{
@@ -13,7 +13,10 @@ use crate::{
     glmath::vector2::Vector2,
 };
 
-use super::event_listeners::EventListener;
+use super::{
+    event_listeners::EventListener,
+    event_state::{self, EventState},
+};
 
 pub fn launch<EventListenerImpl, EventListenerFactory>(
     event_listener_factory: EventListenerFactory,
@@ -65,6 +68,7 @@ where
         let canvas = canvas.clone();
         let closure: Closure<dyn Fn()> = Closure::new(move || {
             let state = &mut *state.lock().unwrap();
+
             if let Err(e) = resize(state, &canvas) {
                 error!("error resizing: {e:?}");
             }
@@ -74,13 +78,17 @@ where
         closure.forget();
     }
 
+    let event_state = Rc::new(Mutex::new(EventState::new()));
+
     {
         let closure: Closure<dyn Fn(_)> = {
             let state = state.clone();
             let canvas = canvas.clone();
             let document = document.clone();
-            Closure::new(move |e: web_sys::MouseEvent| {
+            let event_state = event_state.clone();
+            Closure::new(move |e: MouseEvent| {
                 let mut state = state.lock().unwrap();
+                let mut event_state = event_state.lock().unwrap();
 
                 let is_pointer_locked = if let Some(lock_element) = document.pointer_lock_element()
                 {
@@ -89,11 +97,12 @@ where
                     false
                 };
 
-                if let Err(e) = state.mousemove(
-                    Vector2::new(e.client_x(), e.client_y()),
-                    Vector2::new(e.movement_x(), e.movement_y()),
-                    is_pointer_locked,
-                ) {
+                let location = Vector2::new(e.client_x(), e.client_y());
+                let delta = Vector2::new(e.movement_x(), e.movement_y());
+
+                event_state.mousemove(location, is_pointer_locked);
+
+                if let Err(e) = state.mousemove(&event_state, location, delta, is_pointer_locked) {
                     error!("error on mousemove: {e:?}");
                 }
             })
@@ -105,9 +114,17 @@ where
 
     {
         let state = state.clone();
-        let closure: Closure<dyn Fn(_)> = Closure::new(move |e: web_sys::MouseEvent| {
+        let event_state = event_state.clone();
+        let closure: Closure<dyn Fn(_)> = Closure::new(move |e: MouseEvent| {
             let mut state = state.lock().unwrap();
-            if let Err(e) = state.mousedown(e.button(), Vector2::new(e.client_x(), e.client_y())) {
+            let mut event_state = event_state.lock().unwrap();
+
+            let button = e.button();
+            let location = Vector2::new(e.client_x(), e.client_y());
+
+            event_state.mousedown(button, location);
+
+            if let Err(e) = state.mousedown(&event_state, button, location) {
                 error!("error on mousedown: {e:?}");
             }
         });
@@ -121,8 +138,10 @@ where
             let state = state.clone();
             let canvas = canvas.clone();
             let document = document.clone();
-            Closure::new(move |e: web_sys::MouseEvent| {
+            let event_state = event_state.clone();
+            Closure::new(move |e: MouseEvent| {
                 let mut state = state.lock().unwrap();
+                let mut event_state = event_state.lock().unwrap();
 
                 // toggle mouse grab on left click
                 if e.button() == 0 {
@@ -152,13 +171,59 @@ where
                     }
                 }
 
-                if let Err(e) = state.mouseup(e.button(), Vector2::new(e.client_x(), e.client_y()))
-                {
+                let button = e.button();
+                let location = Vector2::new(e.client_x(), e.client_y());
+
+                event_state.mouseup(button, location);
+
+                if let Err(e) = state.mouseup(&event_state, button, location) {
                     error!("error on mouseup: {e:?}");
                 }
             })
         };
         canvas.add_event_listener_with_callback("mouseup", closure.as_ref().unchecked_ref())?;
+        // intentionally leak memory to keep this closure alive forever so js can call it
+        closure.forget();
+    }
+
+    {
+        let state = state.clone();
+        let event_state = event_state.clone();
+        let closure: Closure<dyn Fn(_)> = Closure::new(move |e: KeyboardEvent| {
+            let mut state = state.lock().unwrap();
+            let mut event_state = event_state.lock().unwrap();
+
+            let key = e.key();
+            let key_code = e.key_code();
+
+            event_state.keydown(key.clone(), key_code);
+
+            if let Err(e) = state.keydown(&event_state, key, key_code) {
+                error!("error on keydown: {e:?}");
+            }
+        });
+        window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())?;
+        // intentionally leak memory to keep this closure alive forever so js can call it
+        closure.forget();
+    }
+
+    {
+        let state = state.clone();
+        let event_state = event_state.clone();
+        let closure: Closure<dyn Fn(_)> = Closure::new(move |e: KeyboardEvent| {
+            let mut state = state.lock().unwrap();
+            let mut event_state = event_state.lock().unwrap();
+
+            let key = e.key();
+            let key_code = e.key_code();
+
+            event_state.keyup(key.clone(), key_code);
+
+            if let Err(e) = state.keyup(&event_state, key, key_code) {
+                error!("error on keyup: {e:?}");
+            }
+        });
+        window.add_event_listener_with_callback("keyup", closure.as_ref().unchecked_ref())?;
         // intentionally leak memory to keep this closure alive forever so js can call it
         closure.forget();
     }
@@ -172,7 +237,8 @@ where
             let mut last_time = last_time.lock().unwrap();
             if let Some(last_time) = &*last_time {
                 let delta = Duration::from_secs_f64((time - last_time) / 1000f64);
-                state.animate(delta)?;
+                let event_state = event_state.lock().unwrap();
+                state.animate(delta, &event_state)?;
             }
             last_time.replace(time);
 
