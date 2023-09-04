@@ -7,7 +7,14 @@ use super::{
     vector3::Vector3,
 };
 
-#[derive(Debug)]
+#[derive(Clone)]
+struct CalculatedState<T> {
+    local_x: Vector3<T>,
+    local_y: Vector3<T>,
+    local_z: Vector3<T>,
+    matrix: Matrix4<T>,
+}
+
 pub struct FPSCamera<T>
 where
     T: Float + Copy,
@@ -30,7 +37,8 @@ where
     position: Vector3<T>,
 
     // a transformation matrix that applies the above
-    matrix: RefCell<Option<Matrix4<T>>>,
+    // TODO should this have a mutex?
+    calculated_state: RefCell<Option<CalculatedState<T>>>,
 }
 
 impl<T> FPSCamera<T>
@@ -57,7 +65,7 @@ where
             angle_x: Radians(T::ZERO),
             angle_y: Radians(T::ZERO),
             position,
-            matrix: RefCell::new(None),
+            calculated_state: RefCell::new(None),
         }
     }
 
@@ -67,7 +75,7 @@ where
 
     pub fn set_position(&mut self, value: Vector3<T>) {
         self.position = value;
-        self.matrix.replace(None);
+        self.calculated_state.replace(None);
     }
 
     pub fn angle_x(&self) -> Radians<T> {
@@ -85,7 +93,7 @@ where
         } else {
             value
         };
-        self.matrix.replace(None);
+        self.calculated_state.replace(None);
     }
 
     pub fn angle_y(&self) -> Radians<T> {
@@ -98,12 +106,14 @@ where
             value += Radians(T::PI * T::TWO);
         }
         self.angle_y = value;
-        self.matrix.replace(None);
+        self.calculated_state.replace(None);
     }
 
     pub fn move_by(&mut self, forward: T, right: T, up: T) {
-        // self.set_position(self.position + Vector3::new());
-        todo!("TODO JEFF implement move_by")
+        let state = self.get_or_update_calculated_state();
+        self.set_position(
+            self.position + state.local_x * right + state.local_y * up + state.local_z * forward,
+        );
     }
 
     /*
@@ -161,13 +171,17 @@ where
             },
         );
 
-        self.matrix.replace(None);
+        self.calculated_state.replace(None);
     }
 
     pub fn matrix(&mut self) -> Matrix4<T> {
-        let matrix = &mut *self.matrix.borrow_mut();
-        match matrix {
-            Some(result) => *result,
+        self.get_or_update_calculated_state().matrix
+    }
+
+    fn get_or_update_calculated_state(&mut self) -> CalculatedState<T> {
+        let state = &mut *self.calculated_state.borrow_mut();
+        match state {
+            Some(result) => result.clone(),
             None => {
                 // first rotate around the local y axis
                 // so the new y axis is still default, but we need the other two
@@ -181,13 +195,19 @@ where
                 let rotation_x = Matrix4::new_rotation(self.angle_x, local_x);
                 let local_z = rotation_x.apply_to_vector(local_z);
 
-                // get the actual transform
-                let result = Matrix4::new_look_at(
-                    self.position,
-                    self.position + local_z,
-                    self.default_local_y,
-                );
-                *matrix = Some(result);
+                // update the state var
+                let result = CalculatedState {
+                    local_x,
+                    // we don't actually rotate the up vector, all movement should be parallel to the default up
+                    local_y: self.default_local_y,
+                    local_z,
+                    matrix: Matrix4::new_look_at(
+                        self.position,
+                        self.position + local_z,
+                        self.default_local_y,
+                    ),
+                };
+                state.replace(result.clone());
                 result
             }
         }

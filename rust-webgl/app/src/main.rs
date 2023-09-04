@@ -179,7 +179,12 @@ impl EventListener for State {
             0f32
         };
 
-        self.camera.move_by(forward, right, up);
+        const SPEED: f32 = 5.0f32;
+        self.camera.move_by(
+            forward * delta.as_secs_f32() * SPEED,
+            right * delta.as_secs_f32() * SPEED,
+            up * delta.as_secs_f32() * SPEED,
+        );
 
         Ok(())
     }
@@ -235,7 +240,7 @@ impl EventListener for State {
 
     fn mousemove(
         &mut self,
-        event_state: &EventState,
+        _event_state: &EventState,
         _location: Vector2<i32>,
         delta: Vector2<i32>,
         is_pointer_locked: bool,
@@ -251,7 +256,7 @@ impl EventListener for State {
 
     fn mousedown(
         &mut self,
-        event_state: &EventState,
+        _event_state: &EventState,
         _button: i16,
         _location: Vector2<i32>,
     ) -> Result<()> {
@@ -260,18 +265,18 @@ impl EventListener for State {
 
     fn mouseup(
         &mut self,
-        event_state: &EventState,
+        _event_state: &EventState,
         _button: i16,
         _location: Vector2<i32>,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn keydown(&mut self, event_state: &EventState, key: String, key_code: u32) -> Result<()> {
+    fn keydown(&mut self, _event_state: &EventState, _key: String, _key_code: u32) -> Result<()> {
         Ok(())
     }
 
-    fn keyup(&mut self, event_state: &EventState, key: String, key_code: u32) -> Result<()> {
+    fn keyup(&mut self, _event_state: &EventState, _key: String, _key_code: u32) -> Result<()> {
         Ok(())
     }
 }

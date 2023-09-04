@@ -1,5 +1,6 @@
-use std::{collections::HashMap, rc::Rc, sync::Mutex, time::Duration};
+use std::{rc::Rc, sync::Mutex, time::Duration};
 
+use js_sys::{Object, Reflect};
 use log::*;
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, KeyboardEvent, MouseEvent, WebGl2RenderingContext};
@@ -13,10 +14,7 @@ use crate::{
     glmath::vector2::Vector2,
 };
 
-use super::{
-    event_listeners::EventListener,
-    event_state::{self, EventState},
-};
+use super::{event_listeners::EventListener, event_state::EventState};
 
 pub fn launch<EventListenerImpl, EventListenerFactory>(
     event_listener_factory: EventListenerFactory,
@@ -45,10 +43,13 @@ where
     canvas.style().set_property("top", "0")?;
 
     let context = {
-        let options = serde_wasm_bindgen::to_value(&HashMap::from([(
-            "powerPreference",
-            "high-performance",
-        )]))?;
+        let options = Object::new();
+        Reflect::set(
+            &options,
+            &"powerPreference".into(),
+            &"high-performance".into(),
+        )?;
+        Reflect::set(&options, &"antialias".into(), &true.into())?;
         canvas
             .get_context_with_context_options("webgl2", &options)?
             .ok_or("failed to make webgl2 context")?
