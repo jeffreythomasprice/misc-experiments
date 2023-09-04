@@ -193,10 +193,10 @@ where
             [T::ZERO, T::ZERO, T::ZERO, T::ZERO],
             [T::ZERO, T::ZERO, T::ZERO, T::ZERO],
         ];
-        for i in 0..4 {
-            for j in 0..4 {
+        for (i, row) in data.iter_mut().enumerate() {
+            for (j, col) in row.iter_mut().enumerate() {
                 for k in 0..4 {
-                    data[i][j] += self.data[i][k] * rhs.data[k][j];
+                    *col += self.data[i][k] * rhs.data[k][j];
                 }
             }
         }

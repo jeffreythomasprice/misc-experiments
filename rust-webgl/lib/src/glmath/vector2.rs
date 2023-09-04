@@ -95,7 +95,7 @@ where
     T: BasicMath + Copy,
 {
     fn sub_assign(&mut self, rhs: Self) {
-        *self += rhs
+        *self = *self - rhs;
     }
 }
 
