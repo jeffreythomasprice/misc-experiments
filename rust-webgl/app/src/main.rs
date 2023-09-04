@@ -9,12 +9,7 @@ use lib::{
     },
     errors::Result,
     glmath::{
-        angles::{Degrees, Radians},
-        fpscamera::FPSCamera,
-        matrix4::Matrix4,
-        numbers::CouldBeAnAngle,
-        rgba::Rgba,
-        vector2::Vector2,
+        angles::Degrees, fpscamera::FPSCamera, matrix4::Matrix4, rgba::Rgba, vector2::Vector2,
         vector3::Vector3,
     },
     webgl::{
@@ -47,8 +42,6 @@ struct State {
     texture: Texture,
 
     last_time: f64,
-
-    last_mouse_location: Option<Vector2<i32>>,
 
     ortho_matrix: Matrix4<f32>,
     perspective_matrix: Matrix4<f32>,
@@ -154,8 +147,6 @@ impl State {
 
             last_time: 0f64,
 
-            last_mouse_location: None,
-
             ortho_matrix: Matrix4::new_identity(),
             perspective_matrix: Matrix4::new_identity(),
             camera,
@@ -182,7 +173,7 @@ impl State {
         self.ortho_matrix =
             Matrix4::new_ortho(0f32, width as f32, height as f32, 0f32, -1f32, 1f32);
         self.perspective_matrix = Matrix4::new_perspective(
-            Degrees(90f32).into(),
+            Degrees(65f32).into(),
             width as f32,
             height as f32,
             0.1f32,
@@ -193,7 +184,7 @@ impl State {
     }
 
     pub fn animate(&mut self, time: f64) -> Result<()> {
-        let delta = Duration::from_secs_f64((time - self.last_time) / 1000f64);
+        let _delta = Duration::from_secs_f64((time - self.last_time) / 1000f64);
         self.last_time = time;
 
         self.context.clear_color(0.25, 0.5, 0.75, 1.0);
@@ -228,16 +219,26 @@ impl State {
         Ok(())
     }
 
-    pub fn mousemove(&mut self, location: Vector2<i32>) -> Result<()> {
-        if let Some(last) = self.last_mouse_location {
-            let delta = location - last;
-
+    pub fn mousemove(
+        &mut self,
+        _location: Vector2<i32>,
+        delta: Vector2<i32>,
+        is_pointer_locked: bool,
+    ) -> Result<()> {
+        if is_pointer_locked {
             let delta = Vector2::new(delta.x as f32, delta.y as f32) / 5f32;
             self.camera
                 .turn(Degrees(delta.y).into(), Degrees(delta.x).into())
         }
-        self.last_mouse_location = Some(location);
 
+        Ok(())
+    }
+
+    pub fn mousedown(&mut self, _button: i16, _location: Vector2<i32>) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn mouseup(&mut self, _button: i16, _location: Vector2<i32>) -> Result<()> {
         Ok(())
     }
 }
@@ -304,20 +305,93 @@ fn main_impl() -> Result<()> {
     }
 
     {
-        let state = state.clone();
-        let closure: Closure<dyn Fn(_)> = Closure::new(move |e: web_sys::MouseEvent| {
-            let mut state = state.lock().unwrap();
-            if let Err(e) = state.mousemove(Vector2::new(e.client_x(), e.client_y())) {
-                error!("error on mousemove: {e:?}");
-            }
-        });
+        let closure: Closure<dyn Fn(_)> = {
+            let state = state.clone();
+            let canvas = canvas.clone();
+            let document = document.clone();
+            Closure::new(move |e: web_sys::MouseEvent| {
+                let mut state = state.lock().unwrap();
+
+                let is_pointer_locked = if let Some(lock_element) = document.pointer_lock_element()
+                {
+                    lock_element.is_equal_node(Some(&canvas))
+                } else {
+                    false
+                };
+
+                if let Err(e) = state.mousemove(
+                    Vector2::new(e.client_x(), e.client_y()),
+                    Vector2::new(e.movement_x(), e.movement_y()),
+                    is_pointer_locked,
+                ) {
+                    error!("error on mousemove: {e:?}");
+                }
+            })
+        };
         canvas.add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref())?;
         // intentionally leak memory to keep this closure alive forever so js can call it
         closure.forget();
     }
 
-    // TODO JEFF mouse down, mouse up
-    // TODO JEFF grab cursor on mouse down
+    {
+        let state = state.clone();
+        let closure: Closure<dyn Fn(_)> = Closure::new(move |e: web_sys::MouseEvent| {
+            let mut state = state.lock().unwrap();
+            if let Err(e) = state.mousedown(e.button(), Vector2::new(e.client_x(), e.client_y())) {
+                error!("error on mousedown: {e:?}");
+            }
+        });
+        canvas.add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref())?;
+        // intentionally leak memory to keep this closure alive forever so js can call it
+        closure.forget();
+    }
+
+    {
+        let closure: Closure<dyn Fn(_)> = {
+            let state = state.clone();
+            let canvas = canvas.clone();
+            let document = document.clone();
+            Closure::new(move |e: web_sys::MouseEvent| {
+                let mut state = state.lock().unwrap();
+
+                // toggle mouse grab on left click
+                if e.button() == 0 {
+                    // toggle pointer lock
+                    if match document.pointer_lock_element() {
+                        Some(lock_element) => {
+                            if lock_element.is_equal_node(Some(&canvas)) {
+                                // we have the lock, we should releases it
+                                false
+                            } else {
+                                // some other element has the lock, we should take over
+                                // this should never happen?
+                                warn!(
+                                    "some other element had the pointer lock that we didn't expect"
+                                );
+                                true
+                            }
+                        }
+                        None => {
+                            // no element has the lock, we should enable
+                            true
+                        }
+                    } {
+                        canvas.request_pointer_lock();
+                    } else {
+                        document.exit_pointer_lock();
+                    }
+                }
+
+                if let Err(e) = state.mouseup(e.button(), Vector2::new(e.client_x(), e.client_y()))
+                {
+                    error!("error on mouseup: {e:?}");
+                }
+            })
+        };
+        canvas.add_event_listener_with_callback("mouseup", closure.as_ref().unchecked_ref())?;
+        // intentionally leak memory to keep this closure alive forever so js can call it
+        closure.forget();
+    }
 
     {
         let state = state.clone();

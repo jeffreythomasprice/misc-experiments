@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 
-use super::numbers::{BasicMath, Float};
+use super::numbers::{BasicMath, ExtraMathFunctions};
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -27,25 +27,29 @@ where
     }
 }
 
-// TODO JEFF clean up types, doesn't all have to be Float
 impl<T> Vector2<T>
 where
-    T: Float + Copy,
+    T: BasicMath + Copy,
 {
     pub fn magnitude_squared(self) -> T {
         self.x * self.x + self.y * self.y
     }
 
+    pub fn dot_product(self, rhs: Self) -> T {
+        self.x * rhs.x + self.y * rhs.y
+    }
+}
+
+impl<T> Vector2<T>
+where
+    T: BasicMath + ExtraMathFunctions + Copy,
+{
     pub fn magnitude(self) -> T {
         self.magnitude_squared().sqrt()
     }
 
     pub fn normalized(self) -> Vector2<T> {
         self / self.magnitude()
-    }
-
-    pub fn dot_product(self, rhs: Self) -> T {
-        self.x * rhs.x + self.y * rhs.y
     }
 }
 

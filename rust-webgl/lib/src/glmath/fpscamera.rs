@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Display};
+use std::cell::RefCell;
 
 use super::{
     angles::Radians,
@@ -75,7 +75,8 @@ where
     }
 
     pub fn set_angle_x(&mut self, value: Radians<T>) {
-        let max = Radians(T::PI);
+        // TODO JEFF should be like 95% of pi/2
+        let max = Radians(T::FRAC_PI_2);
         let min = -max;
         self.angle_x = if value < min {
             min
