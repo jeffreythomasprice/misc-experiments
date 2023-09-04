@@ -1,12 +1,9 @@
 #![feature(offset_of)]
 
-use std::{collections::HashMap, rc::Rc, sync::Mutex, time::Duration};
+use std::{rc::Rc, time::Duration};
 
 use lib::{
-    dom::{
-        anim_frame::{request_animation_frame_loop, RequestAnimationFrameStatus},
-        getters::{get_body, get_document, get_window},
-    },
+    dom::game::{event_listeners::EventListener, main::launch},
     errors::Result,
     glmath::{
         angles::Degrees, fpscamera::FPSCamera, matrix4::Matrix4, rgba::Rgba, vector2::Vector2,
@@ -21,8 +18,7 @@ use lib::{
 };
 use log::*;
 
-use wasm_bindgen::{prelude::Closure, JsCast};
-use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
+use web_sys::WebGl2RenderingContext;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -33,7 +29,6 @@ struct Vertex {
 }
 
 struct State {
-    canvas: HtmlCanvasElement,
     context: Rc<WebGl2RenderingContext>,
 
     program: ShaderProgram,
@@ -41,15 +36,13 @@ struct State {
     vertex_array: VertexArray,
     texture: Texture,
 
-    last_time: f64,
-
     ortho_matrix: Matrix4<f32>,
     perspective_matrix: Matrix4<f32>,
     camera: FPSCamera<f32>,
 }
 
 impl State {
-    pub fn new(canvas: HtmlCanvasElement, context: WebGl2RenderingContext) -> Result<Self> {
+    pub fn new(context: WebGl2RenderingContext) -> Result<Self> {
         let context = Rc::new(context);
 
         let program = ShaderProgram::new(
@@ -137,7 +130,6 @@ impl State {
         camera.look_at(Vector3::new(0f32, 0f32, 0f32));
 
         Ok(Self {
-            canvas,
             context,
 
             program,
@@ -145,48 +137,19 @@ impl State {
             vertex_array,
             texture,
 
-            last_time: 0f64,
-
             ortho_matrix: Matrix4::new_identity(),
             perspective_matrix: Matrix4::new_identity(),
             camera,
         })
     }
+}
 
-    pub fn resize(&mut self) -> Result<()> {
-        let window = get_window()?;
-
-        let width = window
-            .inner_width()?
-            .as_f64()
-            .ok_or("expected number for width")?;
-        let height = window
-            .inner_height()?
-            .as_f64()
-            .ok_or("expected number for height")?;
-
-        self.canvas.set_width(width as u32);
-        self.canvas.set_height(height as u32);
-
-        self.context.viewport(0, 0, width as i32, height as i32);
-
-        self.ortho_matrix =
-            Matrix4::new_ortho(0f32, width as f32, height as f32, 0f32, -1f32, 1f32);
-        self.perspective_matrix = Matrix4::new_perspective(
-            Degrees(65f32).into(),
-            width as f32,
-            height as f32,
-            0.1f32,
-            1000f32,
-        );
-
+impl EventListener for State {
+    fn animate(&mut self, _delta: Duration) -> Result<()> {
         Ok(())
     }
 
-    pub fn animate(&mut self, time: f64) -> Result<()> {
-        let _delta = Duration::from_secs_f64((time - self.last_time) / 1000f64);
-        self.last_time = time;
-
+    fn render(&mut self) -> Result<()> {
         self.context.clear_color(0.25, 0.5, 0.75, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
@@ -219,7 +182,23 @@ impl State {
         Ok(())
     }
 
-    pub fn mousemove(
+    fn resize(&mut self, size: Vector2<u32>) -> Result<()> {
+        self.context.viewport(0, 0, size.x as i32, size.y as i32);
+
+        self.ortho_matrix =
+            Matrix4::new_ortho(0f32, size.x as f32, size.y as f32, 0f32, -1f32, 1f32);
+        self.perspective_matrix = Matrix4::new_perspective(
+            Degrees(65f32).into(),
+            size.x as f32,
+            size.y as f32,
+            0.1f32,
+            1000f32,
+        );
+
+        Ok(())
+    }
+
+    fn mousemove(
         &mut self,
         _location: Vector2<i32>,
         delta: Vector2<i32>,
@@ -234,175 +213,13 @@ impl State {
         Ok(())
     }
 
-    pub fn mousedown(&mut self, _button: i16, _location: Vector2<i32>) -> Result<()> {
+    fn mousedown(&mut self, _button: i16, _location: Vector2<i32>) -> Result<()> {
         Ok(())
     }
 
-    pub fn mouseup(&mut self, _button: i16, _location: Vector2<i32>) -> Result<()> {
+    fn mouseup(&mut self, _button: i16, _location: Vector2<i32>) -> Result<()> {
         Ok(())
     }
-}
-
-fn main() {
-    console_log::init_with_level(Level::Trace).unwrap();
-    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-
-    if let Err(e) = main_impl() {
-        error!("fatal error: {e:?}");
-    }
-}
-
-fn main_impl() -> Result<()> {
-    let window = get_window()?;
-    let body = get_body()?;
-    let document = get_document()?;
-
-    while let Some(child) = body.first_child() {
-        body.remove_child(&child)?;
-    }
-
-    let canvas = document
-        .create_element("canvas")?
-        .dyn_into::<HtmlCanvasElement>()
-        .map_err(|_| "failed to create canvas")?;
-    body.append_child(&canvas)?;
-    canvas.style().set_property("position", "absolute")?;
-    canvas.style().set_property("width", "100%")?;
-    canvas.style().set_property("height", "100%")?;
-    canvas.style().set_property("left", "0")?;
-    canvas.style().set_property("top", "0")?;
-
-    let context = {
-        let options = serde_wasm_bindgen::to_value(&HashMap::from([(
-            "powerPreference",
-            "high-performance",
-        )]))?;
-        canvas
-            .get_context_with_context_options("webgl2", &options)?
-            .ok_or("failed to make webgl2 context")?
-            .dyn_into::<WebGl2RenderingContext>()
-            .map_err(|_| "expected webgl2 context but got some other kind of context")?
-    };
-
-    let state = Rc::new(Mutex::new(State::new(canvas.clone(), context)?));
-
-    {
-        let mut state = state.lock().unwrap();
-        state.resize()?;
-    }
-
-    {
-        let state = state.clone();
-        let closure: Closure<dyn Fn()> = Closure::new(move || {
-            let mut state = state.lock().unwrap();
-            if let Err(e) = state.resize() {
-                error!("error resizing: {e:?}");
-            }
-        });
-        window.add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())?;
-        // intentionally leak memory to keep this closure alive forever so js can call it
-        closure.forget();
-    }
-
-    {
-        let closure: Closure<dyn Fn(_)> = {
-            let state = state.clone();
-            let canvas = canvas.clone();
-            let document = document.clone();
-            Closure::new(move |e: web_sys::MouseEvent| {
-                let mut state = state.lock().unwrap();
-
-                let is_pointer_locked = if let Some(lock_element) = document.pointer_lock_element()
-                {
-                    lock_element.is_equal_node(Some(&canvas))
-                } else {
-                    false
-                };
-
-                if let Err(e) = state.mousemove(
-                    Vector2::new(e.client_x(), e.client_y()),
-                    Vector2::new(e.movement_x(), e.movement_y()),
-                    is_pointer_locked,
-                ) {
-                    error!("error on mousemove: {e:?}");
-                }
-            })
-        };
-        canvas.add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref())?;
-        // intentionally leak memory to keep this closure alive forever so js can call it
-        closure.forget();
-    }
-
-    {
-        let state = state.clone();
-        let closure: Closure<dyn Fn(_)> = Closure::new(move |e: web_sys::MouseEvent| {
-            let mut state = state.lock().unwrap();
-            if let Err(e) = state.mousedown(e.button(), Vector2::new(e.client_x(), e.client_y())) {
-                error!("error on mousedown: {e:?}");
-            }
-        });
-        canvas.add_event_listener_with_callback("mousedown", closure.as_ref().unchecked_ref())?;
-        // intentionally leak memory to keep this closure alive forever so js can call it
-        closure.forget();
-    }
-
-    {
-        let closure: Closure<dyn Fn(_)> = {
-            let state = state.clone();
-            let canvas = canvas.clone();
-            let document = document.clone();
-            Closure::new(move |e: web_sys::MouseEvent| {
-                let mut state = state.lock().unwrap();
-
-                // toggle mouse grab on left click
-                if e.button() == 0 {
-                    // toggle pointer lock
-                    if match document.pointer_lock_element() {
-                        Some(lock_element) => {
-                            if lock_element.is_equal_node(Some(&canvas)) {
-                                // we have the lock, we should releases it
-                                false
-                            } else {
-                                // some other element has the lock, we should take over
-                                // this should never happen?
-                                warn!(
-                                    "some other element had the pointer lock that we didn't expect"
-                                );
-                                true
-                            }
-                        }
-                        None => {
-                            // no element has the lock, we should enable
-                            true
-                        }
-                    } {
-                        canvas.request_pointer_lock();
-                    } else {
-                        document.exit_pointer_lock();
-                    }
-                }
-
-                if let Err(e) = state.mouseup(e.button(), Vector2::new(e.client_x(), e.client_y()))
-                {
-                    error!("error on mouseup: {e:?}");
-                }
-            })
-        };
-        canvas.add_event_listener_with_callback("mouseup", closure.as_ref().unchecked_ref())?;
-        // intentionally leak memory to keep this closure alive forever so js can call it
-        closure.forget();
-    }
-
-    {
-        let state = state.clone();
-        request_animation_frame_loop(move |time| {
-            let mut state = state.lock().unwrap();
-            state.animate(time)?;
-            Ok(RequestAnimationFrameStatus::Continue)
-        })?;
-    }
-
-    Ok(())
 }
 
 fn cube(center: Vector3<f32>, size: Vector3<f32>, color: Rgba<f32>) -> [Vertex; 36] {
@@ -597,4 +414,13 @@ fn cube(center: Vector3<f32>, size: Vector3<f32>, color: Rgba<f32>) -> [Vertex; 
             color,
         },
     ]
+}
+
+fn main() {
+    console_log::init_with_level(Level::Trace).unwrap();
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    if let Err(e) = launch(State::new) {
+        error!("fatal error: {e:?}");
+    }
 }

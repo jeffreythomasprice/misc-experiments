@@ -1,3 +1,5 @@
+use std::num::TryFromIntError;
+
 use wasm_bindgen::JsValue;
 
 #[derive(Debug, Clone)]
@@ -29,6 +31,12 @@ impl From<JsValue> for Error {
 
 impl From<serde_wasm_bindgen::Error> for Error {
     fn from(value: serde_wasm_bindgen::Error) -> Self {
+        Self(format!("{value:?}"))
+    }
+}
+
+impl From<TryFromIntError> for Error {
+    fn from(value: TryFromIntError) -> Self {
         Self(format!("{value:?}"))
     }
 }
