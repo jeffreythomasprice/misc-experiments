@@ -2,6 +2,8 @@ use std::ops::{
     Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Rem, RemAssign, Sub, SubAssign,
 };
 
+use crate::errors::Result;
+
 pub trait BasicMath:
     Sized
     + Add<Output = Self>
@@ -47,6 +49,9 @@ pub trait Float: BasicMath + CouldBeAnAngle + ExtraMathFunctions {
     const FRAC_PI_6: Self;
     const FRAC_PI_8: Self;
     const FRAC_2_SQRT_PI: Self;
+
+    fn from_f32(value: f32) -> Result<Self>;
+    fn from_f64(value: f64) -> Result<Self>;
 }
 
 impl BasicMath for i8 {}
@@ -87,6 +92,14 @@ impl Float for f32 {
     const FRAC_PI_8: Self = std::f32::consts::FRAC_PI_8;
 
     const FRAC_2_SQRT_PI: Self = std::f32::consts::FRAC_2_SQRT_PI;
+
+    fn from_f32(value: f32) -> Result<Self> {
+        Ok(value)
+    }
+
+    fn from_f64(value: f64) -> Result<Self> {
+        Ok(value as f32)
+    }
 }
 
 impl Float for f64 {
@@ -115,6 +128,14 @@ impl Float for f64 {
     const FRAC_PI_8: Self = std::f64::consts::FRAC_PI_8;
 
     const FRAC_2_SQRT_PI: Self = std::f64::consts::FRAC_2_SQRT_PI;
+
+    fn from_f32(value: f32) -> Result<Self> {
+        Ok(value as f64)
+    }
+
+    fn from_f64(value: f64) -> Result<Self> {
+        Ok(value)
+    }
 }
 
 impl CouldBeAnAngle for f32 {

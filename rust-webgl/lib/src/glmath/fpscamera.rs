@@ -1,7 +1,9 @@
 use std::cell::RefCell;
 
+use crate::errors::Result;
+
 use super::{
-    angles::Radians,
+    angles::{Degrees, Radians},
     matrix4::Matrix4,
     numbers::{CouldBeAnAngle, Float},
     vector3::Vector3,
@@ -28,6 +30,12 @@ where
     default_local_y: Vector3<T>,
     default_local_z: Vector3<T>,
 
+    // the range of possible values each angle can take
+    min_angle_x: Radians<T>,
+    max_angle_x: Radians<T>,
+    min_angle_y: Radians<T>,
+    max_angle_y: Radians<T>,
+
     // the rotation around the camera's local x axis, that is the cross product of the look and up vectors
     angle_x: Radians<T>,
     // the rotation around the camera's local y axis, that is the up vector
@@ -53,20 +61,31 @@ where
 
     up is the vector pointing towards the top of the screen in the camera's space
     */
-    pub fn new(position: Vector3<T>, look: Vector3<T>, up: Vector3<T>) -> Self {
+    pub fn new(position: Vector3<T>, look: Vector3<T>, up: Vector3<T>) -> Result<Self> {
         let local_x = look.cross_product(up);
         let local_y = local_x.cross_product(look);
         let local_z = local_y.cross_product(local_x);
 
-        Self {
+        let max_angle_x = Degrees(T::from_f64(89f64)?);
+        let min_angle_x = -max_angle_x;
+        let min_angle_y = Degrees(T::ZERO);
+        let max_angle_y = Radians(T::PI * T::TWO);
+
+        Ok(Self {
             default_local_x: local_x.normalized(),
             default_local_y: local_y.normalized(),
             default_local_z: local_z.normalized(),
+
+            min_angle_x: min_angle_x.to_radians(),
+            max_angle_x: max_angle_x.to_radians(),
+            min_angle_y: min_angle_y.to_radians(),
+            max_angle_y,
+
             angle_x: Radians(T::ZERO),
             angle_y: Radians(T::ZERO),
             position,
             calculated_state: RefCell::new(None),
-        }
+        })
     }
 
     pub fn position(&self) -> Vector3<T> {
@@ -83,13 +102,10 @@ where
     }
 
     pub fn set_angle_x(&mut self, value: Radians<T>) {
-        // TODO JEFF should be like 95% of pi/2
-        let max = Radians(T::FRAC_PI_2);
-        let min = -max;
-        self.angle_x = if value < min {
-            min
-        } else if value > max {
-            max
+        self.angle_x = if value < self.min_angle_x {
+            self.min_angle_x
+        } else if value > self.max_angle_x {
+            self.max_angle_x
         } else {
             value
         };
@@ -101,11 +117,12 @@ where
     }
 
     pub fn set_angle_y(&mut self, value: Radians<T>) {
-        let mut value = value % Radians(T::PI * T::TWO);
+        let range = self.max_angle_y - self.min_angle_y;
+        let mut value = (value - self.min_angle_y) % range;
         if value < Radians(T::ZERO) {
-            value += Radians(T::PI * T::TWO);
+            value += range;
         }
-        self.angle_y = value;
+        self.angle_y = value + self.min_angle_y;
         self.calculated_state.replace(None);
     }
 

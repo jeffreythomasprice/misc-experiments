@@ -126,7 +126,7 @@ impl State {
             Vector3::new(4f32, 3f32, 4f32),
             Vector3::new(0f32, 0f32, 1f32),
             Vector3::new(0f32, 1f32, 0f32),
-        );
+        )?;
         camera.look_at(Vector3::new(0f32, 0f32, 0f32));
 
         Ok(Self {
