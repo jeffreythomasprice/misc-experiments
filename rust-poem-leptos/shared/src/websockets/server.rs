@@ -3,6 +3,7 @@
 use futures_util::{SinkExt, StreamExt};
 use poem::{web::websocket::WebSocket, IntoResponse};
 use tokio::{
+    spawn,
     sync::mpsc::{channel, Receiver, Sender},
     task::spawn_local,
 };
@@ -33,9 +34,12 @@ pub fn handler<F>(ws: WebSocket, f: F) -> impl IntoResponse
 where
     F: FnOnce(WebSocketChannel) + Send + Sync + 'static,
 {
+    debug!(
+        "TODO JEFF received websocket request, about to respond after registering the on_upgrade"
+    );
     ws.on_upgrade(|stream| async move {
         // TODO JEFF put some context about which websocket, source ip and port?
-        let _span = span!(Level::TRACE, "websocket").entered();
+        // let _span = span!(Level::TRACE, "websocket").entered();
 
         debug!("TODO JEFF ws in on-upgrade");
 
@@ -44,7 +48,7 @@ where
         let (incoming_messages_sender, incoming_messages_receiver) = channel(1);
         let (outgoing_messages_sender, outgoing_messages_receiver) = channel(1);
 
-        spawn_local(async move {
+        spawn(async move {
             let _span = span!(Level::DEBUG, "TODO JEFF websocket incoming message task");
             original_stream
                 .filter_map(|message| async {
@@ -80,7 +84,7 @@ where
                 .await;
         });
 
-        spawn_local(async move {
+        spawn(async move {
             let _span = span!(Level::DEBUG, "TODO JEFF websocket outgoing message task");
             if let Err(e) = original_sink
                 .send_all(

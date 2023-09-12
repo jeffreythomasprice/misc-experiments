@@ -48,7 +48,7 @@ async fn test_websockets() -> Result<(), JsValue> {
         while let Some(message) = receiver.recv().await {
             match message {
                 Ok(Message::Text(value)) => {
-                    debug!("TODO JEFF got text message from client, {}", value)
+                    debug!("TODO JEFF got text message from server, {}", value)
                 }
                 Ok(Message::Binary(value)) => debug!(
                     "TODO JEFF got binary message from client, {} bytes",

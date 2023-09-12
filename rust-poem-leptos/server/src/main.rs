@@ -14,7 +14,7 @@ use shared::{
     models::{ClientHelloRequest, ClientHelloResponse},
     websockets::{Message, WebSocketChannel},
 };
-use tokio::task::spawn_local;
+use tokio::{spawn, task::spawn_local};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 
@@ -35,7 +35,7 @@ fn websocket(ws: WebSocket) -> impl IntoResponse {
 
         let (sender, mut receiver) = stream.split();
 
-        spawn_local(async move {
+        spawn(async move {
             while let Some(message) = receiver.recv().await {
                 match message {
                     Ok(Message::Text(value)) => {
@@ -50,7 +50,7 @@ fn websocket(ws: WebSocket) -> impl IntoResponse {
             }
         });
 
-        spawn_local(async move {
+        spawn(async move {
             if let Err(e) = sender
                 .send(Message::Text(
                     "TODO JEFF test message from server".to_string(),
@@ -60,7 +60,7 @@ fn websocket(ws: WebSocket) -> impl IntoResponse {
                 error!("TODO JEFF error sending test message: {e:?}");
             }
         });
-    });
+    })
 }
 
 #[tokio::main]

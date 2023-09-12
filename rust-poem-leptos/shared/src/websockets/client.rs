@@ -129,6 +129,8 @@ impl WebSocketChannel {
     }
 
     fn onmessage(&self, e: MessageEvent) {
+        debug!("TODO JEFF onmessage: {:?}", e.data());
+
         let data = self.data.clone();
         spawn_local(async move {
             let data = data.lock().unwrap();
@@ -150,6 +152,8 @@ impl WebSocketChannel {
     }
 
     fn onerror(&self) {
+        debug!("TODO JEFF onerror");
+
         let data = self.data.clone();
         spawn_local(async move {
             let data = data.lock().unwrap();
