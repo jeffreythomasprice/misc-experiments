@@ -1,14 +1,17 @@
 #![cfg(feature = "server")]
 
 use futures_util::{SinkExt, StreamExt};
-use poem::{web::websocket::WebSocket, IntoResponse};
+use log::*;
+use poem::{
+    web::{websocket::WebSocket, RemoteAddr},
+    IntoResponse,
+};
 use tokio::{
     spawn,
     sync::mpsc::{channel, Receiver, Sender},
     task::spawn_local,
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::*;
 
 use crate::websockets::{Error, Message};
 
@@ -30,18 +33,13 @@ impl super::WebSocketChannel for WebSocketChannel {
     }
 }
 
-pub fn handler<F>(ws: WebSocket, f: F) -> impl IntoResponse
+pub fn handler<F>(ws: WebSocket, remote_addr: &RemoteAddr, f: F) -> impl IntoResponse
 where
     F: FnOnce(WebSocketChannel) + Send + Sync + 'static,
 {
-    debug!(
-        "TODO JEFF received websocket request, about to respond after registering the on_upgrade"
-    );
+    let remote_addr = remote_addr.to_string();
     ws.on_upgrade(|stream| async move {
-        // TODO JEFF put some context about which websocket, source ip and port?
-        // let _span = span!(Level::TRACE, "websocket").entered();
-
-        debug!("TODO JEFF ws in on-upgrade");
+        trace!("websocket upgraded: {remote_addr}");
 
         let (mut original_sink, original_stream) = stream.split();
 
@@ -49,7 +47,6 @@ where
         let (outgoing_messages_sender, outgoing_messages_receiver) = channel(1);
 
         spawn(async move {
-            let _span = span!(Level::DEBUG, "TODO JEFF websocket incoming message task");
             original_stream
                 .filter_map(|message| async {
                     match message {
@@ -77,7 +74,6 @@ where
                 })
                 .for_each(|message| async {
                     if let Err(e) = incoming_messages_sender.send(message).await {
-                        // TODO JEFF does this need more context, or does it get some from the wrawpping span! ?
                         error!("error in websocket handler: {e:?}");
                     }
                 })
@@ -85,7 +81,6 @@ where
         });
 
         spawn(async move {
-            let _span = span!(Level::DEBUG, "TODO JEFF websocket outgoing message task");
             if let Err(e) = original_sink
                 .send_all(
                     &mut ReceiverStream::new(outgoing_messages_receiver).map(
@@ -99,7 +94,6 @@ where
                 )
                 .await
             {
-                // TODO JEFF does this need more context, or does it get some from the wrawpping span! ?
                 error!("error in websocket handler: {e:?}");
             }
         });

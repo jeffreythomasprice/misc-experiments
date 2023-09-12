@@ -7,14 +7,14 @@ use poem::{
     listener::TcpListener,
     middleware::{Cors, Tracing},
     post,
-    web::{websocket::WebSocket, Json},
+    web::{websocket::WebSocket, Json, RemoteAddr},
     EndpointExt, IntoResponse, Route, Server,
 };
 use shared::{
     models::{ClientHelloRequest, ClientHelloResponse},
     websockets::{Message, WebSocketChannel},
 };
-use tokio::{spawn, task::spawn_local};
+use tokio::spawn;
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 
@@ -29,10 +29,8 @@ fn client_hello(
 }
 
 #[handler]
-fn websocket(ws: WebSocket) -> impl IntoResponse {
-    shared::websockets::server::handler(ws, |mut stream| {
-        let _span = span!(Level::DEBUG, "TODO JEFF in impl of websocket handler");
-
+fn websocket(ws: WebSocket, remote_addr: &RemoteAddr) -> impl IntoResponse {
+    shared::websockets::server::handler(ws, remote_addr, move |mut stream| {
         let (sender, mut receiver) = stream.split();
 
         spawn(async move {
@@ -70,7 +68,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::TRACE.into())
                 .parse("")?
-                .add_directive("hyper=info".parse()?),
+                .add_directive("hyper=info".parse()?)
+                .add_directive("tungstenite=info".parse()?)
+                .add_directive("tokio_tungstenite=info".parse()?),
         )
         .init();
 

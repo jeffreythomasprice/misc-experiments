@@ -104,8 +104,6 @@ impl WebSocketChannel {
     }
 
     fn onopen(&self) {
-        debug!("TODO JEFF websocket open");
-
         let data = self.data.clone();
         spawn_local(async move {
             let mut outgoing_messages_receiver = {
@@ -124,13 +122,9 @@ impl WebSocketChannel {
         });
     }
 
-    fn onclose(&self) {
-        debug!("TODO JEFF websocket closed");
-    }
+    fn onclose(&self) {}
 
     fn onmessage(&self, e: MessageEvent) {
-        debug!("TODO JEFF onmessage: {:?}", e.data());
-
         let data = self.data.clone();
         spawn_local(async move {
             let data = data.lock().unwrap();
@@ -152,8 +146,6 @@ impl WebSocketChannel {
     }
 
     fn onerror(&self) {
-        debug!("TODO JEFF onerror");
-
         let data = self.data.clone();
         spawn_local(async move {
             let data = data.lock().unwrap();
@@ -182,7 +174,7 @@ impl super::WebSocketChannel for WebSocketChannel {
     }
 }
 
-// TODO JEFF different new?
+// TODO JEFF WebSocketChannel::new_url(url)?
 pub fn connect(url: &str) -> Result<WebSocketChannel, JsValue> {
     trace!("connecting to websocket url={url}");
     Ok(WebSocketChannel::new(WebSocket::new(url)?))
