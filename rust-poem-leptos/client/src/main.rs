@@ -3,7 +3,6 @@ use leptos::*;
 use log::*;
 use shared::models::{ClientHelloRequest, ClientHelloResponse};
 use shared::websockets::{Message, WebSocketChannel};
-use std::error::Error;
 use std::panic;
 use std::rc::Rc;
 use wasm_bindgen::JsValue;
@@ -13,10 +12,29 @@ pub fn Login<F>(cx: Scope, submit: F) -> impl IntoView
 where
     F: Fn(String) + 'static,
 {
+    let submit = Rc::new(submit);
+
+    let http_client = use_context::<HttpClient>(cx).unwrap();
+
     let (value, set_value) = create_signal(cx, "".to_string());
 
     let on_submit = Rc::new(move || {
-        submit(value());
+        let http_client = http_client.clone();
+        let submit = submit.clone();
+        let name = value();
+        spawn_local(async move {
+            match http_client
+                .client_hello(&ClientHelloRequest { name: name.clone() })
+                .await
+            {
+                Ok(_) => {
+                    submit(name);
+                }
+                Err(e) => {
+                    log::warn!("error making client hello request: {e:?}");
+                }
+            }
+        });
     });
 
     let on_button_click = {
@@ -46,6 +64,8 @@ where
 
 #[component]
 pub fn App(cx: Scope) -> impl IntoView {
+    provide_context(cx, HttpClient::new("http://localhost:8001".to_string()));
+
     let (name, set_name) = create_signal(cx, None);
 
     let login = move |name| {
@@ -76,9 +96,6 @@ fn main() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
     spawn_local(async {
-        if let Err(e) = test_request().await {
-            log::error!("error doing test request: {e:?}");
-        }
         if let Err(e) = test_websockets().await {
             log::error!("error doing test websockets: {e:?}");
         }
@@ -91,18 +108,29 @@ fn main() {
     })
 }
 
-async fn test_request() -> Result<(), Box<dyn Error>> {
-    let client = reqwest::Client::new();
-    let response = client
-        .post("http://127.0.0.1:8001/client")
-        .json(&ClientHelloRequest {
-            name: "tester".to_string(),
-        })
-        .send()
-        .await?;
-    let response_body: ClientHelloResponse = response.json().await?;
-    debug!("response = {response_body:?}");
-    Ok(())
+#[derive(Clone)]
+struct HttpClient {
+    base_url: String,
+}
+
+impl HttpClient {
+    pub fn new(base_url: String) -> Self {
+        Self { base_url }
+    }
+
+    pub async fn client_hello(
+        &self,
+        request: &ClientHelloRequest,
+    ) -> Result<ClientHelloResponse, reqwest::Error> {
+        let client = reqwest::Client::new();
+        let response = client
+            .post("http://127.0.0.1:8001/client")
+            .json(request)
+            .send()
+            .await?;
+        let response_body: ClientHelloResponse = response.json().await?;
+        Ok(response_body)
+    }
 }
 
 async fn test_websockets() -> Result<(), JsValue> {
