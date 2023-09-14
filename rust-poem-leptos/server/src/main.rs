@@ -1,13 +1,16 @@
-use std::error::Error;
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+};
 
 use metadata::LevelFilter;
 use poem::{
     get, handler,
     http::StatusCode,
     listener::TcpListener,
-    middleware::{Cors, Tracing},
+    middleware::{AddData, Cors, Tracing},
     post,
-    web::{websocket::WebSocket, Json, RemoteAddr},
+    web::{websocket::WebSocket, Data, Json, RemoteAddr},
     EndpointExt, IntoResponse, Route, Server,
 };
 use shared::{
@@ -17,15 +20,36 @@ use shared::{
 use tokio::spawn;
 use tracing::*;
 use tracing_subscriber::EnvFilter;
+use uuid::Uuid;
+
+#[derive(Clone)]
+struct ClientService {}
+
+impl ClientService {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn new_client(&self) -> Uuid {
+        Uuid::new_v4()
+    }
+}
 
 #[handler]
-// TODO is tracing macro needed?
-// #[tracing::instrument]
 fn client_hello(
+    client_service: Data<&ClientService>,
     Json(request_body): Json<ClientHelloRequest>,
 ) -> (StatusCode, Json<ClientHelloResponse>) {
     debug!(request_body.name, "client hello");
-    (StatusCode::OK, Json(ClientHelloResponse {}))
+
+    let client_id = client_service.new_client();
+
+    (
+        StatusCode::OK,
+        Json(ClientHelloResponse {
+            client_id: client_id.to_string(),
+        }),
+    )
 }
 
 #[handler]
@@ -74,11 +98,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         )
         .init();
 
+    let client_service = ClientService::new();
+
     let client_api = Route::new().at("/", post(client_hello));
 
     let app = Route::new()
         .nest("/client", client_api)
         .at("/ws", get(websocket))
+        .with(AddData::new(client_service))
         .with(Tracing)
         .with(Cors::new());
 

@@ -6,4 +6,6 @@ pub struct ClientHelloRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ClientHelloResponse {}
+pub struct ClientHelloResponse {
+    pub client_id: String,
+}

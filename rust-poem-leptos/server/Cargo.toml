@@ -11,3 +11,4 @@ shared = { path = "../shared", features = ["server"] }
 tokio = { version = "1.32.0", features = ["rt-multi-thread"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+uuid = { version = "1.4.1", features = ["v4"] }
