@@ -3,6 +3,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use leptos::spawn_local;
+use shared::{
+    models::{ClientToServerMessage, ServerToClientMessage},
+    websockets::{Message, WebSocketChannel},
+};
+use tokio::sync::mpsc::Sender;
+use wasm_bindgen::JsValue;
+
 #[derive(Debug, Clone)]
 pub struct LogInRequest {
     pub client_id: String,
@@ -12,18 +20,34 @@ pub struct LogInRequest {
 #[derive(Debug)]
 pub enum LogInError {
     AlreadyLoggedIn { client_id: String, name: String },
+    Unknown(String),
+}
+
+#[derive(Debug)]
+pub enum SendError {
+    NotConnected,
+    SerializationError(String),
+    FailedToSend(String),
 }
 
 #[derive(Clone)]
-pub struct Client {
+pub struct Client<F>
+where
+    F: Fn(ServerToClientMessage),
+{
     base_url: String,
+    callback: Arc<F>,
     state: Arc<Mutex<RefCell<Option<State>>>>,
 }
 
-impl Client {
-    pub fn new(base_url: &str) -> Self {
+impl<F> Client<F>
+where
+    F: Fn(ServerToClientMessage) + 'static,
+{
+    pub fn new(base_url: &str, callback: F) -> Self {
         Self {
             base_url: base_url.to_string(),
+            callback: Arc::new(callback),
             state: Arc::new(Mutex::new(RefCell::new(None))),
         }
     }
@@ -37,60 +61,88 @@ impl Client {
                 client_id: existing.client_id.clone(),
                 name: existing.name.clone(),
             })?,
-            None => state.replace(State::new(request)),
+            None => state.replace(
+                State::new(&self.base_url, request, self.callback.clone())
+                    .map_err(|e| LogInError::Unknown(format!("{e:?}")))?,
+            ),
         };
 
         Ok(())
+    }
+
+    pub async fn send(&self, message: &ClientToServerMessage) -> Result<(), SendError> {
+        match serde_json::to_string(message) {
+            Ok(message) => {
+                let state = self.state.lock().unwrap();
+                let state = &*state.borrow();
+                match state {
+                    Some(state) => state
+                        .sender
+                        .send(Message::Text(message))
+                        .await
+                        .map_err(|e| SendError::FailedToSend(format!("{e:?}"))),
+                    None => Err(SendError::NotConnected),
+                }
+            }
+            Err(e) => Err(SendError::SerializationError(format!("{e:?}"))),
+        }
     }
 }
 
 struct State {
     client_id: String,
     name: String,
+    sender: Sender<Message>,
 }
 
 impl State {
-    pub fn new(request: LogInRequest) -> Self {
-        // TODO JEFF actually do websocket stuff
+    pub fn new<F>(base_url: &str, request: LogInRequest, callback: Arc<F>) -> Result<Self, JsValue>
+    where
+        F: Fn(ServerToClientMessage) + 'static,
+    {
+        let (sender, mut receiver) =
+            shared::websockets::client::connect(format!("{}/ws", base_url).as_str())?.split();
 
-        Self {
+        // TODO be able to stop this
+        spawn_local(async move {
+            while let Some(message) = receiver.recv().await {
+                let message = match message {
+                    Ok(Message::Text(value)) => Some(value),
+                    Ok(Message::Binary(value)) => match std::str::from_utf8(&value) {
+                        Ok(value) => Some(value.to_string()),
+                        Err(e) => {
+                            log::error!("error parsing websocket message: {e:?}");
+                            None
+                        }
+                    },
+                    Err(_e) => {
+                        // TODO try to reconnect? signal error?
+                        log::error!("TODO JEFF error from websocket");
+                        None
+                    }
+                };
+                let message = if let Some(message) = message {
+                    message
+                } else {
+                    continue;
+                };
+
+                let message = match serde_json::from_str::<ServerToClientMessage>(&message) {
+                    Ok(message) => message,
+                    Err(e) => {
+                        log::error!("failed to deserialize message: {e:?}");
+                        continue;
+                    }
+                };
+
+                callback(message);
+            }
+        });
+
+        Ok(Self {
             client_id: request.client_id,
             name: request.name,
-        }
+            sender,
+        })
     }
 }
-
-// TODO JEFF example, delete me
-
-// async fn test_websockets() -> Result<(), JsValue> {
-//     let (sender, mut receiver) =
-//         shared::websockets::client::connect("ws://127.0.0.1:8001/ws")?.split();
-
-//     spawn_local(async move {
-//         while let Some(message) = receiver.recv().await {
-//             match message {
-//                 Ok(Message::Text(value)) => {
-//                     debug!("TODO JEFF got text message from server, {}", value)
-//                 }
-//                 Ok(Message::Binary(value)) => debug!(
-//                     "TODO JEFF got binary message from client, {} bytes",
-//                     value.len()
-//                 ),
-//                 Err(_e) => log::error!("TODO JEFF error from websocket"),
-//             }
-//         }
-//     });
-
-//     spawn_local(async move {
-//         if let Err(e) = sender
-//             .send(Message::Text(
-//                 "TODO JEFF test message from client".to_string(),
-//             ))
-//             .await
-//         {
-//             log::error!("TODO JEFF error sending test message: {e:?}");
-//         }
-//     });
-
-//     Ok(())
-// }

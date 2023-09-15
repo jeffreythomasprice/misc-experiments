@@ -69,18 +69,37 @@ where
 
 #[component]
 fn LoggedIn(cx: Scope, name: String) -> impl IntoView {
+    let (value, set_value) = create_signal(cx, "".to_string());
+
+    let web_socket_cclient = use_context::<clients::websocket::Client>(cx).unwrap();
+
+    let on_input_keyup = move |e: KeyboardEvent| {
+        if e.key() == "Enter" {
+            log::debug!("TODO JEFF submit message: {}", value());
+            set_value("".to_string());
+        }
+    };
+
+    let on_input_input = move |e| {
+        set_value(event_target_value(&e));
+    };
+
     view! { cx,
         <div>{name}</div>
+        <input type="text" autofocus on:keyup=on_input_keyup on:input=on_input_input prop:value=value />
     }
 }
 
 #[component]
 fn App(cx: Scope) -> impl IntoView {
-    const BASE_URL: &str = "http://localhost:8001";
+    const HOST: &str = "localhost:8001";
 
-    provide_context(cx, clients::http::Client::new(BASE_URL.to_string()));
+    provide_context(cx, clients::http::Client::new(format!("http://{HOST}")));
 
-    let websocket_client = clients::websocket::Client::new(BASE_URL);
+    let websocket_client =
+        clients::websocket::Client::new(format!("ws://{HOST}").as_str(), |message| {
+            log::debug!("TODO JEFF received message: {message:?}");
+        });
 
     let (is_logged_in, set_logged_in) = create_signal(cx, false);
     let (name, set_name) = create_signal(cx, "".to_string());
