@@ -1,9 +1,6 @@
 #![cfg(feature = "client")]
 
-use std::{
-    cell::RefCell,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use js_sys::{ArrayBuffer, JsString, Uint8Array};
 use log::*;
@@ -42,7 +39,7 @@ impl From<JsValue> for Error {
 impl WebSocketChannel {
     pub fn new(ws: WebSocket) -> Self {
         let (incoming_messages_sender, incoming_messages_receiver) = channel(1);
-        let (outgoing_messages_sender, mut outgoing_messages_receiver) = channel(1);
+        let (outgoing_messages_sender, outgoing_messages_receiver) = channel(1);
 
         let data = Arc::new(Mutex::new(Data {
             ws,

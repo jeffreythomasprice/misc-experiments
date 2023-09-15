@@ -1,7 +1,4 @@
-use std::{
-    error::Error,
-    sync::{Arc, Mutex},
-};
+use std::error::Error;
 
 use metadata::LevelFilter;
 use poem::{
