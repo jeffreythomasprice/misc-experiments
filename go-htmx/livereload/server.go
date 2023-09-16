@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-chi/chi"
 	g "github.com/maragudk/gomponents"
-	. "github.com/maragudk/gomponents/html"
+	h "github.com/maragudk/gomponents/html"
 	"github.com/olahol/melody"
 
 	_ "embed"
@@ -30,5 +30,5 @@ func HandleFunc(r chi.Router) {
 }
 
 func NewScript() g.Node {
-	return Script(g.Raw(script))
+	return h.Script(g.Raw(script))
 }
