@@ -1,5 +1,12 @@
 document.addEventListener("DOMContentLoaded", async () => {
-	const url = "ws://" + window.location.host + "/_liveReload";
+	const baseUrl = `ws://${window.location.host}`;
+	const path = "{{.Path}}";
+	let url;
+	if (path.startsWith("/")) {
+		url = `${baseUrl}${path}`;
+	} else {
+		url = `${baseUrl}/${path}`;
+	}
 
 	const defaultDelay = 100;
 	const maxDelay = 10000;
@@ -10,10 +17,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 	while (true) {
 		await new Promise(resolve => {
+			// TODO sometimes new websockets hang
 			const ws = new WebSocket(url);
 			ws.addEventListener("open", () => {
 				delay = defaultDelay;
-				ws.send("test");
 			});
 
 			ws.addEventListener("message", (message) => {

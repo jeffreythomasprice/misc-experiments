@@ -25,23 +25,35 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.Get("/", pageHandlerFunc(func() []g.Node {
-		return []g.Node{
-			h.H1(g.Text("Hello, World!")),
-			h.Button(
-				g.Text("Click Me"),
-				g.Attr("hx-post", "/clicked1"),
-				g.Attr("hx-target", "#target1"),
-			),
-			h.Div(h.ID("target1")),
-			h.Button(
-				g.Text("Also Click Me"),
-				g.Attr("hx-post", "/clicked2"),
-				g.Attr("hx-target", "#target2"),
-			),
-			h.Div(h.ID("target2")),
-		}
-	}))
+	liveReloadScript, err := livereload.Script("/_liveReloadFoobar")
+	if err != nil {
+		panic(err)
+	}
+	r.HandleFunc("/_liveReloadFoobar", livereload.HandlerFunc(r))
+
+	r.Get("/", pageHandlerFunc(
+		func() []g.Node {
+			return []g.Node{liveReloadScript}
+		},
+		func() []g.Node {
+			return []g.Node{
+				h.H1(g.Text("Hello, World!")),
+				h.Button(
+					g.Text("Click Me"),
+					g.Attr("hx-post", "/clicked1"),
+					g.Attr("hx-target", "#target1"),
+				),
+				h.Div(h.ID("target1")),
+
+				h.Button(
+					g.Text("Also Click Me"),
+					g.Attr("hx-post", "/clicked2"),
+					g.Attr("hx-target", "#target2"),
+				),
+				h.Div(h.ID("target2")),
+			}
+		},
+	))
 
 	clicks1 := 0
 	r.Post("/clicked1", nodeHandlerFunc(func() g.Node {
@@ -67,8 +79,6 @@ func main() {
 		},
 	))
 
-	livereload.HandleFunc(r)
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	host := "localhost:8000"
@@ -84,15 +94,18 @@ func main() {
 	slog.Debug("done")
 }
 
-func pageHandlerFunc(body func() []g.Node) http.HandlerFunc {
+func pageHandlerFunc(head, body func() []g.Node) http.HandlerFunc {
 	return nodeHandlerFunc(func() g.Node {
 		return c.HTML5(c.HTML5Props{
 			Title:    "Experiment",
 			Language: "en",
-			Head: []g.Node{
-				h.Script(h.Src("https://unpkg.com/htmx.org@1.9.5")),
-				livereload.NewScript(),
-			},
+			Head: append(
+				[]g.Node{
+					h.Script(h.Src("https://unpkg.com/htmx.org@1.9.5")),
+					h.Script(h.Src("https://unpkg.com/htmx.org@1.9.5/dist/ext/ws.js")),
+				},
+				head()...,
+			),
 			Body: body(),
 		})
 	})
