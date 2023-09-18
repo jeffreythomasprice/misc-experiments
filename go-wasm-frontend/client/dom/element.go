@@ -35,3 +35,13 @@ func (e *Element) InnerHTML() string {
 func (e *Element) SetInnerHTML(s string) {
 	e.Set("innerHTML", s)
 }
+
+var _ EventTarget = (*Element)(nil)
+
+// AddEventListener implements EventTarget.
+func (e *Element) AddEventListener(typ string, listener func(args []js.Value)) {
+	e.Call("addEventListener", typ, js.FuncOf(func(this js.Value, args []js.Value) any {
+		listener(args)
+		return nil
+	}))
+}

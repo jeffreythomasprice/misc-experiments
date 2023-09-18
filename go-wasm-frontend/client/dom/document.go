@@ -17,3 +17,11 @@ func (d *Document) Body() *Body {
 func (d *Document) CreateElement(tagName string) *Element {
 	return NewElement(d.Call("createElement", tagName))
 }
+
+func (d *Document) QuerySelector(selectors string) *Element {
+	result := d.Call("querySelector", selectors)
+	if result.Truthy() {
+		return NewElement(result)
+	}
+	return nil
+}
