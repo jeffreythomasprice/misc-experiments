@@ -1,5 +1,16 @@
 FROM swift:5.8.1
 
+# ARG USERNAME=jeff
+# ARG USER_UID=1000
+# ARG USER_GID=$USER_UID
+
+# RUN groupadd --gid $USER_GID $USERNAME && \
+# 	useradd --uid $USER_UID --gid $USER_GID -m $USERNAME && \
+# 	apt-get update && \
+# 	apt-get install -y sudo && \
+# 	echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+# 	chmod 0440 /etc/sudoers.d/$USERNAME
+
 RUN apt update
 RUN apt install -y build-essential curl
 
@@ -25,5 +36,7 @@ RUN git clone https://github.com/vapor/toolbox.git
 WORKDIR /toolbox
 RUN git checkout 18.7.1
 RUN make install
+
+# USER $USERNAME
 
 WORKDIR /

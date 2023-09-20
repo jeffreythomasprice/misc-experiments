@@ -19,5 +19,6 @@
 				"terminal.integrated.shell.linux": "/bin/bash"
 			}
 		}
-	}
+	},
+	// "remoteUser": "jeff"
 }
