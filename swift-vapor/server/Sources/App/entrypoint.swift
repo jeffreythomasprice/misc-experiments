@@ -43,7 +43,8 @@ enum Entrypoint {
         app.http.server.configuration.port = 8001
 
         do {
-            try await configure(app)
+            let connectedClients = ConnectedClientsService()
+            try await configure(app, connectedClients: connectedClients)
         } catch {
             app.logger.report(error: error)
             throw error
@@ -69,7 +70,95 @@ struct ServerToClientMessage: Content {
     var message: String
 }
 
-private func configure(_ app: Application) async throws {
+class PendingClient {
+    let id: UUID
+    var name: String
+
+    init(name: String) {
+        id = UUID()
+        self.name = name
+    }
+}
+
+class ConnectedClient {
+    let ws: WebSocket
+    let id: UUID
+    var name: String
+
+    init(ws: WebSocket, client: PendingClient) {
+        self.ws = ws
+        self.id = client.id
+        self.name = client.name
+    }
+
+    func send(message: ServerToClientMessage) {
+        // TODO JEFF implement send
+
+        /*
+            req.logger.debug("received ws message = \(message)")
+            let response = ServerToClientMessage(
+                senderId: "TODO fill in sender ID",
+                message: "response from server"
+            )
+            req.logger.debug("responding to ws message = \(response)")
+            guard
+                let response = try? String(decoding: JSONEncoder().encode(response), as: UTF8.self)
+            else {
+                return
+            }
+            ws.send(response)
+        */
+    }
+}
+
+enum ConnectedClientServiceError: Error {
+    case noSuchClient
+}
+
+class ConnectedClientsService {
+    private let logger: Logger = Logger(label: "clients")
+
+    private var pendingClients: [UUID: PendingClient] = [:]
+    private var connectedClients: [UUID: ConnectedClient] = [:]
+
+    func close() {
+        logger.debug("closing all active clients")
+        // TODO JEFF disconnect everybody
+    }
+
+    func newClient(name: String) -> PendingClient {
+        let result = PendingClient(name: name)
+        logger.debug("new pending client, name = \(name), id = \(result.id)")
+        pendingClients[result.id] = result
+        logger.trace("there are now \(pendingClients.count) pending clients")
+        return result
+    }
+
+    func upgradeClient(id: UUID, ws: WebSocket) throws -> ConnectedClient {
+        if let client = pendingClients.removeValue(forKey: id) {
+            let result = ConnectedClient(ws: ws, client: client)
+            connectedClients[client.id] = result
+            return result
+        } else {
+            throw ConnectedClientServiceError.noSuchClient
+        }
+    }
+
+    func broadcast(sender: ConnectedClient, message: String) {
+        logger.trace("sending message from \(sender), message = \(message)")
+        let messageObj = ServerToClientMessage(senderId: sender.id.uuidString, message: message)
+        for (_, client) in connectedClients {
+            if client.id != sender.id {
+                client.send(message: messageObj)
+            }
+        }
+    }
+}
+
+private func configure(
+    _ app: Application,
+    connectedClients: ConnectedClientsService
+) async throws {
     // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
 
     let corsConfiguration = CORSMiddleware.Configuration(
@@ -88,31 +177,33 @@ private func configure(_ app: Application) async throws {
     app.post("login") { req -> LoginResponse in
         let request = try req.content.decode(LoginRequest.self)
         req.logger.debug("login request = \(request)")
-        let response = LoginResponse(id: UUID().uuidString)
+        let client = connectedClients.newClient(name: request.name)
+        let response = LoginResponse(id: client.id.uuidString)
         req.logger.debug("login response = \(response)")
         return response
     }
 
     app.webSocket("ws") { req, ws in
+        req.logger.debug("TODO JEFF new ws connection \(req.remoteAddress)")
+
+        ws.onClose.whenComplete { _ in
+            connectedClients.close()
+        }
+
         ws.onText { ws, messageJson in
-            guard
-                let message = try? JSONDecoder().decode(
+            let message: ClientToServerMessage
+            do {
+                message = try JSONDecoder().decode(
                     ClientToServerMessage.self, from: messageJson.data(using: .utf8)!)
-            else {
+            } catch {
+                req.logger.warning("\(error)")
                 return
             }
-            req.logger.debug("received ws message = \(message)")
-            let response = ServerToClientMessage(
-                senderId: "TODO fill in sender ID",
-                message: "response from server"
-            )
-            req.logger.debug("responding to ws message = \(response)")
-            guard
-                let response = try? String(decoding: JSONEncoder().encode(response), as: UTF8.self)
-            else {
-                return
-            }
-            ws.send(response)
+
+            req.logger.debug("TODO JEFF message = \(message)")
+
+            // TODO JEFF broadcast
+            // connectedClients.broadcast(sender: ConnectedClient, message: String)
         }
     }
 }

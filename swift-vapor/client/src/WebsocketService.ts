@@ -6,6 +6,7 @@ export class WebsocketService {
 
 	private ws: WebSocket | null = null;
 	private shouldBeRunning = false;
+	private isOpen = false;
 
 	constructor(private readonly url: string) { }
 
@@ -20,10 +21,14 @@ export class WebsocketService {
 
 		this.ws.addEventListener("open", () => {
 			console.log("TODO JEFF websocket on open");
+			this.isOpen = true;
+
+			// TODO JEFF should be sending an initial login message with our id
 		});
 
 		this.ws.addEventListener("close", () => {
 			console.log("TODO JEFF websocket on close");
+			this.isOpen = false;
 			if (this.shouldBeRunning) {
 				this.start(id);
 			}
@@ -60,7 +65,11 @@ export class WebsocketService {
 
 	send(message: string) {
 		const wrappedMessage: ClientToServerMessage = { message };
-		this.ws?.send(JSON.stringify(wrappedMessage));
+		if (this.isOpen) {
+			this.ws?.send(JSON.stringify(wrappedMessage));
+		} else {
+			console.error("can't send message, websocket not ready yet");
+		}
 	}
 
 	private handleTextMessage(data: string) {
