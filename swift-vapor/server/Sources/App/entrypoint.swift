@@ -184,12 +184,14 @@ private func configure(
     }
 
     app.webSocket("ws") { req, ws in
-        req.logger.debug("TODO JEFF new ws connection \(req.remoteAddress)")
+        req.logger.debug(
+            "TODO JEFF new ws connection \(req.remoteAddress?.description ?? "no remote address")")
 
         ws.onClose.whenComplete { _ in
             connectedClients.close()
         }
 
+        let client: ConnectedClient?
         ws.onText { ws, messageJson in
             let message: ClientToServerMessage
             do {
