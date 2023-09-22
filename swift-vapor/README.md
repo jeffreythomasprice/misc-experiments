@@ -4,6 +4,7 @@ npm run start
 ```
 
 ```
-docker exec -it <container name> bash
+docker exec -it swift_server_$USER bash
+cd workspaces/misc-experiments/swift-vapor/server/
 swift run
 ```

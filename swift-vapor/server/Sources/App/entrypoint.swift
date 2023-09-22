@@ -87,13 +87,12 @@ class ConnectedClientsService {
         logger.trace("sending message from \(sender.description()), message = \(message)")
         let messageObj = ServerToClientMessage.send(
             ServerToClientMessage.Send(senderId: sender.id.uuidString, message: message))
-        for (_, client) in connectedClients {
-            if client.id != sender.id {
-                do {
-                    try client.send(message: messageObj)
-                } catch {
-                    logger.error("error sending to \(client.description()): \(error)")
-                }
+        for client in connectedClients.values {
+            do {
+                logger.trace("sending to client \(client.description())")
+                try client.send(message: messageObj)
+            } catch {
+                logger.error("error sending to \(client.description()): \(error)")
             }
         }
     }

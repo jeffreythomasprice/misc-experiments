@@ -52,6 +52,8 @@ export class WebsocketService {
 					await this.handleArrayBufferMessage(data);
 				} else if (data instanceof Blob) {
 					await this.handleArrayBufferMessage(await data.arrayBuffer());
+				} else {
+					console.error("unhandled message type", typeof data, data);
 				}
 			} catch (err) {
 				console.error("error handling websocket message", err);
