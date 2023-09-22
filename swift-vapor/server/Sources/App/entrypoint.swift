@@ -2,6 +2,94 @@ import Dispatch
 import Logging
 import Vapor
 
+class PendingClient {
+    let id: UUID
+    var name: String
+
+    init(name: String) {
+        id = UUID()
+        self.name = name
+    }
+
+    func description() -> String {
+        return "PendingClient(id=\(id), name=\(name))"
+    }
+}
+
+class ConnectedClient {
+    let ws: WebSocket
+    let id: UUID
+    var name: String
+
+    init(ws: WebSocket, client: PendingClient) {
+        self.ws = ws
+        self.id = client.id
+        self.name = client.name
+    }
+
+    func description() -> String {
+        return "ConnectedClient(id=\(id), name=\(name))"
+    }
+
+    func send(message: ServerToClientMessage) throws {
+        ws.send(try String(decoding: JSONEncoder().encode(message), as: UTF8.self))
+    }
+}
+
+enum ConnectedClientServiceError: Error {
+    case noSuchClient
+}
+
+class ConnectedClientsService {
+    private let logger: Logger = Logger(label: "clients")
+
+    private var pendingClients: [UUID: PendingClient] = [:]
+    private var connectedClients: [UUID: ConnectedClient] = [:]
+
+    func close() {
+        logger.debug("closing all active clients")
+        // TODO disconnect everybody
+    }
+
+    func close(client: ConnectedClient) {
+        logger.debug("closing client \(client.description())")
+        // TODO disconnect client
+    }
+
+    func newClient(name: String) -> PendingClient {
+        let result = PendingClient(name: name)
+        logger.debug("new pending client, name = \(name), id = \(result.id)")
+        pendingClients[result.id] = result
+        logger.trace("there are now \(pendingClients.count) pending clients")
+        return result
+    }
+
+    func upgradeClient(id: UUID, ws: WebSocket) throws -> ConnectedClient {
+        if let client = pendingClients.removeValue(forKey: id) {
+            let result = ConnectedClient(ws: ws, client: client)
+            connectedClients[client.id] = result
+            return result
+        } else {
+            throw ConnectedClientServiceError.noSuchClient
+        }
+    }
+
+    func broadcast(sender: ConnectedClient, message: String) {
+        logger.trace("sending message from \(sender.description()), message = \(message)")
+        let messageObj = ServerToClientMessage.send(
+            ServerToClientMessage.Send(senderId: sender.id.uuidString, message: message))
+        for (_, client) in connectedClients {
+            if client.id != sender.id {
+                do {
+                    try client.send(message: messageObj)
+                } catch {
+                    logger.error("error sending to \(client.description()): \(error)")
+                }
+            }
+        }
+    }
+}
+
 /// This extension is temporary and can be removed once Vapor gets this support.
 extension Vapor.Application {
     fileprivate static let baseExecutionQueue = DispatchQueue(label: "vapor.codes.entrypoint")
@@ -30,7 +118,7 @@ enum Entrypoint {
                 return ConsoleLogger(
                     label: label,
                     console: console,
-                    // ignore whatever the env var said and just always print trace
+                    // ignore whatever the env var said and always print trace
                     level: .trace
                 )
             }
@@ -53,113 +141,11 @@ enum Entrypoint {
     }
 }
 
-struct LoginRequest: Content {
-    var name: String
-}
-
-struct LoginResponse: Content {
-    var id: String
-}
-
-struct ClientToServerMessage: Content {
-    var message: String
-}
-
-struct ServerToClientMessage: Content {
-    var senderId: String
-    var message: String
-}
-
-class PendingClient {
-    let id: UUID
-    var name: String
-
-    init(name: String) {
-        id = UUID()
-        self.name = name
-    }
-}
-
-class ConnectedClient {
-    let ws: WebSocket
-    let id: UUID
-    var name: String
-
-    init(ws: WebSocket, client: PendingClient) {
-        self.ws = ws
-        self.id = client.id
-        self.name = client.name
-    }
-
-    func send(message: ServerToClientMessage) {
-        // TODO JEFF implement send
-
-        /*
-            req.logger.debug("received ws message = \(message)")
-            let response = ServerToClientMessage(
-                senderId: "TODO fill in sender ID",
-                message: "response from server"
-            )
-            req.logger.debug("responding to ws message = \(response)")
-            guard
-                let response = try? String(decoding: JSONEncoder().encode(response), as: UTF8.self)
-            else {
-                return
-            }
-            ws.send(response)
-        */
-    }
-}
-
-enum ConnectedClientServiceError: Error {
-    case noSuchClient
-}
-
-class ConnectedClientsService {
-    private let logger: Logger = Logger(label: "clients")
-
-    private var pendingClients: [UUID: PendingClient] = [:]
-    private var connectedClients: [UUID: ConnectedClient] = [:]
-
-    func close() {
-        logger.debug("closing all active clients")
-        // TODO JEFF disconnect everybody
-    }
-
-    func newClient(name: String) -> PendingClient {
-        let result = PendingClient(name: name)
-        logger.debug("new pending client, name = \(name), id = \(result.id)")
-        pendingClients[result.id] = result
-        logger.trace("there are now \(pendingClients.count) pending clients")
-        return result
-    }
-
-    func upgradeClient(id: UUID, ws: WebSocket) throws -> ConnectedClient {
-        if let client = pendingClients.removeValue(forKey: id) {
-            let result = ConnectedClient(ws: ws, client: client)
-            connectedClients[client.id] = result
-            return result
-        } else {
-            throw ConnectedClientServiceError.noSuchClient
-        }
-    }
-
-    func broadcast(sender: ConnectedClient, message: String) {
-        logger.trace("sending message from \(sender), message = \(message)")
-        let messageObj = ServerToClientMessage(senderId: sender.id.uuidString, message: message)
-        for (_, client) in connectedClients {
-            if client.id != sender.id {
-                client.send(message: messageObj)
-            }
-        }
-    }
-}
-
 private func configure(
     _ app: Application,
     connectedClients: ConnectedClientsService
 ) async throws {
-    // app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+    // TODO handle ctrl+c faster, currently takes like 10 seconds to timeout shutting down
 
     let corsConfiguration = CORSMiddleware.Configuration(
         allowedOrigin: .all,
@@ -167,12 +153,7 @@ private func configure(
         allowedHeaders: [.contentType]
     )
     let cors = CORSMiddleware(configuration: corsConfiguration)
-    // cors middleware should come before default error middleware using `at: .beginning`
     app.middleware.use(cors, at: .beginning)
-
-    // app.get { req async in
-    //     req.fileio.streamFile(at: "Public/index.html")
-    // }
 
     app.post("login") { req -> LoginResponse in
         let request = try req.content.decode(LoginRequest.self)
@@ -185,13 +166,22 @@ private func configure(
 
     app.webSocket("ws") { req, ws in
         req.logger.debug(
-            "TODO JEFF new ws connection \(req.remoteAddress?.description ?? "no remote address")")
+            "new ws connection \(req.remoteAddress?.description ?? "no remote address")")
 
         ws.onClose.whenComplete { _ in
             connectedClients.close()
         }
 
-        let client: ConnectedClient?
+        class State {
+            var client: ConnectedClient?
+
+            init() {
+                client = nil
+            }
+        }
+
+        let state = State()
+
         ws.onText { ws, messageJson in
             let message: ClientToServerMessage
             do {
@@ -202,10 +192,33 @@ private func configure(
                 return
             }
 
-            req.logger.debug("TODO JEFF message = \(message)")
+            switch message {
+            case .send(let send):
+                if let client = state.client {
+                    connectedClients.broadcast(sender: client, message: send.message)
+                } else {
+                    req.logger.warning("not logged in, can't send messages")
+                    _ = ws.close(code: .normalClosure)
+                }
 
-            // TODO JEFF broadcast
-            // connectedClients.broadcast(sender: ConnectedClient, message: String)
+            case .login(let login):
+                if let client = state.client {
+                    req.logger.warning("already logged in, can't handle request \(login)")
+                    connectedClients.close(client: client)
+                    return
+                }
+
+                req.logger.info("logged in \(login)")
+                if let id = UUID.init(uuidString: login.id) {
+                    do {
+                        state.client = try connectedClients.upgradeClient(id: id, ws: ws)
+                    } catch {
+                        req.logger.error("error upgrading client \(error)")
+                    }
+                } else {
+                    req.logger.warning("client gave us nonsense for an id \(login)")
+                }
+            }
         }
     }
 }

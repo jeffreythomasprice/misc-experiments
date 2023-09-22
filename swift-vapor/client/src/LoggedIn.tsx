@@ -28,7 +28,6 @@ export const LoggedIn: Component<Props> = ({ name, service }) => {
 		<p>Name: {name}</p>
 		<form onsubmit={(e) => {
 			e.preventDefault();
-			console.log("TODO JEFF submit message", message());
 			service.send(message());
 			setMessage("");
 		}}>

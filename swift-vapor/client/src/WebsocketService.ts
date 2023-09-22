@@ -11,6 +11,7 @@ export class WebsocketService {
 	constructor(private readonly url: string) { }
 
 	start(id: string) {
+		console.log(`TODO JEFF start ${id}`);
 		if (this.ws) {
 			this.stop();
 		}
@@ -20,14 +21,18 @@ export class WebsocketService {
 		this.ws = new WebSocket(this.url);
 
 		this.ws.addEventListener("open", () => {
-			console.log("TODO JEFF websocket on open");
+			console.log("websocket opened");
 			this.isOpen = true;
 
-			// TODO JEFF should be sending an initial login message with our id
+			const message: ClientToServerMessage = {
+				type: "login",
+				id,
+			};
+			this.ws?.send(JSON.stringify(message));
 		});
 
 		this.ws.addEventListener("close", () => {
-			console.log("TODO JEFF websocket on close");
+			console.log("websocket closed");
 			this.isOpen = false;
 			if (this.shouldBeRunning) {
 				this.start(id);
@@ -64,7 +69,10 @@ export class WebsocketService {
 	}
 
 	send(message: string) {
-		const wrappedMessage: ClientToServerMessage = { message };
+		const wrappedMessage: ClientToServerMessage = {
+			type: "send",
+			message,
+		};
 		if (this.isOpen) {
 			this.ws?.send(JSON.stringify(wrappedMessage));
 		} else {

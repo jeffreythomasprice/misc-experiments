@@ -4,11 +4,11 @@ import PackageDescription
 let package = Package(
     name: "Experiment",
     platforms: [
-       .macOS(.v13)
+        .macOS(.v13)
     ],
     dependencies: [
         // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.77.1"),
+        .package(url: "https://github.com/vapor/vapor.git", from: "4.81.1")
     ],
     targets: [
         .executableTarget(
@@ -17,9 +17,11 @@ let package = Package(
                 .product(name: "Vapor", package: "vapor")
             ]
         ),
-        .testTarget(name: "AppTests", dependencies: [
-            .target(name: "App"),
-            .product(name: "XCTVapor", package: "vapor"),
-        ])
+        .testTarget(
+            name: "AppTests",
+            dependencies: [
+                .target(name: "App"),
+                .product(name: "XCTVapor", package: "vapor"),
+            ]),
     ]
 )

@@ -7,5 +7,6 @@ module.exports = {
 	rules: {
 		"quotes": ["error", "double"],
 		"indent": ["error", "tab"],
+		"@typescript-eslint/no-namespace": "off",
 	}
 };
