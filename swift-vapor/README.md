@@ -5,5 +5,5 @@ npm run start
 
 ```
 docker exec -it <container name> bash
-vapor run
+swift run
 ```

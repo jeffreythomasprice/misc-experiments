@@ -11,7 +11,6 @@ export class WebsocketService {
 	constructor(private readonly url: string) { }
 
 	start(id: string) {
-		console.log(`TODO JEFF start ${id}`);
 		if (this.ws) {
 			this.stop();
 		}

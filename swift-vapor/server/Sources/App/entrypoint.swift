@@ -46,14 +46,23 @@ class ConnectedClientsService {
     private var pendingClients: [UUID: PendingClient] = [:]
     private var connectedClients: [UUID: ConnectedClient] = [:]
 
-    func close() {
+    func close() async {
         logger.debug("closing all active clients")
-        // TODO disconnect everybody
+        for client in connectedClients.values {
+            await close(client: client)
+        }
+        pendingClients.removeAll()
+        connectedClients.removeAll()
     }
 
-    func close(client: ConnectedClient) {
+    func close(client: ConnectedClient) async {
         logger.debug("closing client \(client.description())")
-        // TODO disconnect client
+        do {
+            try await client.ws.close()
+        } catch {
+            logger.error("error closing client websocket \(error)")
+        }
+        connectedClients.removeValue(forKey: client.id)
     }
 
     func newClient(name: String) -> PendingClient {
@@ -168,10 +177,6 @@ private func configure(
         req.logger.debug(
             "new ws connection \(req.remoteAddress?.description ?? "no remote address")")
 
-        ws.onClose.whenComplete { _ in
-            connectedClients.close()
-        }
-
         class State {
             var client: ConnectedClient?
 
@@ -181,6 +186,14 @@ private func configure(
         }
 
         let state = State()
+
+        ws.onClose.whenComplete { _ in
+            if let client = state.client {
+                Task {
+                    await connectedClients.close(client: client)
+                }
+            }
+        }
 
         ws.onText { ws, messageJson in
             let message: ClientToServerMessage
@@ -204,7 +217,9 @@ private func configure(
             case .login(let login):
                 if let client = state.client {
                     req.logger.warning("already logged in, can't handle request \(login)")
-                    connectedClients.close(client: client)
+                    Task {
+                        await connectedClients.close(client: client)
+                    }
                     return
                 }
 
