@@ -12,7 +12,7 @@ import (
 func main() {
 	shared.InitSlog()
 
-	liveReload("ws://localhost:8000/_liveReload")
+	go liveReload("ws://localhost:8000/_liveReload")
 
 	loginPage()
 
@@ -31,7 +31,7 @@ func loginPage() {
 	`)...)
 
 	// TODO simpler casting?
-	form := dom.NewHTMLFormElement(*document.QuerySelector("#form").Value)
+	form := dom.NewHTMLFormElement(document.QuerySelector("#form").Value)
 
 	// TODO event for when input becomes visible, set focus because autofocus doesn't work when swapping in
 
@@ -84,14 +84,15 @@ func loggedInPage(ws *WebsocketClient) {
 	`)...)
 
 	// TODO simpler casting?
-	form := dom.NewHTMLFormElement(*document.QuerySelector("#form").Value)
+	form := dom.NewHTMLFormElement(document.QuerySelector("#form").Value)
+	messageInput := dom.NewHTMLInputElement(document.QuerySelector("#form > input[name='message']").Value)
 
 	// TODO event for when input becomes visible, set focus because autofocus doesn't work when swapping in
 
 	handleFormSubmit(form, func(data *dom.FormData) {
 		message := data.Entries()["message"][0].String()
-		// TODO clear form
-		// TODO focus on input
+		messageInput.SetValue("")
+		messageInput.Focus()
 		if err := ws.SendJSON(&shared.WebsocketClientToServerMessage{
 			Type: shared.WebsocketClientToServerMessageTypeSend,
 			Send: &shared.WebsocketClientToServerMessageSend{

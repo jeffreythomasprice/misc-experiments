@@ -1,6 +1,8 @@
 package dom
 
-import "syscall/js"
+import (
+	"syscall/js"
+)
 
 type Document struct {
 	*Node
