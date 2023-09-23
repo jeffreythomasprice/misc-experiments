@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"shared"
+	"slices"
 	"sync"
 	"time"
 
@@ -40,6 +41,8 @@ func main() {
 		return &shared.WebsocketLoginResponse{ID: id}, nil
 	}))
 
+	r.HandleFunc("/ws", chatWebsocketHandler())
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	host := "localhost:8000"
@@ -61,6 +64,107 @@ func liveReloadWebSocketHandler() http.HandlerFunc {
 	m.HandleConnect(func(s *melody.Session) {
 		s.Write(response)
 	})
+	return func(w http.ResponseWriter, r *http.Request) {
+		m.HandleRequest(w, r)
+	}
+}
+
+func chatWebsocketHandler() http.HandlerFunc {
+	m := melody.New()
+
+	verifiedSessions := make([]*melody.Session, 0)
+	var verifiedSessionsMutex sync.Mutex
+
+	getID := func(s *melody.Session) (string, bool) {
+		value, ok := s.Get("id")
+		if ok {
+			return value.(string), true
+		} else {
+			return "", false
+		}
+	}
+
+	setID := func(s *melody.Session, id string) {
+		s.Set("id", id)
+	}
+
+	closeSession := func(s *melody.Session) {
+		if err := s.Close(); err != nil {
+			slog.Error("error when closing session", "err", err)
+		}
+	}
+
+	m.HandleMessage(func(s *melody.Session, b []byte) {
+		var message shared.WebsocketClientToServerMessage
+		if err := json.Unmarshal(b, &message); err != nil {
+			slog.Error("error unmarshalling websocket message", "err", err)
+			return
+		}
+
+		switch message.Type {
+		case shared.WebsocketClientToServerMessageTypeLogin:
+			slog.Debug(
+				"received message",
+				"type", message.Type,
+				"id", message.Login.ID,
+			)
+			// if session is already verified, close it
+			id, ok := getID(s)
+			if ok {
+				slog.Error(
+					"session is already verified",
+					"existing id", id,
+					"incoming id", message.Login.ID,
+				)
+				closeSession(s)
+				return
+			}
+			// this session is now verified
+			setID(s, message.Login.ID)
+			verifiedSessionsMutex.Lock()
+			verifiedSessions = append(verifiedSessions, s)
+			verifiedSessionsMutex.Unlock()
+
+		case shared.WebsocketClientToServerMessageTypeSend:
+			slog.Debug(
+				"received message",
+				"type", message.Type,
+				"message", message.Send.Message,
+			)
+			id, ok := getID(s)
+			// if session is unverified, close it
+			if !ok {
+				slog.Error("message received before verification", id)
+				closeSession(s)
+				return
+			}
+			// broadcast response to all connected sessions
+			outgoingBytes, err := json.Marshal(&shared.WebsocketServerToClientMessage{
+				Type: shared.WebsocketServerToClientMessageTypeSend,
+				Send: &shared.WebsocketServerToClientMessageSend{
+					SenderID: id,
+					Message:  message.Send.Message,
+				},
+			})
+			if err != nil {
+				slog.Error("failed to serialize message", "err", err)
+				return
+			}
+			verifiedSessionsMutex.Lock()
+			cloneOfVerifiedSessions := slices.Clone(verifiedSessions)
+			verifiedSessionsMutex.Unlock()
+			for _, s := range cloneOfVerifiedSessions {
+				if err := s.Write(outgoingBytes); err != nil {
+					slog.Error("error writing to session", "session", s, "err", err)
+					closeSession(s)
+				}
+			}
+
+		default:
+			slog.Error("unrecognized message type", "type", message.Type)
+		}
+	})
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.HandleRequest(w, r)
 	}

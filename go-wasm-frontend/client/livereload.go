@@ -1,14 +1,13 @@
 package main
 
 import (
-	"context"
 	"log/slog"
 	"syscall/js"
 )
 
-func liveReload() {
+func liveReload(url string) {
 	var lastMessage *string = nil
-	WebsocketWithReconnect(context.Background(), "ws://localhost:8000/_liveReload", nil, func(message string) {
+	NewWebsocketWithReconnect(url, nil, func(message string) {
 		if lastMessage == nil {
 			lastMessage = &message
 		} else if *lastMessage != message {
