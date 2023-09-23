@@ -4,6 +4,7 @@ import (
 	"client/dom"
 	"html/template"
 	"log/slog"
+	"net/http"
 	"shared"
 	"strings"
 )
@@ -29,10 +30,25 @@ func main() {
 	// TODO simpler casting?
 	form := dom.NewHTMLFormElement(*document.QuerySelector("#form").Value)
 	// TODO event for when input becomes visible, set focus because autofocus doesn't work when swapping in
+	isSubmitting := false
 	form.OnSubmit(func(e *dom.SubmitEvent) {
 		e.PreventDefault()
-
-		slog.Debug("TODO JEFF submit", "entries", e.FormData().Entries())
+		if isSubmitting {
+			return
+		}
+		isSubmitting = true
+		request := &shared.WebsocketLoginRequest{
+			Name: e.FormData().Entries()["name"][0].String(),
+		}
+		go func() {
+			result, err := shared.MakeJSONRequest[shared.WebsocketLoginResponse](http.MethodPost, "/login", request)
+			isSubmitting = false
+			if err != nil {
+				slog.Error("error making login request", "err", err)
+			} else {
+				slog.Debug("TODO login result", "result", result)
+			}
+		}()
 	})
 
 	select {}

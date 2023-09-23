@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -13,23 +14,9 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/google/uuid"
 	"github.com/olahol/melody"
 )
-
-type client struct {
-	Name, ID string
-	Session  *melody.Session
-}
-
-type websocketLogin struct {
-	ID string `json:"id"`
-}
-
-type websocketMessage struct {
-	Message string             `json:"message"`
-	ID      string             `json:"id"`
-	Headers map[string]*string `json:"HEADERS"`
-}
 
 //go:embed embed
 var assets embed.FS
@@ -46,6 +33,12 @@ func main() {
 	r.Get("/client.wasm", serveFile(assets, "embed/client.wasm"))
 
 	r.HandleFunc("/_liveReload", liveReloadWebSocketHandler())
+
+	r.HandleFunc("/login", newJsonHandlerFunc[shared.WebsocketLoginRequest, shared.WebsocketLoginResponse](func(request *shared.WebsocketLoginRequest) (*shared.WebsocketLoginResponse, error) {
+		id := uuid.NewString()
+		slog.Info("new client", "id", id, "name", request.Name)
+		return &shared.WebsocketLoginResponse{ID: id}, nil
+	}))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -95,6 +88,48 @@ func serveFile(fileSystem http.FileSystem, path string) http.HandlerFunc {
 		http.ServeContent(w, r, path, stat.ModTime(), file)
 		if err := file.Close(); err != nil {
 			slog.Error("error closing file", "path", path, "err", err)
+		}
+	}
+}
+
+func newJsonHandlerFunc[RequestType, ResponseType any](f func(request *RequestType) (*ResponseType, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// TODO logging should have request content stuff like remote addr
+
+		// TODO assert that it's got the application/json or */* header
+		// strings.Split(r.Header.Get("accept"), ",")
+
+		// TODO assert that content type is application/json
+		// r.Header.Get("content-type")
+
+		request, err := shared.UnmarshalJson[RequestType](r.Body)
+		if err != nil {
+			slog.Error("error reading request body", "err", err)
+			respondError(w, 400)
+			return
+		}
+		slog.Debug("request", "body", request)
+
+		response, err := f(request)
+		if err != nil {
+			slog.Error("error handling json request", "err", err)
+			respondError(w, 500)
+			return
+		}
+		slog.Debug("response", "body", response)
+
+		responseBytes, err := json.Marshal(response)
+		if err != nil {
+			slog.Error("error marshalling response body", "err", err)
+			respondError(w, 500)
+			return
+		}
+
+		w.Header().Add("content-type", "application/json")
+		w.WriteHeader(200)
+		_, err = w.Write(responseBytes)
+		if err != nil {
+			slog.Error("error writing response to http request", "err", err)
 		}
 	}
 }
