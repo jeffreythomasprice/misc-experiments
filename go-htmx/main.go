@@ -1,19 +1,27 @@
 package main
 
 import (
+	"encoding/json"
 	"experiments/livereload"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/go-chi/chi"
 	g "github.com/maragudk/gomponents"
 	c "github.com/maragudk/gomponents/components"
 	h "github.com/maragudk/gomponents/html"
+	"github.com/olahol/melody"
 )
+
+type WebsocketMessage struct {
+	Message string             `json:"message"`
+	Headers map[string]*string `json:"HEADERS"`
+}
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(
@@ -38,6 +46,7 @@ func main() {
 		func() []g.Node {
 			return []g.Node{
 				h.H1(g.Text("Hello, World!")),
+
 				h.Button(
 					g.Text("Click Me"),
 					g.Attr("hx-post", "/clicked1"),
@@ -51,6 +60,21 @@ func main() {
 					g.Attr("hx-target", "#target2"),
 				),
 				h.Div(h.ID("target2")),
+
+				h.Div(
+					g.Attr("hx-ws", "connect:/ws"),
+					h.FormEl(
+						h.ID("ws-form"),
+						g.Attr("hx-ws", "send"),
+						h.Input(
+							h.Name("message"),
+							h.AutoFocus(),
+						),
+					),
+					h.Div(
+						h.ID("ws-messages"),
+					),
+				),
 			}
 		},
 	))
@@ -78,6 +102,73 @@ func main() {
 			return clicks2
 		},
 	))
+
+	m := melody.New()
+	m.HandleConnect(func(s *melody.Session) {
+		slog.Debug(
+			"ws connected",
+			"remote addr", s.RemoteAddr().String(),
+		)
+		if err := writeToWebSocket(s, func() g.Node {
+			return h.Div(
+				h.ID("ws-messages"),
+				g.Attr("hx-swap-oob", "beforeend"),
+				h.Div(g.Text("TODO JEFF hello from server")),
+			)
+		}); err != nil {
+			slog.Error(
+				"error sending to websocket",
+				"remote addr", s.RemoteAddr().String(),
+				"err", err,
+			)
+		}
+	})
+	m.HandleMessage(func(s *melody.Session, b []byte) {
+		var message WebsocketMessage
+		if err := json.Unmarshal(b, &message); err != nil {
+			slog.Error("json unmarshal error", "err", err)
+			return
+		}
+		slog.Debug(
+			"received message",
+			"remote addr", s.RemoteAddr().String(),
+			"msg", message.Message,
+		)
+		// TODO deduplicate the writing of messages
+		if err := writeToWebSocket(s, func() g.Node {
+			return h.Div(
+				h.ID("ws-messages"),
+				g.Attr("hx-swap-oob", "beforeend"),
+				h.Div(g.Textf("TODO JEFF responding to \"%v\"", message.Message)),
+			)
+		}); err != nil {
+			slog.Error(
+				"error sending to websocket",
+				"remote addr", s.RemoteAddr().String(),
+				"err", err,
+			)
+		}
+		if err := writeToWebSocket(s, func() g.Node {
+			// TODO deduplicate the form
+			return h.FormEl(
+				h.ID("ws-form"),
+				g.Attr("hx-ws", "send"),
+				h.Input(
+					h.Name("message"),
+					h.AutoFocus(),
+				),
+			)
+		}); err != nil {
+			slog.Error(
+				"error sending to websocket",
+				"remote addr", s.RemoteAddr().String(),
+				"err", err,
+			)
+		}
+	})
+	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		m.HandleRequest(w, r)
+	})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -129,4 +220,12 @@ func nodeHandlerFunc(f func() g.Node) http.HandlerFunc {
 			slog.Error("error rendering node", "err", err)
 		}
 	}
+}
+
+func writeToWebSocket(s *melody.Session, f func() g.Node) error {
+	var w strings.Builder
+	if err := f().Render(&w); err != nil {
+		return err
+	}
+	return s.Write([]byte(w.String()))
 }

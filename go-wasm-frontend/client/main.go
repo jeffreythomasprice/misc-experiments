@@ -74,16 +74,26 @@ func renderDomString(s string) []*dom.Node {
 	return temp.Children()
 }
 
-func newTemplateRenderer(t *template.Template, name string, data func() any) func() []*dom.Node {
+func newDomRenderer(f func() (string, error)) func() []*dom.Node {
 	return func() []*dom.Node {
-		var s strings.Builder
-		if err := t.ExecuteTemplate(&s, name, data()); err != nil {
+		s, err := f()
+		if err != nil {
 			// TODO handle error when rendering
-			slog.Error("error rendering template", "name", name, "err", err)
+			slog.Error("error rendering dom elements from string", "err", err)
 			return nil
 		}
-		return renderDomString(s.String())
+		return renderDomString(s)
 	}
+}
+
+func newTemplateRenderer(t *template.Template, name string, data func() any) func() []*dom.Node {
+	return newDomRenderer(func() (string, error) {
+		var s strings.Builder
+		if err := t.ExecuteTemplate(&s, name, data()); err != nil {
+			return "", nil
+		}
+		return s.String(), nil
+	})
 }
 
 func newReplaceChildWith(target *dom.Element, f func() []*dom.Node) func() {
