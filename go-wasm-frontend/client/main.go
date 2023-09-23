@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"shared"
 	"strings"
-	"syscall/js"
 )
 
 func main() {
@@ -21,35 +20,19 @@ func main() {
 	elem.SetInnerText("Hello, World!")
 	replaceContent(body.Element, elem.Node)
 
-	appendContent(body.Element, renderDomString(`
-		<div>
-			<ul>
-				<li>foo</li>
-				<li>bar</li>
-				<li>baz</li>
-			<ul>
-		</div>
-		<button id="button">Click Me</button>
-		<div id="output"></div>
+	replaceContent(body.Element, renderDomString(`
+		<form id="form">
+			<label>Enter a name:</label>
+			<input type="text" name="name" placeholder="Name"/>
+		</form>
 	`)...)
+	// TODO simpler casting?
+	form := dom.NewHTMLFormElement(*document.QuerySelector("#form").Value)
+	// TODO event for when input becomes visible, set focus because autofocus doesn't work when swapping in
+	form.OnSubmit(func(e *dom.SubmitEvent) {
+		e.PreventDefault()
 
-	button := document.QuerySelector("#button")
-	output := document.QuerySelector("#output")
-
-	t, err := template.New("").Parse(`
-		<h4>count = {{.}}</h4>
-	`)
-	if err != nil {
-		panic(err)
-	}
-	count := 0
-	f := newReplaceChildWith(output, newTemplateRenderer(t, "", func() any {
-		count++
-		return count
-	}))
-
-	button.AddEventListener("click", func(args []js.Value) {
-		f()
+		slog.Debug("TODO JEFF submit", "entries", e.FormData().Entries())
 	})
 
 	select {}

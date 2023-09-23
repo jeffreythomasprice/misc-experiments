@@ -20,16 +20,16 @@ import (
 	"github.com/olahol/melody"
 )
 
-type Client struct {
+type client struct {
 	Name, ID string
 	Session  *melody.Session
 }
 
-type WebsocketLogin struct {
+type websocketLogin struct {
 	ID string `json:"id"`
 }
 
-type WebsocketMessage struct {
+type websocketMessage struct {
 	Message string             `json:"message"`
 	ID      string             `json:"id"`
 	Headers map[string]*string `json:"HEADERS"`
@@ -51,7 +51,7 @@ func main() {
 	}
 	r.HandleFunc("/_liveReloadFoobar", livereload.HandlerFunc(r))
 
-	clients := make(map[string]*Client)
+	clients := make(map[string]*client)
 
 	r.Get("/", pageHandlerFunc(
 		func() ([]g.Node, error) {
@@ -108,7 +108,7 @@ func main() {
 			"id", id,
 		)
 
-		clients[id] = &Client{
+		clients[id] = &client{
 			Name:    name,
 			ID:      id,
 			Session: nil,
@@ -166,8 +166,8 @@ func main() {
 		message, err := unmarshalTaggedUnionJson(
 			"type",
 			map[string]interface{}{
-				"login": &WebsocketLogin{},
-				"send":  &WebsocketMessage{},
+				"login": &websocketLogin{},
+				"send":  &websocketMessage{},
 			},
 			b,
 		)
@@ -177,9 +177,9 @@ func main() {
 			return
 		}
 		switch message.(type) {
-		case *WebsocketLogin:
+		case *websocketLogin:
 			slog.Debug("TODO JEFF got login", "msg", message)
-		case *WebsocketMessage:
+		case *websocketMessage:
 			slog.Debug("TODO JEFF got message", "msg", message)
 		}
 
@@ -329,7 +329,7 @@ func writeMessageToWebsocket(s *melody.Session, message string) {
 		g.Attr("hx-swap-oob", "beforeend"),
 		h.Div(g.Text(message)),
 	)
-	if err := writeNodeToWebSoccket(s, n); err != nil {
+	if err := writeNodeToWebSocket(s, n); err != nil {
 		slog.Error(
 			"error sending to websocket",
 			"remote addr", s.RemoteAddr().String(),
@@ -338,7 +338,7 @@ func writeMessageToWebsocket(s *melody.Session, message string) {
 	}
 }
 
-func writeNodeToWebSoccket(s *melody.Session, n g.Node) error {
+func writeNodeToWebSocket(s *melody.Session, n g.Node) error {
 	var w strings.Builder
 	if err := n.Render(&w); err != nil {
 		return err

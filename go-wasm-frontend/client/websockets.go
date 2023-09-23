@@ -73,14 +73,14 @@ func Websocket(ctx context.Context, url string, protocol []string, onMessage Web
 			message := message.String()
 			onMessage(message)
 		} else if message.InstanceOf(js.Global().Get("ArrayBuffer")) {
-			panic("TODO JEFF convert array buffer to message")
+			panic("TODO convert array buffer to message")
 		} else if message.InstanceOf(js.Global().Get("Blob")) {
 			_, err := await(message.Call("arrayBuffer"))
 			if err.Truthy() {
 				slog.Error("error getting buffer from blob message", "url", url, "err", err)
 				returnErr = ErrWebsocket
 			} else {
-				panic("TODO JEFF convert array buffer to message")
+				panic("TODO convert array buffer to message")
 			}
 		} else {
 			slog.Error("unhandled message type", "url", url, "message", message.Type())

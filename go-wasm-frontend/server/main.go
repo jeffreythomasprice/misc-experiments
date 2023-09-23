@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
 	"shared"
 	"sync"
 	"time"
@@ -16,6 +15,21 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/olahol/melody"
 )
+
+type client struct {
+	Name, ID string
+	Session  *melody.Session
+}
+
+type websocketLogin struct {
+	ID string `json:"id"`
+}
+
+type websocketMessage struct {
+	Message string             `json:"message"`
+	ID      string             `json:"id"`
+	Headers map[string]*string `json:"HEADERS"`
+}
 
 //go:embed embed
 var assets embed.FS
@@ -57,11 +71,6 @@ func liveReloadWebSocketHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m.HandleRequest(w, r)
 	}
-}
-
-func sfatal(message string, err error) {
-	slog.Error(message, "err", err)
-	os.Exit(1)
 }
 
 func serveFile(fileSystem http.FileSystem, path string) http.HandlerFunc {
