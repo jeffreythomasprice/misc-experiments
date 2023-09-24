@@ -23,9 +23,9 @@ func AsHTMLInputElement(n Node) HTMLInputElement {
 }
 
 func (e htmlInputElementImpl) Value() string {
-	return e.Get("value").String()
+	return e.jsValue().Get("value").String()
 }
 
 func (e htmlInputElementImpl) SetValue(s string) {
-	e.Set("value", s)
+	e.jsValue().Set("value", s)
 }

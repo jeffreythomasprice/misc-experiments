@@ -15,22 +15,26 @@ type documentImpl struct {
 	nodeImpl
 }
 
-var _ Document = (*documentImpl)(nil)
+var _ Document = documentImpl{}
 
-func GetDocument() *documentImpl {
-	return &documentImpl{newNode(js.Global().Get("document"))}
+func GetDocument() documentImpl {
+	return documentImpl{newNode(js.Global().Get("document"))}
 }
 
-func (d *documentImpl) Body() Body {
-	return newBody(d.Get("body"))
+func (d documentImpl) Body() Body {
+	return newBody(d.jsValue().Get("body"))
 }
 
-func (d *documentImpl) CreateElement(tagName string) Element {
-	return newElement(d.Call("createElement", tagName))
+func (d documentImpl) Head() Head {
+	return newHead(d.jsValue().Get("head"))
 }
 
-func (d *documentImpl) QuerySelector(selectors string) Element {
-	result := d.Call("querySelector", selectors)
+func (d documentImpl) CreateElement(tagName string) Element {
+	return newElement(d.jsValue().Call("createElement", tagName))
+}
+
+func (d documentImpl) QuerySelector(selectors string) Element {
+	result := d.jsValue().Call("querySelector", selectors)
 	if result.Truthy() {
 		return newElement(result)
 	}

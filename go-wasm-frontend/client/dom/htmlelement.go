@@ -22,5 +22,5 @@ func AsHTMLElement(n Node) HTMLElement {
 }
 
 func (e htmlElementImpl) Focus() {
-	e.Call("focus")
+	e.jsValue().Call("focus")
 }

@@ -9,6 +9,9 @@ type Element interface {
 	SetInnerText(s string)
 	InnerHTML() string
 	SetInnerHTML(s string)
+	GetAttribute(name string) string
+	SetAttribute(name, value string)
+	RemoveAttribute(name string) string
 }
 
 type elementImpl struct {
@@ -27,7 +30,7 @@ func AsElement(n Node) Element {
 }
 
 func (e elementImpl) Children() []Node {
-	children := e.Get("children")
+	children := e.jsValue().Get("children")
 	len := children.Length()
 	results := make([]Node, 0, len)
 	for i := 0; i < len; i++ {
@@ -37,24 +40,35 @@ func (e elementImpl) Children() []Node {
 }
 
 func (e elementImpl) InnerText() string {
-	return e.Get("innerText").String()
+	return e.jsValue().Get("innerText").String()
 }
 
 func (e elementImpl) SetInnerText(s string) {
-	e.Set("innerText", s)
+	e.jsValue().Set("innerText", s)
 }
 
 func (e elementImpl) InnerHTML() string {
-	return e.Get("innerHTML").String()
+	return e.jsValue().Get("innerHTML").String()
 }
 
 func (e elementImpl) SetInnerHTML(s string) {
-	e.Set("innerHTML", s)
+	e.jsValue().Set("innerHTML", s)
 }
 
-// AddEventListener implements EventTarget.
+func (e elementImpl) GetAttribute(name string) string {
+	return e.jsValue().Call("getAttribute", name).String()
+}
+
+func (e elementImpl) SetAttribute(name string, value string) {
+	e.jsValue().Call("setAttribute", name, value)
+}
+
+func (e elementImpl) RemoveAttribute(name string) string {
+	return e.jsValue().Call("removeAttribute", name).String()
+}
+
 func (e elementImpl) AddEventListener(typ string, listener func(args []js.Value)) {
-	e.Call("addEventListener", typ, js.FuncOf(func(this js.Value, args []js.Value) any {
+	e.jsValue().Call("addEventListener", typ, js.FuncOf(func(this js.Value, args []js.Value) any {
 		listener(args)
 		return nil
 	}))

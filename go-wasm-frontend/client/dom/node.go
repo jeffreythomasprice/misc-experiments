@@ -11,7 +11,7 @@ type Node interface {
 }
 
 type nodeImpl struct {
-	js.Value
+	value js.Value
 }
 
 var _ Node = nodeImpl{}
@@ -21,13 +21,13 @@ func newNode(value js.Value) nodeImpl {
 }
 
 func (n nodeImpl) jsValue() js.Value {
-	return n.Value
+	return n.value
 }
 
 func (n nodeImpl) AppendChild(other Node) {
-	n.Call("appendChild", other.jsValue())
+	n.value.Call("appendChild", other.jsValue())
 }
 
 func (n nodeImpl) RemoveChild(other Node) {
-	n.Call("removeChild", other.jsValue())
+	n.value.Call("removeChild", other.jsValue())
 }

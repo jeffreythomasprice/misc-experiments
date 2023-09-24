@@ -3,7 +3,7 @@ package dom
 import "syscall/js"
 
 type FormData struct {
-	js.Value
+	value js.Value
 }
 
 func newFormData(value js.Value) FormData {
@@ -11,7 +11,7 @@ func newFormData(value js.Value) FormData {
 }
 
 func (data FormData) Entries() map[string][]js.Value {
-	iterator := data.Call("entries")
+	iterator := data.value.Call("entries")
 	results := make(map[string][]js.Value)
 	for {
 		this := iterator.Call("next")

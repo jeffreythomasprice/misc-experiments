@@ -2,9 +2,11 @@ package main
 
 import (
 	"client/dom"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"shared"
+	"strings"
 )
 
 func main() {
@@ -12,25 +14,36 @@ func main() {
 
 	go liveReload("ws://localhost:8000/_liveReload")
 
+	appendCss(`
+		.error {
+			color: red;
+			font-weight: bold;
+		}
+	`)
+
 	loginPage()
 
 	select {}
 }
 
 func loginPage() {
-	document := dom.GetDocument()
-	body := document.Body()
-
-	replaceContent(body, renderDomString(`
+	showPage(renderDomString(`
 		<form id="form">
 			<label>Enter a name:</label>
 			<input type="text" name="name" placeholder="Name"/>
 		</form>
 	`)...)
 
+	document := dom.GetDocument()
 	form := dom.AsHTMLFormElement(document.QuerySelector("#form"))
+	nameInput := dom.AsHTMLInputElement(document.QuerySelector("#form > input[name='name']"))
 
-	// TODO event for when input becomes visible, set focus because autofocus doesn't work when swapping in
+	waitForElementToAppear(
+		func(e dom.Element) {
+			nameInput.Focus()
+		},
+		nameInput,
+	)
 
 	handleFormSubmit(form, func(data dom.FormData) {
 		request := &shared.WebsocketLoginRequest{
@@ -40,20 +53,35 @@ func loginPage() {
 		if err != nil {
 			slog.Error("error making login request", "err", err)
 		} else {
-			startWebsocket(result)
+			startWebsocket(request.Name, result)
 		}
 	})
 }
 
-func startWebsocket(client *shared.WebsocketLoginResponse) {
-	document := dom.GetDocument()
-	body := document.Body()
+func startWebsocket(name string, client *shared.WebsocketLoginResponse) {
+	showPage(loadingMessage()...)
 
-	replaceContent(body, loadingMessage()...)
+	ws := NewWebsocketWithReconnect("ws://localhost:8000/ws", nil, func(messageStr string) {
+		message, err := shared.UnmarshalJson[shared.WebsocketServerToClientMessage](strings.NewReader(messageStr))
+		if err != nil {
+			showErrorMessage(fmt.Sprintf("Error parsing incoming message from server:\n%v", err))
+			return
+		}
 
-	ws := NewWebsocketWithReconnect("ws://localhost:8000/ws", nil, func(message string) {
-		// TODO handle response messages
-		slog.Debug("TODO handle response message", "message", message)
+		switch message.Type {
+		case shared.WebsocketServerToClientMessageTypeSend:
+			appendContent(
+				dom.GetDocument().QuerySelector("#messages"),
+				renderDomStringf(
+					"<div>%v - %v</div>",
+					message.Send.SenderID,
+					message.Send.Message,
+				)...,
+			)
+
+		default:
+			showErrorMessage(fmt.Sprintf("Unhandled incoming message type from server: %v", message.Type))
+		}
 	})
 
 	if err := ws.SendJSON(&shared.WebsocketClientToServerMessage{
@@ -62,28 +90,38 @@ func startWebsocket(client *shared.WebsocketLoginResponse) {
 			ID: client.ID,
 		},
 	}); err != nil {
-		slog.Error("error sending websocket message", "err", err)
+		showErrorMessage(fmt.Sprintf("Error sending websocket message:\n%v", err))
 		return
 	}
 
-	loggedInPage(ws)
+	loggedInPage(name, client.ID, ws)
 }
 
-func loggedInPage(ws *WebsocketClient) {
-	document := dom.GetDocument()
-	body := document.Body()
-
-	replaceContent(body, renderDomString(`
+func loggedInPage(name, id string, ws *WebsocketClient) {
+	showPage(renderDomStringf(
+		`
+		<div>Name: %v</div>
+		<div>ID: %v</div>
 		<form id="form">
 			<label>Message:</label>
 			<input type="text" name="message" placeholder="Message"/>
 		</form>
-	`)...)
+		<div id="messages"></div>
+		`,
+		name,
+		id,
+	)...)
 
+	document := dom.GetDocument()
 	form := dom.AsHTMLFormElement(document.QuerySelector("#form"))
 	messageInput := dom.AsHTMLInputElement(document.QuerySelector("#form > input[name='message']"))
 
-	// TODO event for when input becomes visible, set focus because autofocus doesn't work when swapping in
+	waitForElementToAppear(
+		func(e dom.Element) {
+			messageInput.Focus()
+		},
+		messageInput,
+	)
 
 	handleFormSubmit(form, func(data dom.FormData) {
 		message := data.Entries()["message"][0].String()
@@ -95,8 +133,7 @@ func loggedInPage(ws *WebsocketClient) {
 				Message: message,
 			},
 		}); err != nil {
-			slog.Error("error sending websocket message", "err", err)
-			// TODO handle error
+			showErrorMessage(fmt.Sprintf("Error sending websocket message:\n%v", err))
 		}
 	})
 }
@@ -105,6 +142,16 @@ func loadingMessage() []dom.Node {
 	return renderDomString(`
 		<div>Loading...</div>
 	`)
+}
+
+func showErrorMessage(message string) {
+	appendContent(
+		dom.GetDocument().Body(),
+		renderDomStringf(
+			`<p class="error">%v</p>`,
+			message,
+		)...,
+	)
 }
 
 func handleFormSubmit(form dom.HTMLFormElement, f func(data dom.FormData)) {
@@ -121,6 +168,24 @@ func handleFormSubmit(form dom.HTMLFormElement, f func(data dom.FormData)) {
 			isActive = false
 		}()
 	})
+}
+
+func waitForElementToAppear(callback func(e dom.Element), e dom.Element) {
+	obs := dom.NewIntersectionObserver(func(entries []dom.IntersectionObserverEntry, observer dom.IntersectionObserver) {
+		for _, e := range entries {
+			callback(e.Target())
+			observer.Unobserve(e.Target())
+		}
+		observer.Disconnect()
+	}, nil)
+	obs.Observe(e)
+}
+
+func showPage(newContent ...dom.Node) {
+	replaceContent(
+		dom.GetDocument().Body(),
+		newContent...,
+	)
 }
 
 func replaceContent(target dom.Element, newContent ...dom.Node) {
@@ -140,4 +205,15 @@ func renderDomString(s string) []dom.Node {
 	temp := dom.GetDocument().CreateElement("div")
 	temp.SetInnerHTML(s)
 	return temp.Children()
+}
+
+func renderDomStringf(s string, args ...any) []dom.Node {
+	return renderDomString(fmt.Sprintf(s, args...))
+}
+
+func appendCss(css string) {
+	style := dom.GetDocument().CreateElement("style")
+	style.SetAttribute("type", "text/css")
+	style.SetInnerHTML(css)
+	dom.GetDocument().Head().AppendChild(style)
 }
