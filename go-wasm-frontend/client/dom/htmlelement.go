@@ -2,14 +2,25 @@ package dom
 
 import "syscall/js"
 
-type HTMLElement struct {
-	*Element
+type HTMLElement interface {
+	Element
+	Focus()
 }
 
-func NewHTMLElement(value js.Value) *HTMLElement {
-	return &HTMLElement{NewElement(value)}
+type htmlElementImpl struct {
+	elementImpl
 }
 
-func (e *HTMLElement) Focus() {
+var _ HTMLElement = htmlElementImpl{}
+
+func newHTMLElement(value js.Value) htmlElementImpl {
+	return htmlElementImpl{newElement(value)}
+}
+
+func AsHTMLElement(n Node) HTMLElement {
+	return newHTMLElement(n.jsValue())
+}
+
+func (e htmlElementImpl) Focus() {
 	e.Call("focus")
 }

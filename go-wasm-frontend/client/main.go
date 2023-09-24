@@ -2,11 +2,9 @@ package main
 
 import (
 	"client/dom"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"shared"
-	"strings"
 )
 
 func main() {
@@ -20,22 +18,21 @@ func main() {
 }
 
 func loginPage() {
-	document := dom.NewDocument()
+	document := dom.GetDocument()
 	body := document.Body()
 
-	replaceContent(body.Element, renderDomString(`
+	replaceContent(body, renderDomString(`
 		<form id="form">
 			<label>Enter a name:</label>
 			<input type="text" name="name" placeholder="Name"/>
 		</form>
 	`)...)
 
-	// TODO simpler casting?
-	form := dom.NewHTMLFormElement(document.QuerySelector("#form").Value)
+	form := dom.AsHTMLFormElement(document.QuerySelector("#form"))
 
 	// TODO event for when input becomes visible, set focus because autofocus doesn't work when swapping in
 
-	handleFormSubmit(form, func(data *dom.FormData) {
+	handleFormSubmit(form, func(data dom.FormData) {
 		request := &shared.WebsocketLoginRequest{
 			Name: data.Entries()["name"][0].String(),
 		}
@@ -49,10 +46,10 @@ func loginPage() {
 }
 
 func startWebsocket(client *shared.WebsocketLoginResponse) {
-	document := dom.NewDocument()
+	document := dom.GetDocument()
 	body := document.Body()
 
-	replaceContent(body.Element, loadingMessage()...)
+	replaceContent(body, loadingMessage()...)
 
 	ws := NewWebsocketWithReconnect("ws://localhost:8000/ws", nil, func(message string) {
 		// TODO handle response messages
@@ -73,23 +70,22 @@ func startWebsocket(client *shared.WebsocketLoginResponse) {
 }
 
 func loggedInPage(ws *WebsocketClient) {
-	document := dom.NewDocument()
+	document := dom.GetDocument()
 	body := document.Body()
 
-	replaceContent(body.Element, renderDomString(`
+	replaceContent(body, renderDomString(`
 		<form id="form">
 			<label>Message:</label>
 			<input type="text" name="message" placeholder="Message"/>
 		</form>
 	`)...)
 
-	// TODO simpler casting?
-	form := dom.NewHTMLFormElement(document.QuerySelector("#form").Value)
-	messageInput := dom.NewHTMLInputElement(document.QuerySelector("#form > input[name='message']").Value)
+	form := dom.AsHTMLFormElement(document.QuerySelector("#form"))
+	messageInput := dom.AsHTMLInputElement(document.QuerySelector("#form > input[name='message']"))
 
 	// TODO event for when input becomes visible, set focus because autofocus doesn't work when swapping in
 
-	handleFormSubmit(form, func(data *dom.FormData) {
+	handleFormSubmit(form, func(data dom.FormData) {
 		message := data.Entries()["message"][0].String()
 		messageInput.SetValue("")
 		messageInput.Focus()
@@ -105,15 +101,15 @@ func loggedInPage(ws *WebsocketClient) {
 	})
 }
 
-func loadingMessage() []*dom.Node {
+func loadingMessage() []dom.Node {
 	return renderDomString(`
 		<div>Loading...</div>
 	`)
 }
 
-func handleFormSubmit(form *dom.HTMLFormElement, f func(data *dom.FormData)) {
+func handleFormSubmit(form dom.HTMLFormElement, f func(data dom.FormData)) {
 	isActive := false
-	form.OnSubmit(func(e *dom.SubmitEvent) {
+	form.OnSubmit(func(e dom.SubmitEvent) {
 		e.PreventDefault()
 		if isActive {
 			return
@@ -127,49 +123,21 @@ func handleFormSubmit(form *dom.HTMLFormElement, f func(data *dom.FormData)) {
 	})
 }
 
-func replaceContent(target *dom.Element, newContent ...*dom.Node) {
+func replaceContent(target dom.Element, newContent ...dom.Node) {
 	for _, child := range target.Children() {
 		target.RemoveChild(child)
 	}
 	appendContent(target, newContent...)
 }
 
-func appendContent(target *dom.Element, newContent ...*dom.Node) {
+func appendContent(target dom.Element, newContent ...dom.Node) {
 	for _, child := range newContent {
 		target.AppendChild(child)
 	}
 }
 
-func renderDomString(s string) []*dom.Node {
-	temp := dom.NewDocument().CreateElement("div")
+func renderDomString(s string) []dom.Node {
+	temp := dom.GetDocument().CreateElement("div")
 	temp.SetInnerHTML(s)
 	return temp.Children()
-}
-
-func newDomRenderer(f func() (string, error)) func() []*dom.Node {
-	return func() []*dom.Node {
-		s, err := f()
-		if err != nil {
-			// TODO handle error when rendering
-			slog.Error("error rendering dom elements from string", "err", err)
-			return nil
-		}
-		return renderDomString(s)
-	}
-}
-
-func newTemplateRenderer(t *template.Template, name string, data func() any) func() []*dom.Node {
-	return newDomRenderer(func() (string, error) {
-		var s strings.Builder
-		if err := t.ExecuteTemplate(&s, name, data()); err != nil {
-			return "", nil
-		}
-		return s.String(), nil
-	})
-}
-
-func newReplaceChildWith(target *dom.Element, f func() []*dom.Node) func() {
-	return func() {
-		replaceContent(target, f()...)
-	}
 }

@@ -6,11 +6,11 @@ type FormData struct {
 	js.Value
 }
 
-func NewFormData(value js.Value) *FormData {
-	return &FormData{value}
+func newFormData(value js.Value) FormData {
+	return FormData{value}
 }
 
-func (data *FormData) Entries() map[string][]js.Value {
+func (data FormData) Entries() map[string][]js.Value {
 	iterator := data.Call("entries")
 	results := make(map[string][]js.Value)
 	for {

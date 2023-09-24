@@ -2,18 +2,30 @@ package dom
 
 import "syscall/js"
 
-type HTMLInputElement struct {
-	*HTMLElement
+type HTMLInputElement interface {
+	HTMLElement
+	Value() string
+	SetValue(s string)
 }
 
-func NewHTMLInputElement(value js.Value) *HTMLInputElement {
-	return &HTMLInputElement{NewHTMLElement(value)}
+type htmlInputElementImpl struct {
+	htmlElementImpl
 }
 
-func (e *HTMLInputElement) Value() string {
+var _ HTMLInputElement = htmlInputElementImpl{}
+
+func newHTMLInputElement(value js.Value) htmlInputElementImpl {
+	return htmlInputElementImpl{newHTMLElement(value)}
+}
+
+func AsHTMLInputElement(n Node) HTMLInputElement {
+	return newHTMLInputElement(n.jsValue())
+}
+
+func (e htmlInputElementImpl) Value() string {
 	return e.Get("value").String()
 }
 
-func (e *HTMLInputElement) SetValue(s string) {
+func (e htmlInputElementImpl) SetValue(s string) {
 	e.Set("value", s)
 }

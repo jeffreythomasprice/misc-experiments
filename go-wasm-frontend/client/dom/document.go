@@ -4,26 +4,35 @@ import (
 	"syscall/js"
 )
 
-type Document struct {
-	*Node
+type Document interface {
+	Node
+	Body() Body
+	CreateElement(tagName string) Element
+	QuerySelector(selectors string) Element
 }
 
-func NewDocument() *Document {
-	return &Document{NewNode(js.Global().Get("document"))}
+type documentImpl struct {
+	nodeImpl
 }
 
-func (d *Document) Body() *Body {
-	return &Body{NewElement(d.Get("body"))}
+var _ Document = (*documentImpl)(nil)
+
+func GetDocument() *documentImpl {
+	return &documentImpl{newNode(js.Global().Get("document"))}
 }
 
-func (d *Document) CreateElement(tagName string) *Element {
-	return NewElement(d.Call("createElement", tagName))
+func (d *documentImpl) Body() Body {
+	return newBody(d.Get("body"))
 }
 
-func (d *Document) QuerySelector(selectors string) *Element {
+func (d *documentImpl) CreateElement(tagName string) Element {
+	return newElement(d.Call("createElement", tagName))
+}
+
+func (d *documentImpl) QuerySelector(selectors string) Element {
 	result := d.Call("querySelector", selectors)
 	if result.Truthy() {
-		return NewElement(result)
+		return newElement(result)
 	}
 	return nil
 }

@@ -2,14 +2,21 @@ package dom
 
 import "syscall/js"
 
-type SubmitEvent struct {
-	*Event
+type SubmitEvent interface {
+	Event
+	FormData() FormData
 }
 
-func NewSubmitEvent(value js.Value) *SubmitEvent {
-	return &SubmitEvent{NewEvent(value)}
+type submitEventImpl struct {
+	eventImpl
 }
 
-func (e *SubmitEvent) FormData() *FormData {
-	return NewFormData(js.Global().Get("FormData").New(e.Target()))
+var _ SubmitEvent = submitEventImpl{}
+
+func newSubmitEvent(value js.Value) submitEventImpl {
+	return submitEventImpl{newEvent(value)}
+}
+
+func (e submitEventImpl) FormData() FormData {
+	return newFormData(js.Global().Get("FormData").New(e.Target()))
 }

@@ -2,16 +2,27 @@ package dom
 
 import "syscall/js"
 
-type HTMLFormElement struct {
-	*HTMLElement
+type HTMLFormElement interface {
+	HTMLElement
+	OnSubmit(f func(e SubmitEvent))
 }
 
-func NewHTMLFormElement(value js.Value) *HTMLFormElement {
-	return &HTMLFormElement{NewHTMLElement(value)}
+type htmlFormElementImpl struct {
+	htmlElementImpl
 }
 
-func (e *HTMLFormElement) OnSubmit(f func(e *SubmitEvent)) {
+var _ HTMLFormElement = htmlFormElementImpl{}
+
+func newHTMLFormElement(value js.Value) htmlFormElementImpl {
+	return htmlFormElementImpl{newHTMLElement(value)}
+}
+
+func AsHTMLFormElement(n Node) HTMLFormElement {
+	return newHTMLFormElement(n.jsValue())
+}
+
+func (e htmlFormElementImpl) OnSubmit(f func(e SubmitEvent)) {
 	e.AddEventListener("submit", func(args []js.Value) {
-		f(NewSubmitEvent(args[0]))
+		f(newSubmitEvent(args[0]))
 	})
 }

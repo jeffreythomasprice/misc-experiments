@@ -2,44 +2,58 @@ package dom
 
 import "syscall/js"
 
-type Element struct {
-	*Node
+type Element interface {
+	Node
+	Children() []Node
+	InnerText() string
+	SetInnerText(s string)
+	InnerHTML() string
+	SetInnerHTML(s string)
 }
 
-func NewElement(value js.Value) *Element {
-	return &Element{NewNode(value)}
+type elementImpl struct {
+	nodeImpl
 }
 
-func (e *Element) Children() []*Node {
+var _ Element = elementImpl{}
+var _ EventTarget = elementImpl{}
+
+func newElement(value js.Value) elementImpl {
+	return elementImpl{newNode(value)}
+}
+
+func AsElement(n Node) Element {
+	return newElement(n.jsValue())
+}
+
+func (e elementImpl) Children() []Node {
 	children := e.Get("children")
 	len := children.Length()
-	results := make([]*Node, 0, len)
+	results := make([]Node, 0, len)
 	for i := 0; i < len; i++ {
-		results = append(results, NewNode(children.Call("item", i)))
+		results = append(results, newNode(children.Call("item", i)))
 	}
 	return results
 }
 
-func (e *Element) InnerText() string {
+func (e elementImpl) InnerText() string {
 	return e.Get("innerText").String()
 }
 
-func (e *Element) SetInnerText(s string) {
+func (e elementImpl) SetInnerText(s string) {
 	e.Set("innerText", s)
 }
 
-func (e *Element) InnerHTML() string {
+func (e elementImpl) InnerHTML() string {
 	return e.Get("innerHTML").String()
 }
 
-func (e *Element) SetInnerHTML(s string) {
+func (e elementImpl) SetInnerHTML(s string) {
 	e.Set("innerHTML", s)
 }
 
-var _ EventTarget = (*Element)(nil)
-
 // AddEventListener implements EventTarget.
-func (e *Element) AddEventListener(typ string, listener func(args []js.Value)) {
+func (e elementImpl) AddEventListener(typ string, listener func(args []js.Value)) {
 	e.Call("addEventListener", typ, js.FuncOf(func(this js.Value, args []js.Value) any {
 		listener(args)
 		return nil
