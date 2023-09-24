@@ -4,6 +4,8 @@ import "syscall/js"
 
 type Element interface {
 	Node
+	ID() string
+	SetID(s string)
 	Children() []Node
 	InnerText() string
 	SetInnerText(s string)
@@ -27,6 +29,14 @@ func newElement(value js.Value) elementImpl {
 
 func AsElement(n Node) Element {
 	return newElement(n.jsValue())
+}
+
+func (e elementImpl) ID() string {
+	return e.jsValue().Get("id").String()
+}
+
+func (e elementImpl) SetID(s string) {
+	e.jsValue().Set("id", s)
 }
 
 func (e elementImpl) Children() []Node {

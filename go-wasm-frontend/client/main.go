@@ -27,12 +27,13 @@ func main() {
 }
 
 func loginPage() {
-	showPage(renderDomString(`
-		<form id="form">
-			<label>Enter a name:</label>
-			<input type="text" name="name" placeholder="Name"/>
-		</form>
-	`)...)
+	page := renderDomString(`
+	<form id="form">
+		<label>Enter a name:</label>
+		<input type="text" name="name" placeholder="Name"/>
+	</form>
+`)
+	showPage(page...)
 
 	document := dom.GetDocument()
 	form := dom.AsHTMLFormElement(document.QuerySelector("#form"))

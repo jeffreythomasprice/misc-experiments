@@ -9,6 +9,7 @@ type Document interface {
 	Body() Body
 	CreateElement(tagName string) Element
 	QuerySelector(selectors string) Element
+	QuerySelectorAll(selectors string) []Element
 }
 
 type documentImpl struct {
@@ -39,4 +40,13 @@ func (d documentImpl) QuerySelector(selectors string) Element {
 		return newElement(result)
 	}
 	return nil
+}
+
+func (d documentImpl) QuerySelectorAll(selectors string) []Element {
+	jsResults := d.jsValue().Call("querySelectorAll", selectors)
+	results := make([]Element, jsResults.Length())
+	for i := 0; i < jsResults.Length(); i++ {
+		results[i] = newElement(jsResults.Index(i))
+	}
+	return results
 }
