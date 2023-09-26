@@ -134,10 +134,6 @@ func main() {
 			return
 		}
 
-		response := []g.Node{
-			websocketForm(msg.ID),
-		}
-
 		switch msg.Type {
 		case "login":
 			if client.Session != nil {
@@ -147,21 +143,33 @@ func main() {
 			}
 			client.Session = s
 			slog.Info("client is now initialized", "id", msg.ID)
+			writeNodesToWebSocket(
+				s,
+				websocketForm(msg.ID),
+			)
 
 		case "send":
 			slog.Debug("message received", "id", msg.ID, "msg", msg.Message)
-			response = append(response, websocketMessageNode(fmt.Sprintf("server responding to: %v from %v", msg.Message, client.Name)))
+			messageNode := websocketMessageNode(fmt.Sprintf("server responding to: %v from %v", msg.Message, client.Name))
+			writeNodesToWebSocket(
+				s,
+				websocketForm(client.ID),
+				messageNode,
+			)
+			for _, otherClient := range clients {
+				if otherClient.Session != nil && otherClient.ID != client.ID {
+					writeNodesToWebSocket(
+						otherClient.Session,
+						messageNode,
+					)
+				}
+			}
 
 		default:
 			slog.Error("unrecognized message type", "type", msg.Type)
 			disconnectAndRespondWithError()
 			return
 		}
-
-		writeNodesToWebSocket(
-			s,
-			response...,
-		)
 	})
 
 	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -181,12 +189,6 @@ func main() {
 
 	wg.Wait()
 	slog.Debug("done")
-}
-
-func websocketFormPreConnect() g.Node {
-	return h.FormEl(
-		h.ID("ws-form"),
-	)
 }
 
 func websocketFormLogin(id string) g.Node {
