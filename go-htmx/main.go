@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"experiments/livereload"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"sync"
 
@@ -23,16 +21,6 @@ import (
 type client struct {
 	Name, ID string
 	Session  *melody.Session
-}
-
-type websocketLogin struct {
-	ID string `json:"id"`
-}
-
-type websocketMessage struct {
-	Message string             `json:"message"`
-	ID      string             `json:"id"`
-	Headers map[string]*string `json:"HEADERS"`
 }
 
 func main() {
@@ -59,38 +47,17 @@ func main() {
 		},
 		func() ([]g.Node, error) {
 			return []g.Node{
-				h.Div(g.Text("Enter a name")),
-				h.FormEl(
-					g.Attr("hx-post", "/login"),
-					h.Input(
-						h.Name("name"),
-						h.AutoFocus(),
+				h.Div(
+					h.ID("root"),
+					h.Div(g.Text("Enter a name")),
+					h.FormEl(
+						g.Attr("hx-post", "/login"),
+						h.Input(
+							h.Name("name"),
+							h.AutoFocus(),
+						),
 					),
 				),
-
-				// TODO JEFF no
-
-				// h.Button(
-				// 	g.Text("Click Me"),
-				// 	g.Attr("hx-post", "/clicked1"),
-				// 	g.Attr("hx-target", "#target1"),
-				// ),
-				// h.Div(h.ID("target1")),
-
-				// h.Button(
-				// 	g.Text("Also Click Me"),
-				// 	g.Attr("hx-post", "/clicked2"),
-				// 	g.Attr("hx-target", "#target2"),
-				// ),
-				// h.Div(h.ID("target2")),
-
-				// h.Div(
-				// 	g.Attr("hx-ws", "connect:/ws"),
-				// 	websocketForm(),
-				// 	h.Div(
-				// 		h.ID("ws-messages"),
-				// 	),
-				// ),
 			}, nil
 		},
 	))
@@ -115,42 +82,20 @@ func main() {
 		}
 
 		return []g.Node{
-			h.Div(g.Textf("Name: %v", name)),
-			h.Div(g.Textf("ID: %v", id)),
 			h.Div(
-				g.Attr("hx-ws", "connect:/ws"),
-				g.Attr("hx-trigger", "every 1s"),
-				websocketFormLogin(id),
-				h.Div(h.ID("ws-messages")),
+				h.ID("root"),
+				g.Attr("hx-swap-oob", "innerHTML"),
+				h.Div(g.Textf("Name: %v", name)),
+				h.Div(g.Textf("ID: %v", id)),
+				h.Div(
+					g.Attr("hx-ext", "ws"),
+					g.Attr("ws-connect", "/ws"),
+					websocketFormLogin(id),
+					h.Div(h.ID("ws-messages")),
+				),
 			),
 		}, nil
 	}))
-
-	// TODO JEFF no
-
-	// clicks1 := 0
-	// r.Post("/clicked1", nodeHandlerFunc(func() g.Node {
-	// 	clicks1++
-	// 	return h.P(
-	// 		g.Text(fmt.Sprintf("Clicks: %d", clicks1)),
-	// 	)
-	// }))
-
-	// t, err := template.New("").Parse(`
-	// 	<p>{{.}}</p>
-	// `)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// clicks2 := 0
-	// r.Post("/clicked2", templateHandlerFunc(
-	// 	t,
-	// 	"",
-	// 	func() any {
-	// 		clicks2++
-	// 		return clicks2
-	// 	},
-	// ))
 
 	m := melody.New()
 
@@ -159,50 +104,64 @@ func main() {
 			"ws connected",
 			"remote addr", s.RemoteAddr().String(),
 		)
-		writeMessageToWebsocket(s, "TODO JEFF hello from server")
 	})
 
 	m.HandleMessage(func(s *melody.Session, b []byte) {
-		message, err := unmarshalTaggedUnionJson(
-			"type",
-			map[string]interface{}{
-				"login": &websocketLogin{},
-				"send":  &websocketMessage{},
-			},
-			b,
-		)
-		if err != nil {
-			slog.Error("json unmarshal error", "err", err)
-			// TODO respond with an error message
+		slog.Debug("received message", "msg", string(b))
+
+		disconnectAndRespondWithError := func() {
+			// TODO respond with error to ui
+			if err := s.Close(); err != nil {
+				slog.Error("error closing websocket in response to a previous error", "err", err)
+			}
+		}
+
+		var msg struct {
+			Type    string `json:"type"`
+			ID      string `json:"id"`
+			Message string `type:"message"`
+		}
+		if err := json.Unmarshal(b, &msg); err != nil {
+			slog.Error("error unmarshalling json to check type", "err", err)
+			disconnectAndRespondWithError()
 			return
 		}
-		switch message.(type) {
-		case *websocketLogin:
-			slog.Debug("TODO JEFF got login", "msg", message)
-		case *websocketMessage:
-			slog.Debug("TODO JEFF got message", "msg", message)
+
+		client, ok := clients[msg.ID]
+		if !ok {
+			slog.Error("no such client", "id", msg.ID)
+			disconnectAndRespondWithError()
+			return
 		}
 
-		// TODO finish the websocket handling
+		response := []g.Node{
+			websocketForm(msg.ID),
+		}
 
-		// var message WebsocketMessage
-		// if err := json.Unmarshal(b, &message); err != nil {
-		// 	slog.Error("json unmarshal error", "err", err)
-		// 	return
-		// }
-		// slog.Debug(
-		// 	"received message",
-		// 	"remote addr", s.RemoteAddr().String(),
-		// 	"msg", message.Message,
-		// )
-		// writeMessageToWebsocket(s, fmt.Sprintf("TODO JEFF responding to \"%v\"", message.Message))
-		// if err := writeNodeToWebSoccket(s, websocketForm()); err != nil {
-		// 	slog.Error(
-		// 		"error sending to websocket",
-		// 		"remote addr", s.RemoteAddr().String(),
-		// 		"err", err,
-		// 	)
-		// }
+		switch msg.Type {
+		case "login":
+			if client.Session != nil {
+				slog.Error("client is already initialized", "id", msg.ID)
+				disconnectAndRespondWithError()
+				return
+			}
+			client.Session = s
+			slog.Info("client is now initialized", "id", msg.ID)
+
+		case "send":
+			slog.Debug("message received", "id", msg.ID, "msg", msg.Message)
+			response = append(response, websocketMessageNode(fmt.Sprintf("server responding to: %v from %v", msg.Message, client.Name)))
+
+		default:
+			slog.Error("unrecognized message type", "type", msg.Type)
+			disconnectAndRespondWithError()
+			return
+		}
+
+		writeNodesToWebSocket(
+			s,
+			response...,
+		)
 	})
 
 	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -224,10 +183,17 @@ func main() {
 	slog.Debug("done")
 }
 
+func websocketFormPreConnect() g.Node {
+	return h.FormEl(
+		h.ID("ws-form"),
+	)
+}
+
 func websocketFormLogin(id string) g.Node {
 	return h.FormEl(
 		h.ID("ws-form"),
-		g.Attr("hx-ws", "send"),
+		g.Attr("ws-send"),
+		g.Attr("hx-trigger", "revealed"),
 		h.Input(
 			h.Type("hidden"),
 			h.Name("type"),
@@ -244,7 +210,7 @@ func websocketFormLogin(id string) g.Node {
 func websocketForm(id string) g.Node {
 	return h.FormEl(
 		h.ID("ws-form"),
-		g.Attr("hx-ws", "send"),
+		g.Attr("ws-send"),
 		h.Input(
 			h.Type("hidden"),
 			h.Name("type"),
@@ -258,6 +224,16 @@ func websocketForm(id string) g.Node {
 		h.Input(
 			h.Name("message"),
 			h.AutoFocus(),
+		),
+	)
+}
+
+func websocketMessageNode(message string) g.Node {
+	return h.Div(
+		h.ID("ws-messages"),
+		g.Attr("hx-swap-oob", "beforeend"),
+		h.Div(
+			g.Text(message),
 		),
 	)
 }
@@ -292,19 +268,6 @@ func pageHandlerFunc(head, body func() ([]g.Node, error)) http.HandlerFunc {
 	})
 }
 
-// TODO no?
-func templateHandlerFunc(
-	template *template.Template,
-	name string,
-	data func() any,
-) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := template.ExecuteTemplate(w, name, data()); err != nil {
-			slog.Error("error rendering template", "err", err)
-		}
-	}
-}
-
 func nodeHandlerFunc(f func(r *http.Request) ([]g.Node, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		nodes, err := f(r)
@@ -323,52 +286,12 @@ func nodeHandlerFunc(f func(r *http.Request) ([]g.Node, error)) http.HandlerFunc
 	}
 }
 
-func writeMessageToWebsocket(s *melody.Session, message string) {
-	n := h.Div(
-		h.ID("ws-messages"),
-		g.Attr("hx-swap-oob", "beforeend"),
-		h.Div(g.Text(message)),
-	)
-	if err := writeNodeToWebSocket(s, n); err != nil {
-		slog.Error(
-			"error sending to websocket",
-			"remote addr", s.RemoteAddr().String(),
-			"err", err,
-		)
-	}
-}
-
-func writeNodeToWebSocket(s *melody.Session, n g.Node) error {
+func writeNodesToWebSocket(s *melody.Session, nodes ...g.Node) error {
 	var w strings.Builder
-	if err := n.Render(&w); err != nil {
-		return err
+	for _, n := range nodes {
+		if err := n.Render(&w); err != nil {
+			return err
+		}
 	}
 	return s.Write([]byte(w.String()))
-}
-
-func unmarshalTaggedUnionJson(
-	tagName string,
-	tags map[string]interface{},
-	data []byte,
-) (interface{}, error) {
-	var tagOnly map[string]interface{}
-	if err := json.Unmarshal(data, &tagOnly); err != nil {
-		return nil, err
-	}
-	tag, ok := tagOnly[tagName]
-	if !ok {
-		return nil, fmt.Errorf("json missing tag: %v", tagName)
-	}
-	tagStr, ok := tag.(string)
-	if !ok {
-		return nil, fmt.Errorf("json tag wrong type: %v", reflect.TypeOf(tag))
-	}
-	v, ok := tags[tagStr]
-	if !ok {
-		return nil, fmt.Errorf("json had tag %v=%v, but no such type specified", tagName, tagStr)
-	}
-	if err := json.Unmarshal(data, v); err != nil {
-		return nil, fmt.Errorf("error unmarshalling tag %v=%v into %v: %w", tagName, tagStr, reflect.TypeOf(v), err)
-	}
-	return v, nil
 }
