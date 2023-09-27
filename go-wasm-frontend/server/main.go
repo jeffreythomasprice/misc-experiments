@@ -26,7 +26,7 @@ func main() {
 	shared.InitSlog()
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(middleware.RequestLogger(&shared.SlogLogFormatter{}))
 
 	assets := http.FS(assets)
 	r.Get("/", serveFile(assets, "embed/index.html"))
