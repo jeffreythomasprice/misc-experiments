@@ -1,4 +1,3 @@
 ```
-air
+./watch.sh
 ```
-See https://github.com/cosmtrek/air

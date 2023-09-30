@@ -8,6 +8,9 @@
 
 all: build
 
+run: build
+	./bin/server
+
 build: assets client server
 
 clean:
