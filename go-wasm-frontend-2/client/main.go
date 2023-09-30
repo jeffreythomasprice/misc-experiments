@@ -14,7 +14,7 @@ func main() {
 
 	must(dom.Append(dom.QuerySelector("body"), func() (dom.Rendered, error) {
 		return dom.DomString(`
-			<div id="message">Hello, World!</div>
+			<div id="message">Hello, World! 2</div>
 			<button>Click Me</button>
 		`)
 	}))
