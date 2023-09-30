@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "client"
+		},
+		{
+			"path": "shared"
+		}
+	],
+	"settings": {
+		"go.toolsEnvVars": {
+			"GOOS": "js",
+			"GOARCH": "wasm",
+		},
+	}
+}
