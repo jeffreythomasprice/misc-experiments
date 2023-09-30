@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"experiments/livereload"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -10,290 +8,162 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-chi/chi"
-	"github.com/google/uuid"
-	g "github.com/maragudk/gomponents"
-	c "github.com/maragudk/gomponents/components"
-	h "github.com/maragudk/gomponents/html"
-	"github.com/olahol/melody"
-)
+	"github.com/go-chi/chi/v5"
 
-type client struct {
-	Name, ID string
-	Session  *melody.Session
-}
+	. "github.com/maragudk/gomponents"
+	. "github.com/maragudk/gomponents/components"
+	. "github.com/maragudk/gomponents/html"
+)
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(
 		os.Stdout,
 		&slog.HandlerOptions{
-			Level: slog.LevelDebug,
+			Level:     slog.LevelDebug,
+			AddSource: true,
 		},
 	)))
 
-	r := chi.NewRouter()
+	mux := chi.NewRouter()
 
-	liveReloadScript, err := livereload.Script("/_liveReloadFoobar")
-	if err != nil {
-		panic(err)
-	}
-	r.HandleFunc("/_liveReloadFoobar", livereload.HandlerFunc(r))
-
-	clients := make(map[string]*client)
-
-	r.Get("/", pageHandlerFunc(
-		func() ([]g.Node, error) {
-			return []g.Node{liveReloadScript}, nil
-		},
-		func() ([]g.Node, error) {
-			return []g.Node{
-				h.Div(
-					h.ID("root"),
-					h.Div(g.Text("Enter a name")),
-					h.FormEl(
-						g.Attr("hx-post", "/login"),
-						h.Input(
-							h.Name("name"),
-							h.AutoFocus(),
-						),
-					),
-				),
-			}, nil
-		},
-	))
-
-	r.Post("/login", nodeHandlerFunc(func(r *http.Request) ([]g.Node, error) {
-		if err := r.ParseForm(); err != nil {
-			return nil, fmt.Errorf("error reading request body: %w", err)
-		}
-
-		name := r.Form.Get("name")
-		id := uuid.NewString()
-		slog.Info(
-			"logging in",
-			"name", name,
-			"id", id,
-		)
-
-		clients[id] = &client{
-			Name:    name,
-			ID:      id,
-			Session: nil,
-		}
-
-		return []g.Node{
-			h.Div(
-				h.ID("root"),
-				g.Attr("hx-swap-oob", "innerHTML"),
-				h.Div(g.Textf("Name: %v", name)),
-				h.Div(g.Textf("ID: %v", id)),
-				h.Div(
-					g.Attr("hx-ext", "ws"),
-					g.Attr("ws-connect", "/ws"),
-					websocketFormLogin(id),
-					h.Div(h.ID("ws-messages")),
-				),
-			),
-		}, nil
+	mux.Get("/", newHtmlHandlerFunc(func(w http.ResponseWriter, r *http.Request) ([]Node, error) {
+		// TODO if request had valid auth cookie render the logged in page
+		return []Node{HTML5(HTML5Props{
+			Title: "htmx experiment",
+			Head: []Node{
+				Script(Src("https://unpkg.com/htmx.org@1.9.6")),
+				Script(Text("htmx.logAll()")),
+			},
+			Body: notLoggedIn(),
+		})}, nil
 	}))
 
-	m := melody.New()
-
-	m.HandleConnect(func(s *melody.Session) {
-		slog.Debug(
-			"ws connected",
-			"remote addr", s.RemoteAddr().String(),
-		)
-	})
-
-	m.HandleMessage(func(s *melody.Session, b []byte) {
-		slog.Debug("received message", "msg", string(b))
-
-		disconnectAndRespondWithError := func() {
-			// TODO respond with error to ui
-			if err := s.Close(); err != nil {
-				slog.Error("error closing websocket in response to a previous error", "err", err)
-			}
+	mux.Post("/login", newHtmlHandlerFunc(func(w http.ResponseWriter, r *http.Request) ([]Node, error) {
+		if err := r.ParseForm(); err != nil {
+			return loginFormError("form parse error"), nil
 		}
 
-		var msg struct {
-			Type    string `json:"type"`
-			ID      string `json:"id"`
-			Message string `type:"message"`
-		}
-		if err := json.Unmarshal(b, &msg); err != nil {
-			slog.Error("error unmarshalling json to check type", "err", err)
-			disconnectAndRespondWithError()
-			return
+		username, ok := r.Form["username"]
+		if !ok || len(username) != 1 {
+			return loginFormError("malformed username"), nil
 		}
 
-		client, ok := clients[msg.ID]
-		if !ok {
-			slog.Error("no such client", "id", msg.ID)
-			disconnectAndRespondWithError()
-			return
+		password, ok := r.Form["password"]
+		if !ok || len(password) != 1 {
+			return loginFormError("malformed password"), nil
 		}
 
-		switch msg.Type {
-		case "login":
-			if client.Session != nil {
-				slog.Error("client is already initialized", "id", msg.ID)
-				disconnectAndRespondWithError()
-				return
-			}
-			client.Session = s
-			slog.Info("client is now initialized", "id", msg.ID)
-			writeNodesToWebSocket(
-				s,
-				websocketForm(msg.ID),
-			)
+		slog.Debug("TODO JEFF login form", "username", username[0], "password", password[0])
 
-		case "send":
-			slog.Debug("message received", "id", msg.ID, "msg", msg.Message)
-			messageNode := websocketMessageNode(fmt.Sprintf("server responding to: %v from %v", msg.Message, client.Name))
-			writeNodesToWebSocket(
-				s,
-				websocketForm(client.ID),
-				messageNode,
-			)
-			for _, otherClient := range clients {
-				if otherClient.Session != nil && otherClient.ID != client.ID {
-					writeNodesToWebSocket(
-						otherClient.Session,
-						messageNode,
-					)
-				}
-			}
+		return loginFormError("TODO err msg"), nil
+	}))
 
-		default:
-			slog.Error("unrecognized message type", "type", msg.Type)
-			disconnectAndRespondWithError()
-			return
-		}
-	})
-
-	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		m.HandleRequest(w, r)
-	})
-
+	bindAddr := "127.0.0.1:8000"
 	var wg sync.WaitGroup
 	wg.Add(1)
-	host := "localhost:8000"
 	go func() {
 		defer wg.Done()
-		if err := http.ListenAndServe(host, r); err != nil {
-			slog.Error("http server error", "err", err)
+		if err := http.ListenAndServe(bindAddr, mux); err != nil {
+			slog.Error("server failed with error", "err", err)
 		}
 	}()
-	slog.Debug("listening", "host", host)
-
+	slog.Info("server started", "bindAddr", bindAddr)
 	wg.Wait()
-	slog.Debug("done")
+	slog.Debug("exiting")
 }
 
-func websocketFormLogin(id string) g.Node {
-	return h.FormEl(
-		h.ID("ws-form"),
-		g.Attr("ws-send"),
-		g.Attr("hx-trigger", "revealed"),
-		h.Input(
-			h.Type("hidden"),
-			h.Name("type"),
-			h.Value("login"),
+func notLoggedIn() []Node {
+	return []Node{
+		Div(
+			Label(
+				Text("Username:"),
+				For("username"),
+			),
+			Input(
+				Name("username"),
+				FormAttr("loginForm"),
+				Type("text"),
+				Placeholder("Username"),
+			),
 		),
-		h.Input(
-			h.Type("hidden"),
-			h.Name("id"),
-			h.Value(id),
+		Div(
+			Label(
+				Text("Password:"),
+				For("password"),
+			),
+			Input(
+				Name("password"),
+				FormAttr("loginForm"),
+				Type("password"),
+				Placeholder("Password"),
+			),
 		),
+		FormEl(
+			ID("loginForm"),
+			Attr("hx-post", "/login"),
+			loginButton(),
+		),
+		Div(ID("loginErrors")),
+	}
+}
+
+func loginFormError(s string) []Node {
+	slog.Info("login form error", "msg", s)
+	return []Node{
+		loginButton(),
+		Div(
+			ID("loginErrors"),
+			Attr("hx-swap-oob", "outerHTML"),
+			StyleAttr("color: red; font-weight: bold"),
+			Text(s),
+		),
+	}
+}
+
+func loginButton() Node {
+	return Button(
+		Text("Click Me"),
+		Type("submit"),
 	)
 }
 
-func websocketForm(id string) g.Node {
-	return h.FormEl(
-		h.ID("ws-form"),
-		g.Attr("ws-send"),
-		h.Input(
-			h.Type("hidden"),
-			h.Name("type"),
-			h.Value("send"),
-		),
-		h.Input(
-			h.Type("hidden"),
-			h.Name("id"),
-			h.Value(id),
-		),
-		h.Input(
-			h.Name("message"),
-			h.AutoFocus(),
-		),
-	)
-}
-
-func websocketMessageNode(message string) g.Node {
-	return h.Div(
-		h.ID("ws-messages"),
-		g.Attr("hx-swap-oob", "beforeend"),
-		h.Div(
-			g.Text(message),
-		),
-	)
-}
-
-func pageHandlerFunc(head, body func() ([]g.Node, error)) http.HandlerFunc {
-	return nodeHandlerFunc(func(r *http.Request) ([]g.Node, error) {
-		renderedHead, err := head()
-		if err != nil {
-			return nil, fmt.Errorf("error rendering page head: %w", err)
-		}
-		renderedBody, err := body()
-		if err != nil {
-			return nil, fmt.Errorf("error rendering page body: %w", err)
-		}
-		return []g.Node{
-			c.HTML5(c.HTML5Props{
-				Title:    "Experiment",
-				Language: "en",
-				Head: append(
-					[]g.Node{
-						h.Script(h.Src("https://unpkg.com/htmx.org@1.9.5")),
-						h.Script(h.Src("https://unpkg.com/htmx.org@1.9.5/dist/ext/ws.js")),
-						h.Script(g.Text(`
-							htmx.logAll();
-						`)),
-					},
-					renderedHead...,
-				),
-				Body: renderedBody,
-			}),
-		}, nil
-	})
-}
-
-func nodeHandlerFunc(f func(r *http.Request) ([]g.Node, error)) http.HandlerFunc {
+func newHtmlHandlerFunc(f func(w http.ResponseWriter, r *http.Request) ([]Node, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		nodes, err := f(r)
+		nodes, err := f(w, r)
 		if err != nil {
-			slog.Error("error rendering nodes", "err", err)
-			// TODO respond with an error message
+			writeErrorResponse(w, err, 500, "internal server error")
 			return
 		}
-		for _, node := range nodes {
-			if err := node.Render(w); err != nil {
-				slog.Error("error rendering node", "err", err)
-				// TODO respond with an error message
+
+		var s strings.Builder
+		for _, child := range nodes {
+			if err := child.Render(&s); err != nil {
+				writeErrorResponse(w, err, 500, "internal server error")
 				return
 			}
 		}
+
+		w.Header().Add("content-type", "text/html")
+		_, err = fmt.Fprint(w, s.String())
+		if err != nil {
+			slog.Error("error writing content to http writer", "err", err)
+		}
 	}
 }
 
-func writeNodesToWebSocket(s *melody.Session, nodes ...g.Node) error {
-	var w strings.Builder
-	for _, n := range nodes {
-		if err := n.Render(&w); err != nil {
-			return err
-		}
+func writeErrorResponse(w http.ResponseWriter, err error, statusCode int, message string) {
+	slog.Error(
+		"error response",
+		"err", err,
+		"statusCode", statusCode,
+	)
+	w.WriteHeader(statusCode)
+	_, err = fmt.Fprint(w, message)
+	if err != nil {
+		slog.Error(
+			"an error occurred writing an error message in response to a previous error",
+			"err", err,
+			"statusCode", statusCode,
+		)
 	}
-	return s.Write([]byte(w.String()))
 }

@@ -1,4 +1,3 @@
 ```
-air
+gow run .
 ```
-See https://github.com/cosmtrek/air
