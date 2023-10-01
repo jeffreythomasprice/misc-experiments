@@ -8,6 +8,7 @@ import (
 	"shared"
 	"strings"
 	"syscall/js"
+	"time"
 
 	. "github.com/maragudk/gomponents"
 	. "github.com/maragudk/gomponents/html"
@@ -27,8 +28,7 @@ func main() {
 
 	go func() {
 		outgoing, incoming := websockets.NewBuilder("ws://127.0.0.1:8000/ws").
-			// TODO backoff strategy
-			Reconnect(websockets.Every(1)).
+			Reconnect(websockets.Backoff(time.Second*1, time.Second*5)).
 			Build(context.Background())
 		go func() {
 			for msg := range incoming {

@@ -24,3 +24,29 @@ func (*constantReconnectStrategy) Reset() {}
 func (strat *constantReconnectStrategy) Next() (time.Duration, bool) {
 	return strat.d, true
 }
+
+type backoffReconnectStrategy struct {
+	initial, max, current time.Duration
+}
+
+var _ ReconnectStrategy = (*backoffReconnectStrategy)(nil)
+
+func Backoff(initial, max time.Duration) ReconnectStrategy {
+	return &backoffReconnectStrategy{
+		initial: initial,
+		max:     max,
+		current: initial,
+	}
+}
+
+// Reset implements ReconnectStrategy.
+func (strat *backoffReconnectStrategy) Reset() {
+	strat.current = strat.initial
+}
+
+// Next implements ReconnectStrategy.
+func (strat *backoffReconnectStrategy) Next() (time.Duration, bool) {
+	result := strat.current
+	strat.current = min(strat.current*2, strat.max)
+	return result, true
+}
