@@ -39,17 +39,6 @@ func (builder *Builder) Build(ctx context.Context) (outgoing chan<- Event, incom
 	outgoing = resultOutgoing
 	incoming = resultIncoming
 
-	var ws js.Value
-	go func() {
-		for e := range resultOutgoing {
-			// TODO block until current ws is available
-			currentWs := ws
-			if currentWs.Truthy() && (e.IsTextMessage() || e.IsBinaryMessage()) {
-				currentWs.Call("send", e.value)
-			}
-		}
-	}()
-
 	go func() {
 		defer close(resultOutgoing)
 		defer close(resultIncoming)
@@ -57,6 +46,7 @@ func (builder *Builder) Build(ctx context.Context) (outgoing chan<- Event, incom
 		for {
 			wsCtx, signalClosed := context.WithCancel(ctx)
 
+			var ws js.Value
 			if protocols != nil {
 				ws = js.Global().Get("WebSocket").New(url, protocols)
 			} else {
@@ -68,6 +58,21 @@ func (builder *Builder) Build(ctx context.Context) (outgoing chan<- Event, incom
 				if reconnect != nil {
 					builder.reconnect.Reset()
 				}
+
+				go func() {
+					for {
+						select {
+						// exit if ws closed
+						case <-wsCtx.Done():
+							return
+						case e := <-resultOutgoing:
+							if e.IsTextMessage() || e.IsBinaryMessage() {
+								ws.Call("send", e.value)
+							}
+						}
+					}
+				}()
+
 				resultIncoming <- Event{t: EventOpen}
 				return nil
 			}))
