@@ -19,11 +19,6 @@ var errSelectorsNotFound = errors.New("no element found for selectors")
 func main() {
 	shared.InitSlog()
 
-	node := H1(Text("Hello, World!"))
-	if err := appendNode("body", node); err != nil {
-		panic(err)
-	}
-
 	go liveReload("ws://127.0.0.1:8000/_liveReload")
 
 	go func() {
@@ -43,37 +38,157 @@ func main() {
 		outgoing <- websockets.NewBinaryMessage([]byte("TODO test binary message"))
 	}()
 
+	root := "body"
+
+	signInPage(
+		root,
+		func(username, password string) {
+			slog.Debug("TODO attempt to sign in", "username", username, "password", password)
+		},
+	)
+
 	select {}
 }
 
-func appendNode(selectors string, node Node) error {
+func signInPage(selectors string, callback func(username, password string)) {
+	if err := replaceChildrenWithNodes(
+		selectors,
+		Div(
+			ID("login"),
+			Label(
+				For("username"),
+				Text("Username"),
+			),
+			Input(
+				Name("username"),
+				FormAttr("loginForm"),
+				Type("text"),
+				Placeholder("Username"),
+			),
+			Label(
+				For("password"),
+				Text("Password"),
+			),
+			Input(
+				Name("password"),
+				FormAttr("loginForm"),
+				Type("password"),
+				Placeholder("Password"),
+			),
+			FormEl(
+				ID("loginForm"),
+				Button(
+					Text("Sign In"),
+					Type("submit"),
+				),
+			),
+			Div(ID("errorMessages")),
+		),
+	); err != nil {
+		renderError("login", err)
+		return
+	}
+
+	// TODO JEFF wrapper for basic events
+	js.
+		Global().
+		Get("document").
+		Call("getElementById", "loginForm").
+		Call(
+			"addEventListener",
+			"submit",
+			js.FuncOf(func(this js.Value, args []js.Value) any {
+				e := args[0]
+				e.Call("preventDefault")
+
+				formElements := e.Get("target").Get("elements")
+
+				usernameInput := formElements.Get("username")
+				username := usernameInput.Get("value").String()
+
+				passwordInput := formElements.Get("password")
+				password := passwordInput.Get("value").String()
+
+				if len(username) == 0 {
+					errorMessage("#login > #errorMessages", "Must provide username")
+					return nil
+				}
+
+				if len(password) == 0 {
+					errorMessage("#login > #errorMessages", "Must provide password")
+					return nil
+				}
+
+				callback(username, password)
+
+				return nil
+			}),
+		)
+}
+
+func renderError(page string, err error) {
+	slog.Error("error rendering", "page", page, "err", err)
+	errorMessage("body", "Render error")
+}
+
+func errorMessage(selectors, msg string) {
+	if err := replaceChildrenWithNodes(
+		selectors,
+		Div(
+			StyleAttr("color: red; font-weight: bold"),
+			Text(msg),
+		),
+	); err != nil {
+		slog.Error("error rendering dom nodes for another error message", "err", err)
+	}
+}
+
+func appendNodes(selectors string, nodes ...Node) error {
+	return domSwapper(selectors, nodes, func(target js.Value, elements []js.Value) error {
+		for _, e := range elements {
+			target.Call("append", e)
+		}
+		return nil
+	})
+}
+
+func replaceChildrenWithNodes(selectors string, nodes ...Node) error {
+	return domSwapper(selectors, nodes, func(target js.Value, elements []js.Value) error {
+		currentChildren := target.Get("children")
+		for currentChildren.Length() > 0 {
+			currentChildren.Index(0).Call("remove")
+		}
+		for _, e := range elements {
+			target.Call("append", e)
+		}
+		return nil
+	})
+}
+
+func domSwapper(selectors string, nodes []Node, f func(target js.Value, elements []js.Value) error) error {
 	target, err := querySelector(selectors)
 	if err != nil {
 		return err
 	}
 
-	elements, err := createDomElements(node)
+	elements, err := createDomElements(nodes...)
 	if err != nil {
 		return err
 	}
 
-	if len(elements) == 0 {
-		target.Call("remove")
-		return nil
+	if err := f(target, elements); err != nil {
+		return err
 	}
-	target.Call("replaceWith", elements[0])
-	last := elements[0]
-	for _, e := range elements[1:] {
-		last.Call("after", e)
-		last = e
-	}
+
 	return nil
 }
 
-func createDomElements(node Node) ([]js.Value, error) {
+func createDomElements(nodes ...Node) ([]js.Value, error) {
 	var s strings.Builder
-	if err := node.Render(&s); err != nil {
-		return nil, err
+	for _, n := range nodes {
+		if err := n.Render(&s); err != nil {
+			return nil, err
+		}
 	}
 	temp := js.Global().Get("document").Call("createElement", "div")
 	temp.Set("innerHTML", s.String())
