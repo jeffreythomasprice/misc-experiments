@@ -19,7 +19,7 @@ func liveReload(mux *chi.Mux, pattern string) {
 			slog.Error("error writing to websocket", "err", err)
 		}
 	})
-	mux.HandleFunc("/_liveReload", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if err := m.HandleRequest(w, r); err != nil {
 			slog.Error("error responding to websocket", "err", err)
 		}

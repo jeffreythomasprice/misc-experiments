@@ -2,52 +2,57 @@ package websockets
 
 import "syscall/js"
 
-type WebsocketEventType = int
+type EventType = int
 
 const (
-	WebsocketEventOpen WebsocketEventType = iota
-	WebsocketEventClose
-	WebsocketEventError
-	WebsocketEventTextMessage
-	WebsocketEventBinaryMessage
+	EventOpen EventType = iota
+	EventClose
+	EventError
+	EventTextMessage
+	EventBinaryMessage
 )
 
-type WebsocketEvent struct {
-	t     WebsocketEventType
+type Event struct {
+	t     EventType
 	value js.Value
 }
 
-func NewWebsocketTextMessage(value string) WebsocketEvent {
-	return WebsocketEvent{
-		t:     WebsocketEventTextMessage,
+func NewTextMessage(value string) Event {
+	return Event{
+		t:     EventTextMessage,
 		value: js.ValueOf(value),
 	}
 }
 
-func NewWebsocketBinaryMessage(value []byte) WebsocketEvent {
-	panic("TODO imlement binary message")
+func NewBinaryMessage(value []byte) Event {
+	jsArray := js.Global().Get("Uint8Array").New(len(value))
+	_ = js.CopyBytesToJS(jsArray, value)
+	return Event{
+		t:     EventBinaryMessage,
+		value: jsArray,
+	}
 }
 
-func (e WebsocketEvent) Type() WebsocketEventType {
+func (e Event) Type() EventType {
 	return e.t
 }
 
-func (e WebsocketEvent) IsTextMessage() bool {
-	return e.Type() == WebsocketEventTextMessage
+func (e Event) IsTextMessage() bool {
+	return e.Type() == EventTextMessage
 }
 
-func (e WebsocketEvent) Text() string {
+func (e Event) Text() string {
 	if !e.IsTextMessage() {
 		panic("not a text message")
 	}
 	return e.value.String()
 }
 
-func (e WebsocketEvent) IsBinaryMessage() bool {
-	return e.Type() == WebsocketEventBinaryMessage
+func (e Event) IsBinaryMessage() bool {
+	return e.Type() == EventBinaryMessage
 }
 
-func (e WebsocketEvent) Binary() []byte {
+func (e Event) Binary() []byte {
 	if !e.IsBinaryMessage() {
 		panic("not a binary message")
 	}

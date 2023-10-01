@@ -7,43 +7,42 @@ import (
 	"time"
 )
 
-type websocketClientReconnectStrategy func() (time.Duration, bool)
-
-type websocketClientBuilder struct {
+type Builder struct {
 	url       string
 	protocols []string
-	reconnect websocketClientReconnectStrategy
+	reconnect ReconnectStrategy
 }
 
-func NewWebsocketBuilder(url string) *websocketClientBuilder {
-	return &websocketClientBuilder{
+func NewBuilder(url string) *Builder {
+	return &Builder{
 		url: url,
 	}
 }
 
-func (builder *websocketClientBuilder) Protocols(protocols []string) *websocketClientBuilder {
+func (builder *Builder) Protocols(protocols []string) *Builder {
 	builder.protocols = protocols
 	return builder
 }
 
-func (builder *websocketClientBuilder) Reconnect(f websocketClientReconnectStrategy) *websocketClientBuilder {
+func (builder *Builder) Reconnect(f ReconnectStrategy) *Builder {
 	builder.reconnect = f
 	return builder
 }
 
-func (builder *websocketClientBuilder) Build(ctx context.Context) (outgoing chan<- WebsocketEvent, incoming <-chan WebsocketEvent) {
+func (builder *Builder) Build(ctx context.Context) (outgoing chan<- Event, incoming <-chan Event) {
 	url := builder.url
 	protocols := builder.protocols
 	reconnect := builder.reconnect
 
-	resultOutgoing := make(chan WebsocketEvent)
-	resultIncoming := make(chan WebsocketEvent)
+	resultOutgoing := make(chan Event)
+	resultIncoming := make(chan Event)
 	outgoing = resultOutgoing
 	incoming = resultIncoming
 
 	var ws js.Value
 	go func() {
 		for e := range resultOutgoing {
+			// TODO block until current ws is available
 			currentWs := ws
 			if currentWs.Truthy() && (e.IsTextMessage() || e.IsBinaryMessage()) {
 				currentWs.Call("send", e.value)
@@ -66,13 +65,16 @@ func (builder *websocketClientBuilder) Build(ctx context.Context) (outgoing chan
 
 			ws.Call("addEventListener", "open", js.FuncOf(func(this js.Value, args []js.Value) any {
 				slog.Debug("websocket open", "url", url)
-				resultIncoming <- WebsocketEvent{t: WebsocketEventOpen}
+				if reconnect != nil {
+					builder.reconnect.Reset()
+				}
+				resultIncoming <- Event{t: EventOpen}
 				return nil
 			}))
 
 			ws.Call("addEventListener", "close", js.FuncOf(func(this js.Value, args []js.Value) any {
 				slog.Debug("websocket close", "url", url)
-				resultIncoming <- WebsocketEvent{t: WebsocketEventClose}
+				resultIncoming <- Event{t: EventClose}
 				signalClosed()
 				return nil
 			}))
@@ -80,7 +82,7 @@ func (builder *websocketClientBuilder) Build(ctx context.Context) (outgoing chan
 			ws.Call("addEventListener", "error", js.FuncOf(func(this js.Value, args []js.Value) any {
 				slog.Debug("websocket error", "url", url)
 				select {
-				case resultIncoming <- WebsocketEvent{t: WebsocketEventError}:
+				case resultIncoming <- Event{t: EventError}:
 				case <-ctx.Done():
 				case <-wsCtx.Done():
 				}
@@ -92,9 +94,9 @@ func (builder *websocketClientBuilder) Build(ctx context.Context) (outgoing chan
 				slog.Debug("websocket error", "message", url)
 				data := args[0].Get("data")
 				if data.Type() == js.TypeString {
-					resultIncoming <- WebsocketEvent{t: WebsocketEventTextMessage, value: data}
+					resultIncoming <- Event{t: EventTextMessage, value: data}
 				} else {
-					resultIncoming <- WebsocketEvent{t: WebsocketEventBinaryMessage, value: data}
+					resultIncoming <- Event{t: EventBinaryMessage, value: data}
 				}
 				return nil
 			}))
@@ -114,19 +116,17 @@ func (builder *websocketClientBuilder) Build(ctx context.Context) (outgoing chan
 				slog.Debug("websocket has no reconnect strategy", "url", url)
 				return
 			}
-			reconnectDelay, shouldReconnect := reconnect()
+			reconnectDelay, shouldReconnect := reconnect.Next()
 			slog.Debug("websocket reconnect", "url", url, "should reconnect", shouldReconnect, "reconnect delay", reconnectDelay)
 			if !shouldReconnect {
 				return
 			}
-			// TODO support early exit during sleep
-			time.Sleep(reconnectDelay)
-
 			select {
 			// exit if signalled
 			case <-ctx.Done():
 				return
-			default:
+			// otherwise wait for the desired delay
+			case <-time.After(reconnectDelay):
 			}
 		}
 	}()

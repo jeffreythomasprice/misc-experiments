@@ -16,6 +16,7 @@ import (
 	. "github.com/maragudk/gomponents"
 	. "github.com/maragudk/gomponents/components"
 	. "github.com/maragudk/gomponents/html"
+	"github.com/olahol/melody"
 )
 
 //go:embed embed
@@ -36,6 +37,8 @@ func main() {
 
 	liveReload(r, "/_liveReload")
 
+	websocketChat(r, "/ws")
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	host := "localhost:8000"
@@ -49,6 +52,26 @@ func main() {
 
 	wg.Wait()
 	slog.Debug("done")
+}
+
+func websocketChat(mux *chi.Mux, pattern string) {
+	// TODO implement something interesting for a websocket app
+	m := melody.New()
+	m.HandleConnect(func(s *melody.Session) {
+		s.Write([]byte("TODO test text message from server"))
+		s.WriteBinary([]byte("TODO test binary message from server"))
+	})
+	m.HandleMessage(func(s *melody.Session, b []byte) {
+		slog.Debug("TODO handle binary message", "data", string(b))
+	})
+	m.HandleMessageBinary(func(s *melody.Session, b []byte) {
+		slog.Debug("TODO handle binary message", "data", string(b))
+	})
+	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		if err := m.HandleRequest(w, r); err != nil {
+			slog.Error("error responding to websocket", "err", err)
+		}
+	})
 }
 
 func index() Node {

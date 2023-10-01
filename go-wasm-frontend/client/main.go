@@ -1,7 +1,10 @@
 package main
 
 import (
+	"client/websockets"
+	"context"
 	"errors"
+	"log/slog"
 	"shared"
 	"strings"
 	"syscall/js"
@@ -21,6 +24,24 @@ func main() {
 	}
 
 	go liveReload("ws://127.0.0.1:8000/_liveReload")
+
+	go func() {
+		outgoing, incoming := websockets.NewBuilder("ws://127.0.0.1:8000/ws").
+			// TODO backoff strategy
+			Reconnect(websockets.Every(1)).
+			Build(context.Background())
+		go func() {
+			for msg := range incoming {
+				if msg.IsTextMessage() {
+					slog.Debug("TODO received text message", "msg", msg.Text())
+				} else if msg.IsBinaryMessage() {
+					slog.Debug("TODO received binary message", "msg", string(msg.Binary()))
+				}
+			}
+		}()
+		outgoing <- websockets.NewTextMessage("TODO test text message")
+		outgoing <- websockets.NewBinaryMessage([]byte("TODO test binary message"))
+	}()
 
 	select {}
 }

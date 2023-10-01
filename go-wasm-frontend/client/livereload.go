@@ -8,10 +8,8 @@ import (
 )
 
 func liveReload(url string) {
-	_, incoming := websockets.NewWebsocketBuilder(url).
-		Reconnect(func() (time.Duration, bool) {
-			return time.Second, true
-		}).
+	_, incoming := websockets.NewBuilder(url).
+		Reconnect(websockets.Every(time.Second)).
 		Build(context.Background())
 	var lastMsg *string = nil
 	for msg := range incoming {
