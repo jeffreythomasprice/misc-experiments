@@ -1,4 +1,4 @@
 ```
-air
+gow -g make run
 ```
-See https://github.com/cosmtrek/air
+

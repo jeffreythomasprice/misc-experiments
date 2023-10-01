@@ -2,21 +2,20 @@ package main
 
 import (
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"shared"
-	"slices"
+	"strings"
 	"sync"
-	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	"github.com/google/uuid"
-	"github.com/olahol/melody"
+	. "github.com/maragudk/gomponents"
+	. "github.com/maragudk/gomponents/components"
+	. "github.com/maragudk/gomponents/html"
 )
 
 //go:embed embed
@@ -26,22 +25,16 @@ func main() {
 	shared.InitSlog()
 
 	r := chi.NewRouter()
-	r.Use(middleware.RequestLogger(&shared.SlogLogFormatter{}))
+	r.Use(middleware.RequestLogger(&SlogLogFormatter{}))
 
 	assets := http.FS(assets)
-	r.Get("/", serveFile(assets, "embed/index.html"))
+	r.Get("/", newHtmlHandlerFunc(func(w http.ResponseWriter, r *http.Request) ([]Node, error) {
+		return []Node{index()}, nil
+	}))
 	r.Get("/wasm_exec.js", serveFile(assets, "embed/wasm_exec.js"))
 	r.Get("/client.wasm", serveFile(assets, "embed/client.wasm"))
 
-	r.HandleFunc("/_liveReload", liveReloadWebSocketHandler())
-
-	r.HandleFunc("/login", newJsonHandlerFunc[shared.WebsocketLoginRequest, shared.WebsocketLoginResponse](func(request *shared.WebsocketLoginRequest) (*shared.WebsocketLoginResponse, error) {
-		id := uuid.NewString()
-		slog.Info("new client", "id", id, "name", request.Name)
-		return &shared.WebsocketLoginResponse{ID: id}, nil
-	}))
-
-	r.HandleFunc("/ws", chatWebsocketHandler())
+	liveReload(r, "/_liveReload")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -58,135 +51,65 @@ func main() {
 	slog.Debug("done")
 }
 
-func liveReloadWebSocketHandler() http.HandlerFunc {
-	m := melody.New()
-	response := []byte(fmt.Sprintf("%d", time.Now().UTC().UnixMilli()))
-	m.HandleConnect(func(s *melody.Session) {
-		s.Write(response)
+func index() Node {
+	return HTML5(HTML5Props{
+		Title:    "experiment",
+		Language: "en",
+		Head: []Node{
+			Script(Src("wasm_exec.js")),
+			Script(Raw(`
+				(async () => {
+					const go = new Go();
+					const wasm = await WebAssembly.instantiateStreaming(fetch("client.wasm"), go.importObject);
+					go.run(wasm.instance);
+				})()
+					.catch(err => {
+						console.error("failed to load wasm client", err);
+					});
+			`)),
+		},
 	})
-	return func(w http.ResponseWriter, r *http.Request) {
-		m.HandleRequest(w, r)
-	}
 }
 
-func chatWebsocketHandler() http.HandlerFunc {
-	m := melody.New()
-
-	verifiedSessions := make([]*melody.Session, 0)
-	var verifiedSessionsMutex sync.Mutex
-
-	getID := func(s *melody.Session) (string, bool) {
-		value, ok := s.Get("id")
-		if ok {
-			return value.(string), true
-		} else {
-			return "", false
-		}
-	}
-
-	setID := func(s *melody.Session, id string) {
-		s.Set("id", id)
-	}
-
-	closeSession := func(s *melody.Session) {
-		if err := s.Close(); err != nil {
-			slog.Error("error when closing session", "err", err)
-		}
-	}
-
-	m.HandleMessage(func(s *melody.Session, b []byte) {
-		var message shared.WebsocketClientToServerMessage
-		if err := json.Unmarshal(b, &message); err != nil {
-			slog.Error("error unmarshalling websocket message", "err", err)
+func newHtmlHandlerFunc(f func(w http.ResponseWriter, r *http.Request) ([]Node, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		nodes, err := f(w, r)
+		if err != nil {
+			writeErrorResponse(w, err, 500, "internal server error")
 			return
 		}
 
-		switch message.Type {
-		case shared.WebsocketClientToServerMessageTypeLogin:
-			slog.Debug(
-				"received message",
-				"type", message.Type,
-				"id", message.Login.ID,
-			)
-			// if session is already verified, close it
-			id, ok := getID(s)
-			if ok {
-				slog.Error(
-					"session is already verified",
-					"existing id", id,
-					"incoming id", message.Login.ID,
-				)
-				closeSession(s)
+		var s strings.Builder
+		for _, child := range nodes {
+			if err := child.Render(&s); err != nil {
+				writeErrorResponse(w, err, 500, "internal server error")
 				return
 			}
-			// this session is now verified
-			setID(s, message.Login.ID)
-			verifiedSessionsMutex.Lock()
-			verifiedSessions = append(verifiedSessions, s)
-			verifiedSessionsMutex.Unlock()
-
-		case shared.WebsocketClientToServerMessageTypeSend:
-			slog.Debug(
-				"received message",
-				"type", message.Type,
-				"message", message.Send.Message,
-			)
-			id, ok := getID(s)
-			// if session is unverified, close it
-			if !ok {
-				slog.Error("message received before verification", id)
-				closeSession(s)
-				return
-			}
-			// broadcast response to all connected sessions
-			outgoingBytes, err := json.Marshal(&shared.WebsocketServerToClientMessage{
-				Type: shared.WebsocketServerToClientMessageTypeSend,
-				Send: &shared.WebsocketServerToClientMessageSend{
-					SenderID: id,
-					Message:  message.Send.Message,
-				},
-			})
-			if err != nil {
-				slog.Error("failed to serialize message", "err", err)
-				return
-			}
-			verifiedSessionsMutex.Lock()
-			cloneOfVerifiedSessions := slices.Clone(verifiedSessions)
-			verifiedSessionsMutex.Unlock()
-			for _, s := range cloneOfVerifiedSessions {
-				if err := s.Write(outgoingBytes); err != nil {
-					slog.Error("error writing to session", "session", s, "err", err)
-					closeSession(s)
-				}
-			}
-
-		default:
-			slog.Error("unrecognized message type", "type", message.Type)
 		}
-	})
 
-	return func(w http.ResponseWriter, r *http.Request) {
-		m.HandleRequest(w, r)
+		w.Header().Add("content-type", "text/html")
+		_, err = fmt.Fprint(w, s.String())
+		if err != nil {
+			slog.Error("error writing content to http writer", "err", err)
+		}
 	}
 }
 
 func serveFile(fileSystem http.FileSystem, path string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// http.ServeContent
 		file, err := fileSystem.Open(path)
 		if err != nil {
 			slog.Error("error opening file", "path", path, "err", err)
 			if errors.Is(err, fs.ErrNotExist) {
-				respondError(w, http.StatusNotFound)
+				writeErrorResponse(w, err, http.StatusNotFound, "not found")
 				return
 			}
-			respondError(w, http.StatusInternalServerError)
+			writeErrorResponse(w, err, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		stat, err := file.Stat()
 		if err != nil {
-			slog.Error("error getting file stat", "path", path, "err", err)
-			respondError(w, http.StatusInternalServerError)
+			writeErrorResponse(w, err, http.StatusInternalServerError, "internal server error")
 			return
 		}
 		http.ServeContent(w, r, path, stat.ModTime(), file)
@@ -196,48 +119,19 @@ func serveFile(fileSystem http.FileSystem, path string) http.HandlerFunc {
 	}
 }
 
-func newJsonHandlerFunc[RequestType, ResponseType any](f func(request *RequestType) (*ResponseType, error)) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO logging should have request content stuff like remote addr
-
-		// TODO assert that it's got the application/json or */* header
-		// strings.Split(r.Header.Get("accept"), ",")
-
-		// TODO assert that content type is application/json
-		// r.Header.Get("content-type")
-
-		request, err := shared.UnmarshalJson[RequestType](r.Body)
-		if err != nil {
-			slog.Error("error reading request body", "err", err)
-			respondError(w, 400)
-			return
-		}
-		slog.Debug("request", "body", request)
-
-		response, err := f(request)
-		if err != nil {
-			slog.Error("error handling json request", "err", err)
-			respondError(w, 500)
-			return
-		}
-		slog.Debug("response", "body", response)
-
-		responseBytes, err := json.Marshal(response)
-		if err != nil {
-			slog.Error("error marshalling response body", "err", err)
-			respondError(w, 500)
-			return
-		}
-
-		w.Header().Add("content-type", "application/json")
-		w.WriteHeader(200)
-		_, err = w.Write(responseBytes)
-		if err != nil {
-			slog.Error("error writing response to http request", "err", err)
-		}
+func writeErrorResponse(w http.ResponseWriter, err error, statusCode int, message string) {
+	slog.Error(
+		"error response",
+		"err", err,
+		"statusCode", statusCode,
+	)
+	w.WriteHeader(statusCode)
+	_, err = fmt.Fprint(w, message)
+	if err != nil {
+		slog.Error(
+			"an error occurred writing an error message in response to a previous error",
+			"err", err,
+			"statusCode", statusCode,
+		)
 	}
-}
-
-func respondError(w http.ResponseWriter, code int) {
-	http.Error(w, http.StatusText(code), code)
 }

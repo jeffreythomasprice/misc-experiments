@@ -1,5 +1,6 @@
 .PHONY: \
 	all \
+	run \
 	build \
 	clean \
 	assets \
@@ -7,6 +8,9 @@
 	server
 
 all: build
+
+run: build
+	./bin/server
 
 build: assets client server
 

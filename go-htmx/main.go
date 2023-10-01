@@ -43,17 +43,16 @@ func main() {
 			return loginFormError("form parse error"), nil
 		}
 
-		username, ok := r.Form["username"]
-		if !ok || len(username) != 1 {
-			return loginFormError("malformed username"), nil
+		username := r.FormValue("username")
+		if username == "" {
+			return loginFormError("Username is required."), nil
+		}
+		password := r.FormValue("password")
+		if password == "" {
+			return loginFormError("Password is required."), nil
 		}
 
-		password, ok := r.Form["password"]
-		if !ok || len(password) != 1 {
-			return loginFormError("malformed password"), nil
-		}
-
-		slog.Debug("TODO JEFF login form", "username", username[0], "password", password[0])
+		slog.Debug("TODO JEFF login form", "username", username, "password", password)
 
 		return loginFormError("TODO err msg"), nil
 	}))
