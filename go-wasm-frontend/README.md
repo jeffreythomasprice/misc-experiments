@@ -1,4 +1,0 @@
-```
-gow -g make run
-```
-
