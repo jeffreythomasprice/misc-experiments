@@ -1,0 +1,24 @@
+{{define "index"}}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<script src="https://unpkg.com/htmx.org@1.9.6"></script>
+	<script>
+		htmx.logAll();
+	</script>
+</head>
+
+<body
+	{{block "asdf"
+	.bodyAttributes}}
+	{{if
+	.headers}}
+	hx-headers='{{.headers}}'
+	{{end}}
+	{{end}}
+>{{.content}}</body>
+
+</html>
+{{end}}
