@@ -24,7 +24,7 @@ func Swap(
 		return err
 	}
 
-	elements, err := renderGeneratorToDom(gen)
+	elements, err := render(gen)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func querySelector(selectors string) (js.Value, error) {
 	return result, nil
 }
 
-func renderGeneratorToDom(gen Generator) ([]js.Value, error) {
+func render(gen Generator) ([]js.Value, error) {
 	var s strings.Builder
 	if err := gen(&s); err != nil {
 		return nil, err

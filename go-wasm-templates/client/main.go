@@ -23,6 +23,23 @@ func main() {
 
 	clicks := 0
 
+	var clickHandler swap.EventHandler = func(this js.Value, args []js.Value) {
+		clicks++
+
+		if err := swap.Swap(
+			"#clicks",
+			swap.InnerHTML,
+			func(w io.Writer) error {
+				return templates.ExecuteTemplate(w, "click", map[string]any{
+					"count": clicks,
+				})
+			},
+			nil,
+		); err != nil {
+			fail("failed to swap in click content", err)
+		}
+	}
+
 	if err := swap.Swap(
 		"body",
 		swap.InnerHTML,
@@ -32,22 +49,7 @@ func main() {
 			})
 		},
 		map[string]swap.EventHandler{
-			"click": func(this js.Value, args []js.Value) {
-				clicks++
-
-				if err := swap.Swap(
-					"#clicks",
-					swap.InnerHTML,
-					func(w io.Writer) error {
-						return templates.ExecuteTemplate(w, "click", map[string]any{
-							"count": clicks,
-						})
-					},
-					nil,
-				); err != nil {
-					fail("failed to swap in click content", err)
-				}
-			},
+			"click": clickHandler,
 		},
 	); err != nil {
 		fail("failed to swap in content", err)
