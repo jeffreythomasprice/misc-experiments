@@ -1,6 +1,7 @@
 package main
 
 import (
+	"client/dom"
 	"client/swap"
 	"embed"
 	"html/template"
@@ -21,35 +22,20 @@ func main() {
 		fail("failed to parse templates", err)
 	}
 
-	clicks := 0
-
-	var clickHandler swap.EventHandler = func(this js.Value, args []js.Value) {
-		clicks++
-
-		if err := swap.Swap(
-			"#clicks",
-			swap.InnerHTML,
-			func(w io.Writer) error {
-				return templates.ExecuteTemplate(w, "click", map[string]any{
-					"count": clicks,
-				})
-			},
-			nil,
-		); err != nil {
-			fail("failed to swap in click content", err)
-		}
-	}
-
 	if err := swap.Swap(
 		"body",
 		swap.InnerHTML,
-		func(w io.Writer) error {
-			return templates.ExecuteTemplate(w, "test", map[string]any{
-				"msg": "Hello, World!",
-			})
-		},
+		templ(templates, "login", nil),
 		map[string]swap.EventHandler{
-			"click": clickHandler,
+			"submit": func(this js.Value, args []js.Value) {
+				e := args[0]
+				e.Call("preventDefault")
+
+				username := dom.MustQuerySelector("input[name='username']").Get("value")
+				password := dom.MustQuerySelector("input[name='password']").Get("value")
+
+				slog.Debug("TODO JEFF submit", "username", username, "password", password)
+			},
 		},
 	); err != nil {
 		fail("failed to swap in content", err)
@@ -61,4 +47,10 @@ func main() {
 func fail(msg string, err error) {
 	slog.Error(msg, "err", err)
 	panic("fatal error")
+}
+
+func templ(t *template.Template, name string, data any) swap.Generator {
+	return func(w io.Writer) error {
+		return t.ExecuteTemplate(w, name, data)
+	}
 }

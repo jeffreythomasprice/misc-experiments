@@ -1,6 +1,7 @@
 package swap
 
 import (
+	"client/dom"
 	"fmt"
 	"io"
 	"strings"
@@ -19,7 +20,7 @@ func Swap(
 	gen Generator,
 	events map[string]EventHandler,
 ) error {
-	target, err := querySelector(selectors)
+	target, err := dom.QuerySelector(selectors)
 	if err != nil {
 		return err
 	}
@@ -70,14 +71,6 @@ func init() {
 		target.Call("replaceChildren", newElementsAsAny...)
 		return nil
 	}
-}
-
-func querySelector(selectors string) (js.Value, error) {
-	result := js.Global().Get("document").Call("querySelector", selectors)
-	if !result.Truthy() {
-		return js.Null(), fmt.Errorf("no such element for selectors: %v", selectors)
-	}
-	return result, nil
 }
 
 func render(gen Generator) ([]js.Value, error) {
