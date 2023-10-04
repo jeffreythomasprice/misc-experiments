@@ -1,0 +1,9 @@
+{{define "test"}}
+<h1>{{.msg}}</h1>
+<button go-click="click">Click Me</button>
+<div id="clicks"></div>
+{{end}}
+
+{{define "click"}}
+Clicks: {{.count}}
+{{end}}
