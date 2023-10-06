@@ -31,8 +31,8 @@ func main() {
 				e := args[0]
 				e.Call("preventDefault")
 
-				username := dom.MustQuerySelector("input[name='username']").Get("value")
-				password := dom.MustQuerySelector("input[name='password']").Get("value")
+				username := dom.MustQuerySelector("input[name='username']").Get("value").String()
+				password := dom.MustQuerySelector("input[name='password']").Get("value").String()
 
 				slog.Debug("TODO JEFF submit", "username", username, "password", password)
 			},
