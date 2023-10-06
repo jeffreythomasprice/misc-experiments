@@ -2,6 +2,7 @@
 	all \
 	build \
 	run \
+	watch \
 	clean \
 	client \
 	server
@@ -12,6 +13,13 @@ build: client server
 
 run: build
 	bin/server
+
+watch:
+	watchexec \
+		-i "**/server/assets/generated/**" \
+		-i "**/bin/**" \
+		-r \
+		make run
 
 clean:
 	rm -rf bin

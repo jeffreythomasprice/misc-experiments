@@ -2,6 +2,7 @@
 	all \
 	build \
 	run \
+	watch \
 	clean
 
 all: build
@@ -14,7 +15,11 @@ run: build
 	bin/experiment
 
 watch:
-	watchexec -i "**/bin/**" -i "**/*_templ.go" -r make run
+	watchexec \
+		-i "**/bin/**" \
+		-i "**/*_templ.go" \
+		-r \
+		make run
 
 clean:
 	rm -rf bin
