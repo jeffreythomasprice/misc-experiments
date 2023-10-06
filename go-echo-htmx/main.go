@@ -39,7 +39,9 @@ func main() {
 		return clickResults(clicks)
 	}))
 
-	e.Logger.Fatal(e.Start("127.0.0.1:8000"))
+	addr := "127.0.0.1:8000"
+	slog.Info("listening", "addr", addr)
+	e.Logger.Fatal(e.Start(addr))
 }
 
 func index() ([]Node, error) {
