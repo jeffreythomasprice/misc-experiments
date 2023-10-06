@@ -1,12 +1,18 @@
 use std::error::Error;
 use std::sync::Arc;
 
-use axum::extract::State;
+use axum::extract::{Path, State};
+use axum::http::header::CONTENT_TYPE;
+use axum::http::{HeaderValue, StatusCode};
+use axum::response::{AppendHeaders, IntoResponse};
 use axum::routing::{get, post};
 use axum::{Form, Router};
+use include_dir::{include_dir, Dir};
 use maud::{html, Markup, DOCTYPE};
 use serde::Deserialize;
 use tokio::sync::Mutex;
+
+static ASSETS_DIR: Dir = include_dir!("assets");
 
 #[derive(Clone)]
 struct UsersService {}
@@ -49,6 +55,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .route("/", get(index))
         .route("/click", post(click))
         .route("/login", post(login))
+        .route("/*path", get(asset_file))
         .with_state(users_service);
 
     axum::Server::bind(&"127.0.0.1:8000".parse()?)
@@ -87,7 +94,9 @@ async fn login(
 
 async fn error_response(message: &str) -> Markup {
     html! {
-        div { (message) }
+        div hx-swap-oob="innerHTML:#errorMessages" {
+            div class="error" { (message) }
+        }
     }
 }
 
@@ -104,7 +113,7 @@ async fn index() -> Markup {
 
 fn login_form() -> Markup {
     html! {
-        form hx-post="/login" {
+        form hx-post="/login" hx-swap="none" {
             div {
                 label for="username" { "Username:" }
                 input name="username" placeholder="Username" type="text" {}
@@ -115,6 +124,7 @@ fn login_form() -> Markup {
             }
             button type="submit" { "Log In" }
         }
+        div id="errorMessages" {}
     }
 }
 
@@ -127,11 +137,34 @@ where
         html {
             head {
                 meta charset="utf-8";
+                link rel="stylesheet" href="index.css";
                 script src="https://unpkg.com/htmx.org@1.9.6" {}
+                script {
+                    "htmx.logAll();"
+                }
             }
             body {
                 (f())
             }
+        }
+    }
+}
+
+async fn asset_file(Path(path): Path<String>) -> Result<impl IntoResponse, StatusCode> {
+    let path = path.trim_start_matches("/");
+    let mime_type = mime_guess::from_path(path).first_or_text_plain();
+    let headers = AppendHeaders([(
+        CONTENT_TYPE,
+        HeaderValue::from_str(mime_type.as_ref()).or_else(|e| {
+            println!("error getting mime type for {path}: {e:?}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        })?,
+    )]);
+    match ASSETS_DIR.get_file(path) {
+        Some(file) => Ok((headers, file.contents())),
+        None => {
+            println!("no such file found {path}");
+            Err(StatusCode::NOT_FOUND)?
         }
     }
 }
