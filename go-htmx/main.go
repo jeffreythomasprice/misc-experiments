@@ -12,6 +12,10 @@ import (
 	"strings"
 )
 
+type TemplateDataFunc[T any] func() (T, error)
+
+type StringContentFunc func(w io.Writer) error
+
 //go:embed templates/*
 var templateFiles embed.FS
 
@@ -28,19 +32,19 @@ func main() {
 	})))
 
 	http.HandleFunc("/", httpMethods{
-		GET: htmlPageHandler(func(w io.Writer) error {
-			return index(
-				w,
-				// TODO testing headers, remove m
-				map[string]string{
-					"foo": "bar",
-					"baz": "asdf",
-				},
-				func(w io.Writer) error {
-					return templates.ExecuteTemplate(w, "hello", nil)
-				},
-			)
-		}),
+		GET: htmlPageHandler(newTemplateHandler[any](templates, "index", func() (any, error) {
+			headers := map[string]string{
+				"foo": "bar",
+				"baz": "asdf",
+			}
+
+			var contentStr strings.Builder
+			if err := templates.ExecuteTemplate(&contentStr, "hello", nil); err != nil {
+				return nil, err
+			}
+
+			return index(headers, contentStr.String())
+		})),
 	}.Handler())
 
 	// TODO testing, remove me
@@ -63,32 +67,42 @@ func main() {
 	select {}
 }
 
-type HtmlPageHandlerFunc func(w io.Writer) error
-
-func index(w io.Writer, headers map[string]string, content func(w io.Writer) error) error {
+func index(headers map[string]string, content string) (any, error) {
 	var headerStr string
 	if headers != nil {
 		b, err := json.Marshal(headers)
 		if err != nil {
-			return fmt.Errorf("error marshalling headers to json for index: %w", err)
+			return nil, fmt.Errorf("error marshalling headers to json for index: %w", err)
 		}
 		headerStr = string(b)
 	}
 
-	var contentStr strings.Builder
-	if err := content(&contentStr); err != nil {
-		return fmt.Errorf("error rendering content for index: %w", err)
-	}
-
-	return templates.ExecuteTemplate(w, "index", map[string]any{
+	return map[string]any{
 		"bodyAttributes": map[string]any{
 			"headers": template.HTMLAttr(headerStr),
 		},
-		"content": template.HTML(contentStr.String()),
-	})
+		"content": template.HTML(content),
+	}, nil
 }
 
-func htmlPageHandler(f HtmlPageHandlerFunc) http.HandlerFunc {
+func newTemplateHandler[T any](t *template.Template, name string, data TemplateDataFunc[T]) StringContentFunc {
+	return func(w io.Writer) error {
+		d, err := data()
+		if err != nil {
+			return fmt.Errorf("error generating data for template rendering: %w", err)
+		}
+		var s strings.Builder
+		if err := templates.ExecuteTemplate(&s, name, d); err != nil {
+			return fmt.Errorf("error rendering template: %w", err)
+		}
+		if _, err := fmt.Fprint(w, s.String()); err != nil {
+			return fmt.Errorf("error writing template content: %w", err)
+		}
+		return nil
+	}
+}
+
+func htmlPageHandler(f StringContentFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var s strings.Builder
 		if err := f(&s); err != nil {

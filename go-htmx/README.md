@@ -1,5 +1,5 @@
 See https://github.com/watchexec/watchexec
 
 ```
-watchexec make
+watchexec -i "**/bin/**" -r make run
 ```
