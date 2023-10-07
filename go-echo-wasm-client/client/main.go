@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"shared"
+	"time"
 
 	. "client/dom"
 )
@@ -95,9 +96,17 @@ func loginPage(success func(*shared.LoginResponse)) {
 }
 
 func loggedInPage(user *shared.LoginResponse) {
+	claims, err := shared.ParseJWTClaimsUnverified(user.Token)
+	if err != nil {
+		slog.Error("failed to parse jwt", "err", err)
+		errorPage("Failed to parse login token")
+		return
+	}
+	// TODO some real content
 	Div(
-		// P(Textf("TODO logged in page, user = %v", u.username)),
-		P(Textf("TODO token = %v", user.Token)),
+		P(Text("Logged in page")),
+		P(Textf("username = %v", claims.Username)),
+		P(Textf("expires = %v", time.Unix(claims.ExpiresAt, 0).Format(time.RFC3339))),
 	).
 		Swap("body", ReplaceChildren)
 }
