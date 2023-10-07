@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"shared"
 	"time"
 
@@ -79,9 +81,17 @@ func loginPage(success func(*shared.LoginResponse)) {
 					})
 					if err != nil {
 						slog.Error("error logging in", "err", err)
-					} else {
-						success(response)
+						var httpErr *shared.HTTPResponseError
+						if errors.As(err, &httpErr) {
+							if httpErr.Response.StatusCode == http.StatusUnauthorized {
+								errorMessage("Invalid credentials")
+								return
+							}
+						}
+						errorPage(fmt.Sprintf("Login failed: %v", err))
+						return
 					}
+					success(response)
 				}()
 			}),
 			Button(
@@ -89,6 +99,7 @@ func loginPage(success func(*shared.LoginResponse)) {
 				Text("Log In"),
 			),
 		),
+		Div(Attr("id", "errorMessages")),
 	).
 		Swap("body", ReplaceChildren); err != nil {
 		panic(err)
@@ -111,9 +122,19 @@ func loggedInPage(user *shared.LoginResponse) {
 		Swap("body", ReplaceChildren)
 }
 
+func errorMessage(msg string) {
+	errorContent(msg).Swap("#errorMessages", Append)
+}
+
 func errorPage(msg string) {
-	Div(
-		P(Textf("Error: %v", msg)),
-	).
-		Swap("body", ReplaceChildren)
+	errorContent(msg).Swap("body", ReplaceChildren)
+}
+
+func errorContent(msg string) *Element {
+	return Div(
+		P(
+			Class("error"),
+			Textf("Error: %v", msg),
+		),
+	)
 }

@@ -54,6 +54,7 @@ func run() error {
 	e.Use(middleware.Recover())
 
 	e.GET("/", echo.StaticFileHandler("assets/index.html", assets))
+	e.GET("/index.css", echo.StaticFileHandler("assets/index.css", assets))
 	e.GET("/client.wasm", echo.StaticFileHandler("assets/generated/client.wasm", assets))
 	e.GET("/wasm_exec.js", echo.StaticFileHandler("assets/generated/wasm_exec.js", assets))
 
