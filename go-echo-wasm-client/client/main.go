@@ -2,6 +2,7 @@ package main
 
 import (
 	"log/slog"
+	"net/http"
 	"shared"
 
 	. "client/dom"
@@ -21,7 +22,6 @@ func main() {
 	}
 
 	if err := Div(
-		H1(Text("Hello, World!")),
 		Form(
 			Div(
 				Label(
@@ -51,7 +51,17 @@ func main() {
 			),
 			EventHandler("submit", func(e Event) {
 				e.PreventDefault()
-				slog.Debug("TODO submit", "username", username, "password", password)
+				go func() {
+					response, err := shared.MakeJsonRequest[shared.LoginResponse](http.MethodPost, "/login", &shared.LoginRequest{
+						Username: username,
+						Password: password,
+					})
+					if err != nil {
+						slog.Error("error logging in", "err", err)
+					} else {
+						slog.Debug("TODO login success", "response", response)
+					}
+				}()
 			}),
 			Button(
 				Attr("type", "submit"),
