@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"shared"
-	"time"
 
 	. "client/dom"
 )
@@ -20,17 +19,22 @@ func main() {
 	if err != nil {
 		var statusCodeErr *shared.HTTPResponseError
 		if errors.As(err, &statusCodeErr) {
-			loginPage(func(lr *shared.LoginResponse) {
-				loggedInPage(lr)
-			})
+			loginPage(defaultLoginContent)
 		} else {
 			errorPage(err.Error())
 		}
 	} else {
-		loggedInPage(response)
+		defaultLoginContent(response)
 	}
 
 	select {}
+}
+
+func defaultLoginContent(response *shared.LoginResponse) {
+	loggedInPage(
+		response,
+		Div(Text("TODO some real logged in content")),
+	)
 }
 
 func loginPage(success func(*shared.LoginResponse)) {
@@ -106,19 +110,32 @@ func loginPage(success func(*shared.LoginResponse)) {
 	}
 }
 
-func loggedInPage(user *shared.LoginResponse) {
+func loggedInPage(user *shared.LoginResponse, content ...Renderer) {
 	claims, err := shared.ParseJWTClaimsUnverified(user.Token)
 	if err != nil {
 		slog.Error("failed to parse jwt", "err", err)
 		errorPage("Failed to parse login token")
 		return
 	}
-	// TODO some real content
-	Div(
-		P(Text("Logged in page")),
-		P(Textf("username = %v", claims.Username)),
-		P(Textf("expires = %v", time.Unix(claims.ExpiresAt, 0).Format(time.RFC3339))),
-	).
+
+	Div(append(
+		[]Renderer{Div(
+			Div(Textf("Logged in as: %v", claims.Username)),
+			Button(
+				Text("Log Out"),
+				EventHandler("click", func(e Event) {
+					go func() {
+						if err := shared.Logout(); err != nil {
+							errorPage(fmt.Sprintf("Logout failed: %v", err))
+						} else {
+							loginPage(defaultLoginContent)
+						}
+					}()
+				}),
+			),
+		)},
+		content...,
+	)...).
 		Swap("body", ReplaceChildren)
 }
 

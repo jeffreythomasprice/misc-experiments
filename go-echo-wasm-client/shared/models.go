@@ -37,3 +37,7 @@ func CheckToken() (*LoginResponse, error) {
 func Login(request *LoginRequest) (*LoginResponse, error) {
 	return MakeJsonRequest[LoginResponse](http.MethodPost, "/login", request)
 }
+
+func Logout() error {
+	return MakeJsonRequestNoResponse(http.MethodPost, "/logout", nil)
+}

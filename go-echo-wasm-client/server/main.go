@@ -21,6 +21,11 @@ type user struct {
 	claims *shared.JWTClaims
 }
 
+const (
+	jwtCookieName   = "auth"
+	jwtCookieDomain = "*"
+)
+
 //go:embed assets
 var assets embed.FS
 
@@ -92,9 +97,9 @@ func run() error {
 		}
 
 		authCookie := &http.Cookie{}
-		authCookie.Name = "auth"
+		authCookie.Name = jwtCookieName
 		authCookie.Value = token
-		authCookie.Domain = "*"
+		authCookie.Domain = jwtCookieDomain
 		authCookie.Expires = time.Unix(claims.ExpiresAt, 0)
 		c.SetCookie(authCookie)
 
@@ -104,6 +109,17 @@ func run() error {
 				Token: token,
 			},
 		)
+	})
+
+	e.POST("/logout", func(c echo.Context) error {
+		authCookie := &http.Cookie{}
+		authCookie.Name = jwtCookieName
+		authCookie.Value = ""
+		authCookie.Domain = jwtCookieDomain
+		authCookie.Expires = time.Now()
+		c.SetCookie(authCookie)
+
+		return c.NoContent(http.StatusOK)
 	})
 
 	addr := "127.0.0.1:8000"
