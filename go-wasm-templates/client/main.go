@@ -3,29 +3,26 @@ package main
 import (
 	"client/dom"
 	"client/swap"
-	"embed"
-	"html/template"
 	"io"
 	"log/slog"
 	"shared"
 	"syscall/js"
-)
 
-//go:embed assets/templates
-var templateAssets embed.FS
+	. "github.com/maragudk/gomponents"
+	. "github.com/maragudk/gomponents/html"
+)
 
 func main() {
 	shared.InitSlog()
 
-	templates, err := template.ParseFS(templateAssets, "assets/templates/**")
+	loginForm, err := loginForm()
 	if err != nil {
-		fail("failed to parse templates", err)
+		panic(err)
 	}
-
 	if err := swap.Swap(
 		"body",
 		swap.InnerHTML,
-		templ(templates, "login", nil),
+		loginForm.Render,
 		map[string]swap.EventHandler{
 			"submit": func(this js.Value, args []js.Value) {
 				e := args[0]
@@ -38,19 +35,56 @@ func main() {
 			},
 		},
 	); err != nil {
-		fail("failed to swap in content", err)
+		panic(err)
 	}
 
 	select {}
 }
 
-func fail(msg string, err error) {
-	slog.Error(msg, "err", err)
-	panic("fatal error")
+type Nodes []Node
+
+func (nodes Nodes) Render(w io.Writer) error {
+	for _, node := range nodes {
+		if err := node.Render(w); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func templ(t *template.Template, name string, data any) swap.Generator {
-	return func(w io.Writer) error {
-		return t.ExecuteTemplate(w, name, data)
-	}
+func loginForm() (Nodes, error) {
+	return Nodes{
+		Div(
+			Label(
+				For("username"),
+				Text("Username:"),
+			),
+			Input(
+				FormAttr("loginForm"),
+				Name("username"),
+				Placeholder("Username"),
+				Type("text"),
+			),
+		),
+		Div(
+			Label(
+				For("password"),
+				Text("Password:"),
+			),
+			Input(
+				FormAttr("loginForm"),
+				Name("password"),
+				Placeholder("Password"),
+				Type("password"),
+			),
+		),
+		FormEl(
+			ID("loginForm"),
+			Attr("go-click", "submit"),
+			Button(
+				Type("submit"),
+				Text("Log In"),
+			),
+		),
+	}, nil
 }
