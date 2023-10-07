@@ -1,6 +1,9 @@
 package dom
 
-import "syscall/js"
+import (
+	"fmt"
+	"syscall/js"
+)
 
 type text struct {
 	value string
@@ -10,6 +13,10 @@ var _ Renderer = (*text)(nil)
 
 func Text(value string) Renderer {
 	return &text{value}
+}
+
+func Textf(format string, args ...any) Renderer {
+	return Text(fmt.Sprintf(format, args...))
 }
 
 // apply implements Renderer.

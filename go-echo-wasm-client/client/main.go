@@ -1,8 +1,8 @@
 package main
 
 import (
+	"errors"
 	"log/slog"
-	"net/http"
 	"shared"
 
 	. "client/dom"
@@ -11,6 +11,26 @@ import (
 func main() {
 	shared.InitSlog()
 
+	// TODO router, parse window.location and draw some components replacing a given selector
+
+	response, err := shared.CheckToken()
+	if err != nil {
+		var statusCodeErr *shared.HTTPResponseError
+		if errors.As(err, &statusCodeErr) {
+			loginPage(func(lr *shared.LoginResponse) {
+				loggedInPage(lr)
+			})
+		} else {
+			errorPage(err.Error())
+		}
+	} else {
+		loggedInPage(response)
+	}
+
+	select {}
+}
+
+func loginPage(success func(*shared.LoginResponse)) {
 	var username, password string
 
 	usernameChanged := func(e Event) {
@@ -52,14 +72,14 @@ func main() {
 			EventHandler("submit", func(e Event) {
 				e.PreventDefault()
 				go func() {
-					response, err := shared.MakeJsonRequest[shared.LoginResponse](http.MethodPost, "/login", &shared.LoginRequest{
+					response, err := shared.Login(&shared.LoginRequest{
 						Username: username,
 						Password: password,
 					})
 					if err != nil {
 						slog.Error("error logging in", "err", err)
 					} else {
-						slog.Debug("TODO login success", "response", response)
+						success(response)
 					}
 				}()
 			}),
@@ -72,6 +92,19 @@ func main() {
 		Swap("body", ReplaceChildren); err != nil {
 		panic(err)
 	}
+}
 
-	select {}
+func loggedInPage(user *shared.LoginResponse) {
+	Div(
+		// P(Textf("TODO logged in page, user = %v", u.username)),
+		P(Textf("TODO token = %v", user.Token)),
+	).
+		Swap("body", ReplaceChildren)
+}
+
+func errorPage(msg string) {
+	Div(
+		P(Textf("Error: %v", msg)),
+	).
+		Swap("body", ReplaceChildren)
 }
