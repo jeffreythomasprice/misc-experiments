@@ -12,13 +12,11 @@ type Operation func(target js.Value, newElements []js.Value) error
 
 type Generator func(w io.Writer) error
 
-type EventHandler func(this js.Value, args []js.Value)
-
 func Swap(
 	selectors string,
 	op Operation,
 	gen Generator,
-	events map[string]EventHandler,
+	events map[string]dom.EventHandler,
 ) error {
 	target, err := dom.QuerySelector(selectors)
 	if err != nil {
@@ -44,10 +42,7 @@ func Swap(
 				if !ok {
 					return fmt.Errorf("no such event: %v, was trying to handle %v", value, key)
 				}
-				element.Call("addEventListener", realKey, js.FuncOf(func(this js.Value, args []js.Value) any {
-					event(this, args)
-					return nil
-				}))
+				element.Call("addEventListener", realKey, event.JsFunc())
 			}
 			return nil
 		}); err != nil {

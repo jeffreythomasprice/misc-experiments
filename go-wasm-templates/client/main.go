@@ -2,7 +2,7 @@ package main
 
 import (
 	"client/dom"
-	"client/swap"
+	"client/dom/swap"
 	"io"
 	"log/slog"
 	"shared"
@@ -23,15 +23,23 @@ func main() {
 		"body",
 		swap.InnerHTML,
 		loginForm.Render,
-		map[string]swap.EventHandler{
-			"submit": func(this js.Value, args []js.Value) {
-				e := args[0]
-				e.Call("preventDefault")
+		map[string]dom.EventHandler{
+			"submit": func(e dom.Event) {
+				e.PreventDefault()
 
-				username := dom.MustQuerySelector("input[name='username']").Get("value").String()
-				password := dom.MustQuerySelector("input[name='password']").Get("value").String()
+				form := &struct {
+					Username js.Value `selector:"input[name='username']"`
+					Password js.Value `selector:"input[name='password']"`
+				}{}
+				if err := dom.MultiQuerySelector(form); err != nil {
+					panic(err)
+				}
 
-				slog.Debug("TODO JEFF submit", "username", username, "password", password)
+				slog.Debug(
+					"TODO selector results",
+					"username", form.Username.Get("value").String(),
+					"password", form.Password.Get("value").String(),
+				)
 			},
 		},
 	); err != nil {
