@@ -11,6 +11,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/olahol/melody"
 	slogecho "github.com/samber/slog-echo"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -117,6 +118,27 @@ func run() error {
 		addAuthCookie(c, "", time.Now())
 
 		return c.NoContent(http.StatusOK)
+	})
+
+	m := melody.New()
+	m.HandleConnect(func(s *melody.Session) {
+		slog.Debug("TODO websocket connected", "remote addr", s.RemoteAddr())
+
+		s.Write([]byte("TODO text message from server"))
+		s.WriteBinary([]byte("TODO binary message from server"))
+	})
+	m.HandleClose(func(s *melody.Session, code int, message string) error {
+		slog.Debug("TODO websocket disconnected", "remote addr", s.RemoteAddr())
+		return nil
+	})
+	m.HandleMessage(func(s *melody.Session, b []byte) {
+		slog.Debug("TODO websocket text message", "remote addr", s.RemoteAddr(), "msg", string(b))
+	})
+	m.HandleMessageBinary(func(s *melody.Session, b []byte) {
+		slog.Debug("TODO websocket binary message", "remote addr", s.RemoteAddr(), "msg", string(b))
+	})
+	e.GET("/ws", func(c echo.Context) error {
+		return m.HandleRequest(c.Response(), c.Request())
 	})
 
 	addr := "127.0.0.1:8000"
