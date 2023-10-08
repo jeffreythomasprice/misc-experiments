@@ -115,24 +115,30 @@ func loggedInPage(token string) {
 		return
 	}
 
-	Div(append(
-		[]Renderer{Div(
-			Div(Textf("Logged in as: %v", claims.Username)),
-			Button(
-				Text("Log Out"),
-				EventHandler("click", func(e Event) {
-					go func() {
-						if err := shared.Logout(); err != nil {
-							errorPage(fmt.Sprintf("Logout failed: %v", err))
-						} else {
-							loginPage()
-						}
-					}()
-				}),
-			),
-		)},
+	content := []Renderer{
+		Div(Textf("Logged in as: %v", claims.Username)),
+	}
+	if claims.IsAdmin {
+		content = append(content, Div(Text("Admin")))
+	}
+	content = append(
+		content,
+		Button(
+			Text("Log Out"),
+			EventHandler("click", func(e Event) {
+				go func() {
+					if err := shared.Logout(); err != nil {
+						errorPage(fmt.Sprintf("Logout failed: %v", err))
+					} else {
+						loginPage()
+					}
+				}()
+			}),
+		),
 		Div(Text("TODO some real logged in content")),
-	)...).
+	)
+
+	Div(content...).
 		Swap("body", ReplaceChildren)
 }
 

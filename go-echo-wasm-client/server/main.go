@@ -85,17 +85,18 @@ func run() error {
 			return err
 		}
 
-		isValid, err := usersService.ValidatePassword(request.Username, request.Password)
+		user, err := usersService.ValidatePassword(request.Username, request.Password)
 		if err != nil {
 			slog.Error("error validating user's password", "err", err)
 			return statusCodeError(c, http.StatusInternalServerError)
 		}
-		if !isValid {
+		if user == nil {
 			return statusCodeError(c, http.StatusUnauthorized)
 		}
 
 		token, claims, err := jwtService.Create(shared.JWTCustomClaims{
-			Username: request.Username,
+			Username: user.Username,
+			IsAdmin:  user.IsAdmin,
 		})
 		if err != nil {
 			slog.Error("error making jwt", "err", err)

@@ -6,6 +6,7 @@ import (
 
 type JWTCustomClaims struct {
 	Username string `json:"username"`
+	IsAdmin  bool   `json:"isAdmin"`
 }
 
 type JWTClaims struct {

@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 )
 
 type UsersService struct {
@@ -15,13 +16,20 @@ type UsersService struct {
 
 type User struct {
 	Username string
+	IsAdmin  bool
+}
+
+type CreateUser struct {
+	User
+	Password string
 }
 
 func NewUsersService(db *sql.DB) (*UsersService, error) {
 	_, err := db.Exec(`
 		create table if not exists users (
 			username varchar(256) not null unique,
-			password varchar(256) not null
+			password varchar(256) not null,
+			isAdmin boolean
 		);
 	`)
 	if err != nil {
@@ -32,35 +40,33 @@ func NewUsersService(db *sql.DB) (*UsersService, error) {
 		db: db,
 	}
 
-	result.getByNameStatement, err = db.Prepare("select (username) from users where username = ?")
+	result.getByNameStatement, err = db.Prepare("select username, isAdmin from users where username = ?")
 	if err != nil {
 		result.Close()
 		return nil, err
 	}
 
-	result.validatePasswordStatement, err = db.Prepare("select (password) from users where username = ?")
+	result.validatePasswordStatement, err = db.Prepare("select password from users where username = ?")
 	if err != nil {
 		result.Close()
 		return nil, err
 	}
 
-	result.createStatement, err = db.Prepare("insert into users (username, password) values (?, ?)")
+	result.createStatement, err = db.Prepare("insert into users (username, password, isAdmin) values (?, ?, ?)")
 	if err != nil {
 		result.Close()
 		return nil, err
 	}
 
-	// create the default user if missing
-	defaultUser, err := result.GetByName("admin")
-	if err != nil {
+	if err := result.createUserIfMissing(&CreateUser{
+		User: User{
+			Username: "admin",
+			IsAdmin:  true,
+		},
+		Password: "admin",
+	}); err != nil {
 		result.Close()
 		return nil, err
-	}
-	if defaultUser == nil {
-		if err := result.Create("admin", "admin"); err != nil {
-			result.Close()
-			return nil, err
-		}
 	}
 
 	return result, nil
@@ -71,30 +77,49 @@ func (service *UsersService) Close() {
 }
 
 func (service *UsersService) GetByName(username string) (*User, error) {
-	var resultUsername string
-	if err := service.getByNameStatement.QueryRow(username).Scan(&resultUsername); err != nil {
+	var result User
+	if err := service.getByNameStatement.QueryRow(username).Scan(&result.Username, &result.IsAdmin); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	return &User{
-		Username: resultUsername,
-	}, nil
+	return &result, nil
 }
 
-func (service *UsersService) ValidatePassword(username, password string) (bool, error) {
+func (service *UsersService) ValidatePassword(username, password string) (*User, error) {
 	var actualPassword string
 	if err := service.validatePasswordStatement.QueryRow(username).Scan(&actualPassword); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
+			return nil, nil
 		}
-		return false, err
+		return nil, err
 	}
-	return password == actualPassword, nil
+	if password != actualPassword {
+		return nil, nil
+	}
+	result, err := service.GetByName(username)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("validated password successfully, but then attempting to look up actual user data failed, username: %v", username)
+	}
+	return result, nil
 }
 
-func (service *UsersService) Create(username, password string) error {
-	_, err := service.createStatement.Exec(username, password)
+func (service *UsersService) Create(user *CreateUser) error {
+	_, err := service.createStatement.Exec(user.Username, user.Password, user.IsAdmin)
 	return err
+}
+
+func (service *UsersService) createUserIfMissing(user *CreateUser) error {
+	existing, err := service.GetByName(user.Username)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return nil
+	}
+	return service.Create(user)
 }

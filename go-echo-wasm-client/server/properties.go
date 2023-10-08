@@ -27,7 +27,7 @@ func NewPropertiesService(db *sql.DB) (*PropertiesService, error) {
 		db: db,
 	}
 
-	result.getStatement, err = db.Prepare("select (value) from properties where name = ?")
+	result.getStatement, err = db.Prepare("select value from properties where name = ?")
 	if err != nil {
 		result.Close()
 		return nil, err
