@@ -15,29 +15,26 @@ func main() {
 
 	// TODO router, parse window.location and draw some components replacing a given selector
 
+	// TODO live reload websockets
+
 	response, err := shared.CheckToken()
 	if err != nil {
 		var statusCodeErr *shared.HTTPResponseError
 		if errors.As(err, &statusCodeErr) {
-			loginPage(defaultLoginContent)
+			loginPage()
 		} else {
 			errorPage(err.Error())
 		}
 	} else {
-		defaultLoginContent(response)
+		loggedInPage(response.Token)
 	}
 
 	select {}
 }
 
-func defaultLoginContent(response *shared.LoginResponse) {
-	loggedInPage(
-		response,
-		Div(Text("TODO some real logged in content")),
-	)
-}
+func loginPage() {
+	// TODO form validation
 
-func loginPage(success func(*shared.LoginResponse)) {
 	var username, password string
 
 	usernameChanged := func(e Event) {
@@ -95,7 +92,7 @@ func loginPage(success func(*shared.LoginResponse)) {
 						errorPage(fmt.Sprintf("Login failed: %v", err))
 						return
 					}
-					success(response)
+					loggedInPage(response.Token)
 				}()
 			}),
 			Button(
@@ -110,8 +107,8 @@ func loginPage(success func(*shared.LoginResponse)) {
 	}
 }
 
-func loggedInPage(user *shared.LoginResponse, content ...Renderer) {
-	claims, err := shared.ParseJWTClaimsUnverified(user.Token)
+func loggedInPage(token string) {
+	claims, err := shared.ParseJWTClaimsUnverified(token)
 	if err != nil {
 		slog.Error("failed to parse jwt", "err", err)
 		errorPage("Failed to parse login token")
@@ -128,19 +125,19 @@ func loggedInPage(user *shared.LoginResponse, content ...Renderer) {
 						if err := shared.Logout(); err != nil {
 							errorPage(fmt.Sprintf("Logout failed: %v", err))
 						} else {
-							loginPage(defaultLoginContent)
+							loginPage()
 						}
 					}()
 				}),
 			),
 		)},
-		content...,
+		Div(Text("TODO some real logged in content")),
 	)...).
 		Swap("body", ReplaceChildren)
 }
 
 func errorMessage(msg string) {
-	errorContent(msg).Swap("#errorMessages", Append)
+	errorContent(msg).Swap("#errorMessages", ReplaceChildren)
 }
 
 func errorPage(msg string) {

@@ -16,10 +16,10 @@ type JWTService struct {
 	key *rsa.PrivateKey
 }
 
-func NewJWTService(db *db) (*JWTService, error) {
+func NewJWTService(props *PropertiesService) (*JWTService, error) {
 	const propName = "jwt private key"
 
-	pemStr, err := db.GetProperty(propName)
+	pemStr, err := props.Get(propName)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func NewJWTService(db *db) (*JWTService, error) {
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(key),
 	}))
-	if err := db.SetProperty(propName, pemStr); err != nil {
+	if err := props.Set(propName, pemStr); err != nil {
 		return nil, err
 	}
 

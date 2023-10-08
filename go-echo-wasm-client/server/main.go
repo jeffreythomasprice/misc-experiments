@@ -16,15 +16,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type user struct {
-	token  string
-	claims *shared.JWTClaims
-}
-
-const (
-	jwtCookieName   = "auth"
-	jwtCookieDomain = "*"
-)
+const jwtCookieName = "auth"
 
 //go:embed assets
 var assets embed.FS
@@ -39,13 +31,27 @@ func main() {
 func run() error {
 	shared.InitSlog()
 
-	db, err := NewDB()
+	db, err := openDatabase()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			slog.Error("error closing database", "err", err)
+		}
+	}()
 
-	jwtService, err := NewJWTService(db)
+	propertiesService, err := NewPropertiesService(db)
+	if err != nil {
+		return err
+	}
+
+	jwtService, err := NewJWTService(propertiesService)
+	if err != nil {
+		return err
+	}
+
+	usersService, err := NewUsersService(db)
 	if err != nil {
 		return err
 	}
@@ -64,18 +70,13 @@ func run() error {
 	e.GET("/wasm_exec.js", echo.StaticFileHandler("assets/generated/wasm_exec.js", assets))
 
 	e.GET("/checkToken", func(c echo.Context) error {
-		user, err := checkAuth(c, jwtService)
+		user, response, err := checkAuth(c, jwtService, usersService)
 		if user == nil || err != nil {
 			slog.Debug("user is not authenticated", "user", user, "err", err)
 			return err
 		}
 		slog.Debug("user is authenticated", "user", user)
-		return c.JSON(
-			http.StatusOK,
-			&shared.LoginResponse{
-				Token: user.token,
-			},
-		)
+		return c.JSON(http.StatusOK, response)
 	})
 
 	e.POST("/login", func(c echo.Context) error {
@@ -84,7 +85,12 @@ func run() error {
 			return err
 		}
 
-		if request.Password != "password" {
+		isValid, err := usersService.ValidatePassword(request.Username, request.Password)
+		if err != nil {
+			slog.Error("error validating user's password", "err", err)
+			return statusCodeError(c, http.StatusInternalServerError)
+		}
+		if !isValid {
 			return statusCodeError(c, http.StatusUnauthorized)
 		}
 
@@ -96,12 +102,7 @@ func run() error {
 			return statusCodeError(c, http.StatusInternalServerError)
 		}
 
-		authCookie := &http.Cookie{}
-		authCookie.Name = jwtCookieName
-		authCookie.Value = token
-		authCookie.Domain = jwtCookieDomain
-		authCookie.Expires = time.Unix(claims.ExpiresAt, 0)
-		c.SetCookie(authCookie)
+		addAuthCookie(c, token, time.Unix(claims.ExpiresAt, 0))
 
 		return c.JSON(
 			http.StatusOK,
@@ -112,12 +113,7 @@ func run() error {
 	})
 
 	e.POST("/logout", func(c echo.Context) error {
-		authCookie := &http.Cookie{}
-		authCookie.Name = jwtCookieName
-		authCookie.Value = ""
-		authCookie.Domain = jwtCookieDomain
-		authCookie.Expires = time.Now()
-		c.SetCookie(authCookie)
+		addAuthCookie(c, "", time.Now())
 
 		return c.NoContent(http.StatusOK)
 	})
@@ -127,26 +123,41 @@ func run() error {
 	return e.Start(addr)
 }
 
-func checkAuth(c echo.Context, jwtService *JWTService) (*user, error) {
-	authCookie, err := c.Cookie("auth")
+func addAuthCookie(c echo.Context, value string, expires time.Time) {
+	cookie := &http.Cookie{}
+	cookie.Name = jwtCookieName
+	cookie.Value = value
+	cookie.Expires = expires
+	c.SetCookie(cookie)
+}
+
+func checkAuth(c echo.Context, jwtService *JWTService, usersService *UsersService) (*User, *shared.CheckTokenResponse, error) {
+	cookie, err := c.Cookie(jwtCookieName)
 	if err != nil {
 		if errors.Is(err, http.ErrNoCookie) {
 			slog.Debug("no auth cookie, not authenticated")
-			return nil, statusCodeError(c, http.StatusUnauthorized)
+			return nil, nil, statusCodeError(c, http.StatusUnauthorized)
 		}
 		slog.Error("error checking auth cookie", "err", err)
-		return nil, statusCodeError(c, http.StatusInternalServerError)
+		return nil, nil, statusCodeError(c, http.StatusInternalServerError)
 	}
-	token := authCookie.Value
+
+	token := cookie.Value
 	claims, err := jwtService.Validate(token)
 	if err != nil {
 		slog.Error("validation failed on jwt", "token", token, "err", err)
-		return nil, statusCodeError(c, http.StatusUnauthorized)
+		return nil, nil, statusCodeError(c, http.StatusUnauthorized)
 	}
-	return &user{
-		token:  token,
-		claims: claims,
-	}, nil
+
+	user, err := usersService.GetByName(claims.Username)
+	if err != nil {
+		slog.Error("error finding user by name", "username", claims.Username, "err", err)
+		return nil, nil, statusCodeError(c, http.StatusInternalServerError)
+	}
+	if user == nil {
+		return nil, nil, statusCodeError(c, http.StatusUnauthorized)
+	}
+	return user, &shared.CheckTokenResponse{Token: token}, nil
 }
 
 func statusCodeError(c echo.Context, code int) error {
