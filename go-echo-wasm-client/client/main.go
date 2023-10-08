@@ -6,18 +6,16 @@ import (
 	"log/slog"
 	"net/http"
 	"shared"
-	"time"
 
 	. "client/dom"
-	"client/websockets"
 )
 
 func main() {
 	shared.InitSlog()
 
-	// TODO router, parse window.location and draw some components replacing a given selector
+	liveReload()
 
-	// TODO live reload websockets
+	// TODO router, parse window.location and draw some components replacing a given selector
 
 	response, err := shared.CheckToken()
 	if err != nil {
@@ -30,28 +28,6 @@ func main() {
 	} else {
 		loggedInPage(response.Token)
 	}
-
-	var ws *websockets.Connection
-	ws = websockets.NewBuilder().
-		OnOpen(func() {
-			slog.Debug("TODO onopen")
-			ws.SendTextMessage("TODO text message from client")
-			ws.SendBinaryMessage([]byte("TODO binary message from client"))
-		}).
-		OnClose(func() {
-			slog.Debug("TODO onclose")
-		}).
-		OnError(func() {
-			slog.Debug("TODO onerror")
-		}).
-		OnTextMessage(func(value string) {
-			slog.Debug("TODO ontextmessage", "value", value)
-		}).
-		OnBinaryMessage(func(value []byte) {
-			slog.Debug("TODO onbinarymessage", "value", value)
-		}).
-		ReconnectStrategy(websockets.ConstantDelay(time.Second * 2)).
-		Build("/ws")
 
 	select {}
 }

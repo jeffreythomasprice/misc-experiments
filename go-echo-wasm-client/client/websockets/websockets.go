@@ -252,6 +252,9 @@ func (c *Connection) SendBinaryMessage(value []byte) error {
 
 func ConstantDelay(delay time.Duration) ReconnectStrategy {
 	return func(failuresInARow int, lastFailureDelay time.Duration) (retry bool, delayBeforeRetrying time.Duration) {
+		if failuresInARow == 0 {
+			return true, 0
+		}
 		return true, delay
 	}
 }
