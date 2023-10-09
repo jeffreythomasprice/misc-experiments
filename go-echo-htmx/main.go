@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"net/http"
 	"os"
 	"path"
 
@@ -18,7 +19,7 @@ import (
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		AddSource: true,
+		AddSource: false,
 		Level:     slog.LevelDebug,
 	})))
 
@@ -46,6 +47,30 @@ func main() {
 		return t.RenderLoginPage(c)
 	})
 
+	e.GET("/loggedIn", func(c echo.Context) error {
+		cookie, err := c.Cookie("auth")
+
+		// not authenticated, missing cookie
+		if errors.Is(err, http.ErrNoCookie) {
+			// TODO include an error message?
+			return c.Redirect(http.StatusSeeOther, "/")
+		}
+
+		// actual error
+		if err != nil {
+			slog.Error("error looking for auth cookie", "err", err)
+			// TODO include an error message?
+			return c.Redirect(http.StatusSeeOther, "/")
+		}
+
+		// TODO check cookie value for validity
+
+		slog.Debug("TODO JEFF logged in", "cookie", cookie)
+
+		panic("TODO need to look up user from cookie and render logged in page")
+		// return t.RenderLoggedInPage(c, ?)
+	})
+
 	e.POST("/login", func(c echo.Context) error {
 		type request struct {
 			Username string `form:"username"`
@@ -56,14 +81,22 @@ func main() {
 			return t.RenderErrorMessage(c, "Missing parameters")
 		}
 
-		user, err := dbService.GetUserAndValidatePassword(req.Username, req.Password)
+		_, err := dbService.GetUserAndValidatePassword(req.Username, req.Password)
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, db.ErrBadPassword) {
 			return t.RenderErrorMessage(c, "Invalid credentials")
 		} else if err != nil {
 			slog.Error("error looking up user to authenticate", "err", err)
 			return t.RenderErrorMessage(c, "Error looking up user")
 		}
-		return t.RenderLoggedInPage(c, user)
+
+		// c.SetCookie(&http.Cookie{
+		// 	Name:  "auth",
+		// 	Value: "TODO jwt here",
+		// 	// TODO use jwt expiration
+		// 	Expires: time.Now().Add(time.Second * 15),
+		// })
+
+		return c.Redirect(http.StatusSeeOther, "/loggedIn")
 	})
 
 	addr := "127.0.0.1:8000"
