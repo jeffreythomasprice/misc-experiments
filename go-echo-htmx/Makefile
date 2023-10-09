@@ -1,23 +1,23 @@
-.PHONY: \
+.PHONy: \
 	all \
 	build \
+	clean \
 	run \
-	watch \
-	clean
+	watch
 
 all: build
 
 build:
-	go build -o bin/experiment .
-
-run: build
-	bin/experiment
-
-watch:
-	watchexec \
-		-i "**/bin/**" \
-		-r \
-		make run
+	go build -o bin/experiment ./...
 
 clean:
 	rm -rf bin
+
+run:
+	go run ./...
+
+watch:
+	watchexec \
+		--ignore bin \
+		-r \
+		go run ./...

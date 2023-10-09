@@ -1,55 +1,38 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
+	"experiment/db"
+	"fmt"
+	"html/template"
 	"log/slog"
-	"net/http"
 	"os"
-	"strings"
-	"time"
+	"path"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	_ "github.com/mattn/go-sqlite3"
 	slogecho "github.com/samber/slog-echo"
-
-	. "github.com/maragudk/gomponents"
-	. "github.com/maragudk/gomponents/components"
-	. "github.com/maragudk/gomponents/html"
 )
-
-type usersService struct{}
-
-func (service *usersService) ValidateCredentials(username, password string) (bool, error) {
-	slog.Debug("checking credentials", "username", username)
-	result := password == "password"
-	slog.Debug("result", "username", username, "result", result)
-	return result, nil
-}
-
-func (service *usersService) IsLoggedInCookie(cookie *http.Cookie, err error) (bool, error) {
-	if err != nil {
-		if errors.Is(err, http.ErrNoCookie) {
-			slog.Debug("missing auth cookie")
-			return false, nil
-		}
-		return false, err
-	}
-	slog.Debug("TODO should check auth cookie", "cookie", cookie)
-	return true, nil
-}
-
-type serviceContext struct {
-	echo.Context
-	users *usersService
-}
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level:     slog.LevelDebug,
 		AddSource: true,
+		Level:     slog.LevelDebug,
 	})))
 
+	dbService, err := db.NewService(getTempDir)
+	if err != nil {
+		fatal("failed to init db", err)
+	}
+	defer dbService.Close()
+
 	e := echo.New()
+
+	t := &assetTemplates{template.Must(template.ParseFS(embedAssets, "assets/*"))}
+	e.Renderer = t
+
 	e.HideBanner = true
 	e.HidePort = true
 	e.Debug = true
@@ -57,157 +40,53 @@ func main() {
 	e.Use(slogecho.New(slog.Default()))
 	e.Use(middleware.Recover())
 
-	users := &usersService{}
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			cc := &serviceContext{
-				Context: c,
-				users:   users,
-			}
-			return next(cc)
-		}
+	e.FileFS("/styles.css", "assets/styles.css", embedAssets)
+
+	e.GET("/", func(c echo.Context) error {
+		return t.RenderLoginPage(c)
 	})
 
-	e.GET("/", htmlNodeHandler(func(c *serviceContext) (Node, error) {
-		isLoggedIn, err := c.users.IsLoggedInCookie(c.Cookie("auth"))
-		if err != nil {
-			return nil, err
+	e.POST("/login", func(c echo.Context) error {
+		type request struct {
+			Username string `form:"username"`
+			Password string `form:"password"`
 		}
-		if isLoggedIn {
-			return page(c, loggedIn)
-		} else {
-			return page(c, notLoggedIn)
+		var req request
+		if err := c.Bind(&req); err != nil {
+			return t.RenderErrorMessage(c, "Missing parameters")
 		}
-	}))
 
-	e.POST("/api/login", htmlNodeHandler(login))
+		user, err := dbService.GetUserAndValidatePassword(req.Username, req.Password)
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, db.ErrBadPassword) {
+			return t.RenderErrorMessage(c, "Invalid credentials")
+		} else if err != nil {
+			slog.Error("error looking up user to authenticate", "err", err)
+			return t.RenderErrorMessage(c, "Error looking up user")
+		}
+		return t.RenderLoggedInPage(c, user)
+	})
 
 	addr := "127.0.0.1:8000"
-	slog.Info("listening", "addr", addr)
-	e.Logger.Fatal(e.Start(addr))
+	slog.Info("server started", "addr", addr)
+	if err := e.Start(addr); err != nil {
+		fatal("server error", err)
+	}
 }
 
-func notLoggedIn(c *serviceContext) (Node, error) {
-	return Group([]Node{
-		FormEl(
-			Attr("hx-post", "/api/login"),
-			Attr("hx-swap", "none"),
-			Div(
-				Label(
-					For("username"),
-					Text("Username:"),
-				),
-				Input(
-					Name("username"),
-					Placeholder("Username"),
-					Type("text"),
-				),
-			),
-			Div(
-				Label(
-					For("password"),
-					Text("Password:"),
-				),
-				Input(
-					Name("password"),
-					Placeholder("Password"),
-					Type("password"),
-				),
-			),
-			Button(
-				Type("submit"),
-				Text("Log In"),
-			),
-		),
-		Div(ID("errorMessages")),
-	}), nil
-}
-
-func loggedIn(c *serviceContext) (Node, error) {
-	return Div(Text("TODO logged in page")), nil
-}
-
-func login(c *serviceContext) (Node, error) {
-	var request struct {
-		Username string `form:"username"`
-		Password string `form:"password"`
-	}
-	if err := c.Bind(&request); err != nil {
-		return nil, err
-	}
-
-	slog.Debug("login", "request", request)
-
-	if len(request.Username) == 0 {
-		return errorMessage(c, "Username is required")
-	}
-
-	if len(request.Password) == 0 {
-		return errorMessage(c, "Password is required")
-	}
-
-	isValid, err := c.users.ValidateCredentials(request.Username, request.Password)
+func getTempDir() (string, error) {
+	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("failed to get current working directory: %w", err)
 	}
-	if !isValid {
-		return errorMessage(c, "Invalid credentials")
+	tmpDir := path.Join(cwd, "bin")
+	slog.Debug("paths", "cwd", cwd, "tmpDir", tmpDir)
+	if err := os.MkdirAll(tmpDir, os.ModePerm); err != nil {
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
-
-	authCookie := new(http.Cookie)
-	authCookie.Name = "auth"
-	authCookie.Value = "TODO jwt here"
-	// TODO expire should match jwt
-	authCookie.Expires = time.Now().Add(60 * time.Second)
-	authCookie.Path = "/"
-	c.SetCookie(authCookie)
-
-	c.Response().Header().Add("hx-refresh", "true")
-	return loggedIn(c)
+	return tmpDir, nil
 }
 
-func errorMessage(c *serviceContext, msg string) (Node, error) {
-	return Div(
-		Attr("hx-swap-oob", "innerHTML:#errorMessages"),
-		Div(
-			Class("error"),
-			Text(msg),
-		),
-	), nil
-}
-
-func page(c *serviceContext, content func(c *serviceContext) (Node, error)) (Node, error) {
-	contentNode, err := content(c)
-	if err != nil {
-		return nil, err
-	}
-	return HTML5(HTML5Props{
-		Head: []Node{
-			StyleEl(Text(`
-				.error {
-					font-weight: bold;
-					color: red;
-				}
-			`)),
-			Script(
-				Src("https://unpkg.com/htmx.org@1.9.6"),
-				Text("htmx.logAll();"),
-			),
-		},
-		Body: []Node{contentNode},
-	}), nil
-}
-
-func htmlNodeHandler(f func(c *serviceContext) (Node, error)) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		node, err := f(c.(*serviceContext))
-		if err != nil {
-			return err
-		}
-		var s strings.Builder
-		if err := node.Render(&s); err != nil {
-			return err
-		}
-		return c.HTML(http.StatusOK, s.String())
-	}
+func fatal(msg string, err error) {
+	slog.Error(msg, "err", err)
+	os.Exit(1)
 }
