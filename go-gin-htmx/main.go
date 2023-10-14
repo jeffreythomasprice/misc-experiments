@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"os"
@@ -38,8 +39,19 @@ func main() {
 		})
 	}
 
-	// TODO customize gin logger
-	g := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	g := gin.New()
+	g.Use(gin.LoggerWithFormatter(func(params gin.LogFormatterParams) string {
+		log.Debug().
+			Int("status code", params.StatusCode).
+			Str("latency", params.Latency.String()).
+			Str("client IP", params.ClientIP).
+			Str("method", params.Method).
+			Str("path", params.Path).
+			Msg("gin")
+		return ""
+	}))
+	g.Use(gin.Recovery())
 
 	templs, err := template.ParseFS(embeddedTemplateAssets, "assets/embed/*")
 	if err != nil {
@@ -64,16 +76,34 @@ func main() {
 		log := log.With().Str("remote addr", r.RemoteAddr).Logger()
 		log.Debug().Msg("websocket connected")
 		if err := m.HandleRequest(w, r); err != nil {
-			// TODO context about remote addr
 			log.Error().Err(err).Msg("error handling websocket")
 		}
 		log.Debug().Msg("websocket disconnected")
 	}))
 	m.HandleMessage(func(s *melody.Session, b []byte) {
-		log.Debug().Str("b", string(b)).Msg("text message")
+		log := log.With().Str("remote addr", s.Request.RemoteAddr).Logger()
+
+		var message struct {
+			Timestamp string `json:"timestamp"`
+		}
+		if err := json.Unmarshal(b, &message); err != nil {
+			log.Error().
+				Err(err).
+				Msg("error parsing websocket message")
+			return
+		}
+
+		if timestamp != message.Timestamp {
+			log.Info().Msg("client is out of date, sending refresh")
+			// TODO send refresh
+		}
 	})
 
-	g.Run("127.0.0.1:8000")
+	addr := "127.0.0.1:8000"
+	log.Info().Str("addr", addr).Msg("starting server")
+	if err := g.Run(addr); err != nil {
+		log.Error().Err(err).Msg("server error")
+	}
 }
 
 type TemplateStringer = func(data any) (string, error)
