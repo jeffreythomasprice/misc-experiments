@@ -1,32 +1,15 @@
 package main
 
 import (
-	"embed"
-	"html/template"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-//go:embed assets/embed/*
-var assetsEmbedFS embed.FS
-
-var assetsEmbedTemplates *template.Template
-
-func init() {
-	var err error
-	assetsEmbedTemplates, err = template.ParseFS(assetsEmbedFS, "assets/embed/*")
-	if err != nil {
-		panic(err)
-	}
-}
-
 func main() {
 	initLogger()
 
 	g := initGin()
-
-	g.SetHTMLTemplate(assetsEmbedTemplates)
 
 	page := pageRenderer(g, &pageRendererOptions{
 		liveReload: true,

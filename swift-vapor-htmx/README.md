@@ -1,4 +1,4 @@
 ```
-docker exec -it swift_server_jeff bash
-watchexec -w Public -w Resources -w Sources -r swift run App
+./docker_exec.sh
+make watch
 ```

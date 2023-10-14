@@ -1,29 +1,27 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"html/template"
 	"net/http"
 	"strings"
 	"time"
 
-	_ "embed"
-
 	"github.com/gin-gonic/gin"
 	"github.com/olahol/melody"
 	"github.com/rs/zerolog/log"
 )
 
-//go:embed assets/embed/liveReload.html
-var liveReloadString string
-
-var liveReloadTemplate *template.Template
-
 type templateStringer = func(data any) (string, error)
+
+//go:embed assets/embed/*
+var assetsEmbedFS embed.FS
+var assetsEmbedTemplates *template.Template
 
 func init() {
 	var err error
-	liveReloadTemplate, err = template.New("").Parse(string(liveReloadString))
+	assetsEmbedTemplates, err = template.ParseFS(assetsEmbedFS, "assets/embed/*")
 	if err != nil {
 		panic(err)
 	}
@@ -41,7 +39,9 @@ type pageRendererOptions struct {
 	liveReload bool
 }
 
-func pageRenderer(g gin.IRouter, options *pageRendererOptions) func(ctx *gin.Context, f templateStringer, fData any) {
+func pageRenderer(g *gin.Engine, options *pageRendererOptions) func(ctx *gin.Context, f templateStringer, fData any) {
+	g.SetHTMLTemplate(assetsEmbedTemplates)
+
 	if options == nil {
 		options = &pageRendererOptions{}
 	}
@@ -66,7 +66,7 @@ func pageRenderer(g gin.IRouter, options *pageRendererOptions) func(ctx *gin.Con
 
 		if liveReloadToken != nil {
 			var s strings.Builder
-			if err := liveReloadTemplate.Execute(&s, map[string]any{
+			if err := assetsEmbedTemplates.ExecuteTemplate(&s, "liveReload.html", map[string]any{
 				"liveReloadToken": *liveReloadToken,
 			}); err != nil {
 				ctx.AbortWithError(http.StatusInternalServerError, err)
