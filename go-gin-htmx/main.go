@@ -140,11 +140,11 @@ func clicks(r gin.IRouter) {
 	clicks := 0
 
 	r.GET("/click", func(ctx *gin.Context) {
-		ctx.HTML(http.StatusOK, "clickResults.html", clicks)
+		ctx.HTML(http.StatusOK, "clickResults", clicks)
 	})
 
 	r.POST("/click", func(ctx *gin.Context) {
 		clicks++
-		ctx.HTML(http.StatusOK, "clickResults.html", clicks)
+		ctx.HTML(http.StatusOK, "clickResults", clicks)
 	})
 }
