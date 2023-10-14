@@ -15,22 +15,9 @@
 <body>
 	{{.content}}
 
-	<div
-		id="wsParent"
-		hx-ext="ws"
-		ws-connect="/ws"
-	>
-		<form
-			ws-send
-			hx-trigger="htmx:wsOpen from:closest [hx-ext=ws]"
-		>
-			<input
-				name="timestamp"
-				type="hidden"
-				value="{{.timestamp}}"
-			/>
-		</form>
-	</div>
+	{{if .liveReloadToken}}
+	{{template "liveReload.html" .}}
+	{{end}}
 </body>
 
 </html>

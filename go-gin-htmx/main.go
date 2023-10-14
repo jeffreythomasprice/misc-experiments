@@ -18,6 +18,16 @@ import (
 //go:embed assets/embed/*
 var embeddedTemplateAssets embed.FS
 
+var embeddedTemplateAssetsTemplates *template.Template
+
+func init() {
+	var err error
+	embeddedTemplateAssetsTemplates, err = template.ParseFS(embeddedTemplateAssets, "assets/embed/*")
+	if err != nil {
+		panic(err)
+	}
+}
+
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
@@ -25,19 +35,6 @@ func main() {
 		Out:        os.Stdout,
 		TimeFormat: time.RFC3339Nano,
 	})
-
-	timestamp := time.Now().Format(time.RFC3339Nano)
-	page := func(ctx *gin.Context, f TemplateStringer, fData any) {
-		content, err := f(fData)
-		if err != nil {
-			ctx.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
-		ctx.HTML(http.StatusOK, "page.html", map[string]any{
-			"content":   template.HTML(content),
-			"timestamp": timestamp,
-		})
-	}
 
 	gin.SetMode(gin.ReleaseMode)
 	g := gin.New()
@@ -51,53 +48,31 @@ func main() {
 			Msg("gin")
 		return ""
 	}))
+
 	g.Use(gin.Recovery())
 
-	templs, err := template.ParseFS(embeddedTemplateAssets, "assets/embed/*")
-	if err != nil {
-		panic(err)
-	}
-	g.SetHTMLTemplate(templs)
-	g.GET("/", func(ctx *gin.Context) {
-		page(ctx, templateStringer(templs, "clicks.html"), nil)
-	})
+	g.SetHTMLTemplate(embeddedTemplateAssetsTemplates)
 
-	clicks := 0
-	g.GET("/click", func(ctx *gin.Context) {
-		ctx.HTML(http.StatusOK, "clickResults.html", clicks)
-	})
-	g.POST("/click", func(ctx *gin.Context) {
-		clicks++
-		ctx.HTML(http.StatusOK, "clickResults.html", clicks)
-	})
-
-	m := melody.New()
-	g.GET("/ws", gin.WrapF(func(w http.ResponseWriter, r *http.Request) {
-		log := log.With().Str("remote addr", r.RemoteAddr).Logger()
-		log.Debug().Msg("websocket connected")
-		if err := m.HandleRequest(w, r); err != nil {
-			log.Error().Err(err).Msg("error handling websocket")
-		}
-		log.Debug().Msg("websocket disconnected")
-	}))
-	m.HandleMessage(func(s *melody.Session, b []byte) {
-		log := log.With().Str("remote addr", s.Request.RemoteAddr).Logger()
-
-		var message struct {
-			Timestamp string `json:"timestamp"`
-		}
-		if err := json.Unmarshal(b, &message); err != nil {
-			log.Error().
-				Err(err).
-				Msg("error parsing websocket message")
+	liveReloadToken := time.Now().Format(time.RFC3339Nano)
+	page := func(ctx *gin.Context, f TemplateStringer, fData any) {
+		content, err := f(fData)
+		if err != nil {
+			ctx.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
+		ctx.HTML(http.StatusOK, "page.html", map[string]any{
+			"content":         template.HTML(content),
+			"liveReloadToken": liveReloadToken,
+		})
+	}
 
-		if timestamp != message.Timestamp {
-			log.Info().Msg("client is out of date, sending refresh")
-			// TODO send refresh
-		}
+	liveReload(g, liveReloadToken)
+
+	g.GET("/", func(ctx *gin.Context) {
+		page(ctx, templateStringer(embeddedTemplateAssetsTemplates, "clicks.html"), nil)
 	})
+
+	clicks(g)
 
 	addr := "127.0.0.1:8000"
 	log.Info().Str("addr", addr).Msg("starting server")
@@ -114,4 +89,62 @@ func templateStringer(t *template.Template, name string) TemplateStringer {
 		err := t.ExecuteTemplate(&s, name, nil)
 		return s.String(), err
 	}
+}
+
+func liveReload(r gin.IRouter, token string) {
+	m := melody.New()
+
+	m.HandleMessage(func(s *melody.Session, b []byte) {
+		log := log.With().Str("remote addr", s.Request.RemoteAddr).Logger()
+
+		var message struct {
+			Token string `json:"liveReloadToken"`
+		}
+		if err := json.Unmarshal(b, &message); err != nil {
+			log.Error().
+				Err(err).
+				Msg("error parsing websocket message")
+			return
+		}
+
+		if token != message.Token {
+			log.Info().Msg("client is out of date, sending refresh")
+			var w strings.Builder
+			if err := embeddedTemplateAssetsTemplates.ExecuteTemplate(&w, "wsReloadWsResponse", nil); err != nil {
+				log.Error().Err(err).Msg("error rendering websocket reload")
+			} else {
+				err := s.Write([]byte(w.String()))
+				if err != nil {
+					log.Error().Err(err).Msg("error writing websocket reload message")
+				}
+			}
+		}
+	})
+
+	r.GET("/liveReload/ws", gin.WrapF(func(w http.ResponseWriter, r *http.Request) {
+		log := log.With().Str("remote addr", r.RemoteAddr).Logger()
+		log.Debug().Msg("websocket connected")
+		if err := m.HandleRequest(w, r); err != nil {
+			log.Error().Err(err).Msg("error handling websocket")
+		}
+		log.Debug().Msg("websocket disconnected")
+	}))
+
+	r.GET("/liveReload/trigger", func(ctx *gin.Context) {
+		ctx.Header("hx-refresh", "true")
+		ctx.String(http.StatusOK, "")
+	})
+}
+
+func clicks(r gin.IRouter) {
+	clicks := 0
+
+	r.GET("/click", func(ctx *gin.Context) {
+		ctx.HTML(http.StatusOK, "clickResults.html", clicks)
+	})
+
+	r.POST("/click", func(ctx *gin.Context) {
+		clicks++
+		ctx.HTML(http.StatusOK, "clickResults.html", clicks)
+	})
 }
