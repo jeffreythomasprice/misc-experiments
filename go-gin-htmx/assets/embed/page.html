@@ -3,8 +3,10 @@
 
 <head>
 	<meta charset="utf-8">
-	<script src="/assets/htmx.js"></script>
-	<script src="/assets/ws.js"></script>
+	<!-- <script src="/assets/htmx.js"></script>
+	<script src="/assets/ws.js"></script> -->
+	<script src="https://unpkg.com/htmx.org@1.9.6"></script>
+	<script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
 	<script>
 		htmx.logAll();
 	</script>
@@ -14,13 +16,13 @@
 	{{.content}}
 
 	<div
+		id="wsParent"
 		hx-ext="ws"
 		ws-connect="/ws"
 	>
-		<!-- TODO can't figure out wsOpen events -->
 		<form
 			ws-send
-			hx-trigger="wsOpen"
+			hx-trigger="htmx:wsOpen from:closest [hx-ext=ws]"
 		>
 			<input
 				name="timestamp"
@@ -28,12 +30,6 @@
 				value="{{.timestamp}}"
 			/>
 		</form>
-		<!-- TODO this div is for testing -->
-		<div
-			id="foo"
-			hx-get="/foobar"
-			hx-trigger="wsOpen"
-		></div>
 	</div>
 </body>
 

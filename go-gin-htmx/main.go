@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	"html/template"
-	"io/fs"
 	"net/http"
 	"os"
 	"strings"
@@ -17,9 +16,6 @@ import (
 
 //go:embed assets/embed/*
 var embeddedTemplateAssets embed.FS
-
-//go:embed assets/*.js
-var embeddedStaticAssets embed.FS
 
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
@@ -45,24 +41,14 @@ func main() {
 	// TODO customize gin logger
 	g := gin.Default()
 
-	{
-		templs, err := template.ParseFS(embeddedTemplateAssets, "assets/embed/*")
-		if err != nil {
-			panic(err)
-		}
-		g.SetHTMLTemplate(templs)
-		g.GET("/", func(ctx *gin.Context) {
-			page(ctx, templateStringer(templs, "clicks.html"), nil)
-		})
+	templs, err := template.ParseFS(embeddedTemplateAssets, "assets/embed/*")
+	if err != nil {
+		panic(err)
 	}
-
-	{
-		x, err := fs.Sub(embeddedStaticAssets, "assets")
-		if err != nil {
-			panic(err)
-		}
-		g.StaticFS("/assets", http.FS(x))
-	}
+	g.SetHTMLTemplate(templs)
+	g.GET("/", func(ctx *gin.Context) {
+		page(ctx, templateStringer(templs, "clicks.html"), nil)
+	})
 
 	clicks := 0
 	g.GET("/click", func(ctx *gin.Context) {
