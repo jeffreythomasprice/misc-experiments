@@ -1,0 +1,9 @@
+<button
+	hx-post="/click"
+	hx-target="#clickResults"
+>Click Me</button>
+<div
+	id="clickResults"
+	hx-get="/click"
+	hx-trigger="load"
+></div>

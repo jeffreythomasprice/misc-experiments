@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<script src="/assets/htmx.js"></script>
+	<script src="/assets/ws.js"></script>
+	<script>
+		htmx.logAll();
+	</script>
+</head>
+
+<body>
+	{{.content}}
+
+	<div
+		hx-ext="ws"
+		ws-connect="/ws"
+	>
+		<!-- TODO can't figure out wsOpen events -->
+		<form
+			ws-send
+			hx-trigger="wsOpen"
+		>
+			<input
+				name="timestamp"
+				type="hidden"
+				value="{{.timestamp}}"
+			/>
+		</form>
+		<!-- TODO this div is for testing -->
+		<div
+			id="foo"
+			hx-get="/foobar"
+			hx-trigger="wsOpen"
+		></div>
+	</div>
+</body>
+
+</html>

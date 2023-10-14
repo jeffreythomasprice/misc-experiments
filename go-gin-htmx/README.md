@@ -1,0 +1,3 @@
+```
+watchexec -r go run ./...
+```
