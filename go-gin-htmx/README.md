@@ -1,3 +1,3 @@
 ```
-watchexec -r go run ./...
+./watch.sh
 ```

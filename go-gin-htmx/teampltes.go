@@ -7,12 +7,27 @@ import (
 	"strings"
 	"time"
 
+	_ "embed"
+
 	"github.com/gin-gonic/gin"
 	"github.com/olahol/melody"
 	"github.com/rs/zerolog/log"
 )
 
+//go:embed assets/embed/liveReload.html
+var liveReloadString string
+
+var liveReloadTemplate *template.Template
+
 type templateStringer = func(data any) (string, error)
+
+func init() {
+	var err error
+	liveReloadTemplate, err = template.New("").Parse(string(liveReloadString))
+	if err != nil {
+		panic(err)
+	}
+}
 
 func newTemplateStringer(t *template.Template, name string) templateStringer {
 	return func(data any) (string, error) {
@@ -40,14 +55,29 @@ func pageRenderer(g gin.IRouter, options *pageRendererOptions) func(ctx *gin.Con
 	}
 
 	return func(ctx *gin.Context, f templateStringer, fData any) {
-		content, err := f(fData)
+		fResult, err := f(fData)
 		if err != nil {
 			ctx.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
+		content := []template.HTML{
+			template.HTML(fResult),
+		}
+
+		if liveReloadToken != nil {
+			var s strings.Builder
+			if err := liveReloadTemplate.Execute(&s, map[string]any{
+				"liveReloadToken": *liveReloadToken,
+			}); err != nil {
+				ctx.AbortWithError(http.StatusInternalServerError, err)
+				return
+			}
+
+			content = append(content, template.HTML(s.String()))
+		}
+
 		ctx.HTML(http.StatusOK, "page.html", map[string]any{
-			"content":         template.HTML(content),
-			"liveReloadToken": liveReloadToken,
+			"content": content,
 		})
 	}
 }

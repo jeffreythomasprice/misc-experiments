@@ -11,11 +11,7 @@
 </head>
 
 <body>
-	{{.content}}
-
-	{{if .liveReloadToken}}
-	{{template "liveReload.html" .}}
-	{{end}}
+	{{range .content}}{{.}}{{end}}
 </body>
 
 </html>
