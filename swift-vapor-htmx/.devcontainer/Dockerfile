@@ -1,4 +1,4 @@
-FROM swift:5.8.1
+FROM swift:5.9.0
 
 ARG USERNAME=user
 ARG USER_UID=1000
@@ -11,20 +11,17 @@ RUN groupadd --gid $USER_GID $USERNAME && \
 	echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
 	chmod 0440 /etc/sudoers.d/$USERNAME
 
-RUN apt update
-RUN apt install -y build-essential curl
+RUN apt update && \
+	apt install -y \
+		build-essential \
+		curl \
+		wget
 
-ENV NVM_DIR /usr/local/nvm
-ENV NODE_VERSION 20.7.0
-RUN mkdir -p $NVM_DIR && \
-	curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash && \
-	. $NVM_DIR/nvm.sh && \
-	nvm install $NODE_VERSION && \
-	nvm alias default $NODE_VERSION && \
-	nvm use default
-ENV NODE_PATH $NVM_DIR/v$NODE_VERSION/lib/node_modules
-ENV PATH $NVM_DIR/v$NODE_VERSION/bin:$PATH
+WORKDIR /watchexec
+RUN wget https://github.com/watchexec/watchexec/releases/download/v1.23.0/watchexec-1.23.0-x86_64-unknown-linux-gnu.deb && \
+	dpkg -i watchexec-1.23.0-x86_64-unknown-linux-gnu.deb
 
+WORKDIR /
 RUN git clone https://github.com/apple/swift-format.git
 WORKDIR /swift-format
 RUN git checkout "tags/509.0.0"
@@ -39,4 +36,4 @@ RUN make install
 
 USER $USERNAME
 
-WORKDIR /
+WORKDIR /workspace
