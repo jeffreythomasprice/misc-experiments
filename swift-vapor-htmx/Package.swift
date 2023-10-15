@@ -9,6 +9,7 @@ let package = Package(
 	dependencies: [
 		.package(url: "https://github.com/vapor/vapor.git", from: "4.83.1"),
 		.package(url: "https://github.com/vapor/leaf.git", from: "4.2.4"),
+		.package(url: "https://github.com/vapor/jwt.git", from: "4.0.0"),
 		.package(url: "https://github.com/stephencelis/SQLite.swift.git", from: "0.14.1"),
 	],
 	targets: [
@@ -18,6 +19,7 @@ let package = Package(
 				.product(name: "Leaf", package: "leaf"),
 				.product(name: "Vapor", package: "vapor"),
 				.product(name: "SQLite", package: "SQLite.swift"),
+				.product(name: "JWT", package: "jwt"),
 			]
 		),
 		.testTarget(

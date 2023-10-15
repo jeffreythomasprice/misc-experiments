@@ -1,4 +1,5 @@
 import Dispatch
+import JWT
 import Leaf
 import Logging
 import SQLite
@@ -77,6 +78,27 @@ public func configure(_ app: Application) async throws {
 		log: log,
 		connection: try Connection(.uri("./db.sqlite"))
 	)
+
+	// TODO testing
+	app.jwt.signers.use(.hs256(key: "TODO should be a random string"))
+	struct TestJWTPayload: JWTPayload {
+		let username: String
+		let exp: ExpirationClaim
+
+		func verify(using signer: JWTSigner) throws {
+			try self.exp.verifyNotExpired()
+		}
+	}
+	let expirationDate = Date.now.advanced(by: 60)
+	let jwt = try app.jwt.signers.sign(
+		TestJWTPayload(
+			username: "foobar",
+			exp: ExpirationClaim(
+				value: Date(timeIntervalSince1970: TimeInterval(UInt64(expirationDate.timeIntervalSince1970)))))
+	)
+	log.debug("TODO jwt = \(jwt)")
+	let decodedJwt: TestJWTPayload = try app.jwt.signers.verify(jwt)
+	log.debug("TODO decoded = \(decodedJwt)")
 
 	try routes(app: app, db: db)
 }
