@@ -40,6 +40,29 @@ enum Entrypoint {
 	}
 }
 
+struct AuthMiddleware: AsyncMiddleware {
+	func respond(to request: Vapor.Request, chainingTo next: Vapor.AsyncResponder) async throws -> Vapor.Response {
+		if try await isAuthenticated(request: request) {
+			return try await next.respond(to: request)
+		} else {
+			return request.redirect(to: "/login")
+		}
+	}
+
+	func isAuthenticated(request: Vapor.Request) async throws -> Bool {
+		let log = request.application.logger
+		let auth = request.cookies["auth"]?.string
+		log.debug("auth cookie = \(auth.debugDescription)")
+		switch auth {
+		case .some(_):
+			// TODO validate cookie here
+			return true
+		case .none:
+			return false
+		}
+	}
+}
+
 public func configure(_ app: Application) async throws {
 	let log = app.logger
 
@@ -61,22 +84,18 @@ public func configure(_ app: Application) async throws {
 func routes(app: Application, db: DBService) throws {
 	let log = app.logger
 
+	let authMiddleware = AuthMiddleware()
+
 	app.get { req async throws -> Vapor.Response in
-		return switch req.cookies["auth"]?.string {
-		// TODO actually check if auth is a valid jwt
-		case .some(_):
+		if try await authMiddleware.isAuthenticated(request: req) {
 			req.redirect(to: "/loggedIn")
-		case .none:
+		} else {
 			req.redirect(to: "/login")
 		}
 	}
 
 	app.get("login") { req async throws -> Vapor.View in
 		try await req.view.render("login")
-	}
-
-	app.get("loggedIn") { req async throws -> Vapor.View in
-		try await req.view.render("loggedIn")
 	}
 
 	app.post("api", "login") { req async throws -> Vapor.Response in
@@ -117,6 +136,12 @@ func routes(app: Application, db: DBService) throws {
 					"message": "Unexpected error: \(e)"
 				]
 			).encodeResponse(for: req)
+		}
+	}
+
+	app.group(authMiddleware) {
+		$0.get("loggedIn") { req async throws -> Vapor.View in
+			try await req.view.render("loggedIn")
 		}
 	}
 }
