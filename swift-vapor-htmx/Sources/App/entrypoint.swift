@@ -100,15 +100,16 @@ func routes(app: Application, db: DBService) throws {
 			res.headers.add(name: "hx-location", value: "/loggedIn")
 
 			return res
+
 		// TODO use a struct for errors?
 		case .success(.none):
-
 			return try await req.view.render(
 				"loginError",
 				[
 					"message": "Invalid credentials"
 				]
 			).encodeResponse(for: req)
+
 		case .failure(let e):
 			return try await req.view.render(
 				"loginError",
