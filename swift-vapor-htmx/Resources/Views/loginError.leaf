@@ -1,0 +1,6 @@
+<!-- TODO references css class 'error' -->
+<div
+	id="loginErrors"
+	hx-swap-oob="true"
+	class="error"
+>#(message)</div>

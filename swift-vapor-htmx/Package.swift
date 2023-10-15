@@ -2,31 +2,33 @@
 import PackageDescription
 
 let package = Package(
-    name: "experiment",
-    platforms: [
-       .macOS(.v13)
-    ],
-    dependencies: [
-        // 💧 A server-side Swift web framework.
-        .package(url: "https://github.com/vapor/vapor.git", from: "4.83.1"),
-        // 🍃 An expressive, performant, and extensible templating language built for Swift.
-        .package(url: "https://github.com/vapor/leaf.git", from: "4.2.4"),
-    ],
-    targets: [
-        .executableTarget(
-            name: "App",
-            dependencies: [
-                .product(name: "Leaf", package: "leaf"),
-                .product(name: "Vapor", package: "vapor"),
-            ]
-        ),
-        .testTarget(name: "AppTests", dependencies: [
-            .target(name: "App"),
-            .product(name: "XCTVapor", package: "vapor"),
+	name: "experiment",
+	platforms: [
+		.macOS(.v13)
+	],
+	dependencies: [
+		.package(url: "https://github.com/vapor/vapor.git", from: "4.83.1"),
+		.package(url: "https://github.com/vapor/leaf.git", from: "4.2.4"),
+		.package(url: "https://github.com/stephencelis/SQLite.swift.git", from: "0.14.1"),
+	],
+	targets: [
+		.executableTarget(
+			name: "App",
+			dependencies: [
+				.product(name: "Leaf", package: "leaf"),
+				.product(name: "Vapor", package: "vapor"),
+				.product(name: "SQLite", package: "SQLite.swift"),
+			]
+		),
+		.testTarget(
+			name: "AppTests",
+			dependencies: [
+				.target(name: "App"),
+				.product(name: "XCTVapor", package: "vapor"),
 
-            // Workaround for https://github.com/apple/swift-package-manager/issues/6940
-            .product(name: "Vapor", package: "vapor"),
-            .product(name: "Leaf", package: "leaf"),
-        ])
-    ]
+				// Workaround for https://github.com/apple/swift-package-manager/issues/6940
+				.product(name: "Vapor", package: "vapor"),
+				.product(name: "Leaf", package: "leaf"),
+			]),
+	]
 )

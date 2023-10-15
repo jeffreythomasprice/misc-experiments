@@ -1,5 +1,7 @@
 FROM swift:5.9.0
 
+# setup
+
 ARG USERNAME=user
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
@@ -10,6 +12,8 @@ RUN groupadd --gid $USER_GID $USERNAME && \
 	apt-get install -y sudo && \
 	echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
 	chmod 0440 /etc/sudoers.d/$USERNAME
+
+# build deps
 
 RUN apt update && \
 	apt install -y \
@@ -33,6 +37,13 @@ RUN git clone https://github.com/vapor/toolbox.git
 WORKDIR /toolbox
 RUN git checkout 18.7.1
 RUN make install
+
+# run deps
+
+RUN apt install -y \
+	libsqlite3-dev
+
+# done
 
 USER $USERNAME
 
