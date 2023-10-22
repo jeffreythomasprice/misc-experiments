@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{
+			"path": "client"
+		},
+		{
+			"path": "shared"
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"**/.git": true,
+			"**/.svn": true,
+			"**/.hg": true,
+			"**/CVS": true,
+			"**/.DS_Store": true,
+			"**/Thumbs.db": true,
+			"**/*_templ.go": true,
+		},
+		"go.toolsEnvVars": {
+			"GOARCH": "wasm",
+			"GOOS": "js",
+		}
+	}
+}

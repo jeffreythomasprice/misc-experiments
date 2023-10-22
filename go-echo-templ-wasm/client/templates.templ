@@ -1,0 +1,13 @@
+package main
+
+import "fmt"
+
+templ hello() {
+	<h1>Hello, World!</h1>
+	<button onclick="click">Click Me</button>
+	<div id="clickResults"></div>
+}
+
+templ clicks(count int) {
+	<span>Clicks: { fmt.Sprintf("%d", count) }</span>
+}
