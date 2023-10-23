@@ -1,13 +1,33 @@
 package main
 
-import "fmt"
-
-templ hello() {
-	<h1>Hello, World!</h1>
-	<button onclick="click">Click Me</button>
-	<div id="clickResults"></div>
+templ index() {
+	@loginForm()
 }
 
-templ clicks(count int) {
-	<span>Clicks: { fmt.Sprintf("%d", count) }</span>
+templ loginForm() {
+	<form onsubmit="submit">
+		<div>
+			<label
+ 				for="username"
+			>Username:</label>
+			<input
+ 				type="text"
+ 				name="username"
+ 				placeholder="Username"
+ 				@ref="username"
+			/>
+		</div>
+		<div>
+			<label
+ 				for="password"
+			>Password:</label>
+			<input
+ 				type="password"
+ 				name="password"
+ 				placeholder="Password"
+ 				@ref="password"
+			/>
+		</div>
+		<button type="submit">Login</button>
+	</form>
 }

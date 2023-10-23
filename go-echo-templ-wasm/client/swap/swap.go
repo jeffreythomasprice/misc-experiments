@@ -19,12 +19,14 @@ New elements are created by inserting the given component into the dom via setti
 Any attributes on the new elements where the value matches a key in the dynamic attributes map are replaced by the values from that map.
 Values in the map must be either js.Value or things that you can call js.ValueOf on.
 
+Any elements with the attribute name @ref while be assigned to the given value pointer in the refs array.
+
 The target selectors are evaluated by calling document.querySelector. If no element is found an error is returned.
 
 The method for inserting the resulting elements into the dom is determined by the swap operation. e.g. InnerHTML replaces any content at the
 selected element with the new elements.
 */
-func Swap(component templ.Component, dynamicAttributes map[string]any, targetSelectors string, operation SwapOperation) error {
+func Swap(component templ.Component, dynamicAttributes map[string]any, refs map[string]*js.Value, targetSelectors string, operation SwapOperation) error {
 	// find the target
 	document := js.Global().Get("document")
 	targetElement := document.Call("querySelector", targetSelectors)
@@ -50,20 +52,36 @@ func Swap(component templ.Component, dynamicAttributes map[string]any, targetSel
 	}
 
 	// eval all dynamic attributes
-	if dynamicAttributes != nil {
-		evalProps := func(elem js.Value) error {
+	if dynamicAttributes != nil || refs != nil {
+		var evalProps func(elem js.Value) error
+		evalProps = func(elem js.Value) error {
 			attrs := elem.Get("attributes")
 			for i := 0; i < attrs.Length(); i++ {
 				attr := attrs.Index(i)
 				name := attr.Get("name").String()
 				value := attr.Get("value").String()
-				dyn, exists := dynamicAttributes[value]
-				if exists {
-					dynValue, err := safeJsValueOf(dyn)
-					if err != nil {
-						return fmt.Errorf("failed to set dynamic attribute %v=%v: %w", name, value, err)
+				if dynamicAttributes != nil {
+					dyn, exists := dynamicAttributes[value]
+					if exists {
+						dynValue, err := safeJsValueOf(dyn)
+						if err != nil {
+							return fmt.Errorf("failed to set dynamic attribute %v=%v: %w", name, value, err)
+						}
+						elem.Set(name, dynValue)
 					}
-					elem.Set(name, dynValue)
+				}
+				if name == "@ref" && refs != nil {
+					ptr, ok := refs[value]
+					if !ok {
+						return fmt.Errorf("found ref but no such pointer provided: %v", name)
+					}
+					*ptr = elem
+				}
+			}
+			children := elem.Get("children")
+			for i := 0; i < children.Length(); i++ {
+				if err := evalProps(children.Index(i)); err != nil {
+					return err
 				}
 			}
 			return nil
