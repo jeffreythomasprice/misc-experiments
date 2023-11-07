@@ -12,18 +12,58 @@ open Giraffe
 open Microsoft.AspNetCore.Http
 open System.Net.WebSockets
 open System.Threading
+open Microsoft.Data.Sqlite
+open Dapper
+open System.Collections.Generic
+open System.Threading.Tasks
 
 [<CLIMutable>]
-type HelloWorldResponse = { message: string }
+type User = { username: string }
 
-let helloWorldHandler: HttpHandler =
-    fun (next: HttpFunc) (ctx: HttpContext) ->
+type UserPasswordCheck =
+    | User of User
+    | BadCredentials
+
+let checkUsersPassword (db: SqliteConnection) (username: string) (password: string) : Task<UserPasswordCheck> =
+    task {
+        let! results =
+            db.QueryAsync<User>(
+                "select username from users where username = @username and password = @password",
+                {| username = username
+                   password = password |}
+            )
+
+        return
+            match results |> List.ofSeq with
+            | [ head ] -> User head
+            | []
+            | _ :: _ -> BadCredentials
+    }
+
+[<CLIMutable>]
+type LoginRequest = { username: string; password: string }
+
+let login (db: SqliteConnection) =
+    fun next (ctx: HttpContext) ->
         task {
-            let response: HelloWorldResponse = { message = "Hello, World!" }
-            do! Async.Sleep(TimeSpan.FromSeconds 2)
-            return! Successful.OK response next ctx
+            let! request = ctx.BindJsonAsync<LoginRequest>()
+            printfn "TODO login request = %A" request
+
+            let! user = checkUsersPassword db request.username request.password
+
+            return!
+                (match user with
+                 | User(user) ->
+                     printfn "TODO login successful, user = %A" user
+                     Successful.NO_CONTENT
+                 | BadCredentials ->
+                     printfn "TODO login failed, bad credentials"
+                     RequestErrors.UNAUTHORIZED "TODO scheme" "TODO realm" "TODO message")
+                    next
+                    ctx
         }
 
+// TODO make a typed websocket thing with json parsing? channels?
 let websocketHandler: HttpHandler =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         task {
@@ -67,10 +107,10 @@ let websocketHandler: HttpHandler =
                 return! ServerErrors.INTERNAL_ERROR (text "expected websocket request") next ctx
         }
 
-let webApp =
+let webApp (db: SqliteConnection) =
     choose
         [ choose
-              [ GET >=> route "/" >=> helloWorldHandler
+              [ POST >=> route "/login" >=> (login db)
                 GET >=> route "/ws" >=> websocketHandler ]
           setStatusCode 404 >=> text "Not Found" ]
 
@@ -81,8 +121,30 @@ let errorHandler (ex: Exception) (logger: ILogger) =
 let configureCors (builder: CorsPolicyBuilder) =
     builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader() |> ignore
 
+let dbInit (db: SqliteConnection) =
+    task {
+        let! _ =
+            db.ExecuteAsync
+                @"create table if not exists users (
+                username varchar(256) not null primary key unique,
+                password varcahr(256) not null
+            )"
+
+        let! adminUserCount = db.QuerySingleAsync<int>("select count(*) from users where username = 'admin'")
+
+        if adminUserCount = 0 then
+            let! _ = db.ExecuteAsync "insert into users (username, password) values ('admin', 'admin')"
+            ()
+
+        ()
+    }
+    |> Async.AwaitTask
+
 let configureApp (app: IApplicationBuilder) =
     let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
+
+    use db = new SqliteConnection "Data Source=db.sqlite"
+    dbInit db |> Async.RunSynchronously
 
     (match env.IsDevelopment() with
      | true -> app.UseDeveloperExceptionPage()
@@ -90,7 +152,7 @@ let configureApp (app: IApplicationBuilder) =
         .UseCors(configureCors)
         .UseStaticFiles()
         .UseWebSockets()
-        .UseGiraffe(webApp)
+        .UseGiraffe(webApp db)
 
 let configureServices (services: IServiceCollection) =
     services.AddCors() |> ignore

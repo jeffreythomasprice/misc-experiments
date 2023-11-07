@@ -1,24 +1,8 @@
 import { useEffect, useState } from "react";
 
-interface HelloWorldResponse {
-	message: string;
-}
-
 export function App() {
-	let [message, setMessage] = useState<string | null>(null);
-
 	useEffect(() => {
-		(async () => {
-			const start = Date.now();
-			const response = await fetch("http://localhost:8001");
-			console.log(`status = ${response.status}`);
-			const responseBody: HelloWorldResponse = await response.json();
-			const duration = Date.now() - start;
-			console.log(`response = ${JSON.stringify(responseBody)}`);
-			setMessage(responseBody.message);
-			console.log(`duration = ${duration}`);
-		})();
-
+		// TODO make a typed websocket thing with json parsing?
 		(async () => {
 			const ws = new WebSocket("ws://127.0.0.1:8001/ws");
 			ws.onopen = () => {
@@ -42,9 +26,64 @@ export function App() {
 		})();
 	}, []);
 
-	if (message) {
-		return <div>{message}</div>;
-	}
+	return <Login></Login>;
+}
 
-	return <div>Loading...</div>;
+interface LoginRequest {
+	username: string;
+	password: string;
+}
+
+function Login() {
+	let [username, setUsername] = useState("");
+	let [password, setPassword] = useState("");
+
+	const submit = (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault();
+
+		const request: LoginRequest = { username, password };
+
+		// TODO helper service for interacting with server
+		(async () => {
+			const response = await fetch(
+				"http://localhost:8001/login",
+				{
+					method: "POST",
+					body: JSON.stringify(request),
+				}
+			);
+			if (response.status < 200 || response.status >= 300) {
+				throw new Error(`request failed, status code: ${response.status}`);
+			}
+		})()
+			.catch(err => {
+				console.error("login failed", err);
+			});
+	};
+
+	return <form
+		onSubmit={submit}
+	>
+		<div>
+			<label htmlFor="username">Username: </label>
+			<input
+				type="text"
+				placeholder="Username"
+				name="username"
+				value={username}
+				onChange={(e) => setUsername(e.target.value)}
+			></input>
+		</div>
+		<div>
+			<label htmlFor="password">Password: </label>
+			<input
+				type="password"
+				placeholder="Password"
+				name="password"
+				value={password}
+				onChange={(e) => setPassword(e.target.value)}
+			></input>
+		</div>
+		<button type="submit">Log In</button>
+	</form>;
 }
