@@ -10,6 +10,45 @@ open Microsoft.Extensions.Logging
 open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open System.Globalization
+open Microsoft.Data.Sqlite
+open Dapper
+open System.Reflection
+open System.Data.Common
+open Microsoft.AspNetCore.Http
+
+let initDb (db: DbConnection) =
+    // TODO async?
+    task {
+        let! _ =
+            db.ExecuteAsync
+                @"CREATE TABLE IF NOT EXISTS users (
+                    username STRING NOT NULL UNIQUE PRIMARY KEY,
+                    password STRING NOT NULL
+                )"
+
+        let! _ = db.ExecuteAsync @"INSERT OR IGNORE INTO users (username, password) VALUES (""admin"", ""admin"")"
+        ()
+    }
+
+type CredentialsCheck =
+    | Success
+    | BadCredentials
+
+type Db(db: DbConnection) =
+    member this.CheckUsernameAndPassword (username: string) (password: string) =
+        task {
+            let! count =
+                db.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM users WHERE username = @username AND password = @password",
+                    {| username = username
+                       password = password |}
+                )
+
+            return
+                match count with
+                | 1 -> Success
+                | _ -> BadCredentials
+        }
 
 module Views =
     open Giraffe.ViewEngine
@@ -20,8 +59,9 @@ module Views =
             [ head
                   []
                   [ title [] [ encodedText "F# Experiment" ]
-                    link [ _rel "stylesheet"; _type "text/css"; _href "/main.css" ]
+                    link [ _rel "stylesheet"; _type "text/css"; _href "/index.css" ]
                     script [ _src "https://unpkg.com/htmx.org@1.9.7" ] []
+                    // TODO only in debug mode?
                     script [] [ Text @"htmx.logAll()" ] ]
               body [] content ]
         |> htmlView
@@ -53,33 +93,38 @@ module Views =
         div [ _id "loginErrors"; KeyValue("hx-swap-oob", "true") ] [ encodedText $"TODO login failure: {message}" ]
         |> htmlView
 
+// TODO no
 let mutable clicks = 0
 
+// TODO no
 let clickHandler (_) =
     clicks <- clicks + 1
     Views.clicks (clicks)
 
-let bindFormEnUS<'a> =
-    bindForm<'a> (Some(CultureInfo.CreateSpecificCulture "en-US"))
-
 [<CLIMutable>]
 type LoginRequest = { username: string; password: string }
 
-let loginHandler (_) =
-    bindFormEnUS<LoginRequest> (fun request ->
-        printfn "TODO login request body = %A" request
+let loginHandler (db: Db) : HttpHandler =
+    fun (next: HttpFunc) (ctx: HttpContext) ->
+        task {
+            let! request = ctx.BindFormAsync<LoginRequest>()
 
-        if request.username = "foo" then
-            Views.loginSuccess request.username
-        else
-            Views.loginFailure "invalid credentials")
+            let! result = db.CheckUsernameAndPassword request.username request.password
 
-let webApp =
+            let response =
+                match result with
+                | Success -> Views.loginSuccess request.username
+                | BadCredentials -> Views.loginFailure "invalid credentials"
+
+            return! response next ctx
+        }
+
+let webApp db =
     choose
         [ choose
               [ GET >=> route "/" >=> Views.index ()
                 POST >=> route "/click" >=> warbler clickHandler
-                POST >=> route "/login" >=> warbler loginHandler ]
+                POST >=> route "/login" >=> loginHandler db ]
           // TODO better 404 page
           setStatusCode 404 >=> text "Not Found" ]
 
@@ -91,15 +136,16 @@ let errorHandler (ex: Exception) (logger: ILogger) =
 let configureCors (builder: CorsPolicyBuilder) =
     builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader() |> ignore
 
-let configureApp (app: IApplicationBuilder) =
-    let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
+let configureApp db =
+    fun (app: IApplicationBuilder) ->
+        let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
 
-    (match env.IsDevelopment() with
-     | true -> app.UseDeveloperExceptionPage()
-     | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection())
-        .UseCors(configureCors)
-        .UseStaticFiles()
-        .UseGiraffe(webApp)
+        (match env.IsDevelopment() with
+         | true -> app.UseDeveloperExceptionPage()
+         | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection())
+            .UseCors(configureCors)
+            .UseStaticFiles()
+            .UseGiraffe(webApp db)
 
 let configureServices (services: IServiceCollection) =
     services.AddCors() |> ignore
@@ -112,6 +158,11 @@ let configureLogging (builder: ILoggingBuilder) =
 let main args =
     let contentRoot = Directory.GetCurrentDirectory()
     let webRoot = Path.Combine(contentRoot, "WebRoot")
+    let exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
+    let dbPath = Path.Combine(exeDir, "db.sqlite")
+
+    use db = new SqliteConnection $"Data Source={dbPath}"
+    initDb db |> Async.AwaitTask |> Async.RunSynchronously
 
     Host
         .CreateDefaultBuilder(args)
@@ -120,7 +171,7 @@ let main args =
                 .UseUrls("http://localhost:8000")
                 .UseContentRoot(contentRoot)
                 .UseWebRoot(webRoot)
-                .Configure(Action<IApplicationBuilder> configureApp)
+                .Configure(Action<IApplicationBuilder>(configureApp (Db db)))
                 .ConfigureServices(configureServices)
                 .ConfigureLogging(configureLogging)
             |> ignore)
