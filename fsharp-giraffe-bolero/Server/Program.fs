@@ -1,4 +1,4 @@
-﻿module Experiment.Server
+﻿module Server
 
 open System
 open System.IO
@@ -10,7 +10,6 @@ open Microsoft.Extensions.Logging
 open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open System.Reflection
-open Giraffe.ViewEngine
 
 // TODO no
 let testHandler = setStatusCode 418 >=> text "I'm a teapot!"
