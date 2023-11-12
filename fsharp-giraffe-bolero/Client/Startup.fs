@@ -1,4 +1,4 @@
-namespace Client.Client
+namespace Client
 
 open Microsoft.AspNetCore.Components.WebAssembly.Hosting
 open Microsoft.Extensions.DependencyInjection
@@ -13,7 +13,7 @@ module Program =
         builder.RootComponents.Add<Main.MyApp>("#main")
 
         builder.Services.AddScoped<HttpClient>(fun _ ->
-            // TODO change base addr to the server addr, was builder.HostEnvironment.BaseAddress
+            // TODO change builder.HostEnvironment.BaseAddress to be the server addr and use that
             new HttpClient(BaseAddress = Uri "http://localhost:8001"))
         |> ignore
 

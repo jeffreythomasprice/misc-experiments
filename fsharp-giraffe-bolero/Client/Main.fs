@@ -1,4 +1,4 @@
-module Client.Client.Main
+module Client.Main
 
 open System
 open System.Net.Http
@@ -26,6 +26,7 @@ type Model = { counter: int }
 let initModel = { counter = 0 }
 
 type Message =
+    // TODO no
     | TestApi
     | TestApiSuccess
     | Error of exn
@@ -33,6 +34,7 @@ type Message =
 
 let update (http: HttpClient) message model =
     match message with
+    // TODO no
     | TestApi ->
         let testApi () =
             task {
