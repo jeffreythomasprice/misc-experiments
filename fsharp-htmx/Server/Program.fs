@@ -17,7 +17,6 @@ open System.Data.Common
 open Microsoft.AspNetCore.Http
 
 let initDb (db: DbConnection) =
-    // TODO async?
     task {
         let! _ =
             db.ExecuteAsync
@@ -67,20 +66,15 @@ module Views =
         |> htmlView
 
     let index () =
-        [ button [ KeyValue("hx-post", "/click"); KeyValue("hx-target", "#clickResults") ] [ encodedText "Click Me" ]
-          div [ _id "clickResults" ] []
-          form
-              [ KeyValue("hx-post", "/login"); KeyValue("hx-swap", "none") ]
-              [ div
-                    []
-                    [ label [ _for "username" ] [ encodedText "Username:" ]
-                      input [ _name "username"; _type "text" ] ]
-                div
-                    []
-                    [ label [ _for "password" ] [ encodedText "Password:" ]
-                      input [ _name "password"; _type "password" ] ]
-                button [ _type "submit" ] [ encodedText "Login" ]
-                div [ _id "loginErrors" ] [] ] ]
+        [ form
+              [ _id "login"; KeyValue("hx-post", "/login"); KeyValue("hx-swap", "none") ]
+              [ label [ _for "username" ] [ encodedText "Username:" ]
+                input [ _name "username"; _type "text" ]
+                label [ _for "password" ] [ encodedText "Password:" ]
+                input [ _name "password"; _type "password" ]
+                div [] []
+                div [] [ button [ _type "submit" ] [ encodedText "Login" ] ] ]
+          div [ _id "loginErrors" ] [] ]
         |> htmlPage
 
     let clicks (clicks: int) = Text $"{clicks}" |> htmlView
@@ -90,16 +84,10 @@ module Views =
         |> htmlView
 
     let loginFailure (message: string) =
-        div [ _id "loginErrors"; KeyValue("hx-swap-oob", "true") ] [ encodedText $"TODO login failure: {message}" ]
+        div
+            [ _id "loginErrors"; _class "errors"; KeyValue("hx-swap-oob", "true") ]
+            [ encodedText $"TODO login failure: {message}" ]
         |> htmlView
-
-// TODO no
-let mutable clicks = 0
-
-// TODO no
-let clickHandler (_) =
-    clicks <- clicks + 1
-    Views.clicks (clicks)
 
 [<CLIMutable>]
 type LoginRequest = { username: string; password: string }
@@ -123,7 +111,6 @@ let webApp db =
     choose
         [ choose
               [ GET >=> route "/" >=> Views.index ()
-                POST >=> route "/click" >=> warbler clickHandler
                 POST >=> route "/login" >=> loginHandler db ]
           // TODO better 404 page
           setStatusCode 404 >=> text "Not Found" ]
