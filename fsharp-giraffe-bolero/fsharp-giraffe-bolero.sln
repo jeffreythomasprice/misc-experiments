@@ -7,6 +7,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Client", "Client\Client.fsp
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Server", "Server\Server.fsproj", "{8FA38ADE-0746-4843-B793-8D105F89D7DD}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Shared", "Shared\Shared.fsproj", "{D115AFA2-1683-447F-9348-889E365F9CA1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{8FA38ADE-0746-4843-B793-8D105F89D7DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8FA38ADE-0746-4843-B793-8D105F89D7DD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8FA38ADE-0746-4843-B793-8D105F89D7DD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D115AFA2-1683-447F-9348-889E365F9CA1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D115AFA2-1683-447F-9348-889E365F9CA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D115AFA2-1683-447F-9348-889E365F9CA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D115AFA2-1683-447F-9348-889E365F9CA1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

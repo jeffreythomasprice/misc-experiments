@@ -7,23 +7,18 @@ open Microsoft.AspNetCore.Components
 open Elmish
 open Bolero
 open Bolero.Html
+open Shared
 
-// TODO deduplicate
-[<CLIMutable>]
-type LoginRequest = { username: string; password: string }
-
-// TODO deduplicate
-type LoginResponse = { username: string }
+// TODO authenticated route guards, client side
 
 module LoginForm =
-    open System.Threading
     type Model = { username: string; password: string }
 
     type Message =
         | SetUsername of string
         | SetPassword of string
         | Submit
-        | SubmitSuccess of LoginResponse
+        | SubmitSuccess of Login.Response
         | SubmitError of exn
 
     let init () : Model = { username = ""; password = "" }
@@ -35,7 +30,7 @@ module LoginForm =
         | Submit ->
             printfn "TODO login, model = %A" model
 
-            let submit (request: LoginRequest) =
+            let submit (request: Login.Request) =
                 async {
                     let! response = http.PostAsJsonAsync("/login", request) |> Async.AwaitTask
 
@@ -46,14 +41,15 @@ module LoginForm =
                 Cmd.OfAsync.either
                     (fun _ ->
                         async {
-                            let request: LoginRequest =
+                            let request: Login.Request =
                                 { username = model.username
                                   password = model.password }
 
                             let! response = http.PostAsJsonAsync("/login", request) |> Async.AwaitTask
                             response.EnsureSuccessStatusCode() |> ignore
 
-                            let! responseBody = response.Content.ReadFromJsonAsync<LoginResponse>() |> Async.AwaitTask
+                            let! responseBody = response.Content.ReadFromJsonAsync<Login.Response>() |> Async.AwaitTask
+
                             return responseBody
                         })
                     ()

@@ -14,6 +14,9 @@ open System.Data.Common
 open Dapper
 open Microsoft.Data.Sqlite
 open Microsoft.AspNetCore.Http
+open Shared
+
+// TODO authenticated route guards, server side
 
 let initDb (db: DbConnection) =
     task {
@@ -48,21 +51,15 @@ type Db(db: DbConnection) =
                 | _ -> BadCredentials
         }
 
-// TODO deduplicate
-[<CLIMutable>]
-type LoginRequest = { username: string; password: string }
-
-// TODO deduplicate
-type LoginResponse = { username: string }
-
 let loginHandler (db: Db) : HttpHandler =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         task {
-            let! request = ctx.BindJsonAsync<LoginRequest>()
+            let! request = ctx.BindJsonAsync<Login.Request>()
 
             let! result = db.CheckUsernameAndPassword request.username request.password
 
-            let responseBody: LoginResponse = { username = request.username }
+            // TODO should be issuing a jwt
+            let responseBody: Login.Response = { username = request.username }
 
             return!
                 match result with
