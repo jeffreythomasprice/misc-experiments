@@ -9,3 +9,8 @@
     margin-top: 5px;
     float: right;
 }
+
+.error {
+    color: red;
+    font-weight: bold;
+}

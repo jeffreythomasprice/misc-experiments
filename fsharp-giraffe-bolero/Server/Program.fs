@@ -65,7 +65,9 @@ let loginHandler (db: Db) : HttpHandler =
                 match result with
                 | CredentialsCheck.Success -> Successful.OK responseBody next ctx
                 // | BadCredentials -> Successful.OK (Failure "invalid credentials") next ctx
-                | BadCredentials -> RequestErrors.UNAUTHORIZED "schema" "realm" (Failure "invalid credentials") next ctx
+                | BadCredentials ->
+                    let response: GenericFailureResponse = { message = "invalid credentials" }
+                    RequestErrors.UNAUTHORIZED "schema" "realm" response next ctx
         }
 
 let webApp db =

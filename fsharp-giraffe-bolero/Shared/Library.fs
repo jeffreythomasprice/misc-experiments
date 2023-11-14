@@ -1,5 +1,7 @@
 ﻿namespace Shared
 
+type GenericFailureResponse = { message: string }
+
 module Login =
     type Request = { username: string; password: string }
 
