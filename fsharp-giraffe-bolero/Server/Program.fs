@@ -15,8 +15,37 @@ open Dapper
 open Microsoft.Data.Sqlite
 open Microsoft.AspNetCore.Http
 open Shared
+open Microsoft.AspNetCore.Authentication.JwtBearer
+open Microsoft.IdentityModel.Tokens
+open System.Text
+open System.IdentityModel.Tokens.Jwt
 
-// TODO authenticated route guards, server side
+// TODO logging
+
+// TODO move auth stuff to it's own file
+type JWTService() =
+    let issuer = "TODO issuer"
+    let audience = "TODO audience"
+    let signingKey = SymmetricSecurityKey(Encoding.UTF8.GetBytes("TODO signing key"))
+
+    member this.tokenValidationParameters =
+        TokenValidationParameters(
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = issuer,
+            ValidAudience = audience,
+            IssuerSigningKey = signingKey
+        )
+
+    member this.createToken() =
+        let credentials = SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256)
+
+        let result =
+            JwtSecurityToken(issuer, audience, null, DateTime.Now, DateTime.Now.AddMinutes 60, credentials)
+
+        JwtSecurityTokenHandler().WriteToken(result)
 
 let initDb (db: DbConnection) =
     task {
@@ -31,11 +60,21 @@ let initDb (db: DbConnection) =
         ()
     }
 
+// TODO move auth stuff to it's own file
+let defaultUnauthorized =
+    let response: GenericFailureResponse = { message = "invalid credentials" }
+    RequestErrors.UNAUTHORIZED "Bearer" "TODO realm" response
+
+// TODO move auth stuff to it's own file
+let requiresAuthentication = requiresAuthentication defaultUnauthorized
+
+// TODO move db stuff to it's own file
 type CredentialsCheck =
     | Success
     | BadCredentials
 
-type Db(db: DbConnection) =
+// TODO move db stuff to it's own file
+type DBService(db: DbConnection) =
     member this.CheckUsernameAndPassword (username: string) (password: string) =
         task {
             let! count =
@@ -51,28 +90,34 @@ type Db(db: DbConnection) =
                 | _ -> BadCredentials
         }
 
-let loginHandler (db: Db) : HttpHandler =
+let loginHandler (db: DBService) (jwt: JWTService) : HttpHandler =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         task {
-            let! request = ctx.BindJsonAsync<Login.Request>()
+            try
+                let! request = ctx.BindJsonAsync<Login.Request>()
 
-            let! result = db.CheckUsernameAndPassword request.username request.password
+                let! result = db.CheckUsernameAndPassword request.username request.password
 
-            // TODO should be issuing a jwt
-            let responseBody: Login.Response = { username = request.username }
+                let responseBody: Login.Response =
+                    { username = request.username
+                      token = jwt.createToken () }
 
-            return!
-                match result with
-                | CredentialsCheck.Success -> Successful.OK responseBody next ctx
-                // | BadCredentials -> Successful.OK (Failure "invalid credentials") next ctx
-                | BadCredentials ->
-                    let response: GenericFailureResponse = { message = "invalid credentials" }
-                    RequestErrors.UNAUTHORIZED "schema" "realm" response next ctx
+                return!
+                    match result with
+                    | Success -> Successful.OK responseBody next ctx
+                    | BadCredentials -> defaultUnauthorized next ctx
+            with _ ->
+                return! defaultUnauthorized next ctx
         }
 
-let webApp db =
+// TODO no
+let testHandler (next: HttpFunc) (ctx: HttpContext) = Successful.OK "test" next ctx
+
+let webApp db jwt =
     choose
-        [ choose [ POST >=> route "/login" >=> loginHandler db ]
+        [ choose
+              [ route "/login" >=> POST >=> loginHandler db jwt
+                route "/test" >=> GET >=> requiresAuthentication >=> testHandler ]
           // TODO better 404 page
           setStatusCode 404 >=> text "Not Found" ]
 
@@ -84,20 +129,29 @@ let errorHandler (ex: Exception) (logger: ILogger) =
 let configureCors (builder: CorsPolicyBuilder) =
     builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader() |> ignore
 
-let configureApp db =
-    fun (app: IApplicationBuilder) ->
-        let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
+let configureApp db jwt (app: IApplicationBuilder) =
+    let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
 
-        (match env.IsDevelopment() with
-         | true -> app.UseDeveloperExceptionPage()
-         | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection())
-            .UseCors(configureCors)
-            .UseStaticFiles()
-            .UseGiraffe(webApp db)
+    app.UseAuthentication() |> ignore
 
-let configureServices (services: IServiceCollection) =
+    (match env.IsDevelopment() with
+     | true -> app.UseDeveloperExceptionPage()
+     | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection())
+        .UseCors(configureCors)
+        .UseStaticFiles()
+        .UseGiraffe(webApp db jwt)
+
+let configureServices (jwt: JWTService) (services: IServiceCollection) =
     services.AddCors() |> ignore
     services.AddGiraffe() |> ignore
+
+    services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(fun options ->
+            options.TokenValidationParameters <- jwt.tokenValidationParameters
+
+            ())
+    |> ignore
 
 let configureLogging (builder: ILoggingBuilder) =
     builder.AddConsole().AddDebug() |> ignore
@@ -105,12 +159,15 @@ let configureLogging (builder: ILoggingBuilder) =
 [<EntryPoint>]
 let main args =
     let contentRoot = Directory.GetCurrentDirectory()
-    let webRoot = Path.Combine(contentRoot, "WebRoot")
+    let webRoot = Path.Combine(contentRoot, "wwwroot")
     let exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
     let dbPath = Path.Combine(exeDir, "db.sqlite")
 
     use db = new SqliteConnection $"Data Source={dbPath}"
     initDb db |> Async.AwaitTask |> Async.RunSynchronously
+    let db = DBService db
+
+    let jwt = JWTService()
 
     Host
         .CreateDefaultBuilder(args)
@@ -119,8 +176,8 @@ let main args =
                 .UseUrls("http://localhost:8001")
                 .UseContentRoot(contentRoot)
                 .UseWebRoot(webRoot)
-                .Configure(Action<IApplicationBuilder>(configureApp (Db db)))
-                .ConfigureServices(configureServices)
+                .Configure(configureApp db jwt)
+                .ConfigureServices(configureServices jwt)
                 .ConfigureLogging(configureLogging)
             |> ignore)
         .Build()

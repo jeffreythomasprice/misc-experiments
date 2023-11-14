@@ -1,6 +1,5 @@
 module Client.Main
 
-open System
 open System.Net.Http
 open System.Net.Http.Json
 open Microsoft.AspNetCore.Components
@@ -8,13 +7,14 @@ open Elmish
 open Bolero
 open Bolero.Html
 open Shared
+open System.Net
 
 type Page =
     | [<EndPoint "/login">] Login
     | [<EndPoint "/">] LoggedIn
 
 module LoginForm =
-    open System.Net
+    open System.Net.Http.Headers
 
     type Model =
         { username: string
@@ -69,7 +69,18 @@ module LoginForm =
                     (fun e -> SubmitError { message = e.ToString() })
 
             model, cmd, None
-        | SubmitSuccess response -> model, Cmd.none, Some(LoggedIn)
+        | SubmitSuccess response ->
+            // TODO save token in local store?
+            http.DefaultRequestHeaders.Authorization <- AuthenticationHeaderValue("Bearer", response.token)
+
+            // TODO no
+            task {
+                let! s = http.GetStringAsync("/test") |> Async.AwaitTask
+                printfn "test api = %s" s
+            }
+            |> ignore
+
+            model, Cmd.none, Some(LoggedIn)
         | SubmitError e ->
             { model with
                 errorMessage = Some(e.message) },
@@ -158,7 +169,7 @@ let view model dispatch =
             | LoggedIn -> div { "TODO logged in page" }
     }
 
-type MyApp() =
+type App() =
     inherit ProgramComponent<Model, Message>()
 
     [<Inject>]

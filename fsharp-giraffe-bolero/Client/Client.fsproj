@@ -4,8 +4,8 @@
     <TargetFramework>net7.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Main.fs" />
-    <Compile Include="Startup.fs" />
+    <Compile Include="App.fs" />
+    <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Bolero" Version="0.*" />
