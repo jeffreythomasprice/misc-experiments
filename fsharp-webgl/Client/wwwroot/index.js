@@ -42,3 +42,9 @@ globalThis.init = async (canvas) => {
 };
 
 globalThis.getValue = (target, name) => target[name];
+
+globalThis.arrayToFloat32Array = (array) => {
+    const offset = array + 12;
+    const length = Module.HEAP32[offset >> 2];
+    return new Float32Array(Module.HEAPF32.buffer, offset + 4, length);
+};
