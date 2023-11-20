@@ -18,6 +18,10 @@ type WebGL2RenderingContext(js: IJSInProcessRuntime, context: IJSUnmarshalledObj
 
     member val STATIC_DRAW = js.Invoke<int>("getValue", context, "STATIC_DRAW")
 
+    member val FLOAT = js.Invoke<int>("getValue", context, "FLOAT")
+
+    member val TRIANGLES = js.Invoke<int>("getValue", context, "TRIANGLES")
+
     member this.arrayToFloat32Array(input: single array) =
         (js :?> IJSUnmarshalledRuntime)
             .InvokeUnmarshalled<float32 array, IJSUnmarshalledObjectReference>("arrayToFloat32Array", input)
@@ -72,6 +76,14 @@ type WebGL2RenderingContext(js: IJSInProcessRuntime, context: IJSUnmarshalledObj
     member this.getActiveUniform (program: IJSInProcessObjectReference) (index: int) =
         context.Invoke<IJSInProcessObjectReference>("getActiveUniform", program, index)
 
+    member this.useProgram(program: IJSInProcessObjectReference option) =
+        context.InvokeVoid(
+            "useProgram",
+            (match program with
+             | Some(program) -> program
+             | None -> null)
+        )
+
     member this.createBuffer() =
         context.Invoke<IJSInProcessObjectReference>("createBuffer")
 
@@ -86,3 +98,15 @@ type WebGL2RenderingContext(js: IJSInProcessRuntime, context: IJSUnmarshalledObj
 
     member this.bufferData (typ: int) (data: IJSUnmarshalledObjectReference) (usage: int) =
         context.InvokeVoid("bufferData", typ, data, usage)
+
+    member this.vertexAttribPointer (index: int) (size: int) (typ: int) (normalized: bool) (stride: int) (offset: int) =
+        context.InvokeVoid("vertexAttribPointer", index, size, typ, normalized, stride, offset)
+
+    member this.enableVertexAttribArray(index: int) =
+        context.InvokeVoid("enableVertexAttribArray", index)
+
+    member this.disableVertexAttribArray(index: int) =
+        context.InvokeVoid("disableVertexAttribArray", index)
+
+    member this.drawArrays (mode: int) (first: int) (count: int) =
+        context.InvokeVoid("drawArrays", mode, first, count)

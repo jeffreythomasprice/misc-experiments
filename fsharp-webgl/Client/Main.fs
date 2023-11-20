@@ -108,7 +108,13 @@ type Shader
             Error
                 $"compile error in both vertex and fragment shaders\nvertex shader:\n{vertexShader}\nfragment shader:\n{fragmentShader}"
 
-type Model = unit
+    member this.``use``() = context.useProgram (Some program)
+
+type WebGLModel =
+    { shader: Shader
+      arrayBuffer: IJSInProcessObjectReference }
+
+type Model = { webgl: WebGLModel option }
 
 type Message =
     | Init
@@ -117,7 +123,7 @@ type Message =
     | Animate of context: WebGL2RenderingContext * time: float
     | Resize of context: WebGL2RenderingContext * width: int * height: int
 
-let initModel = (), Cmd.ofMsg Init
+let initModel = { webgl = None }, Cmd.ofMsg Init
 
 let canvasRef = HtmlRef()
 
@@ -148,39 +154,45 @@ let update (js: IJSInProcessRuntime) message model =
                 "
         with
         | Ok(shader) ->
-            use shader = shader
             printfn "TODO shader attributes = %A" shader.attributes
             printfn "TODO shader uniforms = %A" shader.uniforms
-            ()
-        | Error(error) -> printfn "error making shader: %s" error
 
-        let arrayBuffer = context.createBuffer ()
-        context.bindBuffer context.ARRAY_BUFFER (Some arrayBuffer)
+            let arrayBuffer = context.createBuffer ()
+            context.bindBuffer context.ARRAY_BUFFER (Some arrayBuffer)
 
-        context.bufferData
-            context.ARRAY_BUFFER
-            (context.arrayToFloat32Array [| -0.5F; -0.5F; 0.5F; -0.5F; 0.0F; 0.5F |])
-            context.STATIC_DRAW
+            context.bufferData
+                context.ARRAY_BUFFER
+                (context.arrayToFloat32Array [| -0.5F; -0.5F; 0.5F; -0.5F; 0.0F; 0.5F |])
+                context.STATIC_DRAW
 
-        context.bindBuffer context.ARRAY_BUFFER None
+            context.bindBuffer context.ARRAY_BUFFER None
 
-        model, Cmd.none
+            { webgl =
+                Some
+                    { shader = shader
+                      arrayBuffer = arrayBuffer } },
+            Cmd.none
+        | Error(error) ->
+            printfn "error making shader: %s" error
+            model, Cmd.none
 
     | Animate(context, time) ->
         context.clearColor 0.25 0.5 0.75 1
         context.clear context.COLOR_BUFFER_BIT
 
-        (*
-            TODO implement drawing
-
-            use program
-            use array buffer
-            enable vertex attrib
-            vertex pointer
-            draw arrays
-            use array buffer, none
-            use program, none
-        *)
+        match model.webgl with
+        | Some { shader = shader
+                 arrayBuffer = arrayBuffer } ->
+            shader.``use`` ()
+            context.bindBuffer context.ARRAY_BUFFER (Some arrayBuffer)
+            let positionAttribute = shader.attributes["positionAttribute"]
+            context.vertexAttribPointer positionAttribute.index 2 context.FLOAT false 0 0
+            context.enableVertexAttribArray positionAttribute.index
+            context.drawArrays context.TRIANGLES 0 3
+            context.disableVertexAttribArray positionAttribute.index
+            context.bindBuffer context.ARRAY_BUFFER None
+            context.useProgram None
+        | _ -> ()
 
         model, Cmd.none
 
