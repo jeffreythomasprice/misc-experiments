@@ -20,6 +20,8 @@ open Microsoft.IdentityModel.Tokens
 open System.Text
 open System.IdentityModel.Tokens.Jwt
 open System.Security.Claims
+open System.Collections
+open System.Threading.Tasks
 
 // TODO logging
 
@@ -43,8 +45,7 @@ type JWTService() =
         )
 
     member this.createToken(username: string) =
-        let credentials = SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256)
-        let expirationTime = DateTime.Now.AddMinutes 5
+        let expirationTime = DateTime.Now.AddHours 1
 
         let result =
             JwtSecurityToken(
@@ -53,10 +54,19 @@ type JWTService() =
                 [ Claim("username", username) ],
                 DateTime.Now,
                 expirationTime,
-                credentials
+                this.signingCredentials
             )
 
         (JwtSecurityTokenHandler().WriteToken(result), expirationTime)
+
+    member this.validateToken(token: string) =
+        try
+            Some(JwtSecurityTokenHandler().ValidateToken(token, this.tokenValidationParameters))
+        with _ ->
+            None
+
+    member private this.signingCredentials =
+        SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256)
 
 let initDb (db: DbConnection) =
     task {
@@ -74,6 +84,17 @@ let initDb (db: DbConnection) =
 type CredentialsCheckError = | BadCredentials
 
 type DBService(db: DbConnection) =
+    member this.checkUsernameExists(username: string) =
+        task {
+            let! count =
+                db.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM users WHERE username = @username",
+                    {| username = username |}
+                )
+
+            return count = 1
+        }
+
     member this.checkUsernameAndPassword (username: string) (password: string) =
         task {
             let! count =
@@ -89,6 +110,76 @@ type DBService(db: DbConnection) =
                 | _ -> Error BadCredentials
         }
 
+type ExtendedContextService(ctx: HttpContext, db: DBService, jwt: JWTService) =
+    let _user =
+        Lazy<Task<(ClaimsPrincipal * SecurityToken * string) option>>(fun () ->
+            match
+                (ctx.GetCookieValue "Authorization"
+                 |> Option.map (fun token -> jwt.validateToken token)
+                 |> Option.flatten
+                 |> Option.map (fun (principal, token) ->
+                     match principal.Claims |> Seq.tryFind (fun x -> x.Type = "username") with
+                     | Some(username) -> Some(principal, token, username.Value)
+                     | None -> None)
+                 |> Option.flatten)
+            with
+            | Some(principal, token, username) ->
+                task {
+                    let! exists = db.checkUsernameExists username
+
+                    return
+                        match exists with
+                        | true ->
+                            printfn "TODO put logging here, is logged in: %s" username
+                            Some(principal, token, username)
+                        | false ->
+                            printfn "TODO put logging here, has token, but no such user: %s" username
+                            None
+                }
+            | None ->
+                printfn "TODO put logging here, no token"
+                Task.FromResult(None))
+
+    member val user = _user.Value
+
+module RouteUtils =
+    let ifAuthenticated (other: HttpHandler) : HttpHandler =
+        fun (next: HttpFunc) (ctx: HttpContext) ->
+            task {
+                let extCtx = ctx.RequestServices.GetService<ExtendedContextService>()
+                let! auth = extCtx.user
+
+                if auth.IsSome then
+                    return! other next ctx
+                else
+                    return! next ctx
+            }
+
+    let ifNotAuthenticated (other: HttpHandler) : HttpHandler =
+        fun (next: HttpFunc) (ctx: HttpContext) ->
+            task {
+                let extCtx = ctx.RequestServices.GetService<ExtendedContextService>()
+                let! auth = extCtx.user
+
+                if auth.IsSome then
+                    return! next ctx
+                else
+                    return! other next ctx
+            }
+
+    let htmxRedirect (location: string) : HttpHandler =
+        fun (next: HttpFunc) (ctx: HttpContext) ->
+            if ctx.TryGetRequestHeader("hx-request").IsSome then
+                ctx.SetHttpHeader("hx-redirect", location)
+                next ctx
+            else
+                redirectTo false location next ctx
+
+    let redirectIfAuthenticated: HttpHandler = ifAuthenticated (htmxRedirect "/")
+
+    let redirectIfNotAuthenticated: HttpHandler =
+        ifNotAuthenticated (htmxRedirect "/login")
+
 module Views =
     open Giraffe.ViewEngine
 
@@ -99,13 +190,16 @@ module Views =
                   []
                   [ title [] [ encodedText "F# Experiment" ]
                     link [ _rel "stylesheet"; _type "text/css"; _href "/index.css" ]
-                    script [ _src "https://unpkg.com/htmx.org@1.9.7" ] []
+                    script [ _src "https://unpkg.com/htmx.org@1.9.9" ] []
                     // TODO only in debug mode?
                     script [] [ Text @"htmx.logAll()" ] ]
               body [] content ]
         |> htmlView
 
     let index () =
+        [ div [] [ encodedText "Hello, World!" ] ] |> htmlPage
+
+    let loginPage () =
         [ form
               [ _id "login"; KeyValue("hx-post", "/login"); KeyValue("hx-swap", "none") ]
               [ label [ _for "username" ] [ encodedText "Username:" ]
@@ -116,12 +210,6 @@ module Views =
                 div [] [ button [ _type "submit" ] [ encodedText "Login" ] ] ]
           div [ _id "loginErrors" ] [] ]
         |> htmlPage
-
-    let clicks (clicks: int) = Text $"{clicks}" |> htmlView
-
-    let loginSuccess (username: string) =
-        div [ KeyValue("hx-swap-oob", "innerHTML:body") ] [ encodedText $"TODO login success: {username}" ]
-        |> htmlView
 
     let loginFailure (message: string) =
         div
@@ -144,7 +232,7 @@ let loginHandler (db: DBService) (jwt: JWTService) : HttpHandler =
                 | Ok _ ->
                     let token, expirationTime = jwt.createToken request.username
                     ctx.Response.Cookies.Append("Authorization", token, CookieOptions(Expires = expirationTime))
-                    Views.loginSuccess request.username
+                    RouteUtils.htmxRedirect "/"
                 | Error BadCredentials -> Views.loginFailure "invalid credentials"
 
             return! response next ctx
@@ -153,7 +241,10 @@ let loginHandler (db: DBService) (jwt: JWTService) : HttpHandler =
 let webApp db jwt =
     choose
         [ choose
-              [ GET >=> route "/" >=> Views.index ()
+              [ RouteUtils.redirectIfNotAuthenticated
+                >=> choose [ GET >=> route "/" >=> Views.index () ]
+                RouteUtils.redirectIfAuthenticated
+                >=> choose [ GET >=> route "/login" >=> Views.loginPage () ]
                 POST >=> route "/login" >=> loginHandler db jwt ]
           // TODO better 404 page
           setStatusCode 404 >=> text "Not Found" ]
@@ -177,9 +268,8 @@ let configureApp db jwt =
             .UseStaticFiles()
             .UseGiraffe(webApp db jwt)
 
-let configureServices (jwt: JWTService) (services: IServiceCollection) =
-    services.AddCors() |> ignore
-    services.AddGiraffe() |> ignore
+let configureServices (db: DBService) (jwt: JWTService) (services: IServiceCollection) =
+    services.AddCors().AddHttpContextAccessor().AddGiraffe() |> ignore
 
     services
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -187,6 +277,10 @@ let configureServices (jwt: JWTService) (services: IServiceCollection) =
             options.TokenValidationParameters <- jwt.tokenValidationParameters
 
             ())
+    |> ignore
+
+    services.AddScoped<ExtendedContextService>(fun provider ->
+        ExtendedContextService(provider.GetService<IHttpContextAccessor>().HttpContext, db, jwt))
     |> ignore
 
 let configureLogging (builder: ILoggingBuilder) =
@@ -213,7 +307,7 @@ let main args =
                 .UseContentRoot(contentRoot)
                 .UseWebRoot(webRoot)
                 .Configure(Action<IApplicationBuilder>(configureApp db jwt))
-                .ConfigureServices(configureServices jwt)
+                .ConfigureServices(configureServices db jwt)
                 .ConfigureLogging(configureLogging)
             |> ignore)
         .Build()
