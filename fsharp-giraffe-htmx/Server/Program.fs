@@ -183,7 +183,9 @@ module RouteUtils =
 module Views =
     open Giraffe.ViewEngine
 
-    let htmlPage (content: XmlNode list) =
+    let htmlPage (provider: IServiceProvider) (content: XmlNode list) =
+        let env = provider.GetService<IWebHostEnvironment>()
+
         html
             []
             [ head
@@ -191,15 +193,15 @@ module Views =
                   [ title [] [ encodedText "F# Experiment" ]
                     link [ _rel "stylesheet"; _type "text/css"; _href "/index.css" ]
                     script [ _src "https://unpkg.com/htmx.org@1.9.9" ] []
-                    // TODO only in debug mode?
-                    script [] [ Text @"htmx.logAll()" ] ]
+                    if env.IsDevelopment() then
+                        script [] [ Text @"htmx.logAll()" ] ]
               body [] content ]
         |> htmlView
 
-    let index () =
-        [ div [] [ encodedText "Hello, World!" ] ] |> htmlPage
+    let index (provider: IServiceProvider) =
+        [ div [] [ encodedText "Hello, World!" ] ] |> htmlPage provider
 
-    let loginPage () =
+    let loginPage (provider: IServiceProvider) =
         [ form
               [ _id "login"; KeyValue("hx-post", "/login"); KeyValue("hx-swap", "none") ]
               [ label [ _for "username" ] [ encodedText "Username:" ]
@@ -209,7 +211,7 @@ module Views =
                 div [] []
                 div [] [ button [ _type "submit" ] [ encodedText "Login" ] ] ]
           div [ _id "loginErrors" ] [] ]
-        |> htmlPage
+        |> htmlPage provider
 
     let loginFailure (message: string) =
         div
@@ -238,13 +240,17 @@ let loginHandler (db: DBService) (jwt: JWTService) : HttpHandler =
             return! response next ctx
         }
 
-let webApp db jwt =
+let webApp provider db jwt =
     choose
         [ choose
-              [ RouteUtils.redirectIfNotAuthenticated
-                >=> choose [ GET >=> route "/" >=> Views.index () ]
-                RouteUtils.redirectIfAuthenticated
-                >=> choose [ GET >=> route "/login" >=> Views.loginPage () ]
+              [ GET
+                >=> route "/"
+                >=> RouteUtils.redirectIfNotAuthenticated
+                >=> Views.index provider
+                GET
+                >=> route "/login"
+                >=> RouteUtils.redirectIfAuthenticated
+                >=> Views.loginPage provider
                 POST >=> route "/login" >=> loginHandler db jwt ]
           // TODO better 404 page
           setStatusCode 404 >=> text "Not Found" ]
@@ -261,23 +267,18 @@ let configureApp db jwt =
     fun (app: IApplicationBuilder) ->
         let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
 
-        (match env.IsDevelopment() with
-         | true -> app.UseDeveloperExceptionPage()
-         | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection())
+        match env.IsDevelopment() with
+        | true -> app.UseDeveloperExceptionPage()
+        | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection()
+        |> ignore
+
+        app
             .UseCors(configureCors)
             .UseStaticFiles()
-            .UseGiraffe(webApp db jwt)
+            .UseGiraffe(webApp app.ApplicationServices db jwt)
 
 let configureServices (db: DBService) (jwt: JWTService) (services: IServiceCollection) =
     services.AddCors().AddHttpContextAccessor().AddGiraffe() |> ignore
-
-    services
-        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(fun options ->
-            options.TokenValidationParameters <- jwt.tokenValidationParameters
-
-            ())
-    |> ignore
 
     services.AddScoped<ExtendedContextService>(fun provider ->
         ExtendedContextService(provider.GetService<IHttpContextAccessor>().HttpContext, db, jwt))
