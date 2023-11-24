@@ -29,12 +29,10 @@ let initDb (db: DbConnection) =
         ()
     }
 
-type CredentialsCheck =
-    | Success
-    | BadCredentials
+type CredentialsCheckError = | BadCredentials
 
 type Db(db: DbConnection) =
-    member this.CheckUsernameAndPassword (username: string) (password: string) =
+    member this.checkUsernameAndPassword (username: string) (password: string) =
         task {
             let! count =
                 db.ExecuteScalarAsync<int>(
@@ -45,8 +43,8 @@ type Db(db: DbConnection) =
 
             return
                 match count with
-                | 1 -> Success
-                | _ -> BadCredentials
+                | 1 -> Ok()
+                | _ -> Error BadCredentials
         }
 
 module Views =
@@ -97,12 +95,20 @@ let loginHandler (db: Db) : HttpHandler =
         task {
             let! request = ctx.BindFormAsync<LoginRequest>()
 
-            let! result = db.CheckUsernameAndPassword request.username request.password
+            let! result = db.checkUsernameAndPassword request.username request.password
 
             let response =
                 match result with
-                | Success -> Views.loginSuccess request.username
-                | BadCredentials -> Views.loginFailure "invalid credentials"
+                | Ok _ ->
+                    ctx.Response.Cookies.Append(
+                        "Authorization",
+                        "TODO value",
+                        // TODO real expiration time
+                        CookieOptions(Expires = DateTimeOffset.Now.AddMinutes(5))
+                    )
+
+                    Views.loginSuccess request.username
+                | Error BadCredentials -> Views.loginFailure "invalid credentials"
 
             return! response next ctx
         }
