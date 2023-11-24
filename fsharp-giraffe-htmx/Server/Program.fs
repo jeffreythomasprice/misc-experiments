@@ -15,6 +15,48 @@ open Dapper
 open System.Reflection
 open System.Data.Common
 open Microsoft.AspNetCore.Http
+open Microsoft.AspNetCore.Authentication.JwtBearer
+open Microsoft.IdentityModel.Tokens
+open System.Text
+open System.IdentityModel.Tokens.Jwt
+open System.Security.Claims
+
+// TODO logging
+
+// TODO move auth stuff to it's own file
+type JWTService() =
+    let issuer = "TODO issuer"
+    let audience = "TODO audience"
+
+    let signingKey =
+        SymmetricSecurityKey(Encoding.UTF8.GetBytes("TODO signing key some more bits to get the key size up enough"))
+
+    member this.tokenValidationParameters =
+        TokenValidationParameters(
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = issuer,
+            ValidAudience = audience,
+            IssuerSigningKey = signingKey
+        )
+
+    member this.createToken(username: string) =
+        let credentials = SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256)
+        let expirationTime = DateTime.Now.AddMinutes 5
+
+        let result =
+            JwtSecurityToken(
+                issuer,
+                audience,
+                [ Claim("username", username) ],
+                DateTime.Now,
+                expirationTime,
+                credentials
+            )
+
+        (JwtSecurityTokenHandler().WriteToken(result), expirationTime)
 
 let initDb (db: DbConnection) =
     task {
@@ -31,7 +73,7 @@ let initDb (db: DbConnection) =
 
 type CredentialsCheckError = | BadCredentials
 
-type Db(db: DbConnection) =
+type DBService(db: DbConnection) =
     member this.checkUsernameAndPassword (username: string) (password: string) =
         task {
             let! count =
@@ -90,7 +132,7 @@ module Views =
 [<CLIMutable>]
 type LoginRequest = { username: string; password: string }
 
-let loginHandler (db: Db) : HttpHandler =
+let loginHandler (db: DBService) (jwt: JWTService) : HttpHandler =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         task {
             let! request = ctx.BindFormAsync<LoginRequest>()
@@ -100,24 +142,19 @@ let loginHandler (db: Db) : HttpHandler =
             let response =
                 match result with
                 | Ok _ ->
-                    ctx.Response.Cookies.Append(
-                        "Authorization",
-                        "TODO value",
-                        // TODO real expiration time
-                        CookieOptions(Expires = DateTimeOffset.Now.AddMinutes(5))
-                    )
-
+                    let token, expirationTime = jwt.createToken request.username
+                    ctx.Response.Cookies.Append("Authorization", token, CookieOptions(Expires = expirationTime))
                     Views.loginSuccess request.username
                 | Error BadCredentials -> Views.loginFailure "invalid credentials"
 
             return! response next ctx
         }
 
-let webApp db =
+let webApp db jwt =
     choose
         [ choose
               [ GET >=> route "/" >=> Views.index ()
-                POST >=> route "/login" >=> loginHandler db ]
+                POST >=> route "/login" >=> loginHandler db jwt ]
           // TODO better 404 page
           setStatusCode 404 >=> text "Not Found" ]
 
@@ -129,7 +166,7 @@ let errorHandler (ex: Exception) (logger: ILogger) =
 let configureCors (builder: CorsPolicyBuilder) =
     builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader() |> ignore
 
-let configureApp db =
+let configureApp db jwt =
     fun (app: IApplicationBuilder) ->
         let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
 
@@ -138,11 +175,19 @@ let configureApp db =
          | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection())
             .UseCors(configureCors)
             .UseStaticFiles()
-            .UseGiraffe(webApp db)
+            .UseGiraffe(webApp db jwt)
 
-let configureServices (services: IServiceCollection) =
+let configureServices (jwt: JWTService) (services: IServiceCollection) =
     services.AddCors() |> ignore
     services.AddGiraffe() |> ignore
+
+    services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(fun options ->
+            options.TokenValidationParameters <- jwt.tokenValidationParameters
+
+            ())
+    |> ignore
 
 let configureLogging (builder: ILoggingBuilder) =
     builder.AddConsole().AddDebug() |> ignore
@@ -154,8 +199,11 @@ let main args =
     let exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
     let dbPath = Path.Combine(exeDir, "db.sqlite")
 
-    use db = new SqliteConnection $"Data Source={dbPath}"
-    initDb db |> Async.AwaitTask |> Async.RunSynchronously
+    use dbConn = new SqliteConnection $"Data Source={dbPath}"
+    initDb dbConn |> Async.AwaitTask |> Async.RunSynchronously
+    let db = DBService dbConn
+
+    let jwt = JWTService()
 
     Host
         .CreateDefaultBuilder(args)
@@ -164,8 +212,8 @@ let main args =
                 .UseUrls("http://localhost:8000")
                 .UseContentRoot(contentRoot)
                 .UseWebRoot(webRoot)
-                .Configure(Action<IApplicationBuilder>(configureApp (Db db)))
-                .ConfigureServices(configureServices)
+                .Configure(Action<IApplicationBuilder>(configureApp db jwt))
+                .ConfigureServices(configureServices jwt)
                 .ConfigureLogging(configureLogging)
             |> ignore)
         .Build()

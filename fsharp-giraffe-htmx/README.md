@@ -1,3 +1,4 @@
 ```
+cd Server
 ./watch.sh
 ```
