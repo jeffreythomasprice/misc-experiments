@@ -1,4 +1,4 @@
-module Server.App
+module Experiment.Server.App
 
 open System
 open System.IO
@@ -23,13 +23,10 @@ open System.Security.Claims
 open System.Collections
 open System.Threading.Tasks
 
-// TODO logging
+// TODO move various services out to their own files
 
-// TODO move auth stuff to it's own file
-type JWTService() =
-    let issuer = "TODO issuer"
-    let audience = "TODO audience"
-
+type JWTService(log: ILogger<JWTService>) =
+    // TODO use certs?
     let signingKey =
         SymmetricSecurityKey(Encoding.UTF8.GetBytes("TODO signing key some more bits to get the key size up enough"))
 
@@ -39,8 +36,6 @@ type JWTService() =
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = issuer,
-            ValidAudience = audience,
             IssuerSigningKey = signingKey
         )
 
@@ -49,15 +44,17 @@ type JWTService() =
 
         let result =
             JwtSecurityToken(
-                issuer,
-                audience,
+                null,
+                null,
                 [ Claim("username", username) ],
                 DateTime.Now,
                 expirationTime,
                 this.signingCredentials
             )
 
-        (JwtSecurityTokenHandler().WriteToken(result), expirationTime)
+        let result = (JwtSecurityTokenHandler().WriteToken(result), expirationTime)
+        log.LogTrace("issued {token}", result)
+        result
 
     member this.validateToken(token: string) =
         try
@@ -110,9 +107,12 @@ type DBService(db: DbConnection) =
                 | _ -> Error BadCredentials
         }
 
-type ExtendedContextService(ctx: HttpContext, db: DBService, jwt: JWTService) =
+type ExtendedContextService
+    (log: ILogger<ExtendedContextService>, ctxAcc: IHttpContextAccessor, jwt: JWTService, db: DBService) =
     let _user =
         Lazy<Task<(ClaimsPrincipal * SecurityToken * string) option>>(fun () ->
+            let ctx = ctxAcc.HttpContext
+
             match
                 (ctx.GetCookieValue "Authorization"
                  |> Option.map (fun token -> jwt.validateToken token)
@@ -130,14 +130,14 @@ type ExtendedContextService(ctx: HttpContext, db: DBService, jwt: JWTService) =
                     return
                         match exists with
                         | true ->
-                            printfn "TODO put logging here, is logged in: %s" username
+                            log.LogTrace("{username} is logged in", username)
                             Some(principal, token, username)
                         | false ->
-                            printfn "TODO put logging here, has token, but no such user: %s" username
+                            log.LogTrace("{username} token provided, but no such user", username)
                             None
                 }
             | None ->
-                printfn "TODO put logging here, no token"
+                log.LogTrace("no token provided")
                 Task.FromResult(None))
 
     member val user = _user.Value
@@ -214,33 +214,33 @@ module Views =
         |> htmlPage provider
 
     let loginFailure (message: string) =
-        div
-            [ _id "loginErrors"; _class "errors"; KeyValue("hx-swap-oob", "true") ]
-            [ encodedText $"TODO login failure: {message}" ]
+        div [ _id "loginErrors"; _class "errors"; KeyValue("hx-swap-oob", "true") ] [ encodedText message ]
         |> htmlView
 
 [<CLIMutable>]
 type LoginRequest = { username: string; password: string }
 
-let loginHandler (db: DBService) (jwt: JWTService) : HttpHandler =
+let loginHandler: HttpHandler =
     fun (next: HttpFunc) (ctx: HttpContext) ->
         task {
             let! request = ctx.BindFormAsync<LoginRequest>()
 
+            let db = ctx.GetService<DBService>()
             let! result = db.checkUsernameAndPassword request.username request.password
 
             let response =
                 match result with
                 | Ok _ ->
+                    let jwt = ctx.GetService<JWTService>()
                     let token, expirationTime = jwt.createToken request.username
                     ctx.Response.Cookies.Append("Authorization", token, CookieOptions(Expires = expirationTime))
                     RouteUtils.htmxRedirect "/"
-                | Error BadCredentials -> Views.loginFailure "invalid credentials"
+                | Error BadCredentials -> Views.loginFailure "Invalid credentials."
 
             return! response next ctx
         }
 
-let webApp provider db jwt =
+let webApp provider =
     choose
         [ choose
               [ GET
@@ -251,7 +251,7 @@ let webApp provider db jwt =
                 >=> route "/login"
                 >=> RouteUtils.redirectIfAuthenticated
                 >=> Views.loginPage provider
-                POST >=> route "/login" >=> loginHandler db jwt ]
+                POST >=> route "/login" >=> loginHandler ]
           // TODO better 404 page
           setStatusCode 404 >=> text "Not Found" ]
 
@@ -263,7 +263,7 @@ let errorHandler (ex: Exception) (logger: ILogger) =
 let configureCors (builder: CorsPolicyBuilder) =
     builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader() |> ignore
 
-let configureApp db jwt =
+let configureApp =
     fun (app: IApplicationBuilder) ->
         let env = app.ApplicationServices.GetService<IWebHostEnvironment>()
 
@@ -275,14 +275,23 @@ let configureApp db jwt =
         app
             .UseCors(configureCors)
             .UseStaticFiles()
-            .UseGiraffe(webApp app.ApplicationServices db jwt)
+            .UseGiraffe(webApp app.ApplicationServices)
 
-let configureServices (db: DBService) (jwt: JWTService) (services: IServiceCollection) =
+let configureServices (services: IServiceCollection) =
     services.AddCors().AddHttpContextAccessor().AddGiraffe() |> ignore
 
-    services.AddScoped<ExtendedContextService>(fun provider ->
-        ExtendedContextService(provider.GetService<IHttpContextAccessor>().HttpContext, db, jwt))
+    services.AddSingleton<DBService>(fun _ ->
+        let exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
+        let dbPath = Path.Combine(exeDir, "db.sqlite")
+
+        use dbConn = new SqliteConnection $"Data Source={dbPath}"
+        initDb dbConn |> Async.AwaitTask |> Async.RunSynchronously
+        DBService dbConn)
     |> ignore
+
+    services.AddSingleton<JWTService>() |> ignore
+
+    services.AddScoped<ExtendedContextService>() |> ignore
 
 let configureLogging (builder: ILoggingBuilder) =
     builder.AddConsole().AddDebug() |> ignore
@@ -291,14 +300,6 @@ let configureLogging (builder: ILoggingBuilder) =
 let main args =
     let contentRoot = Directory.GetCurrentDirectory()
     let webRoot = Path.Combine(contentRoot, "WebRoot")
-    let exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
-    let dbPath = Path.Combine(exeDir, "db.sqlite")
-
-    use dbConn = new SqliteConnection $"Data Source={dbPath}"
-    initDb dbConn |> Async.AwaitTask |> Async.RunSynchronously
-    let db = DBService dbConn
-
-    let jwt = JWTService()
 
     Host
         .CreateDefaultBuilder(args)
@@ -307,8 +308,8 @@ let main args =
                 .UseUrls("http://localhost:8000")
                 .UseContentRoot(contentRoot)
                 .UseWebRoot(webRoot)
-                .Configure(Action<IApplicationBuilder>(configureApp db jwt))
-                .ConfigureServices(configureServices db jwt)
+                .Configure(Action<IApplicationBuilder>(configureApp))
+                .ConfigureServices(configureServices)
                 .ConfigureLogging(configureLogging)
             |> ignore)
         .Build()
