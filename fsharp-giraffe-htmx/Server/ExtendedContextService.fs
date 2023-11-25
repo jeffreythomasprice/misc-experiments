@@ -10,7 +10,7 @@ open Giraffe
 type ExtendedContextService
     (log: ILogger<ExtendedContextService>, ctxAcc: IHttpContextAccessor, jwt: JWTService, db: DBService) =
     let _user =
-        Lazy<Task<(ClaimsPrincipal * SecurityToken * string) option>>(fun () ->
+        Lazy<Task<(ClaimsPrincipal * SecurityToken * User) option>>(fun () ->
             let ctx = ctxAcc.HttpContext
 
             match
@@ -25,14 +25,14 @@ type ExtendedContextService
             with
             | Some(principal, token, username) ->
                 task {
-                    let! exists = db.checkUsernameExists username
+                    let! user = db.getUser username
 
                     return
-                        match exists with
-                        | true ->
-                            log.LogTrace("{username} is logged in", username)
-                            Some(principal, token, username)
-                        | false ->
+                        match user with
+                        | Some(user) ->
+                            log.LogTrace("{user} is logged in", user)
+                            Some(principal, token, user)
+                        | None ->
                             log.LogTrace("{username} token provided, but no such user", username)
                             None
                 }
