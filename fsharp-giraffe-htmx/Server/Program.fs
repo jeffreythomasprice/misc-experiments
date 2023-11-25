@@ -72,6 +72,20 @@ module Views =
 
             result next ctx
 
+    let notFound: HttpHandler =
+        fun (next: HttpFunc) (ctx: HttpContext) ->
+            let location = ctx.Request.Path.Value
+
+            let result =
+                [ div [ _class "error" ] [ encodedText (sprintf "Not found: %s" location) ] ]
+                |> htmlPage
+
+            result next ctx
+
+    let errorPage (e: exn) : HttpHandler =
+        [ div [ _class "error" ] [ encodedText (sprintf "Error: %s" e.Message) ] ]
+        |> htmlPage
+
     let index: HttpHandler =
         fun (next: HttpFunc) (ctx: HttpContext) ->
             task {
@@ -103,7 +117,7 @@ module Views =
             result next ctx
 
     let loginFailure (message: string) =
-        div [ _id "loginErrors"; _class "errors"; KeyValue("hx-swap-oob", "true") ] [ encodedText message ]
+        div [ _id "loginErrors"; _class "error"; KeyValue("hx-swap-oob", "true") ] [ encodedText message ]
         |> htmlView
 
 module APIs =
@@ -142,13 +156,11 @@ let webApp =
                 GET >=> route "/login" >=> Routes.redirectIfAuthenticated >=> Views.loginPage
                 POST >=> route "/login" >=> APIs.login
                 POST >=> route "/logout" >=> APIs.logout ]
-          // TODO better 404 page
-          setStatusCode 404 >=> text "Not Found" ]
+          setStatusCode 404 >=> Views.notFound ]
 
-let errorHandler (ex: Exception) (logger: ILogger) =
-    logger.LogError(ex, "An unhandled exception has occurred while executing the request.")
-    // TODO better 500 page
-    clearResponse >=> setStatusCode 500 >=> text ex.Message
+let errorHandler (e: Exception) (log: ILogger) =
+    log.LogError(e, "An unhandled exception has occurred while executing the request.")
+    clearResponse >=> setStatusCode 500 >=> Views.errorPage e
 
 let configureCors (builder: CorsPolicyBuilder) =
     builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader() |> ignore
@@ -159,10 +171,14 @@ let configureApp =
 
         match env.IsDevelopment() with
         | true -> app.UseDeveloperExceptionPage()
-        | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection()
+        | false -> app.UseGiraffeErrorHandler(errorHandler)
         |> ignore
 
-        app.UseCors(configureCors).UseStaticFiles().UseGiraffe(webApp)
+        app
+            .UseHttpsRedirection()
+            .UseCors(configureCors)
+            .UseStaticFiles()
+            .UseGiraffe(webApp)
 
 let configureServices (services: IServiceCollection) =
     services.AddCors().AddHttpContextAccessor().AddGiraffe() |> ignore
