@@ -69,7 +69,9 @@ module Views =
         |> htmlView
 
     let index (provider: IServiceProvider) =
-        [ div [] [ encodedText "Hello, World!" ] ] |> htmlPage provider
+        [ div [] [ button [ KeyValue("hx-post", "/logout") ] [ encodedText "Log Out" ] ]
+          div [] [ encodedText "Hello, World!" ] ]
+        |> htmlPage provider
 
     let loginPage (provider: IServiceProvider) =
         [ form
@@ -91,7 +93,7 @@ module APIs =
     [<CLIMutable>]
     type LoginRequest = { username: string; password: string }
 
-    let loginHandler: HttpHandler =
+    let login: HttpHandler =
         fun (next: HttpFunc) (ctx: HttpContext) ->
             task {
                 let! request = ctx.BindFormAsync<LoginRequest>()
@@ -111,6 +113,11 @@ module APIs =
                 return! response next ctx
             }
 
+    let logout: HttpHandler =
+        fun (next: HttpFunc) (ctx: HttpContext) ->
+            ctx.Response.Cookies.Delete("Authorization")
+            Routes.htmxRedirect "/login" next ctx
+
 let webApp provider =
     choose
         [ choose
@@ -119,7 +126,8 @@ let webApp provider =
                 >=> route "/login"
                 >=> Routes.redirectIfAuthenticated
                 >=> Views.loginPage provider
-                POST >=> route "/login" >=> APIs.loginHandler ]
+                POST >=> route "/login" >=> APIs.login
+                POST >=> route "/logout" >=> APIs.logout ]
           // TODO better 404 page
           setStatusCode 404 >=> text "Not Found" ]
 
