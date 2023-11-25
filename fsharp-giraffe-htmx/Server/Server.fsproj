@@ -16,6 +16,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="JWTService.fs" />
+    <Compile Include="DBService.fs" />
+    <Compile Include="ExtendedContextService.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
