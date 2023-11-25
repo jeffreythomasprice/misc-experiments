@@ -53,37 +53,54 @@ module Routes =
         ifNotAuthenticated (htmxRedirect "/login")
 
 module Views =
-    let htmlPage (provider: IServiceProvider) (content: XmlNode list) =
-        let env = provider.GetService<IWebHostEnvironment>()
+    let htmlPage (content: XmlNode list) : HttpHandler =
+        fun (next: HttpFunc) (ctx: HttpContext) ->
+            let env = ctx.GetService<IWebHostEnvironment>()
 
-        html
-            []
-            [ head
-                  []
-                  [ title [] [ encodedText "F# Experiment" ]
-                    link [ _rel "stylesheet"; _type "text/css"; _href "/index.css" ]
-                    script [ _src "https://unpkg.com/htmx.org@1.9.9" ] []
-                    if env.IsDevelopment() then
-                        script [] [ Text @"htmx.logAll()" ] ]
-              body [] content ]
-        |> htmlView
+            let result =
+                html
+                    []
+                    [ head
+                          []
+                          [ title [] [ encodedText "F# Experiment" ]
+                            link [ _rel "stylesheet"; _type "text/css"; _href "/index.css" ]
+                            script [ _src "https://unpkg.com/htmx.org@1.9.9" ] []
+                            if env.IsDevelopment() then
+                                script [] [ Text @"htmx.logAll()" ] ]
+                      body [] content ]
+                |> htmlView
 
-    let index (provider: IServiceProvider) =
-        [ div [] [ button [ KeyValue("hx-post", "/logout") ] [ encodedText "Log Out" ] ]
-          div [] [ encodedText "Hello, World!" ] ]
-        |> htmlPage provider
+            result next ctx
 
-    let loginPage (provider: IServiceProvider) =
-        [ form
-              [ _id "login"; KeyValue("hx-post", "/login"); KeyValue("hx-swap", "none") ]
-              [ label [ _for "username" ] [ encodedText "Username:" ]
-                input [ _name "username"; _type "text"; _autofocus ]
-                label [ _for "password" ] [ encodedText "Password:" ]
-                input [ _name "password"; _type "password" ]
-                div [] []
-                div [] [ button [ _type "submit" ] [ encodedText "Login" ] ] ]
-          div [ _id "loginErrors" ] [] ]
-        |> htmlPage provider
+    let index: HttpHandler =
+        fun (next: HttpFunc) (ctx: HttpContext) ->
+            task {
+                let! user = ctx.GetService<ExtendedContextService>().user
+                let _, _, user = user.Value
+
+                let result =
+                    [ div [] [ button [ KeyValue("hx-post", "/logout") ] [ encodedText "Log Out" ] ]
+                      div [] [ encodedText (sprintf "Hello, %s!" user.username) ] ]
+                    |> htmlPage
+
+                return! result next ctx
+            }
+
+    let loginPage: HttpHandler =
+        fun (next: HttpFunc) (ctx: HttpContext) ->
+            let result =
+                [ form
+                      [ _id "login"; KeyValue("hx-post", "/login"); KeyValue("hx-swap", "none") ]
+                      [ label [ _for "username" ] [ encodedText "Username:" ]
+                        input [ _name "username"; _type "text"; _autofocus ]
+                        label [ _for "password" ] [ encodedText "Password:" ]
+                        input [ _name "password"; _type "password" ]
+                        div [] []
+                        div [] [ button [ _type "submit" ] [ encodedText "Login" ] ] ]
+                  div [ _id "loginErrors" ] [] ]
+                |> htmlPage
+
+            result next ctx
 
     let loginFailure (message: string) =
         div [ _id "loginErrors"; _class "errors"; KeyValue("hx-swap-oob", "true") ] [ encodedText message ]
@@ -118,14 +135,11 @@ module APIs =
             ctx.Response.Cookies.Delete("Authorization")
             Routes.htmxRedirect "/login" next ctx
 
-let webApp provider =
+let webApp =
     choose
         [ choose
-              [ GET >=> route "/" >=> Routes.redirectIfNotAuthenticated >=> Views.index provider
-                GET
-                >=> route "/login"
-                >=> Routes.redirectIfAuthenticated
-                >=> Views.loginPage provider
+              [ GET >=> route "/" >=> Routes.redirectIfNotAuthenticated >=> Views.index
+                GET >=> route "/login" >=> Routes.redirectIfAuthenticated >=> Views.loginPage
                 POST >=> route "/login" >=> APIs.login
                 POST >=> route "/logout" >=> APIs.logout ]
           // TODO better 404 page
@@ -148,10 +162,7 @@ let configureApp =
         | false -> app.UseGiraffeErrorHandler(errorHandler).UseHttpsRedirection()
         |> ignore
 
-        app
-            .UseCors(configureCors)
-            .UseStaticFiles()
-            .UseGiraffe(webApp app.ApplicationServices)
+        app.UseCors(configureCors).UseStaticFiles().UseGiraffe(webApp)
 
 let configureServices (services: IServiceCollection) =
     services.AddCors().AddHttpContextAccessor().AddGiraffe() |> ignore
