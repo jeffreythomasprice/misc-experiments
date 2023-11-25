@@ -77,7 +77,7 @@ module Views =
         [ form
               [ _id "login"; KeyValue("hx-post", "/login"); KeyValue("hx-swap", "none") ]
               [ label [ _for "username" ] [ encodedText "Username:" ]
-                input [ _name "username"; _type "text" ]
+                input [ _name "username"; _type "text"; _autofocus ]
                 label [ _for "password" ] [ encodedText "Password:" ]
                 input [ _name "password"; _type "password" ]
                 div [] []
