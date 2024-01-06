@@ -162,7 +162,7 @@ let update (js: IJSInProcessRuntime) message model =
 
             context.bufferData
                 context.ARRAY_BUFFER
-                (context.arrayToFloat32Array [| -0.5F; -0.5F; 0.5F; -0.5F; 0.0F; 0.5F |])
+                (context.createFloat32ArrayFromArray [| -0.5F; -0.5F; 0.5F; -0.5F; 0.0F; 0.5F |])
                 context.STATIC_DRAW
 
             context.bindBuffer context.ARRAY_BUFFER None

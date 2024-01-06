@@ -22,7 +22,7 @@ type WebGL2RenderingContext(js: IJSInProcessRuntime, context: IJSUnmarshalledObj
 
     member val TRIANGLES = js.Invoke<int>("getValue", context, "TRIANGLES")
 
-    member this.arrayToFloat32Array(input: single array) =
+    member this.createFloat32ArrayFromArray(input: single array) =
         (js :?> IJSUnmarshalledRuntime)
             .InvokeUnmarshalled<float32 array, IJSUnmarshalledObjectReference>("arrayToFloat32Array", input)
 

@@ -1,0 +1,33 @@
+package main
+
+import "strconv"
+
+templ index(state *State) {
+	@page() {
+		<div>Hello, World!</div>
+		@countResults(state)
+		<button
+ 			hx-post="/click"
+ 			hx-target="#clickResults"
+		>Click Me</button>
+	}
+}
+
+templ countResults(state *State) {
+	<div id="clickResults">
+		Count: { strconv.Itoa(state.count) }
+	</div>
+}
+
+templ page() {
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+			<script>htmx.logAll()</script>
+		</head>
+		<body>
+			{ children... }
+		</body>
+	</html>
+}
