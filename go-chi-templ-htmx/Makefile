@@ -15,7 +15,7 @@ clean:
 	rm -rf *_templ.go
 
 run: build
-	./bin/experiment
+	cd bin && ./experiment
 
 watch:
 	watchexec \
