@@ -1,0 +1,65 @@
+package messages
+
+import "fmt"
+
+templ MessagesListAndForm(messages []*Message) {
+	<div id="messagesOuter">
+		<ul>
+			for _, m := range messages {
+				<li id={ fmt.Sprintf("message-%v", m.ID) }>
+					<span>{ m.Message }</span>
+					<button
+ 						hx-get={ fmt.Sprintf("/messages/%v", m.ID) }
+ 						hx-target={ fmt.Sprintf("#message-%v", m.ID) }
+ 						hx-swap="innerHTML"
+					>
+						Edit
+					</button>
+					<button
+ 						hx-delete={ fmt.Sprintf("/messages/%v", m.ID) }
+ 						hx-target="#messagesOuter"
+					>
+						Delete
+					</button>
+				</li>
+			}
+		</ul>
+		<form
+ 			hx-post="/messages"
+ 			hx-target="#messagesOuter"
+		>
+			<input
+ 				name="message"
+ 				type="text"
+ 				placeholder="Message"
+ 				autofocus
+ 				autocomplete="off"
+			/>
+			<button
+ 				type="submit"
+			>
+				New
+			</button>
+		</form>
+	</div>
+}
+
+templ MessageEditForm(message *Message) {
+	<form
+ 		hx-put={ fmt.Sprintf("/messages/%v", message.ID) }
+ 		hx-target="#messagesOuter"
+	>
+		<input
+ 			name="message"
+ 			type="text"
+ 			placeholder="Message"
+ 			autofocus
+ 			autocomplete="off"
+		/>
+		<button
+ 			type="submit"
+		>
+			Submit
+		</button>
+	</form>
+}
