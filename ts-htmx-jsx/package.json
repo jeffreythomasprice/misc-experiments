@@ -1,0 +1,25 @@
+{
+  "name": "ts-htmx-jsx",
+  "scripts": {
+    "build": "tsc",
+    "start": "nodemon --watch src/** --ext ts,tsx --exec 'ts-node src/index.tsx' | pino-pretty -t 'UTC:yyyy-mm-dd\"T\"HH:MM:ss.lo'"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "@types/react-dom": "^18.2.18",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "pino-pretty": "^10.3.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@fastify/formbody": "^7.4.0",
+    "fastify": "^4.25.2",
+    "nodemon": "^3.0.3",
+    "pino": "^8.17.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
