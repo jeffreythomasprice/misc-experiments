@@ -1,4 +1,8 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     extract::State,
@@ -11,6 +15,15 @@ use mustache::Template;
 use serde::Serialize;
 use tracing::*;
 
+/*
+TODO next:
+- "login" form
+    - some new htmx
+    - cookies?
+    - sql for user db
+    - FromRef for the db part (user service?) from the main app state
+*/
+
 #[derive(Clone)]
 struct AppState {
     clicks: Arc<Mutex<u64>>,
@@ -18,19 +31,13 @@ struct AppState {
 }
 
 struct Templates {
-    page: Template,
-    clicks_form: Template,
-    clicks_response: Template,
+    templates: Mutex<RefCell<HashMap<String, Arc<Template>>>>,
 }
 
 impl Templates {
     pub fn new() -> mustache::Result<Templates> {
         Ok(Self {
-            page: mustache::compile_str(include_str!("../templates/page.html"))?,
-            clicks_form: mustache::compile_str(include_str!("../templates/click-form.html"))?,
-            clicks_response: mustache::compile_str(include_str!(
-                "../templates/click-response.html"
-            ))?,
+            templates: Mutex::new(RefCell::new(HashMap::new())),
         })
     }
 
@@ -39,7 +46,10 @@ impl Templates {
         struct Data {
             clicks: u64,
         }
-        self.render_page(self.clicks_form.render_to_string(&Data { clicks })?)
+
+        let template =
+            self.get_template("click form", include_str!("../templates/click-form.html"))?;
+        self.render_page(template.render_to_string(&Data { clicks })?)
     }
 
     pub fn render_click_response(&self, clicks: u64) -> mustache::Result<String> {
@@ -47,7 +57,12 @@ impl Templates {
         struct Data {
             clicks: u64,
         }
-        self.render_page(self.clicks_response.render_to_string(&Data { clicks })?)
+
+        let template = self.get_template(
+            "click response",
+            include_str!("../templates/click-response.html"),
+        )?;
+        self.render_page(template.render_to_string(&Data { clicks })?)
     }
 
     fn render_page(&self, contents: String) -> mustache::Result<String> {
@@ -55,7 +70,22 @@ impl Templates {
         struct Data {
             contents: String,
         }
-        self.page.render_to_string(&Data { contents })
+
+        let template = self.get_template("page", include_str!("../templates/page.html"))?;
+        template.render_to_string(&Data { contents })
+    }
+
+    fn get_template(&self, name: &str, source: &str) -> mustache::Result<Arc<Template>> {
+        let mut templates = self.templates.lock().unwrap();
+        let templates = templates.get_mut();
+        match templates.get(name) {
+            Some(result) => Ok(result.clone()),
+            None => {
+                let result = Arc::new(mustache::compile_str(source)?);
+                templates.insert(name.to_string(), result.clone());
+                Ok(result)
+            }
+        }
     }
 }
 
