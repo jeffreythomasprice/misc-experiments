@@ -47,9 +47,11 @@ impl Templates {
             clicks: u64,
         }
 
-        let template =
-            self.get_template("click form", include_str!("../templates/click-form.html"))?;
-        self.render_page(template.render_to_string(&Data { clicks })?)
+        self.render_page(self.render_template_string(
+            "click form",
+            include_str!("../templates/click-form.html"),
+            &Data { clicks },
+        )?)
     }
 
     pub fn render_click_response(&self, clicks: u64) -> mustache::Result<String> {
@@ -58,11 +60,11 @@ impl Templates {
             clicks: u64,
         }
 
-        let template = self.get_template(
+        self.render_template_string(
             "click response",
             include_str!("../templates/click-response.html"),
-        )?;
-        self.render_page(template.render_to_string(&Data { clicks })?)
+            &Data { clicks },
+        )
     }
 
     fn render_page(&self, contents: String) -> mustache::Result<String> {
@@ -73,6 +75,19 @@ impl Templates {
 
         let template = self.get_template("page", include_str!("../templates/page.html"))?;
         template.render_to_string(&Data { contents })
+    }
+
+    fn render_template_string<T>(
+        &self,
+        name: &str,
+        source: &str,
+        data: &T,
+    ) -> mustache::Result<String>
+    where
+        T: Serialize,
+    {
+        let template = self.get_template(name, source)?;
+        template.render_to_string(data)
     }
 
     fn get_template(&self, name: &str, source: &str) -> mustache::Result<Arc<Template>> {
