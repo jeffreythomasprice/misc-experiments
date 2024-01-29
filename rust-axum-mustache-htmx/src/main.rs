@@ -1,18 +1,17 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+mod templates;
+
+use std::sync::{Arc, Mutex};
 
 use axum::{
-    extract::State,
-    http::StatusCode,
-    response::{Html, IntoResponse, Response},
+    extract::{FromRef, State},
+    http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
+    response::{AppendHeaders, Html, IntoResponse, Response},
     routing::{get, post},
-    Router,
+    Form, Router,
 };
-use mustache::Template;
-use serde::Serialize;
+
+use serde::Deserialize;
+use templates::*;
 use tracing::*;
 
 /*
@@ -26,81 +25,12 @@ TODO next:
 
 #[derive(Clone)]
 struct AppState {
-    clicks: Arc<Mutex<u64>>,
     templates: Arc<Templates>,
 }
 
-struct Templates {
-    templates: Mutex<RefCell<HashMap<String, Arc<Template>>>>,
-}
-
-impl Templates {
-    pub fn new() -> mustache::Result<Templates> {
-        Ok(Self {
-            templates: Mutex::new(RefCell::new(HashMap::new())),
-        })
-    }
-
-    pub fn render_click_form(&self, clicks: u64) -> mustache::Result<String> {
-        #[derive(Serialize)]
-        struct Data {
-            clicks: u64,
-        }
-
-        self.render_page(self.render_template_string(
-            "click form",
-            include_str!("../templates/click-form.html"),
-            &Data { clicks },
-        )?)
-    }
-
-    pub fn render_click_response(&self, clicks: u64) -> mustache::Result<String> {
-        #[derive(Serialize)]
-        struct Data {
-            clicks: u64,
-        }
-
-        self.render_template_string(
-            "click response",
-            include_str!("../templates/click-response.html"),
-            &Data { clicks },
-        )
-    }
-
-    fn render_page(&self, contents: String) -> mustache::Result<String> {
-        #[derive(Serialize)]
-        struct Data {
-            contents: String,
-        }
-
-        let template = self.get_template("page", include_str!("../templates/page.html"))?;
-        template.render_to_string(&Data { contents })
-    }
-
-    fn render_template_string<T>(
-        &self,
-        name: &str,
-        source: &str,
-        data: &T,
-    ) -> mustache::Result<String>
-    where
-        T: Serialize,
-    {
-        let template = self.get_template(name, source)?;
-        template.render_to_string(data)
-    }
-
-    fn get_template(&self, name: &str, source: &str) -> mustache::Result<Arc<Template>> {
-        let mut templates = self.templates.lock().unwrap();
-        let templates = templates.get_mut();
-        match templates.get(name) {
-            Some(result) => Ok(result.clone()),
-            None => {
-                let result = Arc::new(mustache::compile_str(source)?);
-                templates.insert(name.to_string(), result.clone());
-                Ok(result)
-            }
-        }
+impl FromRef<AppState> for Arc<Templates> {
+    fn from_ref(input: &AppState) -> Self {
+        input.templates.clone()
     }
 }
 
@@ -122,6 +52,12 @@ impl From<mustache::Error> for ResponseError {
     }
 }
 
+#[derive(Deserialize)]
+struct LoginForm {
+    username: String,
+    password: String,
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -133,9 +69,9 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(index))
-        .route("/click", post(click))
+        .route("/login", post(login))
+        .route("/index.css", get(index_css))
         .with_state(AppState {
-            clicks: Arc::new(Mutex::new(0)),
             templates: Arc::new(Templates::new().unwrap()),
         });
 
@@ -146,13 +82,23 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn index(State(state): State<AppState>) -> Result<Html<String>, ResponseError> {
-    let clicks = state.clicks.lock().unwrap();
-    Ok(Html(state.templates.render_click_form(*clicks)?))
+async fn index(State(templates): State<Arc<Templates>>) -> Result<Html<String>, ResponseError> {
+    Ok(Html(templates.login_form()?))
 }
 
-async fn click(State(state): State<AppState>) -> Result<Html<String>, ResponseError> {
-    let mut clicks = state.clicks.lock().unwrap();
-    *clicks += 1;
-    Ok(Html(state.templates.render_click_response(*clicks)?))
+async fn login(
+    State(templates): State<Arc<Templates>>,
+    Form(form): Form<LoginForm>,
+) -> Result<Html<String>, ResponseError> {
+    debug!(
+        "TODO username: {}, password: {}",
+        form.username, form.password
+    );
+    todo!()
+}
+
+async fn index_css() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, "text/css".parse().unwrap());
+    (headers, include_str!("../static/index.css"))
 }
