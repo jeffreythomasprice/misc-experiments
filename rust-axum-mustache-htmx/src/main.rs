@@ -1,3 +1,4 @@
+mod db;
 mod templates;
 
 use std::sync::{Arc, Mutex};
@@ -10,7 +11,9 @@ use axum::{
     Form, Router,
 };
 
+use db::*;
 use serde::Deserialize;
+use sqlx::{Connection, Executor, SqliteConnection};
 use templates::*;
 use tracing::*;
 
@@ -26,6 +29,7 @@ TODO next:
 #[derive(Clone)]
 struct AppState {
     templates: Arc<Templates>,
+    db: Arc<DbService>,
 }
 
 impl FromRef<AppState> for Arc<Templates> {
@@ -34,9 +38,16 @@ impl FromRef<AppState> for Arc<Templates> {
     }
 }
 
+impl FromRef<AppState> for Arc<DbService> {
+    fn from_ref(input: &AppState) -> Self {
+        input.db.clone()
+    }
+}
+
 #[derive(Debug)]
 enum ResponseError {
     Mustache(mustache::Error),
+    Sqlx(sqlx::Error),
 }
 
 impl IntoResponse for ResponseError {
@@ -49,6 +60,12 @@ impl IntoResponse for ResponseError {
 impl From<mustache::Error> for ResponseError {
     fn from(value: mustache::Error) -> Self {
         Self::Mustache(value)
+    }
+}
+
+impl From<sqlx::Error> for ResponseError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::Sqlx(value)
     }
 }
 
@@ -67,12 +84,19 @@ async fn main() {
         )
         .init();
 
+    // TODO error logging instead of unwrapping everything
+
+    let db = DbService::new().await.unwrap();
+
+    // TODO axum tracing config?
+
     let app = Router::new()
         .route("/", get(index))
         .route("/login", post(login))
         .route("/index.css", get(index_css))
         .with_state(AppState {
             templates: Arc::new(Templates::new().unwrap()),
+            db: Arc::new(db),
         });
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8000")
@@ -88,13 +112,14 @@ async fn index(State(templates): State<Arc<Templates>>) -> Result<Html<String>, 
 
 async fn login(
     State(templates): State<Arc<Templates>>,
+    State(db): State<Arc<DbService>>,
     Form(form): Form<LoginForm>,
 ) -> Result<Html<String>, ResponseError> {
     debug!(
         "TODO username: {}, password: {}",
         form.username, form.password
     );
-    if form.username == "admin" && form.password == "asdf" {
+    if db.check_password(&form.username, &form.password).await? {
         Ok(Html(templates.logged_in()?))
     } else {
         Ok(Html(templates.error_response(&Messages {
