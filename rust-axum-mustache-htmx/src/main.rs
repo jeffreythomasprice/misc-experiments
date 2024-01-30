@@ -94,7 +94,15 @@ async fn login(
         "TODO username: {}, password: {}",
         form.username, form.password
     );
-    todo!()
+    if form.username == "admin" && form.password == "asdf" {
+        Ok(Html(templates.logged_in()?))
+    } else {
+        Ok(Html(templates.error_response(&Messages {
+            messages: vec![Message {
+                message: "testing".to_string(),
+            }],
+        })?))
+    }
 }
 
 async fn index_css() -> impl IntoResponse {

@@ -7,6 +7,16 @@ use std::{
 use mustache::Template;
 use serde::Serialize;
 
+#[derive(Serialize)]
+pub struct Message {
+    pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct Messages {
+    pub messages: Vec<Message>,
+}
+
 pub struct Templates {
     templates: Mutex<RefCell<HashMap<String, Arc<Template>>>>,
 }
@@ -25,6 +35,25 @@ impl Templates {
         self.render_page(
             "login form",
             include_str!("../templates/login-form.html"),
+            &Data {},
+        )
+    }
+
+    pub fn error_response(&self, data: &Messages) -> mustache::Result<String> {
+        self.render_snippet(
+            "error messages",
+            include_str!("../templates/error-response.html"),
+            data,
+        )
+    }
+
+    pub fn logged_in(&self) -> mustache::Result<String> {
+        #[derive(Serialize)]
+        struct Data {}
+
+        self.render_snippet(
+            "logged in",
+            include_str!("../templates/logged-in.html"),
             &Data {},
         )
     }
