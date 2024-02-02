@@ -1,64 +1,62 @@
 use std::{
-    cell::RefCell,
-    collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc},
 };
 
-use mustache::Template;
 use serde::Serialize;
 
-#[derive(Serialize)]
-pub struct Message {
-    pub message: String,
+pub struct TemplateService {
+    page_template: Arc<mustache::Template>,
 }
 
-#[derive(Serialize)]
-pub struct Messages {
-    pub messages: Vec<Message>,
+pub trait RenderableTemplate {
+    fn render_to_string<T>(&self, data: &T) -> mustache::Result<String>
+    where
+        T: Serialize;
 }
 
-pub struct Templates {
-    templates: Mutex<RefCell<HashMap<String, Arc<Template>>>>,
+pub struct Snippet {
+    template: mustache::Template,
 }
 
-impl Templates {
-    pub fn new() -> mustache::Result<Templates> {
+pub struct Page {
+    page_template: Arc<mustache::Template>,
+    content_template: mustache::Template,
+}
+
+impl TemplateService {
+    pub fn new() -> mustache::Result<TemplateService> {
         Ok(Self {
-            templates: Mutex::new(RefCell::new(HashMap::new())),
+            page_template: Arc::new(mustache::compile_str(include_str!(
+                "../templates/page.html"
+            ))?),
         })
     }
 
-    pub fn login_form(&self) -> mustache::Result<String> {
-        #[derive(Serialize)]
-        struct Data {}
-
-        self.render_page(
-            "login form",
-            include_str!("../templates/login-form.html"),
-            &Data {},
-        )
+    pub fn snippet(&self, source: &str) -> mustache::Result<Snippet> {
+        Ok(Snippet {
+            template: mustache::compile_str(source)?,
+        })
     }
 
-    pub fn error_response(&self, data: &Messages) -> mustache::Result<String> {
-        self.render_snippet(
-            "error messages",
-            include_str!("../templates/error-response.html"),
-            data,
-        )
+    pub fn page(&self, source: &str) -> mustache::Result<Page> {
+        Ok(Page {
+            page_template: self.page_template.clone(),
+            content_template: mustache::compile_str(source)?,
+        })
     }
+}
 
-    pub fn logged_in(&self) -> mustache::Result<String> {
-        #[derive(Serialize)]
-        struct Data {}
-
-        self.render_snippet(
-            "logged in",
-            include_str!("../templates/logged-in.html"),
-            &Data {},
-        )
+impl RenderableTemplate for Snippet {
+    fn render_to_string<T>(&self, data: &T) -> mustache::Result<String>
+    where
+        T: Serialize,
+    {
+        self.template.render_to_string(data)
     }
+}
 
-    fn render_page<T>(&self, name: &str, source: &str, data: &T) -> mustache::Result<String>
+impl RenderableTemplate for Page {
+    fn render_to_string<T>(&self, data: &T) -> mustache::Result<String>
     where
         T: Serialize,
     {
@@ -66,31 +64,8 @@ impl Templates {
         struct Data {
             contents: String,
         }
-
-        let template = self.get_template("page", include_str!("../templates/page.html"))?;
-        template.render_to_string(&Data {
-            contents: self.render_snippet(name, source, data)?,
+        self.page_template.render_to_string(&Data {
+            contents: self.content_template.render_to_string(data)?,
         })
-    }
-
-    fn render_snippet<T>(&self, name: &str, source: &str, data: &T) -> mustache::Result<String>
-    where
-        T: Serialize,
-    {
-        let template = self.get_template(name, source)?;
-        template.render_to_string(data)
-    }
-
-    fn get_template(&self, name: &str, source: &str) -> mustache::Result<Arc<Template>> {
-        let mut templates = self.templates.lock().unwrap();
-        let templates = templates.get_mut();
-        match templates.get(name) {
-            Some(result) => Ok(result.clone()),
-            None => {
-                let result = Arc::new(mustache::compile_str(source)?);
-                templates.insert(name.to_string(), result.clone());
-                Ok(result)
-            }
-        }
     }
 }

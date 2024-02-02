@@ -1,10 +1,9 @@
 use std::str::FromStr;
 
 use sqlx::{
-    migrate::MigrateDatabase,
     query,
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    Connection, Executor, Row, Sqlite, SqliteConnection, SqlitePool,
+    sqlite::{SqliteConnectOptions},
+    Connection, Executor, Row, SqlitePool,
 };
 use tracing::*;
 

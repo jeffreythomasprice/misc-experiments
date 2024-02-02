@@ -1,38 +1,29 @@
 mod db;
 mod templates;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 
 use axum::{
     extract::{FromRef, State},
-    http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
-    response::{AppendHeaders, Html, IntoResponse, Response},
+    http::{header::CONTENT_TYPE, HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     Form, Router,
 };
 
 use db::*;
-use serde::Deserialize;
-use sqlx::{Connection, Executor, SqliteConnection};
+use serde::{Deserialize, Serialize};
+
 use templates::*;
 use tracing::*;
 
-/*
-TODO next:
-- "login" form
-    - some new htmx
-    - cookies?
-    - sql for user db
-    - FromRef for the db part (user service?) from the main app state
-*/
-
 #[derive(Clone)]
 struct AppState {
-    templates: Arc<Templates>,
+    templates: Arc<TemplateService>,
     db: Arc<DbService>,
 }
 
-impl FromRef<AppState> for Arc<Templates> {
+impl FromRef<AppState> for Arc<TemplateService> {
     fn from_ref(input: &AppState) -> Self {
         input.templates.clone()
     }
@@ -95,7 +86,7 @@ async fn main() {
         .route("/login", post(login))
         .route("/index.css", get(index_css))
         .with_state(AppState {
-            templates: Arc::new(Templates::new().unwrap()),
+            templates: Arc::new(TemplateService::new().unwrap()),
             db: Arc::new(db),
         });
 
@@ -106,27 +97,34 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn index(State(templates): State<Arc<Templates>>) -> Result<Html<String>, ResponseError> {
-    Ok(Html(templates.login_form()?))
+async fn index(
+    State(templates): State<Arc<TemplateService>>,
+) -> Result<Html<String>, ResponseError> {
+    Ok(Html(
+        templates
+            .page(include_str!("../templates/login-form.html"))?
+            .render_to_string(&())?,
+    ))
 }
 
 async fn login(
-    State(templates): State<Arc<Templates>>,
+    State(templates): State<Arc<TemplateService>>,
     State(db): State<Arc<DbService>>,
     Form(form): Form<LoginForm>,
 ) -> Result<Html<String>, ResponseError> {
-    debug!(
-        "TODO username: {}, password: {}",
-        form.username, form.password
-    );
     if db.check_password(&form.username, &form.password).await? {
-        Ok(Html(templates.logged_in()?))
+        trace!("login success for {}", form.username);
+        Ok(Html(
+            templates
+                .page(include_str!("../templates/logged-in.html"))?
+                .render_to_string(&())?,
+        ))
     } else {
-        Ok(Html(templates.error_response(&Messages {
-            messages: vec![Message {
-                message: "testing".to_string(),
-            }],
-        })?))
+        trace!("login failed for {}", form.username);
+        Ok(Html(error_response(
+            &templates,
+            &["TODO error message here"],
+        )?))
     }
 }
 
@@ -134,4 +132,25 @@ async fn index_css() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, "text/css".parse().unwrap());
     (headers, include_str!("../static/index.css"))
+}
+
+fn error_response(templates: &TemplateService, messages: &[&str]) -> Result<String, ResponseError> {
+    #[derive(Serialize)]
+    struct Message {
+        message: String,
+    }
+    #[derive(Serialize)]
+    struct Data {
+        messages: Vec<Message>,
+    }
+    Ok(templates
+        .snippet(include_str!("../templates/error-response.html"))?
+        .render_to_string(&Data {
+            messages: messages
+                .iter()
+                .map(|message| Message {
+                    message: message.to_string(),
+                })
+                .collect(),
+        })?)
 }
