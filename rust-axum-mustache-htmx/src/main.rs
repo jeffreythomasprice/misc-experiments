@@ -1,7 +1,7 @@
 mod db;
 mod templates;
 
-use std::sync::{Arc};
+use std::sync::Arc;
 
 use axum::{
     extract::{FromRef, State},
@@ -121,9 +121,9 @@ async fn login(
         ))
     } else {
         trace!("login failed for {}", form.username);
-        Ok(Html(error_response(
+        Ok(Html(error_response_str(
             &templates,
-            &["TODO error message here"],
+            "TODO error message here",
         )?))
     }
 }
@@ -134,23 +134,29 @@ async fn index_css() -> impl IntoResponse {
     (headers, include_str!("../static/index.css"))
 }
 
-fn error_response(templates: &TemplateService, messages: &[&str]) -> Result<String, ResponseError> {
+#[derive(Serialize)]
+struct ErrorMessage {
+    pub message: String,
+}
+
+fn error_response(
+    templates: &TemplateService,
+    messages: &Vec<ErrorMessage>,
+) -> Result<String, ResponseError> {
     #[derive(Serialize)]
-    struct Message {
-        message: String,
-    }
-    #[derive(Serialize)]
-    struct Data {
-        messages: Vec<Message>,
+    struct Data<'a> {
+        messages: &'a Vec<ErrorMessage>,
     }
     Ok(templates
         .snippet(include_str!("../templates/error-response.html"))?
-        .render_to_string(&Data {
-            messages: messages
-                .iter()
-                .map(|message| Message {
-                    message: message.to_string(),
-                })
-                .collect(),
-        })?)
+        .render_to_string(&Data { messages })?)
+}
+
+fn error_response_str(templates: &TemplateService, message: &str) -> Result<String, ResponseError> {
+    error_response(
+        templates,
+        &vec![ErrorMessage {
+            message: message.to_string(),
+        }],
+    )
 }
