@@ -1,11 +1,13 @@
 use std::{
-    sync::{Arc},
+    collections::HashMap,
+    sync::{Arc, Mutex},
 };
 
 use serde::Serialize;
 
 pub struct TemplateService {
     page_template: Arc<mustache::Template>,
+    cache: Mutex<HashMap<String, Arc<mustache::Template>>>,
 }
 
 pub trait RenderableTemplate {
@@ -15,12 +17,12 @@ pub trait RenderableTemplate {
 }
 
 pub struct Snippet {
-    template: mustache::Template,
+    template: Arc<mustache::Template>,
 }
 
 pub struct Page {
     page_template: Arc<mustache::Template>,
-    content_template: mustache::Template,
+    content_template: Arc<mustache::Template>,
 }
 
 impl TemplateService {
@@ -29,19 +31,32 @@ impl TemplateService {
             page_template: Arc::new(mustache::compile_str(include_str!(
                 "../templates/page.html"
             ))?),
+            cache: Mutex::new(HashMap::new()),
         })
     }
 
     pub fn snippet(&self, source: &str) -> mustache::Result<Snippet> {
         Ok(Snippet {
-            template: mustache::compile_str(source)?,
+            template: self.get(source)?,
         })
     }
 
     pub fn page(&self, source: &str) -> mustache::Result<Page> {
         Ok(Page {
             page_template: self.page_template.clone(),
-            content_template: mustache::compile_str(source)?,
+            content_template: self.get(source)?,
+        })
+    }
+
+    fn get(&self, source: &str) -> mustache::Result<Arc<mustache::Template>> {
+        let mut cache = self.cache.lock().unwrap();
+        Ok(match cache.entry(source.to_string()) {
+            std::collections::hash_map::Entry::Occupied(value) => value.get().clone(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let result = Arc::new(mustache::compile_str(source)?);
+                entry.insert(result.clone());
+                result
+            }
         })
     }
 }
