@@ -16,22 +16,19 @@ fn LoginForm(#[prop(into)] on_login: Callback<LoginResponse>) -> impl IntoView {
     let (errors, set_errors) = create_signal::<Vec<String>>(Vec::new());
 
     let (request, set_request) = create_signal::<Option<LoginRequest>>(None);
-    create_local_resource(
-        request,
-        move |request| async move {
-            if let Some(request) = request {
-                match login(&request).await {
-                    Ok(response) => {
-                        set_errors(vec![]);
-                        on_login(response);
-                    }
-                    Err(message) => {
-                        set_errors(vec![message]);
-                    }
+    create_local_resource(request, move |request| async move {
+        if let Some(request) = request {
+            match login(&request).await {
+                Ok(response) => {
+                    set_errors(vec![]);
+                    on_login(response);
+                }
+                Err(message) => {
+                    set_errors(vec![message]);
                 }
             }
-        },
-    );
+        }
+    });
 
     view! {
         <form
