@@ -1,17 +1,27 @@
 mod db;
+mod websockets;
 
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
-    extract::{ws::WebSocketUpgrade, ConnectInfo, FromRef, State},
+    extract::{
+        ws::{WebSocket, WebSocketUpgrade},
+        ConnectInfo, FromRef, State,
+    },
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use axum_extra::{headers::UserAgent, TypedHeader};
-use db::DbService;
-use shared::{LoginRequest, LoginResponse};
+use futures_util::StreamExt;
+use shared::{
+    LoginRequest, LoginResponse, WebSocketClientToServerMessage, WebSocketServerToClientMessage,
+};
+use tokio::{
+    spawn,
+    task::{spawn_local, LocalSet},
+};
 use tower_http::{
     cors,
     trace::{DefaultMakeSpan, TraceLayer},
@@ -19,14 +29,23 @@ use tower_http::{
 use tracing::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+type WebSocketsService = websockets::Service<WebSocketServerToClientMessage>;
+
 #[derive(Clone)]
 struct AppState {
-    db: Arc<DbService>,
+    db: Arc<db::Service>,
+    websockets: Arc<WebSocketsService>,
 }
 
-impl FromRef<AppState> for Arc<DbService> {
+impl FromRef<AppState> for Arc<db::Service> {
     fn from_ref(input: &AppState) -> Self {
         input.db.clone()
+    }
+}
+
+impl FromRef<AppState> for Arc<WebSocketsService> {
+    fn from_ref(input: &AppState) -> Self {
+        input.websockets.clone()
     }
 }
 
@@ -70,36 +89,46 @@ async fn main() {
         .allow_headers(cors::Any);
 
     // TODO error handling
-    let db = DbService::new().await.unwrap();
+    let db = db::Service::new().await.unwrap();
 
     let app = Router::new()
         .route("/login", post(login_handler))
         .route("/ws", get(websocket_handler))
-        .with_state(AppState { db: Arc::new(db) })
+        .with_state(AppState {
+            db: Arc::new(db),
+            websockets: Arc::new(WebSocketsService::new()),
+        })
         .layer(cors)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
         );
 
+    // let local_set = LocalSet::new();
+    // local_set
+    //     .run_until(async move {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8001")
         .await
         .unwrap();
     info!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
+    // })
+    // .await;
 }
 
 async fn login_handler(
-    State(db): State<Arc<DbService>>,
+    State(db): State<Arc<db::Service>>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, Error> {
     debug!("login request: {request:?}");
-    if db
+    if let Some(user) = db
         .check_password(&request.username, &request.password)
         .await?
     {
-        debug!("auth successful");
-        Ok(Json(LoginResponse {}))
+        debug!("auth successful: {user:?}");
+        Ok(Json(LoginResponse {
+            username: user.username,
+        }))
     } else {
         debug!("auth failed");
         Err(Error::Unauthorized)
@@ -107,16 +136,47 @@ async fn login_handler(
 }
 
 async fn websocket_handler(
-    _ws: WebSocketUpgrade,
-    user_agent: Option<TypedHeader<UserAgent>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(service): State<Arc<WebSocketsService>>,
+    ws: WebSocketUpgrade,
+    // user_agent: Option<TypedHeader<UserAgent>>,
+    // ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
-    let user_agent = user_agent
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| "<failed to parse header>".to_string());
-    debug!("new websocket connection, user agent = {user_agent}, addr = {addr}");
+    // let user_agent = user_agent
+    //     .map(|value| value.to_string())
+    //     .unwrap_or_else(|| "<failed to parse header>".to_string());
+    // debug!("new websocket connection, user agent = {user_agent}, addr = {addr}");
 
-    (StatusCode::INTERNAL_SERVER_ERROR, "TODO implement me")
-    // ws.on_upgrade(move |socket| handle_socket(socket, addr))
-    // https://github.com/tokio-rs/axum/blob/main/examples/websockets/src/main.rs
+    async fn f(service: Arc<WebSocketsService>, socket: axum::extract::ws::WebSocket) {
+        let (send, mut receive) = service
+            .client_connected::<WebSocketClientToServerMessage>(socket)
+            .await;
+
+        spawn(async move {
+            if let Err(e) = send.send(WebSocketServerToClientMessage::Placeholder(
+                "TODO hello from server".to_string(),
+            )) {
+                error!("error sending: {e:?}");
+            }
+        });
+
+        // spawn(async move {
+        let mut done = false;
+        while !done {
+            match receive.recv().await {
+                Ok(message) => {
+                    debug!("TODO received: {message:?}");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    done = true;
+                }
+                Err(e) => {
+                    error!("error receiving message: {e:?}");
+                }
+            }
+        }
+        debug!("TODO websocket closed");
+        // });
+    }
+
+    ws.on_upgrade(move |socket| f(service, socket))
 }

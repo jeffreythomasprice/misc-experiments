@@ -1,13 +1,20 @@
 use std::str::FromStr;
 
-use sqlx::{query, sqlite::SqliteConnectOptions, Connection, Executor, Row, SqlitePool};
+use sqlx::{
+    query, query_as, sqlite::SqliteConnectOptions, Connection, Executor, FromRow, Row, SqlitePool,
+};
 use tracing::*;
 
-pub struct DbService {
+pub struct Service {
     pool: SqlitePool,
 }
 
-impl DbService {
+#[derive(Debug, FromRow)]
+pub struct User {
+    pub username: String,
+}
+
+impl Service {
     pub async fn new() -> Result<Self, sqlx::Error> {
         let pool = SqlitePool::connect_with(
             SqliteConnectOptions::from_str("sqlite://sqlite.db")?.create_if_missing(true),
@@ -56,13 +63,11 @@ impl DbService {
         &self,
         username: &str,
         password: &str,
-    ) -> Result<bool, sqlx::Error> {
-        let results: i32 = query("SELECT count(*) FROM users WHERE username = ? AND password = ?")
+    ) -> Result<Option<User>, sqlx::Error> {
+        query_as::<_, User>("SELECT username FROM users WHERE username = ? AND password = ?")
             .bind(username)
             .bind(password)
-            .fetch_one(&self.pool)
-            .await?
-            .get(0);
-        Ok(results == 1)
+            .fetch_optional(&self.pool)
+            .await
     }
 }

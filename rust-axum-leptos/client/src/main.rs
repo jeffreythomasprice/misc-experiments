@@ -1,4 +1,5 @@
 mod requests;
+mod websockets;
 
 use std::panic;
 
@@ -6,7 +7,9 @@ use leptos::*;
 use log::*;
 use requests::http_request_json_body_json_response;
 
-use shared::{LoginRequest, LoginResponse};
+use shared::{
+    LoginRequest, LoginResponse, WebSocketClientToServerMessage, WebSocketServerToClientMessage,
+};
 
 #[component]
 fn LoginForm(#[prop(into)] on_login: Callback<LoginResponse>) -> impl IntoView {
@@ -83,6 +86,53 @@ fn LoginForm(#[prop(into)] on_login: Callback<LoginResponse>) -> impl IntoView {
 }
 
 #[component]
+fn LoggedIn(#[prop()] data: LoginResponse) -> impl IntoView {
+    create_resource(
+        || (),
+        |_| async {
+            // TODO host should be config?
+            match websockets::connect::<
+                WebSocketClientToServerMessage,
+                WebSocketServerToClientMessage,
+            >("ws://localhost:8001/ws")
+            {
+                Ok((send, mut receive)) => {
+                    spawn_local(async move {
+                        let mut done = false;
+                        while !done {
+                            match receive.recv().await {
+                                Ok(message) => {
+                                    debug!("TODO received: {message:?}");
+                                }
+                                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                                    done = true;
+                                }
+                                Err(e) => {
+                                    error!("error receiving message: {e:?}");
+                                }
+                            }
+                        }
+                        debug!("TODO websocket closed");
+                    });
+
+                    if let Err(e) = send.send(WebSocketClientToServerMessage::Placeholder(
+                        "TODO hello from client".to_string(),
+                    )) {
+                        debug!("error sending: {e:?}");
+                    }
+                }
+                Err(e) => {
+                    // TODO put error in front of client
+                    error!("error connecting websocket: {e:?}")
+                }
+            }
+        },
+    );
+
+    view! { <div>{move || format!("Logged in as: {}", data.username)}</div> }
+}
+
+#[component]
 fn App() -> impl IntoView {
     let (login_status, set_login_status) = create_signal::<Option<LoginResponse>>(None);
 
@@ -91,14 +141,10 @@ fn App() -> impl IntoView {
     };
 
     view! {
-        <Show
-            when=move || { login_status().is_some() }
-            fallback=move || view! { <LoginForm on_login=on_login/> }
-        >
-            <div>
-                {move || format!("TODO handle logged in case: {:?}", login_status().unwrap())}
-            </div>
-        </Show>
+        {move || match login_status() {
+            Some(login_status) => view! { <LoggedIn data=login_status/> }.into_view(),
+            None => view! { <LoginForm on_login=on_login/> }.into_view(),
+        }}
     }
 }
 

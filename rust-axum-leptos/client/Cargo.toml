@@ -17,3 +17,4 @@ js-sys = "0.3.67"
 web-sys = { version = "0.3.67", features = ["RequestInit", "Request", "Response", "Headers", "RequestMode", "Window"] }
 wasm-bindgen-futures = "0.4.40"
 serde_json = "1.0.113"
+tokio = { version = "1.36.0", features = ["sync"] }

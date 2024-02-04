@@ -7,4 +7,18 @@ pub struct LoginRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoginResponse {}
+pub struct LoginResponse {
+    pub username: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WebSocketClientToServerMessage {
+    // TODO real messages
+    Placeholder(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WebSocketServerToClientMessage {
+    // TODO real messages
+    Placeholder(String),
+}
