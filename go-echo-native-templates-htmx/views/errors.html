@@ -1,0 +1,11 @@
+{{define "errors"}}
+<div
+	hx-swap-oob="true"
+	id="errors"
+	class="errors"
+>
+	{{range .Messages}}
+	<div>{{.}}</div>
+	{{end}}
+</div>
+{{end}}

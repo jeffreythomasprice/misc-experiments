@@ -1,0 +1,32 @@
+{{define "form"}}
+<form
+	hx-post="/login"
+	hx-swap="none"
+	class="login-form"
+>
+	<div class="grid">
+		<label for="username">Username:</label>
+		<input
+			text="text"
+			name="username"
+			autofocus
+		/>
+		<label for="password">Password:</label>
+		<input
+			type="password"
+			name="password"
+		/>
+		<div class="submit-button">
+			<button type="submit">Login</button>
+		</div>
+	</div>
+</form>
+<div id="errors"></div>
+{{end}}
+
+{{define "success"}}
+<div
+	hx-swap-oob="true"
+	id="root"
+>Logged in</div>
+{{end}}
