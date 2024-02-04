@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	_ "embed"
+	"experiment/db"
 	"experiment/logging"
 	"experiment/views"
 	"net/http"
@@ -22,6 +24,18 @@ func main() {
 	logging.InitEcho(e, log)
 
 	clicks := uint64(0)
+
+	dbService, err := db.NewService(log.WithContext(context.Background()))
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create database")
+	}
+	// TODO testing
+	{
+		ok, err := dbService.CheckPassword("foo", "bar")
+		log.Debug().Bool("ok", ok).Err(err).Msg("foo")
+		ok, err = dbService.CheckPassword("admin", "admin")
+		log.Debug().Bool("ok", ok).Err(err).Msg("admin")
+	}
 
 	e.GET("/", func(c echo.Context) error {
 		return views.ClicksPage(c.Request().Context(), c.Response().Writer, clicks)
