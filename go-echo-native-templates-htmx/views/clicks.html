@@ -1,0 +1,11 @@
+{{define "index"}}
+<div id="clicks-response">{{template "response" .}}</div>
+<button
+	hx-post="/click"
+	hx-target="#clicks-response"
+>Click Me</button>
+{{end}}
+
+{{define "response"}}
+Clicks: {{.Clicks}}
+{{end}}
