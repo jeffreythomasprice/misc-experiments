@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"experiment/auth"
 	"experiment/db"
 	"experiment/logging"
 	"experiment/views"
@@ -31,8 +32,8 @@ func main() {
 	}
 
 	e.GET("/", func(c echo.Context) error {
-		user, err := checkAuthToken(c, dbService)
-		if errors.Is(err, errUnauthorized) {
+		_, user, err := auth.CheckToken(nil, c, dbService)
+		if errors.Is(err, auth.ErrUnauthorized) {
 			return views.NotLoggedInPage(c.Request().Context(), c.Response().Writer)
 		}
 		if err != nil {
@@ -72,7 +73,7 @@ func main() {
 
 		log.Trace().Msg("login successful")
 
-		if err := createAuthToken(log, c, user); err != nil {
+		if err := auth.CreateToken(log, c, user); err != nil {
 			return err
 		}
 
@@ -84,6 +85,19 @@ func main() {
 				IsAdmin:  user.IsAdmin,
 			},
 		)
+	})
+
+	e.POST("/logout", func(c echo.Context) error {
+		log, _, err := auth.CheckToken(nil, c, dbService)
+		if errors.Is(err, auth.ErrUnauthorized) {
+			return views.NotLoggedInPage(c.Request().Context(), c.Response().Writer)
+		}
+		if err != nil {
+			return err
+		}
+		log.Info().Msg("logging out")
+		auth.ClearToken(c)
+		return views.NotLoggedInPage(c.Request().Context(), c.Response().Writer)
 	})
 
 	e.GET("/index.css", func(c echo.Context) error {

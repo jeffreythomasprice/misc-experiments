@@ -1,4 +1,4 @@
-{{define "form"}}
+{{define "notLoggedIn"}}
 <form
 	hx-post="/login"
 	hx-swap="none"
@@ -24,14 +24,27 @@
 <div id="errors"></div>
 {{end}}
 
-{{define "success"}}
+{{define "loggedIn"}}
+{{template "content" .}}
+{{end}}
+
+{{define "response"}}
 <div
 	hx-swap-oob="true"
 	id="root"
 >
-	<div>
-		Logged in as {{.Username}}
-		{{if .IsAdmin}} (admin){{end}}
-	</div>
+	{{template "content" .}}
+</div>
+{{end}}
+
+{{define "content"}}
+<button
+	hx-post="/logout"
+	hx-swap="body"
+	hx-target="body"
+>Log Out</button>
+<div>
+	Logged in as {{.Username}}
+	{{if .IsAdmin}} (admin){{end}}
 </div>
 {{end}}

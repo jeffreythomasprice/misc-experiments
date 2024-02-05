@@ -8,9 +8,9 @@ import (
 
 //go:embed login.html
 var loginSource string
-var notLoggedInPageFunc templateFunc = page(loginSource, "form")
-var loggedInPageFunc templateFunc = page(loginSource, "success")
-var loggedInResponseSnippetFunc templateFunc = snippet(loginSource, "success")
+var notLoggedInPageFunc templateFunc = page(loginSource, "notLoggedIn")
+var loggedInPageFunc templateFunc = page(loginSource, "loggedIn")
+var loggedInResponseSnippetFunc templateFunc = snippet(loginSource, "response")
 
 type User struct {
 	Username string
