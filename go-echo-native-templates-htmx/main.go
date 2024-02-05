@@ -44,22 +44,21 @@ func main() {
 		}
 		log := zerolog.Ctx(c.Request().Context())
 		log.Trace().Str("username", request.Username).Msg("checking login status")
-		ok, err := dbService.CheckPassword(request.Username, request.Password)
+		user, err := dbService.CheckPassword(nil, request.Username, request.Password)
 		if err != nil {
 			return err
 		}
-		if ok {
-			return views.LoggedInResponse(
-				c.Request().Context(),
-				c.Response().Writer,
-				views.User{
-					// TODO don't use request, pull actual data including isAdmin when checking password
-					Username: request.Username,
-				},
-			)
-		} else {
+		if user == nil {
 			return views.ErrorsResponse(c.Request().Context(), c.Response().Writer, "Invalid username or password")
 		}
+		return views.LoggedInResponse(
+			c.Request().Context(),
+			c.Response().Writer,
+			views.User{
+				Username: user.Username,
+				IsAdmin:  user.IsAdmin,
+			},
+		)
 	})
 
 	e.GET("/index.css", func(c echo.Context) error {

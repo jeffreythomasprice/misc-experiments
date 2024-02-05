@@ -2,17 +2,14 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 )
-
-type User struct {
-	Username string `db:"username"`
-	IsAdmin  string `db:"isAdmin"`
-}
 
 type Service struct {
 	log zerolog.Logger
@@ -27,44 +24,19 @@ func NewService(ctx context.Context) (*Service, error) {
 		return nil, err
 	}
 
-	if _, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS users (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			username TEXT NOT NULL,
-			password TEXT NOT NULL,
-			isAdmin BOOLEAN NOT NULL
-		);
-	`); err != nil {
+	result := &Service{
+		log: log,
+		db:  db,
+	}
+
+	if err := result.createUserTable(); err != nil {
 		return nil, err
 	}
 
-	// TODO transaction helper, takes a function that returns error?
-	tx, err := db.Beginx()
-	if err != nil {
+	if err := result.tx(func(tx *sqlx.Tx) error {
+		return result.seedUserData(tx)
+	}); err != nil {
 		return nil, err
-	} else {
-		rollback := func() {
-			if err := tx.Rollback(); err != nil {
-				log.Error().Err(err).Msg("while handling a previous error, an error occurred rolling back the transaction")
-			}
-		}
-		var count int64
-		err := tx.Get(&count, "SELECT count(*) FROM users WHERE username = ?", "admin")
-		if err != nil {
-			rollback()
-			return nil, err
-		}
-		if count == 0 {
-			log.Info().Msg("creating admin user")
-			_, err = tx.Exec("INSERT INTO users (username, password, isAdmin) VALUES (?, ?, ?)", "admin", "admin", true)
-			if err != nil {
-				rollback()
-				return nil, err
-			}
-		}
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
 	}
 
 	return &Service{
@@ -73,22 +45,45 @@ func NewService(ctx context.Context) (*Service, error) {
 	}, nil
 }
 
-func (service *Service) CheckPassword(username, password string) (bool, error) {
-	log := service.log.With().Str("username", username).Logger()
-	var count int64
-	err := service.db.Get(&count, "SELECT count(*) FROM users WHERE username = ? AND password = ?", username, password)
+func (service *Service) tx(f func(*sqlx.Tx) error) error {
+	tx, err := service.db.Beginx()
 	if err != nil {
-		log.Trace().Err(err).Msg("failed to check password")
-		return false, err
+		return fmt.Errorf("error beginning new transaction: %w", err)
 	}
-	if count > 1 {
-		log.Trace().Int64("count", count).Msg("too many affected rows for check password")
-		return false, fmt.Errorf("expected a single user but got duplicates, username = %s", username)
+	if err := f(tx); err != nil {
+		if err := tx.Rollback(); err != nil {
+			service.log.Error().Err(err).Msg("while rolling back a transaction because of an error, another error occurred")
+		}
+		return fmt.Errorf("error performing work inside a transacction: %w", err)
 	}
-	if count == 1 {
-		log.Trace().Msg("password matched")
-		return true, nil
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
 	}
-	log.Trace().Msg("password did not match")
-	return false, nil
+	return nil
+}
+
+func (service *Service) q(q sqlx.Queryer) sqlx.Queryer {
+	if q == nil {
+		return service.db
+	}
+	return q
+}
+
+func (service *Service) e(e sqlx.Execer) sqlx.Execer {
+	if e == nil {
+		return service.db
+	}
+	return e
+}
+
+func getSingle[T any](q sqlx.Queryer, query string, args ...any) (*T, error) {
+	var result T
+	err := sqlx.Get(q, &result, query, args...)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }

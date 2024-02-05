@@ -13,6 +13,7 @@ var loginSuccessFunc templateFunc = snippet(loginSource, "success")
 
 type User struct {
 	Username string
+	IsAdmin  bool
 }
 
 func NotLoggedInPage(ctx context.Context, w io.Writer) error {

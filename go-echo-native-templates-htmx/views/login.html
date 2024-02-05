@@ -28,5 +28,10 @@
 <div
 	hx-swap-oob="true"
 	id="root"
->Logged in</div>
+>
+	<div>
+		Logged in as {{.Username}}
+		{{if .IsAdmin}} (admin){{end}}
+	</div>
+</div>
 {{end}}
