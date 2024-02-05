@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"experiment/db"
 	"experiment/logging"
 	"experiment/views"
@@ -30,7 +31,17 @@ func main() {
 	}
 
 	e.GET("/", func(c echo.Context) error {
-		return views.NotLoggedInPage(c.Request().Context(), c.Response().Writer)
+		user, err := checkAuthToken(c, dbService)
+		if errors.Is(err, errUnauthorized) {
+			return views.NotLoggedInPage(c.Request().Context(), c.Response().Writer)
+		}
+		if err != nil {
+			return err
+		}
+		return views.LoggedInPage(c.Request().Context(), c.Response().Writer, views.User{
+			Username: user.Username,
+			IsAdmin:  user.IsAdmin,
+		})
 	})
 
 	e.POST("/login", func(c echo.Context) error {
@@ -38,12 +49,19 @@ func main() {
 			Username string `form:"username"`
 			Password string `form:"password"`
 		}
+
+		log := zerolog.Ctx(c.Request().Context())
+
 		var request Request
 		if err := c.Bind(&request); err != nil {
+			log.Debug().Err(err).Msg("error parsing request")
 			return err
 		}
-		log := zerolog.Ctx(c.Request().Context())
-		log.Trace().Str("username", request.Username).Msg("checking login status")
+
+		updatedLog := log.With().Str("username", request.Username).Logger()
+		log = &updatedLog
+
+		log.Trace().Msg("checking login status")
 		user, err := dbService.CheckPassword(nil, request.Username, request.Password)
 		if err != nil {
 			return err
@@ -51,6 +69,13 @@ func main() {
 		if user == nil {
 			return views.ErrorsResponse(c.Request().Context(), c.Response().Writer, "Invalid username or password")
 		}
+
+		log.Trace().Msg("login successful")
+
+		if err := createAuthToken(log, c, user); err != nil {
+			return err
+		}
+
 		return views.LoggedInResponse(
 			c.Request().Context(),
 			c.Response().Writer,
