@@ -9,12 +9,14 @@
 		<input
 			text="text"
 			name="username"
+			placeholder="Username"
 			autofocus
 		/>
 		<label for="password">Password:</label>
 		<input
 			type="password"
 			name="password"
+			placeholder="Password"
 		/>
 		<div class="submit-button">
 			<button type="submit">Login</button>
@@ -47,4 +49,31 @@
 	Logged in as {{.Username}}
 	{{if .IsAdmin}} (admin){{end}}
 </div>
+
+<!-- TODO figure out how to move websocket stuff to another file -->
+<div
+	hx-ext="ws"
+	ws-connect="/ws"
+>
+	<form
+		id="websockets-form"
+		ws-send
+	>
+		<input
+			type="text"
+			name="wsMessage"
+			placeholder="Message"
+			autocomplete="off"
+			autofocus
+		/>
+		<div
+			id="websockets-messages"
+			hx-swap-oob="beforeend"
+		></div>
+	</form>
+</div>
+{{end}}
+
+{{define "websockets-message"}}
+<div id="websockets-messages">{{.}}</div>
 {{end}}

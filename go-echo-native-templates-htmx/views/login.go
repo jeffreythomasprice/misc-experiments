@@ -11,6 +11,7 @@ var loginSource string
 var notLoggedInPageFunc templateFunc = page(loginSource, "notLoggedIn")
 var loggedInPageFunc templateFunc = page(loginSource, "loggedIn")
 var loggedInResponseSnippetFunc templateFunc = snippet(loginSource, "response")
+var websocketMessageSnippetFunc templateFunc = snippet(loginSource, "websockets-message")
 
 type User struct {
 	Username string
@@ -27,4 +28,8 @@ func LoggedInPage(ctx context.Context, w io.Writer, data User) error {
 
 func LoggedInResponse(ctx context.Context, w io.Writer, data User) error {
 	return loggedInResponseSnippetFunc(ctx, w, data)
+}
+
+func WebsocketMessage(ctx context.Context, w io.Writer, data string) error {
+	return websocketMessageSnippetFunc(ctx, w, data)
 }
