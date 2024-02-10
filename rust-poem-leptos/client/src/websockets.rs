@@ -19,7 +19,7 @@ pub fn websocket(url: &str) -> Result<(Sender<String>, Receiver<String>), Websoc
     })?;
 
     let (outgoing_sender, mut outgoing_receiver) = channel::<String>(1);
-    let (incoming_sender, mut incoming_receiver) = channel::<String>(1);
+    let (incoming_sender, incoming_receiver) = channel::<String>(1);
 
     let callback = {
         let description = description.clone();

@@ -1,9 +1,6 @@
 mod websockets;
 
-use std::{
-    cell::RefCell,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use leptos::*;
 use log::*;
@@ -134,7 +131,7 @@ fn App() -> impl IntoView {
                     placeholder="Type your message..."
                     autofocus
                     on:input=move |e| {
-                        set_send_message(event_target_value(&e).into());
+                        set_send_message(event_target_value(&e));
                     }
 
                     prop:value=send_message

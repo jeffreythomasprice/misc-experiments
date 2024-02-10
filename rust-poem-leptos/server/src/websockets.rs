@@ -5,7 +5,6 @@ use poem::{
     web::websocket::{Message, WebSocket, WebSocketStream},
     IntoResponse,
 };
-use serde::{Deserialize, Serialize};
 
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::*;
