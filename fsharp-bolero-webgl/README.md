@@ -1,4 +1,0 @@
-```
-cd Client
-./watch.sh
-```

@@ -1,4 +1,0 @@
-```
-cd Server
-./watch.sh
-```

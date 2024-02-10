@@ -1,3 +1,0 @@
-#!/bin/bash
-
-watchexec -r go run ./...
