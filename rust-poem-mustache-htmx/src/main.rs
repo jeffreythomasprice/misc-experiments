@@ -66,7 +66,7 @@ async fn main() -> Result<(), std::io::Error> {
         .with(AddData::new(TemplateService::new()))
         .with(AddData::new(ClicksService::new()))
         .with(AddData::new(WebsocketService::new()));
-    Server::new(TcpListener::bind("0.0.0.0:8000"))
+    Server::new(TcpListener::bind("127.0.0.1:8000"))
         .run(app)
         .await
 }
