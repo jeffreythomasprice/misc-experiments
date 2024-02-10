@@ -6,15 +6,7 @@ use std::{
 
 use include_dir::include_dir;
 use mustache::Template;
-use poem::{
-    get, handler,
-    http::StatusCode,
-    listener::TcpListener,
-    middleware::{AddData, Tracing},
-    post,
-    web::{headers::ContentType, Data},
-    EndpointExt, IntoResponse, Response, Route, Server,
-};
+
 use serde::Serialize;
 use tracing::*;
 

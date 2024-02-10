@@ -1,13 +1,9 @@
 mod templates;
 
-use std::{
-    collections::HashMap,
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use include_dir::include_dir;
-use mustache::Template;
+
 use poem::{
     endpoint, get, handler,
     http::StatusCode,
@@ -61,10 +57,9 @@ async fn main() -> Result<(), std::io::Error> {
     let app = Route::new()
         .at("/", get(index))
         .at("/click", post(click))
-        .at("/index.css", get(index_css))
-        .at("/htmx.min.js", get(htmx_js))
-        .at("/ws.js", get(htmx_ws_js))
-        .at("/foo", endpoint::make(|_| async { "test" }))
+        .at("/index.css", get(static_file("index.css")))
+        .at("/htmx.min.js", get(static_file("htmx/1.9.10/htmx.min.js")))
+        .at("/ws.js", get(static_file("htmx/1.9.10/ws.js")))
         .with(Tracing)
         .with(AddData::new(TemplateService::new()))
         .with(AddData::new(ClicksService::new()));
@@ -115,30 +110,6 @@ fn click(
         .into_response())
 }
 
-#[handler]
-fn index_css() -> Response {
-    // TODO use STATIC_DIR
-    include_str!("../static/index.css")
-        .with_content_type("text/css")
-        .into_response()
-}
-
-#[handler]
-fn htmx_js() -> Response {
-    // TODO use STATIC_DIR
-    include_str!("../static/htmx/1.9.10/htmx.min.js")
-        .with_content_type("text/javascript")
-        .into_response()
-}
-
-#[handler]
-fn htmx_ws_js() -> Response {
-    // TODO use STATIC_DIR
-    include_str!("../static/htmx/1.9.10/ws.js")
-        .with_content_type("text/javascript")
-        .into_response()
-}
-
 fn page(templates: &TemplateService, content: &str) -> Result<String, TemplateError> {
     #[derive(Serialize)]
     struct Data<'a> {
@@ -147,27 +118,27 @@ fn page(templates: &TemplateService, content: &str) -> Result<String, TemplateEr
     templates.render("page.html", &Data { content })
 }
 
-fn static_file(path: &str) -> impl Endpoint {
-    endpoint::make(|_| -> Result<Response, _> {
-        async {
-            let file = STATIC_DIR.get_file(path).ok_or_else(|| {
-                error!("no such static file: {path}");
-                StatusCode::INTERNAL_SERVER_ERROR.into_response()
-            })?;
-            let contents = file.contents();
-            let path = path.to_lowercase();
-            let content_type = if path.ends_with(".html") || path.ends_with(".htm") {
-                "text/html"
-            } else if path.ends_with(".js") {
-                "text/javascript"
-            } else if path.ends_with(".css") {
-                "text/css"
-            } else {
-                "text/plain"
-            };
-            Ok(contents.with_content_type(content_type).into_response())
-        }
-    })
+fn static_file(path: &'static str) -> impl Endpoint {
+    fn f(path: &'static str) -> Result<Response, HttpError> {
+        let file = STATIC_DIR.get_file(path).ok_or_else(|| {
+            error!("no such static file: {path}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        let contents = file.contents();
+        let path = path.to_lowercase();
+        let content_type = if path.ends_with(".html") || path.ends_with(".htm") {
+            "text/html"
+        } else if path.ends_with(".js") {
+            "text/javascript"
+        } else if path.ends_with(".css") {
+            "text/css"
+        } else {
+            "text/plain"
+        };
+        Ok(contents.with_content_type(content_type).into_response())
+    }
+
+    endpoint::make(move |_| async move { f(path) })
 }
 
 impl From<TemplateError> for HttpError {
