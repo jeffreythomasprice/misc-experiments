@@ -247,12 +247,16 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "console_log",
+ "js-sys",
  "leptos",
  "log",
  "reqwest",
  "serde",
  "serde_json",
  "shared",
+ "tokio",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -1939,6 +1943,7 @@ dependencies = [
 name = "server"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "poem",
  "serde",
  "serde_json",
