@@ -72,4 +72,12 @@ impl TemplateService {
             TemplateError::Render
         })
     }
+
+    pub fn render_page(&self, content: &str) -> Result<String, TemplateError> {
+        #[derive(Serialize)]
+        struct Data<'a> {
+            content: &'a str,
+        }
+        self.render("page.html", &Data { content })
+    }
 }
