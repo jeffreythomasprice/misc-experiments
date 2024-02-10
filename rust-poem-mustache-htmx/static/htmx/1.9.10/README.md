@@ -1,0 +1,1 @@
+https://unpkg.com/browse/htmx.org@1.9.10/dist/
