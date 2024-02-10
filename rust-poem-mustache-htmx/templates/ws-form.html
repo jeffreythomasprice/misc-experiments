@@ -2,12 +2,11 @@
 	hx-ext="ws"
 	ws-connect="/ws"
 >
-	<form ws-send>
-		<input
-			name="ws_message"
-			type="text"
-			placeholder="Type a message..."
-			autofocus
-		/>
+	<form
+		id="ws-form"
+		ws-send
+	>
+		{{{input}}}
 	</form>
+	<div id="ws-messages"></div>
 </div>

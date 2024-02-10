@@ -162,6 +162,7 @@ dependencies = [
  "mustache",
  "poem",
  "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
