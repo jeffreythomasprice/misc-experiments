@@ -1,80 +1,32 @@
+mod templates;
+
 use std::{
     collections::HashMap,
+    fmt::Debug,
     sync::{Arc, Mutex},
 };
 
+use include_dir::include_dir;
 use mustache::Template;
 use poem::{
-    get, handler,
+    endpoint, get, handler,
     http::StatusCode,
     listener::TcpListener,
     middleware::{AddData, Tracing},
     post,
     web::{headers::ContentType, Data},
-    EndpointExt, IntoResponse, Response, Route, Server,
+    Endpoint, EndpointExt, IntoResponse, Response, Route, Server,
 };
 use serde::Serialize;
+use templates::TemplateError;
 use tracing::*;
 
-#[derive(Debug)]
-enum TemplateError {
-    Compile,
-    Render,
-}
+use crate::templates::TemplateService;
 
-impl From<TemplateError> for StatusCode {
-    fn from(_value: TemplateError) -> Self {
-        StatusCode::INTERNAL_SERVER_ERROR
-    }
-}
+// TODO use me
+static STATIC_DIR: include_dir::Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/static");
 
-#[derive(Clone)]
-struct TemplateService {
-    templates: Arc<Mutex<HashMap<String, Arc<Template>>>>,
-}
-
-impl TemplateService {
-    pub fn new() -> Self {
-        Self {
-            templates: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    pub fn get_with_source_str(
-        &self,
-        name: &str,
-        source: &str,
-    ) -> Result<Arc<Template>, TemplateError> {
-        let mut templates = self.templates.lock().unwrap();
-        Ok(match templates.entry(name.to_owned()) {
-            std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
-            std::collections::hash_map::Entry::Vacant(e) => {
-                let result = Arc::new(mustache::compile_str(source).map_err(|e| {
-                    error!("failed to compile template {name}: {e:?}");
-                    TemplateError::Compile
-                })?);
-                e.insert(result.clone());
-                result
-            }
-        })
-    }
-
-    pub fn render_to_string_with_source_str<T>(
-        &self,
-        name: &str,
-        source: &str,
-        data: &T,
-    ) -> Result<String, TemplateError>
-    where
-        T: Serialize,
-    {
-        let template = self.get_with_source_str(name, source)?;
-        template.render_to_string(data).map_err(|e| {
-            error!("failed to render template {name}: {e:?}");
-            TemplateError::Render
-        })
-    }
-}
+type HttpError = StatusCode;
 
 #[derive(Clone)]
 struct ClicksService {
@@ -112,6 +64,7 @@ async fn main() -> Result<(), std::io::Error> {
         .at("/index.css", get(index_css))
         .at("/htmx.min.js", get(htmx_js))
         .at("/ws.js", get(htmx_ws_js))
+        .at("/foo", endpoint::make(|_| async { "test" }))
         .with(Tracing)
         .with(AddData::new(TemplateService::new()))
         .with(AddData::new(ClicksService::new()));
@@ -124,16 +77,15 @@ async fn main() -> Result<(), std::io::Error> {
 fn index(
     templates: Data<&TemplateService>,
     clicks: Data<&ClicksService>,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, HttpError> {
     #[derive(Serialize)]
     struct Data {
         clicks: u64,
     }
     Ok(page(
         &templates,
-        &templates.render_to_string_with_source_str(
-            "clicks",
-            include_str!("./clicks.html"),
+        &templates.render(
+            "clicks.html",
             &Data {
                 clicks: clicks.get(),
             },
@@ -147,15 +99,14 @@ fn index(
 fn click(
     templates: Data<&TemplateService>,
     clicks: Data<&ClicksService>,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, HttpError> {
     #[derive(Serialize)]
     struct Data {
         clicks: u64,
     }
     Ok(templates
-        .render_to_string_with_source_str(
-            "clicks-response",
-            include_str!("./clicks-response.html"),
+        .render(
+            "clicks-response.html",
             &Data {
                 clicks: clicks.click(),
             },
@@ -166,6 +117,7 @@ fn click(
 
 #[handler]
 fn index_css() -> Response {
+    // TODO use STATIC_DIR
     include_str!("../static/index.css")
         .with_content_type("text/css")
         .into_response()
@@ -173,6 +125,7 @@ fn index_css() -> Response {
 
 #[handler]
 fn htmx_js() -> Response {
+    // TODO use STATIC_DIR
     include_str!("../static/htmx/1.9.10/htmx.min.js")
         .with_content_type("text/javascript")
         .into_response()
@@ -180,6 +133,7 @@ fn htmx_js() -> Response {
 
 #[handler]
 fn htmx_ws_js() -> Response {
+    // TODO use STATIC_DIR
     include_str!("../static/htmx/1.9.10/ws.js")
         .with_content_type("text/javascript")
         .into_response()
@@ -190,9 +144,34 @@ fn page(templates: &TemplateService, content: &str) -> Result<String, TemplateEr
     struct Data<'a> {
         content: &'a str,
     }
-    templates.render_to_string_with_source_str(
-        "page",
-        include_str!("./page.html"),
-        &Data { content },
-    )
+    templates.render("page.html", &Data { content })
+}
+
+fn static_file(path: &str) -> impl Endpoint {
+    endpoint::make(|_| -> Result<Response, _> {
+        async {
+            let file = STATIC_DIR.get_file(path).ok_or_else(|| {
+                error!("no such static file: {path}");
+                StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            })?;
+            let contents = file.contents();
+            let path = path.to_lowercase();
+            let content_type = if path.ends_with(".html") || path.ends_with(".htm") {
+                "text/html"
+            } else if path.ends_with(".js") {
+                "text/javascript"
+            } else if path.ends_with(".css") {
+                "text/css"
+            } else {
+                "text/plain"
+            };
+            Ok(contents.with_content_type(content_type).into_response())
+        }
+    })
+}
+
+impl From<TemplateError> for HttpError {
+    fn from(_value: TemplateError) -> Self {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
 }
