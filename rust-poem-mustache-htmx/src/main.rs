@@ -23,14 +23,14 @@ enum TemplateError {
 }
 
 impl From<TemplateError> for StatusCode {
-    fn from(value: TemplateError) -> Self {
+    fn from(_value: TemplateError) -> Self {
         StatusCode::INTERNAL_SERVER_ERROR
     }
 }
 
 #[derive(Clone)]
 struct TemplateService {
-    templates: Arc<Mutex<HashMap<String, Template>>>,
+    templates: Arc<Mutex<HashMap<String, Arc<Template>>>>,
 }
 
 impl TemplateService {
@@ -40,13 +40,23 @@ impl TemplateService {
         }
     }
 
-    pub fn get_with_source_str(&self, name: &str, source: &str) -> Result<Template, TemplateError> {
-        // TODO actually cache
-        let result = mustache::compile_str(source).map_err(|e| {
-            error!("failed to compile template {name}: {e:?}");
-            TemplateError::Compile
-        })?;
-        Ok(result)
+    pub fn get_with_source_str(
+        &self,
+        name: &str,
+        source: &str,
+    ) -> Result<Arc<Template>, TemplateError> {
+        let mut templates = self.templates.lock().unwrap();
+        Ok(match templates.entry(name.to_owned()) {
+            std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
+            std::collections::hash_map::Entry::Vacant(e) => {
+                let result = Arc::new(mustache::compile_str(source).map_err(|e| {
+                    error!("failed to compile template {name}: {e:?}");
+                    TemplateError::Compile
+                })?);
+                e.insert(result.clone());
+                result
+            }
+        })
     }
 
     pub fn render_to_string_with_source_str<T>(
@@ -144,7 +154,7 @@ fn click(
     }
     Ok(templates
         .render_to_string_with_source_str(
-            "clicks",
+            "clicks-response",
             include_str!("./clicks-response.html"),
             &Data {
                 clicks: clicks.click(),
