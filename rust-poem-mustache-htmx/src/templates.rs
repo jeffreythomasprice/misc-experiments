@@ -7,8 +7,11 @@ use std::{
 use include_dir::include_dir;
 use mustache::Template;
 
+use poem::http::StatusCode;
 use serde::Serialize;
 use tracing::*;
+
+use crate::http_utils::HttpError;
 
 static TEMPLATES_DIR: include_dir::Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/templates");
 
@@ -16,6 +19,12 @@ static TEMPLATES_DIR: include_dir::Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/t
 pub enum TemplateError {
     Compile,
     Render,
+}
+
+impl From<TemplateError> for HttpError {
+    fn from(_value: TemplateError) -> Self {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
 }
 
 #[derive(Clone)]

@@ -1,28 +1,22 @@
+mod http_utils;
+mod static_files;
 mod templates;
 
 use std::sync::{Arc, Mutex};
 
-use include_dir::include_dir;
-
 use poem::{
-    endpoint, get, handler,
-    http::StatusCode,
+    get, handler,
     listener::TcpListener,
     middleware::{AddData, Tracing},
     post,
     web::{headers::ContentType, Data},
-    Endpoint, EndpointExt, IntoResponse, Response, Route, Server,
+    EndpointExt, IntoResponse, Response, Route, Server,
 };
 use serde::Serialize;
+use static_files::static_file;
 use templates::TemplateError;
-use tracing::*;
 
-use crate::templates::TemplateService;
-
-// TODO use me
-static STATIC_DIR: include_dir::Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/static");
-
-type HttpError = StatusCode;
+use crate::{http_utils::HttpError, templates::TemplateService};
 
 #[derive(Clone)]
 struct ClicksService {
@@ -74,20 +68,14 @@ fn index(
     clicks: Data<&ClicksService>,
 ) -> Result<Response, HttpError> {
     #[derive(Serialize)]
-    struct Data {
-        clicks: u64,
+    struct Data<'a> {
+        content: &'a str,
     }
-    Ok(page(
-        &templates,
-        &templates.render(
-            "clicks.html",
-            &Data {
-                clicks: clicks.get(),
-            },
-        )?,
-    )?
-    .with_content_type(ContentType::html().to_string())
-    .into_response())
+    let content = click_text(&templates, clicks.get())?;
+    let content = templates.render("clicks.html", &Data { content: &content })?;
+    Ok(page(&templates, &content)?
+        .with_content_type(ContentType::html().to_string())
+        .into_response())
 }
 
 #[handler]
@@ -95,19 +83,17 @@ fn click(
     templates: Data<&TemplateService>,
     clicks: Data<&ClicksService>,
 ) -> Result<Response, HttpError> {
+    Ok(click_text(&templates, clicks.click())?
+        .with_content_type(ContentType::html().to_string())
+        .into_response())
+}
+
+fn click_text(templates: &TemplateService, clicks: u64) -> Result<String, TemplateError> {
     #[derive(Serialize)]
     struct Data {
         clicks: u64,
     }
-    Ok(templates
-        .render(
-            "clicks-response.html",
-            &Data {
-                clicks: clicks.click(),
-            },
-        )?
-        .with_content_type(ContentType::html().to_string())
-        .into_response())
+    templates.render("clicks-response.html", &Data { clicks })
 }
 
 fn page(templates: &TemplateService, content: &str) -> Result<String, TemplateError> {
@@ -116,33 +102,4 @@ fn page(templates: &TemplateService, content: &str) -> Result<String, TemplateEr
         content: &'a str,
     }
     templates.render("page.html", &Data { content })
-}
-
-fn static_file(path: &'static str) -> impl Endpoint {
-    fn f(path: &'static str) -> Result<Response, HttpError> {
-        let file = STATIC_DIR.get_file(path).ok_or_else(|| {
-            error!("no such static file: {path}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-        let contents = file.contents();
-        let path = path.to_lowercase();
-        let content_type = if path.ends_with(".html") || path.ends_with(".htm") {
-            "text/html"
-        } else if path.ends_with(".js") {
-            "text/javascript"
-        } else if path.ends_with(".css") {
-            "text/css"
-        } else {
-            "text/plain"
-        };
-        Ok(contents.with_content_type(content_type).into_response())
-    }
-
-    endpoint::make(move |_| async move { f(path) })
-}
-
-impl From<TemplateError> for HttpError {
-    fn from(_value: TemplateError) -> Self {
-        StatusCode::INTERNAL_SERVER_ERROR
-    }
 }
