@@ -96,18 +96,22 @@ fn App() -> impl IntoView {
     let send_websocket_message = {
         let websocket_sender = websocket_sender.clone();
         create_action(move |msg: &String| {
-            let msg = ClientToServerChatMessage {
-                message: msg.clone(),
-            };
+            let msg = msg.clone();
             let websocket_sender = websocket_sender.clone();
             async move {
-                let websocket_sender = websocket_sender.lock().unwrap();
-                if let Some(sender) = websocket_sender.as_ref() {
-                    if let Err(e) = sender.send(msg).await {
-                        error!("error writing to websocket send channel: {e:?}");
+                match ClientToServerChatMessage::new(msg.clone()) {
+                    Ok(msg) => {
+                        let websocket_sender = websocket_sender.clone();
+                        let websocket_sender = websocket_sender.lock().unwrap();
+                        if let Some(sender) = websocket_sender.as_ref() {
+                            if let Err(e) = sender.send(msg).await {
+                                error!("error writing to websocket send channel: {e:?}");
+                            }
+                        } else {
+                            error!("no websocket sender available, can't send message");
+                        }
                     }
-                } else {
-                    error!("no websocket sender available, can't send message");
+                    Err(e) => error!("failed to make outgoing message to send to server: {e:?}"),
                 }
             }
         })

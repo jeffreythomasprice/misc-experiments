@@ -70,11 +70,10 @@ async fn ws(
     let ws_service = ws_service.clone();
     tokio::spawn(async move {
         while let Some(msg) = receiver.recv().await {
-            ws_service
-                .broadcast(&ServerToClientChatMessage {
-                    message: msg.message,
-                })
-                .await;
+            match ServerToClientChatMessage::new(&msg) {
+                Ok(msg) => ws_service.broadcast(&msg).await,
+                Err(e) => error!("failed to make outgoing message to broadcast: {e:?}"),
+            };
         }
     });
 
