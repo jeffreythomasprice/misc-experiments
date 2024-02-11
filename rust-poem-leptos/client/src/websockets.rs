@@ -1,3 +1,5 @@
+use std::{cell::RefCell, sync::Arc};
+
 use js_sys::{ArrayBuffer, JsString};
 use leptos::spawn_local;
 use log::*;
@@ -18,40 +20,58 @@ pub fn websocket(url: &str) -> Result<(Sender<String>, Receiver<String>), Websoc
         WebsocketError::ConnectError
     })?;
 
+    // callbacks have to live while they might be invoked by js
+    let open_callback = Arc::new(RefCell::new(None));
+    let close_callback = Arc::new(RefCell::new(None));
+    let error_callback = Arc::new(RefCell::new(None));
+    let message_callback = Arc::new(RefCell::new(None));
+
     let (outgoing_sender, mut outgoing_receiver) = channel::<String>(1);
     let (incoming_sender, incoming_receiver) = channel::<String>(1);
 
-    let callback = {
+    open_callback.replace(Some({
         let description = description.clone();
         Closure::<dyn FnMut()>::new(move || {
             trace!("websocket opened, {description}");
         })
-    };
-    client.set_onopen(Some(callback.as_ref().unchecked_ref()));
-    // TODO clean up callbacks somewhere?
-    callback.forget();
+    }));
+    {
+        let c = open_callback.borrow();
+        client.set_onopen(Some(c.as_ref().unwrap().as_ref().unchecked_ref()));
+    }
 
-    let callback = {
+    close_callback.replace(Some({
+        let open_callback = open_callback.clone();
+        let close_callback = close_callback.clone();
+        let error_callback = error_callback.clone();
+        let message_callback = message_callback.clone();
         let description = description.clone();
         Closure::<dyn FnMut()>::new(move || {
             trace!("websocket closed, {description}");
+            // take values out of the callbacks, meaning they get dropped, because js can't possibly invoke them any more
+            open_callback.borrow_mut().take();
+            close_callback.borrow_mut().take();
+            error_callback.borrow_mut().take();
+            message_callback.borrow_mut().take();
         })
-    };
-    client.set_onclose(Some(callback.as_ref().unchecked_ref()));
-    // TODO clean up callbacks somewhere?
-    callback.forget();
+    }));
+    {
+        let c = close_callback.borrow();
+        client.set_onclose(Some(c.as_ref().unwrap().as_ref().unchecked_ref()));
+    }
 
-    let callback = {
+    error_callback.replace(Some({
         let description = description.clone();
         Closure::<dyn FnMut()>::new(move || {
             trace!("websocket error, {description}");
         })
-    };
-    client.set_onerror(Some(callback.as_ref().unchecked_ref()));
-    // TODO clean up callbacks somewhere?
-    callback.forget();
+    }));
+    {
+        let c = error_callback.borrow();
+        client.set_onerror(Some(c.as_ref().unwrap().as_ref().unchecked_ref()));
+    }
 
-    let callback = {
+    message_callback.replace(Some({
         let description = description.clone();
         Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
             if let Ok(msg) = e.data().dyn_into::<ArrayBuffer>() {
@@ -72,10 +92,11 @@ pub fn websocket(url: &str) -> Result<(Sender<String>, Receiver<String>), Websoc
                 );
             }
         })
-    };
-    client.set_onmessage(Some(callback.as_ref().unchecked_ref()));
-    // TODO clean up callbacks somewhere?
-    callback.forget();
+    }));
+    {
+        let c = message_callback.borrow();
+        client.set_onmessage(Some(c.as_ref().unwrap().as_ref().unchecked_ref()));
+    }
 
     leptos::spawn_local(async move {
         while let Some(msg) = outgoing_receiver.recv().await {
