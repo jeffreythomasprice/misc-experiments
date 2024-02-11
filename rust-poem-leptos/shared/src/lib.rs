@@ -7,8 +7,17 @@ pub struct ClicksResponse {
     pub clicks: u64,
 }
 
-// TODO make a different server and client message
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatMessage {
+pub struct ClientToServerChatMessage {
+    // TODO message id
+    // TODO timestamp
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerToClientChatMessage {
+    // TODO message id
+    // TODO timestamp
+    // TODO which sender
     pub message: String,
 }
