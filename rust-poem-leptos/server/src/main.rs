@@ -7,10 +7,9 @@ use poem::{
     web::{websocket::WebSocket, Data, Json},
     EndpointExt, IntoResponse, Request, Route, Server,
 };
-use shared::ClicksResponse;
+use shared::{websockets::Message, ChatMessage, ClicksResponse};
 use std::sync::{Arc, Mutex};
 use tracing::*;
-use websockets::WebsocketService;
 
 #[derive(Clone)]
 struct ClicksService {
@@ -37,7 +36,7 @@ async fn main() -> Result<(), std::io::Error> {
         .with(Cors::new())
         .with(Tracing)
         .with(AddData::new(ClicksService::new()))
-        .with(AddData::new(WebsocketService::new()));
+        .with(AddData::new(websockets::Service::<ChatMessage>::new()));
 
     Server::new(TcpListener::bind("127.0.0.1:8001"))
         .run(app)
@@ -61,17 +60,15 @@ async fn click(clicks: Data<&ClicksService>) -> Json<ClicksResponse> {
 async fn ws(
     req: &Request,
     ws: WebSocket,
-    ws_service: Data<&WebsocketService>,
+    ws_service: Data<&websockets::Service<ChatMessage>>,
 ) -> impl IntoResponse {
     debug!("remote_addr={}", req.remote_addr());
-    let (result, _sender, mut receiver) = ws_service.on_upgrade(ws);
+    let (result, _sender, mut receiver) = ws_service.on_upgrade::<ChatMessage>(ws);
 
     let ws_service = ws_service.clone();
     tokio::spawn(async move {
         while let Some(msg) = receiver.recv().await {
-            ws_service
-                .broadcast(format!("TODO resending from server: {msg}"))
-                .await;
+            ws_service.broadcast(&msg).await;
         }
     });
 
