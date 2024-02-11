@@ -3,6 +3,8 @@ use std::{cell::RefCell, sync::Arc};
 use js_sys::{ArrayBuffer, JsString};
 use leptos::spawn_local;
 use log::*;
+use serde::{de::DeserializeOwned, Serialize};
+use shared::websockets::Message;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Blob, MessageEvent};
@@ -12,7 +14,13 @@ pub enum WebsocketError {
     ConnectError,
 }
 
-pub fn websocket(url: &str) -> Result<(Sender<String>, Receiver<String>), WebsocketError> {
+pub fn websocket<SendT, ReceiveT>(
+    url: &str,
+) -> Result<(Sender<SendT>, Receiver<ReceiveT>), WebsocketError>
+where
+    SendT: Serialize + 'static,
+    ReceiveT: DeserializeOwned + 'static,
+{
     let description = format!("websocket to {url}");
 
     let client = web_sys::WebSocket::new(url).map_err(|e| {
@@ -26,8 +34,8 @@ pub fn websocket(url: &str) -> Result<(Sender<String>, Receiver<String>), Websoc
     let error_callback = Arc::new(RefCell::new(None));
     let message_callback = Arc::new(RefCell::new(None));
 
-    let (outgoing_sender, mut outgoing_receiver) = channel::<String>(1);
-    let (incoming_sender, incoming_receiver) = channel::<String>(1);
+    let (outgoing_sender, mut outgoing_receiver) = channel::<SendT>(1);
+    let (incoming_sender, incoming_receiver) = channel::<ReceiveT>(1);
 
     open_callback.replace(Some({
         let description = description.clone();
@@ -75,16 +83,23 @@ pub fn websocket(url: &str) -> Result<(Sender<String>, Receiver<String>), Websoc
         let description = description.clone();
         Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
             if let Ok(msg) = e.data().dyn_into::<ArrayBuffer>() {
-                debug!("TODO handle array buffers");
+                todo!("handle array buffers");
             } else if let Ok(msg) = e.data().dyn_into::<Blob>() {
-                debug!("TODO handle blobs");
+                todo!("handle blobs");
             } else if let Ok(msg) = e.data().dyn_into::<JsString>() {
-                let incoming_sender = incoming_sender.clone();
-                spawn_local(async move {
-                    if let Err(e) = incoming_sender.send(msg.as_string().unwrap()).await {
-                        error!("error writing to websocket incoming message channel: {e:?}");
+                match Message::Text(msg.as_string().unwrap()).deserialize() {
+                    Ok(msg) => {
+                        let incoming_sender = incoming_sender.clone();
+                        spawn_local(async move {
+                            if let Err(e) = incoming_sender.send(msg).await {
+                                error!(
+                                    "error writing to websocket incoming message channel: {e:?}"
+                                );
+                            }
+                        });
                     }
-                });
+                    Err(e) => error!("error deserializing incoming websocket message: {e:?}"),
+                }
             } else {
                 error!(
                     "unhandled websocket message type, {description}: {:?}",
@@ -100,8 +115,16 @@ pub fn websocket(url: &str) -> Result<(Sender<String>, Receiver<String>), Websoc
 
     leptos::spawn_local(async move {
         while let Some(msg) = outgoing_receiver.recv().await {
-            if let Err(e) = client.send_with_str(&msg) {
-                error!("error writing to websocket client: {e:?}");
+            match Message::serialize(&msg) {
+                Ok(msg) => {
+                    if let Err(e) = match msg {
+                        Message::Text(msg) => client.send_with_str(&msg),
+                        Message::Binary(msg) => client.send_with_u8_array(&msg),
+                    } {
+                        error!("error writing to websocket client: {e:?}");
+                    }
+                }
+                Err(e) => error!("error serializing outgoing websocket message: {e:?}"),
             }
         }
     });

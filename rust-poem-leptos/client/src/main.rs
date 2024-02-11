@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use leptos::*;
 use log::*;
-use shared::ClicksResponse;
+use shared::{ChatMessage, ClicksResponse};
 use tokio::sync::mpsc::Sender;
 
 use crate::websockets::websocket;
@@ -16,7 +16,7 @@ fn App() -> impl IntoView {
     let (count, set_count) = create_signal(None);
 
     let (send_message, set_send_message) = create_signal("".to_string());
-    let (messages, set_messages) = create_signal(Vec::<String>::new());
+    let (messages, set_messages) = create_signal(Vec::<ChatMessage>::new());
 
     create_resource(
         || (),
@@ -38,7 +38,7 @@ fn App() -> impl IntoView {
         },
     );
 
-    let websocket_sender: Arc<Mutex<Option<Sender<String>>>> = Arc::new(Mutex::new(None));
+    let websocket_sender: Arc<Mutex<Option<Sender<ChatMessage>>>> = Arc::new(Mutex::new(None));
     {
         let websocket_sender = websocket_sender.clone();
         create_resource(
@@ -46,12 +46,12 @@ fn App() -> impl IntoView {
             move |_| {
                 let websocket_sender = websocket_sender.clone();
                 async move {
-                    match websocket("ws://127.0.0.1:8001/ws") {
+                    match websocket::<ChatMessage, ChatMessage>("ws://127.0.0.1:8001/ws") {
                         Ok((sender, mut receiver)) => {
                             spawn_local(async move {
                                 while let Some(msg) = receiver.recv().await {
                                     set_messages.update(|messages| {
-                                        messages.push(msg.to_string());
+                                        messages.push(msg);
                                     });
                                 }
                             });
@@ -93,7 +93,9 @@ fn App() -> impl IntoView {
     let send_websocket_message = {
         let websocket_sender = websocket_sender.clone();
         create_action(move |msg: &String| {
-            let msg = msg.clone();
+            let msg = ChatMessage {
+                message: msg.clone(),
+            };
             let websocket_sender = websocket_sender.clone();
             async move {
                 let websocket_sender = websocket_sender.lock().unwrap();
@@ -142,7 +144,7 @@ fn App() -> impl IntoView {
                 <div>
                     {move || {
                         let (_, msg) = msg.clone();
-                        msg
+                        msg.message
                     }}
 
                 </div>
