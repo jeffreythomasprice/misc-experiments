@@ -1,0 +1,47 @@
+package main
+
+import "strconv"
+
+templ Index(comp templ.Component) {
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<meta charset="UTF-8"/>
+			<link
+				rel="stylesheet"
+				href="index.css"
+			/>
+			<script src="htmx.min.js"></script>
+			<script src="wasm_exec.js"></script>
+			<script>
+				htmx.logAll();
+
+				(async () => {
+					const go = new Go();
+					const clientFile = await fetch("client.wasm");
+					const wasmInstance = await WebAssembly.instantiateStreaming(clientFile, go.importObject);
+					go.run(wasmInstance.instance);
+				})()
+					.catch(e => console.error("error initializing webassembly client", e));
+			</script>
+		</head>
+		<body>
+			@comp
+		</body>
+	</html>
+}
+
+templ ClickForm(clicks int) {
+	@ClickResults(clicks)
+	<button
+		hx-post="/click"
+		hx-swap="outerHTML"
+		hx-target="#clickResults"
+	>Click Me</button>
+}
+
+templ ClickResults(clicks int) {
+	<div id="clickResults">
+		Clicks: { strconv.FormatInt(int64(clicks), 10) }
+	</div>
+}
