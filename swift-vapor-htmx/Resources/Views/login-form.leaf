@@ -1,0 +1,40 @@
+<form
+	class="login"
+	hx-target="this"
+	hx-swap="outerHTML"
+	hx-post="/login"
+>
+	<div class="grid">
+		<label for="username">
+			Username:
+		</label>
+		<input
+			name="username"
+			type="text"
+			placeholder="Username"
+			value="#(username)"
+			autofocus
+		>
+		<label for="password">
+			Password:
+		</label>
+		<input
+			name="password"
+			type="password"
+			placeholder="Password"
+			value="#(password)"
+		>
+	</div>
+
+	<div class="submitButton">
+		<button>Log In</button>
+	</div>
+
+	<div class="errors">
+		#if(errorMessages):
+		#for(msg in errorMessages):
+		<div>#(msg)</div>
+		#endfor
+		#endif
+	</div>
+</form>

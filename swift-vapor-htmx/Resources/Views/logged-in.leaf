@@ -1,0 +1,9 @@
+#extend("page"):
+#export("body"):
+<button
+	hx-post="/logout"
+	hx-target="body"
+>Log Out</button>
+<div>TODO some content here</div>
+#endexport
+#endextend

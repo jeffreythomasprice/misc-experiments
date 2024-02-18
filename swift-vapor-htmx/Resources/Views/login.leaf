@@ -1,0 +1,5 @@
+#extend("page"):
+#export("body"):
+#extend("login-form")
+#endexport
+#endextend
