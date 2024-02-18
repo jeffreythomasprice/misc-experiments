@@ -7,9 +7,9 @@
 				"swift"
 			],
 			"args": [],
-			"cwd": "${workspaceFolder:swift-experiment}",
+			"cwd": "${workspaceFolder:swift-vapor-htmx}",
 			"name": "Debug swift-experiment",
-			"program": "${workspaceFolder:swift-experiment}/.build/debug/swift-experiment",
+			"program": "${workspaceFolder:swift-vapor-htmx}/.build/debug/swift-experiment",
 			"preLaunchTask": "swift: Build Debug swift-experiment"
 		},
 		{
@@ -19,9 +19,9 @@
 				"swift"
 			],
 			"args": [],
-			"cwd": "${workspaceFolder:swift-experiment}",
+			"cwd": "${workspaceFolder:swift-vapor-htmx}",
 			"name": "Release swift-experiment",
-			"program": "${workspaceFolder:swift-experiment}/.build/release/swift-experiment",
+			"program": "${workspaceFolder:swift-vapor-htmx}/.build/release/swift-experiment",
 			"preLaunchTask": "swift: Build Release swift-experiment"
 		}
 	]
