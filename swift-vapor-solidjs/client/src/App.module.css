@@ -1,0 +1,24 @@
+.login {
+    max-width: 500px;
+}
+
+.login .grid {
+    display: grid;
+    grid-template-columns: 30% auto;
+    grid-gap: 5px;
+}
+
+.login .submitButton {
+    margin-top: 15px;
+    grid-column: 1/-1;
+}
+
+.login .submitButton * {
+    float: right;
+}
+
+.login .errors {
+    margin-top: 30px;
+    color: red;
+    font-weight: bold;
+}

@@ -1,0 +1,28 @@
+{
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"sourceLanguages": [
+				"swift"
+			],
+			"args": [],
+			"cwd": "${workspaceFolder:server}",
+			"name": "Debug swift-experiment",
+			"program": "${workspaceFolder:server}/.build/debug/swift-experiment",
+			"preLaunchTask": "swift: Build Debug swift-experiment"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"sourceLanguages": [
+				"swift"
+			],
+			"args": [],
+			"cwd": "${workspaceFolder:server}",
+			"name": "Release swift-experiment",
+			"program": "${workspaceFolder:server}/.build/release/swift-experiment",
+			"preLaunchTask": "swift: Build Release swift-experiment"
+		}
+	]
+}

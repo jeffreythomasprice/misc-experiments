@@ -29,8 +29,6 @@ struct TokenClaims: JWTPayload {
     }
 }
 
-// var env = try Environment.detect()
-// try LoggingSystem.bootstrap(from: &env)
 LoggingSystem.bootstrap { label in
     var result = StreamLogHandler.standardOutput(label: label)
     result.logLevel = .trace
