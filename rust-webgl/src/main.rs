@@ -4,13 +4,32 @@ mod shaders;
 use std::{mem::forget, panic, rc::Rc};
 
 use errors::JsInteropError;
-use js_sys::Float32Array;
+use js_sys::Uint8Array;
 use log::*;
 use serde::Serialize;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlVertexArrayObject};
 
 use crate::shaders::ShaderProgram;
+
+#[allow(dead_code)]
+struct Vec2 {
+    x: f32,
+    y: f32,
+}
+
+#[allow(dead_code)]
+struct RGBA {
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+}
+
+struct Vertex {
+    position: Vec2,
+    color: RGBA,
+}
 
 struct AppState {
     canvas: HtmlCanvasElement,
@@ -60,13 +79,41 @@ impl AppState {
         ))?;
         gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&array_buffer));
         unsafe {
-            let array = Float32Array::view(&vec![
-                -0.5, -0.5, 1.0, 0.0, 0.0, 1.0, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0, 0.5, 0.0, 0.0,
-                1.0, 1.0,
-            ]);
+            let data = [
+                Vertex {
+                    position: Vec2 { x: -0.5, y: 0.5 },
+                    color: RGBA {
+                        r: 1.0,
+                        g: 0.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                },
+                Vertex {
+                    position: Vec2 { x: 0.5, y: 0.5 },
+                    color: RGBA {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 0.0,
+                        a: 1.0,
+                    },
+                },
+                Vertex {
+                    position: Vec2 { x: 0.0, y: -0.5 },
+                    color: RGBA {
+                        r: 0.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                },
+            ];
             gl.buffer_data_with_array_buffer_view(
                 WebGl2RenderingContext::ARRAY_BUFFER,
-                &array,
+                &Uint8Array::view_mut_raw(
+                    data.as_ptr() as *mut u8,
+                    core::mem::size_of::<Vertex>() * data.len(),
+                ),
                 WebGl2RenderingContext::STATIC_DRAW,
             );
         };
@@ -88,8 +135,8 @@ impl AppState {
                 2,
                 WebGl2RenderingContext::FLOAT,
                 false,
-                4 * 6,
-                0,
+                core::mem::size_of::<Vertex>() as i32,
+                core::mem::offset_of!(Vertex, position) as i32,
             );
             gl.enable_vertex_attrib_array(attr.index);
         }
@@ -104,8 +151,8 @@ impl AppState {
                 4,
                 WebGl2RenderingContext::FLOAT,
                 false,
-                4 * 6,
-                4 * 2,
+                core::mem::size_of::<Vertex>() as i32,
+                core::mem::offset_of!(Vertex, color) as i32,
             );
             gl.enable_vertex_attrib_array(attr.index);
         }

@@ -68,7 +68,9 @@ impl Attribute {
 
 pub struct ShaderProgram {
     gl: Rc<WebGl2RenderingContext>,
+    #[allow(dead_code)]
     vertex_shader: Shader,
+    #[allow(dead_code)]
     fragment_shader: Shader,
     instance: WebGlProgram,
     attributes: HashMap<String, Attribute>,
