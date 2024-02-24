@@ -1,0 +1,239 @@
+mod errors;
+mod shaders;
+
+use std::{mem::forget, panic, rc::Rc};
+
+use errors::JsInteropError;
+use js_sys::Float32Array;
+use log::*;
+use serde::Serialize;
+use wasm_bindgen::{closure::Closure, JsCast};
+use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlVertexArrayObject};
+
+use crate::shaders::ShaderProgram;
+
+struct AppState {
+    canvas: HtmlCanvasElement,
+    gl: Rc<WebGl2RenderingContext>,
+    shader_program: ShaderProgram,
+    vertex_array: WebGlVertexArrayObject,
+}
+
+impl AppState {
+    pub fn new() -> Result<Rc<Self>, JsInteropError> {
+        let canvas = create_canvas()?;
+        body()?.replace_children_with_node_1(&canvas);
+
+        #[derive(Serialize)]
+        struct WebGLOptions {
+            #[serde(rename = "powerPreference")]
+            power_preference: String,
+        }
+        let gl: Rc<WebGl2RenderingContext> = Rc::new(
+            canvas
+                .get_context_with_context_options(
+                    "webgl2",
+                    &serde_wasm_bindgen::to_value(&WebGLOptions {
+                        power_preference: "high-performance".to_owned(),
+                    })?,
+                )?
+                .ok_or(JsInteropError::NotFound(
+                    "failed to make webgl context".to_owned(),
+                ))?
+                .dyn_into()
+                .map_err(|_| {
+                    JsInteropError::CastError(
+                        "created a canvas graphics context, but it wasn't the expected type"
+                            .to_owned(),
+                    )
+                })?,
+        );
+
+        let shader_program = ShaderProgram::new(
+            gl.clone(),
+            include_str!("shader.vert"),
+            include_str!("shader.frag"),
+        )?;
+
+        let array_buffer = gl.create_buffer().ok_or(JsInteropError::NotFound(
+            "failed to create buffer".to_owned(),
+        ))?;
+        gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&array_buffer));
+        unsafe {
+            let array = Float32Array::view(&vec![
+                -0.5, -0.5, 1.0, 0.0, 0.0, 1.0, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 0.0, 0.5, 0.0, 0.0,
+                1.0, 1.0,
+            ]);
+            gl.buffer_data_with_array_buffer_view(
+                WebGl2RenderingContext::ARRAY_BUFFER,
+                &array,
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
+        };
+        gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
+
+        let vertex_array = gl.create_vertex_array().ok_or(JsInteropError::NotFound(
+            "failed to create vertex array object".to_owned(),
+        ))?;
+        gl.bind_vertex_array(Some(&vertex_array));
+        gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&array_buffer));
+        {
+            let attr = shader_program
+                .get_attribute_by_name("positionAttribute")
+                .ok_or(JsInteropError::NotFound(
+                    "failed to find attribute".to_owned(),
+                ))?;
+            gl.vertex_attrib_pointer_with_i32(
+                attr.index,
+                2,
+                WebGl2RenderingContext::FLOAT,
+                false,
+                4 * 6,
+                0,
+            );
+            gl.enable_vertex_attrib_array(attr.index);
+        }
+        {
+            let attr = shader_program
+                .get_attribute_by_name("colorAttribute")
+                .ok_or(JsInteropError::NotFound(
+                    "failed to find attribute".to_owned(),
+                ))?;
+            gl.vertex_attrib_pointer_with_i32(
+                attr.index,
+                4,
+                WebGl2RenderingContext::FLOAT,
+                false,
+                4 * 6,
+                4 * 2,
+            );
+            gl.enable_vertex_attrib_array(attr.index);
+        }
+        gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
+        gl.bind_vertex_array(None);
+
+        let result = Rc::new(AppState {
+            canvas,
+            gl,
+            shader_program,
+            vertex_array,
+        });
+
+        // call once on program start because the resize handler won't call until the window actually changes size otherwise
+        if let Err(e) = result.resize() {
+            error!("error resizing: {e:?}");
+        }
+
+        {
+            // register as the window resize handler
+            let state = result.clone();
+            let c = Closure::<dyn Fn()>::new(move || {
+                if let Err(e) = state.resize() {
+                    error!("error resizing: {e:?}");
+                }
+            });
+            window()?.add_event_listener_with_callback("resize", c.as_ref().unchecked_ref())?;
+            // don't ever free this so the js callback stays valid
+            forget(c);
+        }
+
+        {
+            fn request_animation_frame(state: Rc<AppState>) {
+                let state = state.clone();
+                if let Err(e) = (move || -> Result<(), JsInteropError> {
+                    {
+                        let state = state.clone();
+                        let c = Closure::once_into_js(move |time| {
+                            if let Err(e) = state.anim(time) {
+                                error!("error invoking animation frame: {e:?}");
+                            }
+
+                            request_animation_frame(state.clone());
+                        });
+                        window()?.request_animation_frame(c.as_ref().unchecked_ref())?;
+                    }
+
+                    Ok(())
+                })() {
+                    error!("error registering next animation frame callback: {e:?}");
+                }
+            }
+
+            // kick off the first frame
+            request_animation_frame(result.clone());
+        }
+
+        Ok(result)
+    }
+
+    pub fn resize(&self) -> Result<(), JsInteropError> {
+        let width: f64 = window()?.inner_width()?.try_into()?;
+        let height: f64 = window()?.inner_height()?.try_into()?;
+
+        self.canvas.set_width(width as u32);
+        self.canvas.set_height(height as u32);
+        self.gl.viewport(0, 0, width as i32, height as i32);
+
+        Ok(())
+    }
+
+    pub fn anim(&self, _time: f64) -> Result<(), JsInteropError> {
+        // cornflower blue, #6495ED
+        self.gl.clear_color(0.39, 0.58, 0.93, 1.0);
+        self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+        self.shader_program.use_program();
+        self.gl.bind_vertex_array(Some(&self.vertex_array));
+        self.gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+        self.gl.bind_vertex_array(None);
+        self.gl.use_program(None);
+
+        Ok(())
+    }
+}
+
+fn main() -> Result<(), JsInteropError> {
+    console_log::init_with_level(Level::Trace).unwrap();
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    if let Err(e) = AppState::new() {
+        error!("app init error: {e:?}");
+    }
+
+    Ok(())
+}
+
+fn window() -> Result<web_sys::Window, JsInteropError> {
+    web_sys::window().ok_or(JsInteropError::NotFound("failed to get window".to_owned()))
+}
+
+fn document() -> Result<web_sys::Document, JsInteropError> {
+    window()?.document().ok_or(JsInteropError::NotFound(
+        "failed to get document".to_owned(),
+    ))
+}
+
+fn body() -> Result<web_sys::HtmlElement, JsInteropError> {
+    document()?
+        .body()
+        .ok_or(JsInteropError::NotFound("failed to get body".to_owned()))
+}
+
+fn create_canvas() -> Result<web_sys::HtmlCanvasElement, JsInteropError> {
+    let result: web_sys::HtmlCanvasElement = document()?
+        .create_element("canvas")?
+        .dyn_into()
+        .map_err(|_| {
+            JsInteropError::CastError(
+                "created a canvas element, but it wasn't the expected type".to_owned(),
+            )
+        })?;
+
+    result.style().set_property("position", "absolute")?;
+    result.style().set_property("width", "100%")?;
+    result.style().set_property("height", "100%")?;
+    result.style().set_property("left", "0px")?;
+    result.style().set_property("top", "0px")?;
+
+    Ok(result)
+}
