@@ -6,7 +6,7 @@ use std::{cell::RefCell, mem::forget, panic, rc::Rc};
 use errors::JsInteropError;
 use js_sys::{Math, Uint8Array};
 use log::*;
-use nalgebra_glm::{rotation, translation, Mat4, Vec3};
+use nalgebra::{Matrix4, Unit, Vector3};
 use serde::Serialize;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlVertexArrayObject};
@@ -256,44 +256,37 @@ impl AppState {
             Some(
                 &self
                     .shader_program
-                    .get_uniform_by_name("modelViewMatrix")
-                    .ok_or(JsInteropError::NotFound(
-                        "failed to find uniform".to_owned(),
-                    ))?
-                    .location,
-            ),
-            true,
-            Mat4::new_perspective(
-                (self.canvas.width() as f32) / (self.canvas.height() as f32),
-                60.0f32.to_radians(),
-                1.0,
-                100.0,
-            )
-            // Mat4::new_orthographic(
-            //     0.0,
-            //     self.canvas.width() as f32,
-            //     self.canvas.height() as f32,
-            //     0.0,
-            //     -1.0,
-            //     1.0,
-            // )
-            .as_slice(),
-        );
-        self.gl.uniform_matrix4fv_with_f32_array(
-            Some(
-                &self
-                    .shader_program
                     .get_uniform_by_name("projectionMatrix")
                     .ok_or(JsInteropError::NotFound(
                         "failed to find uniform".to_owned(),
                     ))?
                     .location,
             ),
-            true,
-            (
-                translation(&Vec3::new(4.0, 0.0, -6.0))
-                // * rotation(self.rotation, &Vec3::new(0.0, 1.0, 0.0))
+            false,
+            Matrix4::new_perspective(
+                (self.canvas.width() as f32) / (self.canvas.height() as f32),
+                60.0f32.to_radians(),
+                1.0,
+                100.0,
             )
+            .as_slice(),
+        );
+        self.gl.uniform_matrix4fv_with_f32_array(
+            Some(
+                &self
+                    .shader_program
+                    .get_uniform_by_name("modelViewMatrix")
+                    .ok_or(JsInteropError::NotFound(
+                        "failed to find uniform".to_owned(),
+                    ))?
+                    .location,
+            ),
+            false,
+            (Matrix4::new_translation(&Vector3::new(0.0, 0.0, -6.0))
+                * Matrix4::from_axis_angle(
+                    &Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0)),
+                    self.rotation,
+                ))
             .as_slice(),
         );
 
