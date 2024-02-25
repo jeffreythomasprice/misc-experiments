@@ -1,6 +1,8 @@
 use std::{collections::HashMap, rc::Rc};
 
-use web_sys::{WebGl2RenderingContext, WebGlActiveInfo, WebGlProgram, WebGlShader};
+use web_sys::{
+    WebGl2RenderingContext, WebGlActiveInfo, WebGlProgram, WebGlShader, WebGlUniformLocation,
+};
 
 use crate::errors::JsInteropError;
 
@@ -48,20 +50,35 @@ impl Drop for Shader {
 }
 
 #[derive(Debug, Clone)]
-pub struct Attribute {
+pub struct Info {
     pub index: u32,
     pub size: i32,
     pub typ: u32,
     pub name: String,
 }
 
-impl Attribute {
+impl Info {
     pub fn new(index: u32, info: WebGlActiveInfo) -> Self {
         Self {
             index,
             size: info.size(),
             typ: info.type_(),
             name: info.name(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UniformInfo {
+    pub info: Info,
+    pub location: WebGlUniformLocation,
+}
+
+impl UniformInfo {
+    pub fn new(index: u32, info: WebGlActiveInfo, location: WebGlUniformLocation) -> Self {
+        Self {
+            info: Info::new(index, info),
+            location,
         }
     }
 }
@@ -73,7 +90,8 @@ pub struct ShaderProgram {
     #[allow(dead_code)]
     fragment_shader: Shader,
     instance: WebGlProgram,
-    attributes: HashMap<String, Attribute>,
+    attributes: HashMap<String, Info>,
+    uniforms: HashMap<String, UniformInfo>,
 }
 
 impl ShaderProgram {
@@ -110,7 +128,7 @@ impl ShaderProgram {
                 as u32;
             let mut attributes = HashMap::new();
             for index in 0..active_attribs {
-                let info = Attribute::new(
+                let info = Info::new(
                     index,
                     gl.get_active_attrib(&result, index)
                         .ok_or(JsInteropError::NotFound(format!(
@@ -120,7 +138,27 @@ impl ShaderProgram {
                 attributes.insert(info.name.clone(), info);
             }
 
-            // TODO uniforms
+            let active_uniforms = gl
+                .get_program_parameter(&result, WebGl2RenderingContext::ACTIVE_UNIFORMS)
+                .as_f64()
+                .ok_or(JsInteropError::CastError("expected a number".to_owned()))?
+                as u32;
+            let mut uniforms = HashMap::new();
+            for index in 0..active_uniforms {
+                let info =
+                    gl.get_active_uniform(&result, index)
+                        .ok_or(JsInteropError::NotFound(format!(
+                            "failed to find uniform on shader with index {index}"
+                        )))?;
+                let location = gl.get_uniform_location(&result, &info.name()).ok_or(
+                    JsInteropError::NotFound(format!(
+                        "failed to find uniform location on shader with index {index}, name {}",
+                        info.name()
+                    )),
+                )?;
+                let info = UniformInfo::new(index, info, location);
+                uniforms.insert(info.info.name.clone(), info);
+            }
 
             Ok(Self {
                 gl: gl.clone(),
@@ -128,6 +166,7 @@ impl ShaderProgram {
                 fragment_shader,
                 instance: result,
                 attributes,
+                uniforms,
             })
         } else {
             let log = gl.get_program_info_log(&result);
@@ -142,8 +181,12 @@ impl ShaderProgram {
         self.gl.use_program(Some(&self.instance));
     }
 
-    pub fn get_attribute_by_name(&self, name: &str) -> Option<&Attribute> {
+    pub fn get_attribute_by_name(&self, name: &str) -> Option<&Info> {
         self.attributes.get(name)
+    }
+
+    pub fn get_uniform_by_name(&self, name: &str) -> Option<&UniformInfo> {
+        self.uniforms.get(name)
     }
 }
 

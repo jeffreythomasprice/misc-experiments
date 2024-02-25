@@ -1,11 +1,12 @@
 mod errors;
 mod shaders;
 
-use std::{mem::forget, panic, rc::Rc};
+use std::{cell::RefCell, mem::forget, panic, rc::Rc};
 
 use errors::JsInteropError;
-use js_sys::Uint8Array;
+use js_sys::{Math, Uint8Array};
 use log::*;
+use nalgebra_glm::{rotation, translation, Mat4, Vec3};
 use serde::Serialize;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlVertexArrayObject};
@@ -16,6 +17,7 @@ use crate::shaders::ShaderProgram;
 struct Vec2 {
     x: f32,
     y: f32,
+    z: f32,
 }
 
 #[allow(dead_code)]
@@ -36,10 +38,14 @@ struct AppState {
     gl: Rc<WebGl2RenderingContext>,
     shader_program: ShaderProgram,
     vertex_array: WebGlVertexArrayObject,
+
+    last_ticks: f64,
+
+    rotation: f32,
 }
 
 impl AppState {
-    pub fn new() -> Result<Rc<Self>, JsInteropError> {
+    pub fn go() -> Result<(), JsInteropError> {
         let canvas = create_canvas()?;
         body()?.replace_children_with_node_1(&canvas);
 
@@ -81,7 +87,11 @@ impl AppState {
         unsafe {
             let data = [
                 Vertex {
-                    position: Vec2 { x: -0.5, y: 0.5 },
+                    position: Vec2 {
+                        x: -1.0,
+                        y: -1.0,
+                        z: 0.0,
+                    },
                     color: RGBA {
                         r: 1.0,
                         g: 0.0,
@@ -90,7 +100,11 @@ impl AppState {
                     },
                 },
                 Vertex {
-                    position: Vec2 { x: 0.5, y: 0.5 },
+                    position: Vec2 {
+                        x: 1.0,
+                        y: -1.0,
+                        z: 0.0,
+                    },
                     color: RGBA {
                         r: 1.0,
                         g: 1.0,
@@ -99,7 +113,11 @@ impl AppState {
                     },
                 },
                 Vertex {
-                    position: Vec2 { x: 0.0, y: -0.5 },
+                    position: Vec2 {
+                        x: 0.0,
+                        y: 1.0,
+                        z: 0.0,
+                    },
                     color: RGBA {
                         r: 0.0,
                         g: 1.0,
@@ -159,23 +177,27 @@ impl AppState {
         gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
         gl.bind_vertex_array(None);
 
-        let result = Rc::new(AppState {
+        let state = Rc::new(RefCell::new(AppState {
             canvas,
             gl,
             shader_program,
             vertex_array,
-        });
+
+            last_ticks: 0.0,
+
+            rotation: 0.0,
+        }));
 
         // call once on program start because the resize handler won't call until the window actually changes size otherwise
-        if let Err(e) = result.resize() {
+        if let Err(e) = state.borrow_mut().resize() {
             error!("error resizing: {e:?}");
         }
 
         {
             // register as the window resize handler
-            let state = result.clone();
+            let state = state.clone();
             let c = Closure::<dyn Fn()>::new(move || {
-                if let Err(e) = state.resize() {
+                if let Err(e) = state.borrow_mut().resize() {
                     error!("error resizing: {e:?}");
                 }
             });
@@ -185,13 +207,13 @@ impl AppState {
         }
 
         {
-            fn request_animation_frame(state: Rc<AppState>) {
+            fn request_animation_frame(state: Rc<RefCell<AppState>>) {
                 let state = state.clone();
                 if let Err(e) = (move || -> Result<(), JsInteropError> {
                     {
                         let state = state.clone();
                         let c = Closure::once_into_js(move |time| {
-                            if let Err(e) = state.anim(time) {
+                            if let Err(e) = state.borrow_mut().anim(time) {
                                 error!("error invoking animation frame: {e:?}");
                             }
 
@@ -207,13 +229,13 @@ impl AppState {
             }
 
             // kick off the first frame
-            request_animation_frame(result.clone());
+            request_animation_frame(state.clone());
         }
 
-        Ok(result)
+        Ok(())
     }
 
-    pub fn resize(&self) -> Result<(), JsInteropError> {
+    pub fn resize(&mut self) -> Result<(), JsInteropError> {
         let width: f64 = window()?.inner_width()?.try_into()?;
         let height: f64 = window()?.inner_height()?.try_into()?;
 
@@ -224,16 +246,66 @@ impl AppState {
         Ok(())
     }
 
-    pub fn anim(&self, _time: f64) -> Result<(), JsInteropError> {
+    pub fn anim(&mut self, time: f64) -> Result<(), JsInteropError> {
         // cornflower blue, #6495ED
         self.gl.clear_color(0.39, 0.58, 0.93, 1.0);
         self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
         self.shader_program.use_program();
+        self.gl.uniform_matrix4fv_with_f32_array(
+            Some(
+                &self
+                    .shader_program
+                    .get_uniform_by_name("modelViewMatrix")
+                    .ok_or(JsInteropError::NotFound(
+                        "failed to find uniform".to_owned(),
+                    ))?
+                    .location,
+            ),
+            true,
+            Mat4::new_perspective(
+                (self.canvas.width() as f32) / (self.canvas.height() as f32),
+                60.0f32.to_radians(),
+                1.0,
+                100.0,
+            )
+            // Mat4::new_orthographic(
+            //     0.0,
+            //     self.canvas.width() as f32,
+            //     self.canvas.height() as f32,
+            //     0.0,
+            //     -1.0,
+            //     1.0,
+            // )
+            .as_slice(),
+        );
+        self.gl.uniform_matrix4fv_with_f32_array(
+            Some(
+                &self
+                    .shader_program
+                    .get_uniform_by_name("projectionMatrix")
+                    .ok_or(JsInteropError::NotFound(
+                        "failed to find uniform".to_owned(),
+                    ))?
+                    .location,
+            ),
+            true,
+            (
+                translation(&Vec3::new(4.0, 0.0, -6.0))
+                // * rotation(self.rotation, &Vec3::new(0.0, 1.0, 0.0))
+            )
+            .as_slice(),
+        );
+
         self.gl.bind_vertex_array(Some(&self.vertex_array));
         self.gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
         self.gl.bind_vertex_array(None);
+
         self.gl.use_program(None);
+
+        let delta = std::time::Duration::from_millis((time - self.last_ticks) as u64);
+        self.last_ticks = time;
+        self.rotation += (delta.as_secs_f32() * 90.0f32.to_radians()) % 360.0f32.to_radians();
 
         Ok(())
     }
@@ -243,7 +315,7 @@ fn main() -> Result<(), JsInteropError> {
     console_log::init_with_level(Level::Trace).unwrap();
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-    if let Err(e) = AppState::new() {
+    if let Err(e) = AppState::go() {
         error!("app init error: {e:?}");
     }
 
