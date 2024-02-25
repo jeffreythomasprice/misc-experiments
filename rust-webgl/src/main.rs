@@ -4,7 +4,7 @@ mod shaders;
 use std::{cell::RefCell, mem::forget, panic, rc::Rc};
 
 use errors::JsInteropError;
-use js_sys::{Math, Uint8Array};
+use js_sys::Uint8Array;
 use log::*;
 use nalgebra::{Matrix4, Unit, Vector3};
 use serde::Serialize;
@@ -12,13 +12,6 @@ use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlVertexArrayObject};
 
 use crate::shaders::ShaderProgram;
-
-#[allow(dead_code)]
-struct Vec2 {
-    x: f32,
-    y: f32,
-    z: f32,
-}
 
 #[allow(dead_code)]
 struct RGBA {
@@ -29,7 +22,7 @@ struct RGBA {
 }
 
 struct Vertex {
-    position: Vec2,
+    position: Vector3<f32>,
     color: RGBA,
 }
 
@@ -87,11 +80,7 @@ impl AppState {
         unsafe {
             let data = [
                 Vertex {
-                    position: Vec2 {
-                        x: -1.0,
-                        y: -1.0,
-                        z: 0.0,
-                    },
+                    position: Vector3::new(-1.0, -1.0, 0.0),
                     color: RGBA {
                         r: 1.0,
                         g: 0.0,
@@ -100,11 +89,7 @@ impl AppState {
                     },
                 },
                 Vertex {
-                    position: Vec2 {
-                        x: 1.0,
-                        y: -1.0,
-                        z: 0.0,
-                    },
+                    position: Vector3::new(1.0, -1.0, 0.0),
                     color: RGBA {
                         r: 1.0,
                         g: 1.0,
@@ -113,11 +98,7 @@ impl AppState {
                     },
                 },
                 Vertex {
-                    position: Vec2 {
-                        x: 0.0,
-                        y: 1.0,
-                        z: 0.0,
-                    },
+                    position: Vector3::new(0.0, 1.0, 0.0),
                     color: RGBA {
                         r: 0.0,
                         g: 1.0,
