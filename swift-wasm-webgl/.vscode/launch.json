@@ -1,0 +1,28 @@
+{
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"sourceLanguages": [
+				"swift"
+			],
+			"args": [],
+			"cwd": "${workspaceFolder:swift-wasm-javascriptkit}",
+			"name": "Debug swift-wasm",
+			"program": "${workspaceFolder:swift-wasm-javascriptkit}/.build/debug/swift-wasm",
+			"preLaunchTask": "swift: Build Debug swift-wasm"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"sourceLanguages": [
+				"swift"
+			],
+			"args": [],
+			"cwd": "${workspaceFolder:swift-wasm-javascriptkit}",
+			"name": "Release swift-wasm",
+			"program": "${workspaceFolder:swift-wasm-javascriptkit}/.build/release/swift-wasm",
+			"preLaunchTask": "swift: Build Release swift-wasm"
+		}
+	]
+}

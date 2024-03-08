@@ -131,7 +131,7 @@ impl AppState {
                 ))?;
             gl.vertex_attrib_pointer_with_i32(
                 attr.index,
-                2,
+                3,
                 WebGl2RenderingContext::FLOAT,
                 false,
                 core::mem::size_of::<Vertex>() as i32,

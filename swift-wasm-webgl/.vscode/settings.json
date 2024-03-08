@@ -1,0 +1,4 @@
+{
+	"lldb.library": "/home/jeff/swift/swift-5.9.2-RELEASE-ubuntu22.04/usr/lib/liblldb.so",
+	"lldb.launch.expressions": "native",
+}
