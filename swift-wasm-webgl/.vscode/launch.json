@@ -7,9 +7,9 @@
 				"swift"
 			],
 			"args": [],
-			"cwd": "${workspaceFolder:swift-wasm-javascriptkit}",
+			"cwd": "${workspaceFolder:swift-wasm-webgl}",
 			"name": "Debug swift-wasm",
-			"program": "${workspaceFolder:swift-wasm-javascriptkit}/.build/debug/swift-wasm",
+			"program": "${workspaceFolder:swift-wasm-webgl}/.build/debug/swift-wasm",
 			"preLaunchTask": "swift: Build Debug swift-wasm"
 		},
 		{
@@ -19,9 +19,9 @@
 				"swift"
 			],
 			"args": [],
-			"cwd": "${workspaceFolder:swift-wasm-javascriptkit}",
+			"cwd": "${workspaceFolder:swift-wasm-webgl}",
 			"name": "Release swift-wasm",
-			"program": "${workspaceFolder:swift-wasm-javascriptkit}/.build/release/swift-wasm",
+			"program": "${workspaceFolder:swift-wasm-webgl}/.build/release/swift-wasm",
 			"preLaunchTask": "swift: Build Release swift-wasm"
 		}
 	]

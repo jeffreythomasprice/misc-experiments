@@ -11,6 +11,7 @@ clean:
 	rm -rf .build
 
 run: build
+	killall -9 carton || true
 	carton dev \
 		--skip-auto-open \
 		--host 127.0.0.1 \
