@@ -6,7 +6,7 @@ struct Vector2<T: TypedArrayElement> {
 }
 
 extension Vector2: TypedArraySerialization {
-    func WriteTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
         var offset = offset
         destination[offset] = x
         offset += 1
@@ -15,7 +15,7 @@ extension Vector2: TypedArraySerialization {
         return offset
     }
 
-    static func ReadFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (Vector2<T>, Int) {
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (Vector2<T>, Int) {
         var offset = offset
         let x = source[offset]
         offset += 1

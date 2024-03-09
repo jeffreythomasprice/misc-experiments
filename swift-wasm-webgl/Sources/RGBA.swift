@@ -8,7 +8,7 @@ struct RGBA<T: TypedArrayElement> {
 }
 
 extension RGBA: TypedArraySerialization {
-    func WriteTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
         var offset = offset
         destination[offset] = r
         offset += 1
@@ -21,7 +21,7 @@ extension RGBA: TypedArraySerialization {
         return offset
     }
 
-    static func ReadFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (RGBA<T>, Int) {
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (RGBA<T>, Int) {
         var offset = offset
         let r = source[offset]
         offset += 1

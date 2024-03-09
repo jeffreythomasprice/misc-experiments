@@ -4,24 +4,36 @@ import JavaScriptKit
 struct Vertex {
     let position: Vector2<Float32>
     let color: RGBA<Float32>
+
+    static var lengthInBytes: Int {
+        MemoryLayout<Vertex>.size
+    }
+
+    static var positionOffset: Int {
+        0
+    }
+
+    static var colorOffset: Int {
+        MemoryLayout<Vector2<Float32>>.size
+    }
 }
 
 extension Vertex: TypedArraySerialization {
     typealias T = Float32
 
-    func WriteTo(destination: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> Int {
+    func writeTo(destination: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> Int {
         var offset = offset
-        offset = position.WriteTo(destination: destination, offset: offset)
-        offset = color.WriteTo(destination: destination, offset: offset)
+        offset = position.writeTo(destination: destination, offset: offset)
+        offset = color.writeTo(destination: destination, offset: offset)
         return offset
     }
 
-    static func ReadFrom(source: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> (Vertex, Int) {
+    static func readFrom(source: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> (Vertex, Int) {
         var offset = offset
         let position: Vector2<Float32>
-        (position, offset) = Vector2<Float32>.ReadFrom(source: source, offset: offset)
+        (position, offset) = Vector2<Float32>.readFrom(source: source, offset: offset)
         let color: RGBA<Float32>
-        (color, offset) = RGBA<Float32>.ReadFrom(source: source, offset: offset)
+        (color, offset) = RGBA<Float32>.readFrom(source: source, offset: offset)
         return (Vertex(position: position, color: color), offset)
     }
 }
@@ -73,30 +85,33 @@ do {
     exit(0)
 }
 
-let arrayBufferData = JSTypedArray<Float32>(length: 6 * 4)
-_ = [
-    Vertex(
-        position: Vector2(x: -0.5, y: 0.5),
-        color: RGBA(r: 1, g: 1, b: 0, a: 1)
-    ),
-    Vertex(
-        position: Vector2(x: 0.5, y: 0.5),
-        color: RGBA(r: 0, g: 1, b: 1, a: 1)
-    ),
-    Vertex(
-        position: Vector2(x: 0.5, y: -0.5),
-        color: RGBA(r: 1, g: 0, b: 1, a: 1)
-    ),
-    Vertex(
-        position: Vector2(x: -0.5, y: -0.5),
-        color: RGBA(r: 0.5, g: 0, b: 1, a: 1)
-    ),
-]
-.WriteTo(destination: arrayBufferData, offset: 0)
+let positionAttribute = shader.attributes["positionAttribute"]!
+let colorAttribute = shader.attributes["colorAttribute"]!
 
 let arrayBuffer = gl.createBuffer()
 _ = gl.bindBuffer(gl.ARRAY_BUFFER, arrayBuffer)
-_ = gl.bufferData(gl.ARRAY_BUFFER, arrayBufferData, gl.STATIC_DRAW)
+_ = gl.bufferData(
+    gl.ARRAY_BUFFER,
+    TypedArray(array: [
+        Vertex(
+            position: Vector2(x: -0.5, y: 0.5),
+            color: RGBA(r: 1, g: 1, b: 0, a: 1)
+        ),
+        Vertex(
+            position: Vector2(x: 0.5, y: 0.5),
+            color: RGBA(r: 0, g: 1, b: 1, a: 1)
+        ),
+        Vertex(
+            position: Vector2(x: 0.5, y: -0.5),
+            color: RGBA(r: 1, g: 0, b: 1, a: 1)
+        ),
+        Vertex(
+            position: Vector2(x: -0.5, y: -0.5),
+            color: RGBA(r: 0.5, g: 0, b: 1, a: 1)
+        ),
+    ]).buffer,
+    gl.STATIC_DRAW
+)
 _ = gl.bindBuffer(gl.ARRAY_BUFFER, JSValue.null)
 
 let elementArrayBuffer = gl.createBuffer()
@@ -110,6 +125,16 @@ _ = gl.bufferData(
     gl.STATIC_DRAW
 )
 _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, JSValue.null)
+
+let vertexArray = gl.createVertexArray()
+_ = gl.bindVertexArray(vertexArray)
+_ = gl.bindBuffer(gl.ARRAY_BUFFER, arrayBuffer)
+_ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
+_ = gl.enableVertexAttribArray(positionAttribute.index)
+_ = gl.enableVertexAttribArray(colorAttribute.index)
+_ = gl.vertexAttribPointer(positionAttribute.index, 2, gl.FLOAT, false, Vertex.lengthInBytes, Vertex.positionOffset)
+_ = gl.vertexAttribPointer(colorAttribute.index, 4, gl.FLOAT, false, Vertex.lengthInBytes, Vertex.colorOffset)
+_ = gl.bindVertexArray(JSValue.null)
 
 func resize() {
     let width = Int(JSObject.global.window.innerWidth.number!)
@@ -132,28 +157,8 @@ let animate = JSClosure { time in
     _ = gl.clear(gl.COLOR_BUFFER_BIT)
 
     shader.use()
-
-    // TODO use vertex array
-
-    _ = gl.bindBuffer(gl.ARRAY_BUFFER, arrayBuffer)
-    _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
-
-    let positionAttribute = shader.attributes["positionAttribute"]!
-    let colorAttribute = shader.attributes["colorAttribute"]!
-    _ = gl.enableVertexAttribArray(positionAttribute.index)
-    _ = gl.enableVertexAttribArray(colorAttribute.index)
-    _ = gl.vertexAttribPointer(positionAttribute.index, 2, gl.FLOAT, false, 4 * 6, 0)
-    _ = gl.vertexAttribPointer(colorAttribute.index, 4, gl.FLOAT, false, 4 * 6, 4 * 2)
-
+    _ = gl.bindVertexArray(vertexArray)
     _ = gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
-
-    _ = gl.disableVertexAttribArray(positionAttribute.index)
-    _ = gl.disableVertexAttribArray(colorAttribute.index)
-
-    _ = gl.bindBuffer(gl.ARRAY_BUFFER, JSValue.null)
-    _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, JSValue.null)
-
-    _ = gl.useProgram(JSValue.null)
 
     _ = JSObject.global.window.requestAnimationFrame(animate)
     return .undefined
