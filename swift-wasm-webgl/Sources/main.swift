@@ -88,11 +88,10 @@ do {
 let positionAttribute = shader.attributes["positionAttribute"]!
 let colorAttribute = shader.attributes["colorAttribute"]!
 
-let arrayBuffer = gl.createBuffer()
-_ = gl.bindBuffer(gl.ARRAY_BUFFER, arrayBuffer)
-_ = gl.bufferData(
-    gl.ARRAY_BUFFER,
-    TypedArray(array: [
+let arrayBuffer = ArrayBuffer<Vertex>(
+    gl: gl,
+    usage: BufferUsage.StaticDraw,
+    collection: [
         Vertex(
             position: Vector2(x: -0.5, y: 0.5),
             color: RGBA(r: 1, g: 1, b: 0, a: 1)
@@ -109,11 +108,10 @@ _ = gl.bufferData(
             position: Vector2(x: -0.5, y: -0.5),
             color: RGBA(r: 0.5, g: 0, b: 1, a: 1)
         ),
-    ]).buffer,
-    gl.STATIC_DRAW
+    ]
 )
-_ = gl.bindBuffer(gl.ARRAY_BUFFER, JSValue.null)
 
+// TODO do an ElementArrayBuffer class like ArrayBuffer
 let elementArrayBuffer = gl.createBuffer()
 _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
 _ = gl.bufferData(
@@ -128,7 +126,7 @@ _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, JSValue.null)
 
 let vertexArray = gl.createVertexArray()
 _ = gl.bindVertexArray(vertexArray)
-_ = gl.bindBuffer(gl.ARRAY_BUFFER, arrayBuffer)
+arrayBuffer.bind()
 _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
 _ = gl.enableVertexAttribArray(positionAttribute.index)
 _ = gl.enableVertexAttribArray(colorAttribute.index)

@@ -51,8 +51,8 @@ extension Array: TypedArraySerialization where Element: TypedArraySerialization 
 
     static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> ([Element], Int) {
         var offset = offset
-        // TODO preallocate so we don't resize all the time
         var results = Self()
+        results.reserveCapacity(source.lengthInBytes / MemoryLayout<Self>.size)
         while true {
             var next: Element
             (next, offset) = Element.readFrom(source: source, offset: offset)

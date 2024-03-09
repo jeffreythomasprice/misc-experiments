@@ -4,21 +4,24 @@ class TypedArray<T: TypedArraySerialization> {
     let elementLengthInBytes: Int
 
     private var data: JSTypedArray<UInt8>
-    private var _length: Int
+    private var _count: Int
 
     init(capacity: Int) {
         let (_, len) = T.readFrom(source: JSTypedArray<T.T>(length: MemoryLayout<T>.size), offset: 0)
         elementLengthInBytes = len * MemoryLayout<T.T>.size
 
         data = JSTypedArray<UInt8>(length: capacity * elementLengthInBytes)
-        _length = 0
+        _count = 0
     }
 
-    convenience init(array: [T]) {
-        self.init(capacity: array.count)
-        for elem in array {
-            append(elem)
-        }
+    convenience init(sequence: any Sequence<T>) {
+        self.init(capacity: 0)
+        append(sequence)
+    }
+
+    convenience init(collection: any Collection<T>) {
+        self.init(capacity: 0)
+        append(collection)
     }
 
     var capacity: Int {
@@ -32,9 +35,11 @@ class TypedArray<T: TypedArraySerialization> {
         }
     }
 
-    var length: Int { self._length }
+    var count: Int { self._count }
 
-    var lengthInBytes: Int { length * elementLengthInBytes }
+    var capacityInBytes: Int { capacity * elementLengthInBytes }
+
+    var lengthInBytes: Int { count * elementLengthInBytes }
 
     var buffer: JSTypedArray<UInt8> { data }
 
@@ -49,14 +54,71 @@ class TypedArray<T: TypedArraySerialization> {
     }
 
     func append(_ elem: T) {
-        if length == capacity {
+        if count == capacity {
             capacity += 1
         }
-        _ = elem.writeToU8(destination: data, offset: length * elementLengthInBytes)
-        _length += 1
+        _ = elem.writeToU8(destination: data, offset: lengthInBytes)
+        _count += 1
     }
 
-    // TODO iterator? foreach?
+    func append(_ source: any Sequence<T>) {
+        for elem in source {
+            append(elem)
+        }
+    }
+
+    func append(_ source: any Collection<T>) {
+        capacity = Swift.max(capacity, count + source.count)
+        for elem in source {
+            append(elem)
+        }
+    }
+}
+
+extension TypedArray: Sequence {
+    typealias Element = T
+
+    class Iterator: IteratorProtocol {
+        typealias Element = T
+
+        private let source: TypedArray<T>
+        private var index: Int
+
+        init(source: TypedArray<T>) {
+            self.source = source
+            index = 0
+        }
+
+        func next() -> T? {
+            if index >= source.count {
+                return .none
+            } else {
+                let result = source[index]
+                index += 1
+                return .some(result)
+            }
+        }
+    }
+
+    func makeIterator() -> Iterator {
+        Iterator(source: self)
+    }
+}
+
+extension TypedArray: Collection {
+    typealias Index = Int
+
+    var startIndex: Int {
+        0
+    }
+
+    var endIndex: Int {
+        count
+    }
+
+    func index(after i: Int) -> Int {
+        i + 1
+    }
 }
 
 /*
