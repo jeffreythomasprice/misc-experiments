@@ -88,9 +88,10 @@ do {
 let positionAttribute = shader.attributes["positionAttribute"]!
 let colorAttribute = shader.attributes["colorAttribute"]!
 
-let arrayBuffer = ArrayBuffer<Vertex>(
+let arrayBuffer = WebGLBuffer<Vertex>(
     gl: gl,
-    usage: BufferUsage.StaticDraw,
+    type: .array,
+    usage: .staticDraw,
     collection: [
         Vertex(
             position: Vector2(x: -0.5, y: 0.5),
@@ -111,23 +112,20 @@ let arrayBuffer = ArrayBuffer<Vertex>(
     ]
 )
 
-// TODO do an ElementArrayBuffer class like ArrayBuffer
-let elementArrayBuffer = gl.createBuffer()
-_ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
-_ = gl.bufferData(
-    gl.ELEMENT_ARRAY_BUFFER,
-    TypedArray<UInt16>(collection: [
+let elementArrayBuffer = WebGLBuffer<UInt16>(
+    gl: gl,
+    type: .elementArray,
+    usage: .staticDraw,
+    collection: [
         0, 1, 2,
         2, 3, 0,
-    ]).buffer,
-    gl.STATIC_DRAW
+    ]
 )
-_ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, JSValue.null)
 
 let vertexArray = gl.createVertexArray()
 _ = gl.bindVertexArray(vertexArray)
 arrayBuffer.bind()
-_ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
+elementArrayBuffer.bind()
 _ = gl.enableVertexAttribArray(positionAttribute.index)
 _ = gl.enableVertexAttribArray(colorAttribute.index)
 _ = gl.vertexAttribPointer(positionAttribute.index, 2, gl.FLOAT, false, Vertex.lengthInBytes, Vertex.positionOffset)
