@@ -57,7 +57,7 @@ class WebGLBuffer<T: TypedArraySerialization> {
     private let webglBuffer: JSValue
     private let dirty: DirtyRegion
 
-    init(
+    private init(
         gl: JSValue,
         type: BufferType,
         usage: BufferUsage,
@@ -96,6 +96,8 @@ class WebGLBuffer<T: TypedArraySerialization> {
         self.init(gl: gl, type: type, usage: usage, capacity: 0)
         append(collection)
     }
+
+    // TODO dispose?
 
     var capacity: Int {
         get { jsBuffer.capacity }

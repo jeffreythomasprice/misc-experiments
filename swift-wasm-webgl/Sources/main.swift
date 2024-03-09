@@ -55,9 +55,9 @@ _ = JSObject.global.document.body.replaceChildren(canvas)
 
 var gl = canvas.getContext("webgl2", ["powerPreference": "high-performance"])
 
-let shader: Shader
+let shader: WebGLShader
 do {
-    shader = try Shader(
+    shader = try WebGLShader(
         gl: gl,
         vertexSource: """
             attribute vec2 positionAttribute;
@@ -122,15 +122,30 @@ let elementArrayBuffer = WebGLBuffer<UInt16>(
     ]
 )
 
-let vertexArray = gl.createVertexArray()
-_ = gl.bindVertexArray(vertexArray)
-arrayBuffer.bind()
-elementArrayBuffer.bind()
-_ = gl.enableVertexAttribArray(positionAttribute.index)
-_ = gl.enableVertexAttribArray(colorAttribute.index)
-_ = gl.vertexAttribPointer(positionAttribute.index, 2, gl.FLOAT, false, Vertex.lengthInBytes, Vertex.positionOffset)
-_ = gl.vertexAttribPointer(colorAttribute.index, 4, gl.FLOAT, false, Vertex.lengthInBytes, Vertex.colorOffset)
-_ = gl.bindVertexArray(JSValue.null)
+let vertexArray = WebGLVertexArray(
+    gl: gl,
+    shader: shader,
+    arrayBuffer: arrayBuffer,
+    elementArrayBuffer: elementArrayBuffer,
+    attributes: [
+        WebGLVertexArray.VertexAttributeInfo(
+            shaderInfo: positionAttribute,
+            size: 2,
+            type: .float,
+            normalized: false,
+            stride: Vertex.lengthInBytes,
+            offset: Vertex.positionOffset
+        ),
+        WebGLVertexArray.VertexAttributeInfo(
+            shaderInfo: colorAttribute,
+            size: 4,
+            type: .float,
+            normalized: false,
+            stride: Vertex.lengthInBytes,
+            offset: Vertex.colorOffset
+        ),
+    ]
+)
 
 func resize() {
     let width = Int(JSObject.global.window.innerWidth.number!)
@@ -152,9 +167,8 @@ let animate = JSClosure { time in
     _ = gl.clearColor(0.25, 0.5, 0.75, 1.0)
     _ = gl.clear(gl.COLOR_BUFFER_BIT)
 
-    shader.use()
-    _ = gl.bindVertexArray(vertexArray)
-    _ = gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
+    vertexArray.bind()
+    vertexArray.drawElements(drawType: .triangles, count: 6, offset: 0)
 
     _ = JSObject.global.window.requestAnimationFrame(animate)
     return .undefined

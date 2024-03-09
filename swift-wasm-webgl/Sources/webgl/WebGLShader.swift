@@ -1,18 +1,18 @@
 import JavaScriptKit
 
-enum ShaderError: Error {
-    case compile(String)
-    case link(String)
-}
+class WebGLShader {
+    enum Error: Swift.Error {
+        case compile(String)
+        case link(String)
+    }
 
-struct Info {
-    let index: Int
-    let size: Int
-    let type: Int
-    let name: String
-}
+    struct Info {
+        let index: Int
+        let size: Int
+        let type: Int
+        let name: String
+    }
 
-class Shader {
     private let gl: JSValue
     private let vertexShader: JSValue
     private let fragmentShader: JSValue
@@ -23,10 +23,10 @@ class Shader {
     init(gl: JSValue, vertexSource: String, fragmentSource: String) throws {
         self.gl = gl
 
-        vertexShader = try Shader.createShader(gl: gl, type: gl.VERTEX_SHADER, source: vertexSource).get()
+        vertexShader = try WebGLShader.createShader(gl: gl, type: gl.VERTEX_SHADER, source: vertexSource).get()
 
         fragmentShader =
-            switch Shader.createShader(gl: gl, type: gl.FRAGMENT_SHADER, source: fragmentSource) {
+            switch WebGLShader.createShader(gl: gl, type: gl.FRAGMENT_SHADER, source: fragmentSource) {
             case let .success(x):
                 x
             case let .failure(e):
@@ -43,7 +43,7 @@ class Shader {
             _ = self.gl.deleteShader(vertexShader)
             _ = self.gl.deleteShader(fragmentShader)
             _ = self.gl.deleteProgram(program)
-            throw ShaderError.link(log)
+            throw Error.link(log)
         }
 
         let activeAttributes = Int(gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES).number!)
@@ -66,11 +66,13 @@ class Shader {
         }
     }
 
+    // TODO dispose?
+
     func use() {
         _ = gl.useProgram(program)
     }
 
-    private static func createShader(gl: JSValue, type: JSValue, source: String) -> Result<JSValue, ShaderError> {
+    private static func createShader(gl: JSValue, type: JSValue, source: String) -> Result<JSValue, Error> {
         let result = gl.createShader(type)
         _ = gl.shaderSource(result, source)
         _ = gl.compileShader(result)
