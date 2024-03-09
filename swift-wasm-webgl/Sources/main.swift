@@ -116,10 +116,10 @@ let elementArrayBuffer = gl.createBuffer()
 _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
 _ = gl.bufferData(
     gl.ELEMENT_ARRAY_BUFFER,
-    JSTypedArray<UInt16>([
+    TypedArray<UInt16>(collection: [
         0, 1, 2,
         2, 3, 0,
-    ]),
+    ]).buffer,
     gl.STATIC_DRAW
 )
 _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, JSValue.null)

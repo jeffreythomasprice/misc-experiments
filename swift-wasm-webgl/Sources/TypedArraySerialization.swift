@@ -61,3 +61,107 @@ extension Array: TypedArraySerialization where Element: TypedArraySerialization 
         return (results, offset)
     }
 }
+
+extension Int8: TypedArraySerialization {
+    typealias T = Int8
+
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+        destination[offset] = self
+        return offset + 1
+    }
+
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (T, Int) {
+        (source[offset], offset + 1)
+    }
+}
+
+extension UInt8: TypedArraySerialization {
+    typealias T = UInt8
+
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+        destination[offset] = self
+        return offset + 1
+    }
+
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (T, Int) {
+        (source[offset], offset + 1)
+    }
+}
+
+extension Int16: TypedArraySerialization {
+    typealias T = Int16
+
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+        destination[offset] = self
+        return offset + 1
+    }
+
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (T, Int) {
+        (source[offset], offset + 1)
+    }
+}
+
+extension UInt16: TypedArraySerialization {
+    typealias T = UInt16
+
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+        destination[offset] = self
+        return offset + 1
+    }
+
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (T, Int) {
+        (source[offset], offset + 1)
+    }
+}
+
+extension Int32: TypedArraySerialization {
+    typealias T = Int32
+
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+        destination[offset] = self
+        return offset + 1
+    }
+
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (T, Int) {
+        (source[offset], offset + 1)
+    }
+}
+
+extension UInt32: TypedArraySerialization {
+    typealias T = UInt32
+
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+        destination[offset] = self
+        return offset + 1
+    }
+
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (T, Int) {
+        (source[offset], offset + 1)
+    }
+}
+
+extension Float32: TypedArraySerialization {
+    typealias T = Float32
+
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+        destination[offset] = self
+        return offset + 1
+    }
+
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (T, Int) {
+        (source[offset], offset + 1)
+    }
+}
+
+extension Float64: TypedArraySerialization {
+    typealias T = Float64
+
+    func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
+        destination[offset] = self
+        return offset + 1
+    }
+
+    static func readFrom(source: JavaScriptKit.JSTypedArray<T>, offset: Int) -> (T, Int) {
+        (source[offset], offset + 1)
+    }
+}
