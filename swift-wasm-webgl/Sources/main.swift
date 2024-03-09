@@ -1,6 +1,31 @@
 import JavaScriptEventLoop
 import JavaScriptKit
 
+struct Vertex {
+    let position: Vector2<Float32>
+    let color: RGBA<Float32>
+}
+
+extension Vertex: TypedArraySerialization {
+    typealias T = Float32
+
+    func WriteTo(destination: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> Int {
+        var offset = offset
+        offset = position.WriteTo(destination: destination, offset: offset)
+        offset = color.WriteTo(destination: destination, offset: offset)
+        return offset
+    }
+
+    static func ReadFrom(source: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> (Vertex, Int) {
+        var offset = offset
+        let position: Vector2<Float32>
+        (position, offset) = Vector2<Float32>.ReadFrom(source: source, offset: offset)
+        let color: RGBA<Float32>
+        (color, offset) = RGBA<Float32>.ReadFrom(source: source, offset: offset)
+        return (Vertex(position: position, color: color), offset)
+    }
+}
+
 JavaScriptEventLoop.installGlobalExecutor()
 
 var canvas = JSObject.global.document.createElement("canvas")
@@ -48,22 +73,30 @@ do {
     exit(0)
 }
 
+let arrayBufferData = JSTypedArray<Float32>(length: 6 * 4)
+_ = [
+    Vertex(
+        position: Vector2(x: -0.5, y: 0.5),
+        color: RGBA(r: 1, g: 1, b: 0, a: 1)
+    ),
+    Vertex(
+        position: Vector2(x: 0.5, y: 0.5),
+        color: RGBA(r: 0, g: 1, b: 1, a: 1)
+    ),
+    Vertex(
+        position: Vector2(x: 0.5, y: -0.5),
+        color: RGBA(r: 1, g: 0, b: 1, a: 1)
+    ),
+    Vertex(
+        position: Vector2(x: -0.5, y: -0.5),
+        color: RGBA(r: 0.5, g: 0, b: 1, a: 1)
+    ),
+]
+.WriteTo(destination: arrayBufferData, offset: 0)
+
 let arrayBuffer = gl.createBuffer()
 _ = gl.bindBuffer(gl.ARRAY_BUFFER, arrayBuffer)
-_ = gl.bufferData(
-    gl.ARRAY_BUFFER,
-    JSTypedArray<Float32>([
-        -0.5, 0.5,
-        1, 1, 0, 1,
-        0.5, 0.5,
-        0, 1, 1, 1,
-        0.5, -0.5,
-        1, 0, 1, 1,
-        -0.5, -0.5,
-        0.5, 0, 1, 1,
-    ]),
-    gl.STATIC_DRAW
-)
+_ = gl.bufferData(gl.ARRAY_BUFFER, arrayBufferData, gl.STATIC_DRAW)
 _ = gl.bindBuffer(gl.ARRAY_BUFFER, JSValue.null)
 
 let elementArrayBuffer = gl.createBuffer()
