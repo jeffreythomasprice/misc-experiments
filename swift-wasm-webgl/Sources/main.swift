@@ -1,57 +1,6 @@
 import JavaScriptEventLoop
 import JavaScriptKit
 
-enum ShaderError: Error {
-    case compile(String)
-    case link(String)
-}
-
-class Shader {
-    private let gl: JSValue
-    private let vertexShader: JSValue
-    private let fragmentShader: JSValue
-    private let program: JSValue
-
-    init(gl: JSValue, vertexSource: String, fragmentSource: String) throws {
-        self.gl = gl
-
-        vertexShader = try Shader.createShader(gl: gl, type: gl.VERTEX_SHADER, source: vertexSource).get()
-
-        fragmentShader =
-            switch Shader.createShader(gl: gl, type: gl.FRAGMENT_SHADER, source: fragmentSource) {
-            case let .success(x):
-                x
-            case let .failure(e):
-                _ = gl.deleteShader(vertexShader)
-                throw e
-            }
-
-        program = gl.createProgram()
-        _ = gl.attachShader(program, vertexShader)
-        _ = gl.attachShader(program, fragmentShader)
-        _ = gl.linkProgram(program)
-        if !self.gl.getProgramParameter(program, gl.LINK_STATUS).boolean! {
-            let log = gl.getProgramInfoLog(program).string!
-            _ = self.gl.deleteShader(vertexShader)
-            _ = self.gl.deleteShader(fragmentShader)
-            _ = self.gl.deleteProgram(program)
-            throw ShaderError.link(log)
-        }
-    }
-
-    private static func createShader(gl: JSValue, type: JSValue, source: String) -> Result<JSValue, ShaderError> {
-        let result = gl.createShader(type)
-        _ = gl.shaderSource(result, source)
-        _ = gl.compileShader(result)
-        if !gl.getShaderParameter(result, gl.COMPILE_STATUS).boolean! {
-            let log = gl.getShaderInfoLog(result).string!
-            _ = gl.deleteShader(result)
-            return .failure(.compile(log))
-        }
-        return .success(result)
-    }
-}
-
 JavaScriptEventLoop.installGlobalExecutor()
 
 var canvas = JSObject.global.document.createElement("canvas")
@@ -69,27 +18,65 @@ _ = JSObject.global.document.body.replaceChildren(canvas)
 
 var gl = canvas.getContext("webgl2", ["powerPreference": "high-performance"])
 
+let shader: Shader
 do {
-    let shader = try Shader(
+    shader = try Shader(
         gl: gl,
         vertexSource: """
             attribute vec2 positionAttribute;
+            attribute vec4 colorAttribute;
+
+            varying vec4 colorVarying;
 
             void main() {
                 gl_Position = vec4(positionAttribute, 0, 1);
+                colorVarying = colorAttribute;
             }
             """,
         fragmentSource: """
             precision mediump float;
 
+            varying vec4 colorVarying;
+
             void main() {
-                gl_FragColor = vec4(1, 1, 1, 1);
+                gl_FragColor = colorVarying;
             }
             """
     )
 } catch {
     print("error making shader: \(error)")
+    exit(0)
 }
+
+let arrayBuffer = gl.createBuffer()
+_ = gl.bindBuffer(gl.ARRAY_BUFFER, arrayBuffer)
+_ = gl.bufferData(
+    gl.ARRAY_BUFFER,
+    JSTypedArray<Float32>([
+        -0.5, 0.5,
+        1, 1, 0, 1,
+        0.5, 0.5,
+        0, 1, 1, 1,
+        0.5, -0.5,
+        1, 0, 1, 1,
+        -0.5, -0.5,
+        0.5, 0, 1, 1,
+    ]),
+    gl.STATIC_DRAW
+)
+_ = gl.bindBuffer(gl.ARRAY_BUFFER, JSValue.null)
+
+let elementArrayBuffer = gl.createBuffer()
+_ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
+_ = gl.bufferData(
+    gl.ELEMENT_ARRAY_BUFFER,
+    JSTypedArray<UInt16>([
+        0, 1, 2,
+        2, 3, 0,
+    ]),
+    gl.STATIC_DRAW
+)
+_ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, JSValue.null)
 
 func resize() {
     let width = Int(JSObject.global.window.innerWidth.number!)
@@ -110,6 +97,30 @@ resize()
 let animate = JSClosure { time in
     _ = gl.clearColor(0.25, 0.5, 0.75, 1.0)
     _ = gl.clear(gl.COLOR_BUFFER_BIT)
+
+    shader.use()
+
+    // TODO use vertex array
+
+    _ = gl.bindBuffer(gl.ARRAY_BUFFER, arrayBuffer)
+    _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elementArrayBuffer)
+
+    let positionAttribute = shader.attributes["positionAttribute"]!
+    let colorAttribute = shader.attributes["colorAttribute"]!
+    _ = gl.enableVertexAttribArray(positionAttribute.index)
+    _ = gl.enableVertexAttribArray(colorAttribute.index)
+    _ = gl.vertexAttribPointer(positionAttribute.index, 2, gl.FLOAT, false, 4 * 6, 0)
+    _ = gl.vertexAttribPointer(colorAttribute.index, 4, gl.FLOAT, false, 4 * 6, 4 * 2)
+
+    _ = gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
+
+    _ = gl.disableVertexAttribArray(positionAttribute.index)
+    _ = gl.disableVertexAttribArray(colorAttribute.index)
+
+    _ = gl.bindBuffer(gl.ARRAY_BUFFER, JSValue.null)
+    _ = gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, JSValue.null)
+
+    _ = gl.useProgram(JSValue.null)
 
     _ = JSObject.global.window.requestAnimationFrame(animate)
     return .undefined
