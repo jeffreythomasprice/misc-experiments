@@ -1,11 +1,10 @@
 import JavaScriptKit
 
-struct Matrix4<T: TypedArrayElement> {
+struct Matrix4<T: TypedArrayElement & StaticSized> {
     let data: [T]
 }
 
-extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
-    // TODO only needs expressable by int literal?
+extension Matrix4 where T: ExpressibleByIntegerLiteral {
     static var identity: Self {
         Self(data: [
             1, 0, 0, 0,
@@ -15,7 +14,26 @@ extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
         ])
     }
 
-    // TODO only needs mathable?
+    static func translation(_ v: Vector3<T>) -> Self {
+        Self(data: [
+            1, 0, 0, 0,
+            0, 1, 0, 0,
+            0, 0, 1, 0,
+            v.x, v.y, v.z, 1,
+        ])
+    }
+
+    static func scale(_ v: Vector3<T>) -> Self {
+        Self(data: [
+            v.x, 0, 0, 0,
+            0, v.y, 0, 0,
+            0, 0, v.z, 0,
+            0, 0, 0, 1,
+        ])
+    }
+}
+
+extension Matrix4 where T: FloatingPoint & Mathable {
     static func * (left: Self, right: Self) -> Self {
         var result: [T] = [
             0, 0, 0, 0,
@@ -33,40 +51,14 @@ extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
         return Self(data: result)
     }
 
-    // TODO only needs expressable by int literal?
-    static func translation(_ v: Vector3<T>) -> Self {
-        Self(data: [
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            v.x, v.y, v.z, 1,
-        ])
+    func translate(_ v: Vector3<T>) -> Self {
+        Self.translation(v) * self
     }
 
-    // TODO only needs expressable by int literal?
-    static func scale(_ v: Vector3<T>) -> Self {
-        Self(data: [
-            v.x, 0, 0, 0,
-            0, v.y, 0, 0,
-            0, 0, v.z, 0,
-            0, 0, 0, 1,
-        ])
+    func scale(_ v: Vector3<T>) -> Self {
+        Self.scale(v) * self
     }
 
-    // TODO needs Sqrt & Trigonometry
-    static func rotation(axis: Vector3<T>, angle: Radians<T>) -> Self {
-        let c = angle.cos
-        let s = angle.sin
-        let axis = axis.normalized
-        return Self(data: [
-            axis.x * axis.x * (1 - c) + c, axis.x * axis.y * (1 - c) - axis.z * s, axis.x * axis.z * (1 - c) + axis.y * s, 0,
-            axis.y * axis.x * (1 - c) + axis.z * s, axis.y * axis.y * (1 - c) + c, axis.y * axis.z * (1 - c) - axis.x * s, 0,
-            axis.x * axis.z * (1 - c) - axis.y * s, axis.y * axis.z * (1 - c) + axis.x * s, axis.z * axis.z * (1 - c) + c, 0,
-            0, 0, 0, 1,
-        ])
-    }
-
-    // TODO needs mathable
     static func ortho(
         left: T,
         right: T,
@@ -83,12 +75,22 @@ extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
         ])
     }
 
-    func translate(_ v: Vector3<T>) -> Self {
-        Self.translation(v) * self
-    }
+    // TODO perspective
 
-    func scale(_ v: Vector3<T>) -> Self {
-        Self.scale(v) * self
+    // TODO camera, lookat
+}
+
+extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
+    static func rotation(axis: Vector3<T>, angle: Radians<T>) -> Self {
+        let c = angle.cos
+        let s = angle.sin
+        let axis = axis.normalized
+        return Self(data: [
+            axis.x * axis.x * (1 - c) + c, axis.x * axis.y * (1 - c) - axis.z * s, axis.x * axis.z * (1 - c) + axis.y * s, 0,
+            axis.y * axis.x * (1 - c) + axis.z * s, axis.y * axis.y * (1 - c) + c, axis.y * axis.z * (1 - c) - axis.x * s, 0,
+            axis.x * axis.z * (1 - c) - axis.y * s, axis.y * axis.z * (1 - c) + axis.x * s, axis.z * axis.z * (1 - c) + c, 0,
+            0, 0, 0, 1,
+        ])
     }
 
     func rotate(axis: Vector3<T>, angle: Radians<T>) -> Self {

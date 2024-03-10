@@ -1,6 +1,6 @@
 import JavaScriptKit
 
-class WebGLVertexArray<T: TypedArraySerialization> {
+class WebGLVertexArray<T: TypedArraySerialization & StaticSized> {
     enum VertexType {
         case byte
         case short

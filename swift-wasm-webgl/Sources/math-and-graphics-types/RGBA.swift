@@ -1,13 +1,15 @@
 import JavaScriptKit
 
-struct RGBA<T: TypedArrayElement> {
+struct RGBA<T: TypedArrayElement & StaticSized> {
     let r: T
     let g: T
     let b: T
     let a: T
 }
 
-extension RGBA: TypedArraySerialization {
+extension RGBA: TypedArraySerialization & StaticSized {
+    static var lengthInBytes: Int { T.lengthInBytes * 4 }
+
     func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
         var offset = offset
         destination[offset] = r

@@ -1,6 +1,6 @@
 import JavaScriptKit
 
-class WebGLBuffer<T: TypedArraySerialization> {
+class WebGLBuffer<T: TypedArraySerialization & StaticSized> {
     enum BufferUsage {
         case staticDraw
         case dynamicDraw
@@ -171,10 +171,10 @@ class WebGLBuffer<T: TypedArraySerialization> {
         for range in dirty.clear() {
             _ = gl.bufferSubData(
                 type.glValue(gl: gl),
-                range.index * jsBuffer.elementLengthInBytes,
+                range.index * T.lengthInBytes,
                 jsBuffer.buffer,
-                range.index * jsBuffer.elementLengthInBytes,
-                range.count * jsBuffer.elementLengthInBytes
+                range.index * T.lengthInBytes,
+                range.count * T.lengthInBytes
             )
         }
     }

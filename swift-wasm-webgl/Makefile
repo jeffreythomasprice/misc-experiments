@@ -1,16 +1,16 @@
 .PHONY = \
-	build \
+	build-native \
 	clean \
 	run \
 	watch
 
-build:
+build-native:
 	swift build
 
 clean:
 	rm -rf .build
 
-run: build
+run:
 	killall -9 carton || true
 	carton dev \
 		--skip-auto-open \

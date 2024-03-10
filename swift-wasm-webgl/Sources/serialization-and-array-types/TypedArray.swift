@@ -1,16 +1,11 @@
 import JavaScriptKit
 
-class TypedArray<T: TypedArraySerialization> {
-    let elementLengthInBytes: Int
-
+class TypedArray<T: TypedArraySerialization & StaticSized> {
     private var data: JSTypedArray<UInt8>
     private var _count: Int
 
     init(capacity: Int) {
-        let (_, len) = T.readFrom(source: JSTypedArray<T.T>(length: MemoryLayout<T>.size), offset: 0)
-        elementLengthInBytes = len * MemoryLayout<T.T>.size
-
-        data = JSTypedArray<UInt8>(length: capacity * elementLengthInBytes)
+        data = JSTypedArray<UInt8>(length: capacity * T.lengthInBytes)
         _count = 0
     }
 
@@ -25,10 +20,10 @@ class TypedArray<T: TypedArraySerialization> {
     }
 
     var capacity: Int {
-        get { data.lengthInBytes / elementLengthInBytes }
+        get { data.lengthInBytes / T.lengthInBytes }
         set {
             if newValue != capacity {
-                let newData = JSTypedArray<UInt8>(length: newValue * elementLengthInBytes)
+                let newData = JSTypedArray<UInt8>(length: newValue * T.lengthInBytes)
                 _ = newData.jsValue.set(data)
                 data = newData
             }
@@ -37,19 +32,19 @@ class TypedArray<T: TypedArraySerialization> {
 
     var count: Int { self._count }
 
-    var capacityInBytes: Int { capacity * elementLengthInBytes }
+    var capacityInBytes: Int { capacity * T.lengthInBytes }
 
-    var lengthInBytes: Int { count * elementLengthInBytes }
+    var lengthInBytes: Int { count * T.lengthInBytes }
 
     var buffer: JSTypedArray<UInt8> { data }
 
     subscript(index: Int) -> T {
         get {
-            let (result, _) = T.readFromU8(source: data, offset: index * elementLengthInBytes)
+            let (result, _) = T.readFromU8(source: data, offset: index * T.lengthInBytes)
             return result
         }
         set {
-            _ = newValue.writeToU8(destination: data, offset: index * elementLengthInBytes)
+            _ = newValue.writeToU8(destination: data, offset: index * T.lengthInBytes)
         }
     }
 

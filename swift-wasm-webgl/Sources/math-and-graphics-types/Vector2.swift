@@ -1,11 +1,13 @@
 import JavaScriptKit
 
-struct Vector2<T: TypedArrayElement> {
+struct Vector2<T: TypedArrayElement & StaticSized> {
     let x: T
     let y: T
 }
 
-extension Vector2: TypedArraySerialization {
+extension Vector2: TypedArraySerialization & StaticSized {
+    static var lengthInBytes: Int { T.lengthInBytes * 2 }
+
     func writeTo(destination: JavaScriptKit.JSTypedArray<T>, offset: Int) -> Int {
         var offset = offset
         destination[offset] = x

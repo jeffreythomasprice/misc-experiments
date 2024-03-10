@@ -5,21 +5,21 @@ struct Vertex {
     let position: Vector2<Float32>
     let color: RGBA<Float32>
 
-    static var lengthInBytes: Int {
-        MemoryLayout<Vertex>.size
-    }
-
     static var positionOffset: Int {
         0
     }
 
     static var colorOffset: Int {
-        MemoryLayout<Vector2<Float32>>.size
+        Vector2<Float32>.lengthInBytes
     }
 }
 
-extension Vertex: TypedArraySerialization {
+extension Vertex: TypedArraySerialization & StaticSized {
     typealias T = Float32
+
+    static var lengthInBytes: Int {
+        Vector2<Float32>.lengthInBytes + RGBA<Float32>.lengthInBytes
+    }
 
     func writeTo(destination: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> Int {
         var offset = offset
