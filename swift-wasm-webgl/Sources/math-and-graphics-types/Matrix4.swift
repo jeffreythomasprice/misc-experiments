@@ -100,7 +100,7 @@ extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
         near: T,
         far: T
     ) -> Self {
-        let f = 1 / (verticalFieldOfView / Radians(value: 2)).tan
+        let f = 1 / (verticalFieldOfView / Radians(2)).tan
         let aspect = width / height
         return Self(data: [
             f / aspect, 0, 0, 0,

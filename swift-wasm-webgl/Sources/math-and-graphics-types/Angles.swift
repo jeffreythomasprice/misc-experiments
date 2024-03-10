@@ -2,27 +2,39 @@ import JavaScriptKit
 
 struct Radians<T: TypedArrayElement> {
     let value: T
+
+    init(_ value: T) {
+        self.value = value
+    }
 }
 
 extension Radians where T: FloatingPoint {
-    var degrees: Degrees<T> { Degrees(value: value * 180 / T.pi) }
+    var degrees: Degrees<T> {
+        Degrees(value * 180 / T.pi)
+    }
 }
 
 extension Radians: Mathable where T: Mathable {
     static func + (left: Radians<T>, right: Radians<T>) -> Radians<T> {
-        Radians<T>(value: left.value + right.value)
+        Radians<T>(left.value + right.value)
     }
 
     static func - (left: Radians<T>, right: Radians<T>) -> Radians<T> {
-        Radians<T>(value: left.value - right.value)
+        Radians<T>(left.value - right.value)
     }
 
     static func * (left: Radians<T>, right: Radians<T>) -> Radians<T> {
-        Radians<T>(value: left.value * right.value)
+        Radians<T>(left.value * right.value)
     }
 
     static func / (left: Radians<T>, right: Radians<T>) -> Radians<T> {
-        Radians<T>(value: left.value / right.value)
+        Radians<T>(left.value / right.value)
+    }
+}
+
+extension Radians: TruncatingRemainderable where T: TruncatingRemainderable {
+    func truncatingRemainder(dividingBy: Radians<T>) -> Radians<T> {
+        Self(value.truncatingRemainder(dividingBy: dividingBy.value))
     }
 }
 
@@ -34,27 +46,39 @@ extension Radians where T: Trigonometry {
 
 struct Degrees<T: TypedArrayElement> {
     let value: T
+
+    init(_ value: T) {
+        self.value = value
+    }
 }
 
 extension Degrees where T: FloatingPoint {
-    var radians: Radians<T> { Radians(value: value * T.pi / 180) }
+    var radians: Radians<T> {
+        Radians(value * T.pi / 180)
+    }
 }
 
 extension Degrees: Mathable where T: Mathable {
     static func + (left: Degrees<T>, right: Degrees<T>) -> Degrees<T> {
-        Degrees<T>(value: left.value + right.value)
+        Degrees<T>(left.value + right.value)
     }
 
     static func - (left: Degrees<T>, right: Degrees<T>) -> Degrees<T> {
-        Degrees<T>(value: left.value - right.value)
+        Degrees<T>(left.value - right.value)
     }
 
     static func * (left: Degrees<T>, right: Degrees<T>) -> Degrees<T> {
-        Degrees<T>(value: left.value * right.value)
+        Degrees<T>(left.value * right.value)
     }
 
     static func / (left: Degrees<T>, right: Degrees<T>) -> Degrees<T> {
-        Degrees<T>(value: left.value / right.value)
+        Degrees<T>(left.value / right.value)
+    }
+}
+
+extension Degrees: TruncatingRemainderable where T: TruncatingRemainderable {
+    func truncatingRemainder(dividingBy: Degrees<T>) -> Degrees<T> {
+        Self(value.truncatingRemainder(dividingBy: dividingBy.value))
     }
 }
 

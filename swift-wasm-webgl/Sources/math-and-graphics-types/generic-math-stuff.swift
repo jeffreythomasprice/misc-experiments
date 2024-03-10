@@ -18,6 +18,13 @@ extension Int64: Mathable {}
 extension Float32: Mathable {}
 extension Float64: Mathable {}
 
+protocol TruncatingRemainderable {
+    func truncatingRemainder(dividingBy: Self) -> Self
+}
+
+extension Float32: TruncatingRemainderable {}
+extension Float64: TruncatingRemainderable {}
+
 protocol Trigonometry {
     var cos: Self { get }
     var sin: Self { get }

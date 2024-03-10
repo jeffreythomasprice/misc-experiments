@@ -169,16 +169,14 @@ _ = JSObject.global.window.addEventListener(
     })
 resize()
 
-var rotation = Degrees<Float32>(value: 0)
+var rotation = Degrees<Float32>(0)
 var lastTime: Float64 = 0
 let animate = JSClosure { args in
     let time = args[0].number!
     let timeDelta = Float32((time - lastTime) / 1000)
     lastTime = time
-    // TODO put a truncatingRemainder on Radians and Degrees
     // TODO Put math opers that take left or right hand side as the primitive type
-    rotation = Degrees(
-        value: (rotation + Degrees<Float32>(value: 90) * Degrees(value: timeDelta)).value.truncatingRemainder(dividingBy: 360))
+    rotation = (rotation + Degrees<Float32>(90) * Degrees(timeDelta)).truncatingRemainder(dividingBy: Degrees(360))
 
     _ = gl.clearColor(0.25, 0.5, 0.75, 1.0)
     _ = gl.clear(gl.COLOR_BUFFER_BIT)
@@ -187,7 +185,7 @@ let animate = JSClosure { args in
         projectionMatrixUniform.location,
         true,
         Matrix4<Float32>.perspective(
-            verticalFieldOfView: Degrees(value: 60).radians,
+            verticalFieldOfView: Degrees(60).radians,
             width: Float32(canvas.width.number!),
             height: Float32(canvas.height.number!),
             near: 0.1,
