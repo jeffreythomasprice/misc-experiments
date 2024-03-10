@@ -6,8 +6,15 @@ class WebGLShader {
         case link(String)
     }
 
-    struct Info {
+    struct AttributeInfo {
         let index: Int
+        let size: Int
+        let type: Int
+        let name: String
+    }
+
+    struct UniformInfo {
+        let location: JSValue
         let size: Int
         let type: Int
         let name: String
@@ -18,7 +25,8 @@ class WebGLShader {
     private let fragmentShader: JSValue
     private let program: JSValue
 
-    let attributes: [String: Info]
+    let attributes: [String: AttributeInfo]
+    let uniforms: [String: UniformInfo]
 
     init(gl: JSValue, vertexSource: String, fragmentSource: String) throws {
         self.gl = gl
@@ -47,11 +55,11 @@ class WebGLShader {
         }
 
         let activeAttributes = Int(gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES).number!)
-        var attributes = [String: Info]()
+        var attributes = [String: AttributeInfo]()
         for i in 0..<activeAttributes {
             let info = gl.getActiveAttrib(program, i)
             let name = info.name.string!
-            attributes[name] = Info.init(
+            attributes[name] = AttributeInfo(
                 index: i,
                 size: Int(info.size.number!),
                 type: Int(info.type.number!),
@@ -61,9 +69,18 @@ class WebGLShader {
         self.attributes = attributes
 
         let activeUniforms = Int(gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS).number!)
+        var uniforms = [String: UniformInfo]()
         for i in 0..<activeUniforms {
-            // TODO uniforms
+            let info = gl.getActiveUniform(program, i)
+            let name = info.name.string!
+            uniforms[name] = UniformInfo(
+                location: gl.getUniformLocation(program, name),
+                size: Int(info.size.number!),
+                type: Int(info.type.number!),
+                name: name
+            )
         }
+        self.uniforms = uniforms
     }
 
     // TODO dispose?

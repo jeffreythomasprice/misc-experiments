@@ -69,7 +69,7 @@ class WebGLVertexArray<T: TypedArraySerialization> {
     }
 
     struct VertexAttributeInfo {
-        let shaderInfo: WebGLShader.Info
+        let shaderInfo: WebGLShader.AttributeInfo
         let size: Int
         let type: VertexType
         let normalized: Bool

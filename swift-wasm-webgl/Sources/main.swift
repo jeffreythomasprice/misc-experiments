@@ -63,10 +63,13 @@ do {
             attribute vec2 positionAttribute;
             attribute vec4 colorAttribute;
 
+            uniform mat4 projectionMatrixUniform;
+            uniform mat4 modelViewMatrixUniform;
+
             varying vec4 colorVarying;
 
             void main() {
-                gl_Position = vec4(positionAttribute, 0, 1);
+                gl_Position = projectionMatrixUniform * modelViewMatrixUniform * vec4(positionAttribute, 0, 1);
                 colorVarying = colorAttribute;
             }
             """,
@@ -88,25 +91,28 @@ do {
 let positionAttribute = shader.attributes["positionAttribute"]!
 let colorAttribute = shader.attributes["colorAttribute"]!
 
+let projectionMatrixUniform = shader.uniforms["projectionMatrixUniform"]!
+let modelViewMatrixUniform = shader.uniforms["modelViewMatrixUniform"]!
+
 let arrayBuffer = WebGLBuffer<Vertex>(
     gl: gl,
     type: .array,
     usage: .staticDraw,
     collection: [
         Vertex(
-            position: Vector2(x: -0.5, y: 0.5),
+            position: Vector2(x: -150, y: -150),
             color: RGBA(r: 1, g: 1, b: 0, a: 1)
         ),
         Vertex(
-            position: Vector2(x: 0.5, y: 0.5),
+            position: Vector2(x: 150, y: -150),
             color: RGBA(r: 0, g: 1, b: 1, a: 1)
         ),
         Vertex(
-            position: Vector2(x: 0.5, y: -0.5),
+            position: Vector2(x: 150, y: 150),
             color: RGBA(r: 1, g: 0, b: 1, a: 1)
         ),
         Vertex(
-            position: Vector2(x: -0.5, y: -0.5),
+            position: Vector2(x: -150, y: 150),
             color: RGBA(r: 0.5, g: 0, b: 1, a: 1)
         ),
     ]
@@ -166,6 +172,37 @@ resize()
 let animate = JSClosure { time in
     _ = gl.clearColor(0.25, 0.5, 0.75, 1.0)
     _ = gl.clear(gl.COLOR_BUFFER_BIT)
+
+    _ = gl.uniformMatrix4fv(
+        projectionMatrixUniform.location,
+        true,
+        Matrix4<Float32>.ortho(
+            left: 0,
+            right: Float32(canvas.width.number!),
+            bottom: 0,
+            top: Float32(canvas.height.number!),
+            near: -1,
+            far: 1
+        ).data
+    )
+    _ = gl.uniformMatrix4fv(
+        modelViewMatrixUniform.location,
+        false,
+        Matrix4<Float32>
+            .identity
+            .translate(
+                Vector3(
+                    x: Float32(canvas.width.number!) * 0.5,
+                    y: Float32(canvas.height.number!) * 0.5,
+                    z: 0
+                )
+            )
+            .rotate(
+                axis: Vector3(x: 0, y: 0, z: 1),
+                angle: Degrees(value: 45).radians
+            )
+            .data
+    )
 
     vertexArray.bind()
     vertexArray.drawElements(drawType: .triangles, count: 6, offset: 0)
