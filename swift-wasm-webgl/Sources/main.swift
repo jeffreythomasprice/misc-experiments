@@ -2,7 +2,7 @@ import JavaScriptEventLoop
 import JavaScriptKit
 
 struct Vertex {
-    let position: Vector2<Float32>
+    let position: Vector3<Float32>
     let color: RGBA<Float32>
 
     static var positionOffset: Int {
@@ -10,7 +10,7 @@ struct Vertex {
     }
 
     static var colorOffset: Int {
-        Vector2<Float32>.lengthInBytes
+        Vector3<Float32>.lengthInBytes
     }
 }
 
@@ -18,7 +18,7 @@ extension Vertex: TypedArraySerialization & StaticSized {
     typealias T = Float32
 
     static var lengthInBytes: Int {
-        Vector2<Float32>.lengthInBytes + RGBA<Float32>.lengthInBytes
+        Vector3<Float32>.lengthInBytes + RGBA<Float32>.lengthInBytes
     }
 
     func writeTo(destination: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> Int {
@@ -30,8 +30,8 @@ extension Vertex: TypedArraySerialization & StaticSized {
 
     static func readFrom(source: JavaScriptKit.JSTypedArray<Float32>, offset: Int) -> (Vertex, Int) {
         var offset = offset
-        let position: Vector2<Float32>
-        (position, offset) = Vector2<Float32>.readFrom(source: source, offset: offset)
+        let position: Vector3<Float32>
+        (position, offset) = Vector3<Float32>.readFrom(source: source, offset: offset)
         let color: RGBA<Float32>
         (color, offset) = RGBA<Float32>.readFrom(source: source, offset: offset)
         return (Vertex(position: position, color: color), offset)
@@ -60,7 +60,7 @@ do {
     shader = try WebGLShader(
         gl: gl,
         vertexSource: """
-            attribute vec2 positionAttribute;
+            attribute vec3 positionAttribute;
             attribute vec4 colorAttribute;
 
             uniform mat4 projectionMatrixUniform;
@@ -69,7 +69,7 @@ do {
             varying vec4 colorVarying;
 
             void main() {
-                gl_Position = projectionMatrixUniform * modelViewMatrixUniform * vec4(positionAttribute, 0, 1);
+                gl_Position = projectionMatrixUniform * modelViewMatrixUniform * vec4(positionAttribute, 1);
                 colorVarying = colorAttribute;
             }
             """,
@@ -100,19 +100,19 @@ let arrayBuffer = WebGLBuffer<Vertex>(
     usage: .staticDraw,
     collection: [
         Vertex(
-            position: Vector2(x: -150, y: -150),
+            position: Vector3(x: -1, y: -1, z: 0),
             color: RGBA(r: 1, g: 1, b: 0, a: 1)
         ),
         Vertex(
-            position: Vector2(x: 150, y: -150),
+            position: Vector3(x: 1, y: -1, z: 0),
             color: RGBA(r: 0, g: 1, b: 1, a: 1)
         ),
         Vertex(
-            position: Vector2(x: 150, y: 150),
+            position: Vector3(x: 1, y: 1, z: 0),
             color: RGBA(r: 1, g: 0, b: 1, a: 1)
         ),
         Vertex(
-            position: Vector2(x: -150, y: 150),
+            position: Vector3(x: -1, y: 1, z: 0),
             color: RGBA(r: 0.5, g: 0, b: 1, a: 1)
         ),
     ]
@@ -136,7 +136,7 @@ let vertexArray = WebGLVertexArray(
     attributes: [
         WebGLVertexArray.VertexAttributeInfo(
             shaderInfo: positionAttribute,
-            size: 2,
+            size: 3,
             type: .float,
             normalized: false,
             stride: Vertex.lengthInBytes,
@@ -169,20 +169,29 @@ _ = JSObject.global.window.addEventListener(
     })
 resize()
 
-let animate = JSClosure { time in
+var rotation = Degrees<Float32>(value: 0)
+var lastTime: Float64 = 0
+let animate = JSClosure { args in
+    let time = args[0].number!
+    let timeDelta = Float32((time - lastTime) / 1000)
+    lastTime = time
+    // TODO put a truncatingRemainder on Radians and Degrees
+    // TODO Put math opers that take left or right hand side as the primitive type
+    rotation = Degrees(
+        value: (rotation + Degrees<Float32>(value: 90) * Degrees(value: timeDelta)).value.truncatingRemainder(dividingBy: 360))
+
     _ = gl.clearColor(0.25, 0.5, 0.75, 1.0)
     _ = gl.clear(gl.COLOR_BUFFER_BIT)
 
     _ = gl.uniformMatrix4fv(
         projectionMatrixUniform.location,
         true,
-        Matrix4<Float32>.ortho(
-            left: 0,
-            right: Float32(canvas.width.number!),
-            bottom: 0,
-            top: Float32(canvas.height.number!),
-            near: -1,
-            far: 1
+        Matrix4<Float32>.perspective(
+            verticalFieldOfView: Degrees(value: 60).radians,
+            width: Float32(canvas.width.number!),
+            height: Float32(canvas.height.number!),
+            near: 0.1,
+            far: 1000
         ).data
     )
     _ = gl.uniformMatrix4fv(
@@ -192,14 +201,14 @@ let animate = JSClosure { time in
             .identity
             .translate(
                 Vector3(
-                    x: Float32(canvas.width.number!) * 0.5,
-                    y: Float32(canvas.height.number!) * 0.5,
-                    z: 0
+                    x: 0,
+                    y: 0,
+                    z: -6
                 )
             )
             .rotate(
-                axis: Vector3(x: 0, y: 0, z: 1),
-                angle: Degrees(value: 45).radians
+                axis: Vector3(x: 0, y: 1, z: 0),
+                angle: rotation.radians
             )
             .data
     )

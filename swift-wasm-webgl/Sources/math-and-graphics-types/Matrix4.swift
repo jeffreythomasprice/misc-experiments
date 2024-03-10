@@ -74,10 +74,6 @@ extension Matrix4 where T: FloatingPoint & Mathable {
             0, 0, 0, 1,
         ])
     }
-
-    // TODO perspective
-
-    // TODO camera, lookat
 }
 
 extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
@@ -96,4 +92,23 @@ extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
     func rotate(axis: Vector3<T>, angle: Radians<T>) -> Self {
         Self.rotation(axis: axis, angle: angle) * self
     }
+
+    static func perspective(
+        verticalFieldOfView: Radians<T>,
+        width: T,
+        height: T,
+        near: T,
+        far: T
+    ) -> Self {
+        let f = 1 / (verticalFieldOfView / Radians(value: 2)).tan
+        let aspect = width / height
+        return Self(data: [
+            f / aspect, 0, 0, 0,
+            0, f, 0, 0,
+            0, 0, (far + near) / (near - far), 2 * far * near / (near - far),
+            0, 0, -1, 0,
+        ])
+    }
+
+    // TODO camera, lookat
 }

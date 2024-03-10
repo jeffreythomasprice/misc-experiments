@@ -21,6 +21,7 @@ extension Float64: Mathable {}
 protocol Trigonometry {
     var cos: Self { get }
     var sin: Self { get }
+    var tan: Self { get }
 }
 
 extension Float32: Trigonometry {
@@ -31,6 +32,10 @@ extension Float32: Trigonometry {
     var sin: Float32 {
         Float32(JSObject.global.Math.sin(self).number!)
     }
+
+    var tan: Float32 {
+        Float32(JSObject.global.Math.tan(self).number!)
+    }
 }
 
 extension Float64: Trigonometry {
@@ -40,6 +45,10 @@ extension Float64: Trigonometry {
 
     var sin: Double {
         JSObject.global.Math.sin(self).number!
+    }
+
+    var tan: Double {
+        JSObject.global.Math.tan(self).number!
     }
 }
 
