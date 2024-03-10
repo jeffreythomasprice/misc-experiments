@@ -110,5 +110,20 @@ extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
         ])
     }
 
-    // TODO camera, lookat
+    static func lookAt(
+        position: Vector3<T>,
+        target: Vector3<T>,
+        up: Vector3<T>
+    ) -> Self {
+        let f = (target - position).normalized
+        let up = up.normalized
+        let s = Vector3.cross(f, up).normalized
+        let u = Vector3.cross(s, f).normalized
+        return Self(data: [
+            s.x, u.x, -f.x, 0,
+            s.y, u.y, -f.y, 0,
+            s.z, u.z, -f.z, 0,
+            0, 0, 0, 1,
+        ]).translate(-position)
+    }
 }

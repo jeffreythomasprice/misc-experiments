@@ -90,6 +90,21 @@ extension Vector4 where T: Mathable {
     var magnitudeSquared: T { x * x + y * y + z * z + w * w }
 }
 
+extension Vector4 where T: FloatingPoint {
+    static prefix func + (unary: Self) -> Self {
+        unary
+    }
+
+    static prefix func - (unary: Self) -> Self {
+        Self(
+            x: -unary.x,
+            y: -unary.y,
+            z: -unary.z,
+            w: -unary.w
+        )
+    }
+}
+
 extension Vector4 where T: Mathable & Sqrt {
     var magnitude: T { magnitudeSquared.sqrt }
 

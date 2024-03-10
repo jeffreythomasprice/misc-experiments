@@ -70,6 +70,19 @@ extension Vector2 where T: Mathable {
     var magnitudeSquared: T { x * x + y * y }
 }
 
+extension Vector2 where T: FloatingPoint {
+    static prefix func + (unary: Self) -> Self {
+        unary
+    }
+
+    static prefix func - (unary: Self) -> Self {
+        Self(
+            x: -unary.x,
+            y: -unary.y
+        )
+    }
+}
+
 extension Vector2 where T: Mathable & Sqrt {
     var magnitude: T { magnitudeSquared.sqrt }
 

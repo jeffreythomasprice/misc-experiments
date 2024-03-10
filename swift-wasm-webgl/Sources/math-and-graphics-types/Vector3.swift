@@ -77,7 +77,29 @@ extension Vector3 where T: Mathable {
         left.x * right.x + left.y * right.y + left.z * right.z
     }
 
+    static func cross(_ left: Self, _ right: Self) -> Self {
+        Self(
+            x: left.y * right.z - left.z * right.y,
+            y: left.z * right.x - left.x * right.z,
+            z: left.x * right.y - left.y * right.x
+        )
+    }
+
     var magnitudeSquared: T { x * x + y * y + z * z }
+}
+
+extension Vector3 where T: FloatingPoint {
+    static prefix func + (unary: Self) -> Self {
+        unary
+    }
+
+    static prefix func - (unary: Self) -> Self {
+        Self(
+            x: -unary.x,
+            y: -unary.y,
+            z: -unary.z
+        )
+    }
 }
 
 extension Vector3 where T: Mathable & Sqrt {

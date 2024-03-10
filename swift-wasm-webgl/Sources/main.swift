@@ -185,7 +185,7 @@ let animate = JSClosure { args in
         projectionMatrixUniform.location,
         true,
         Matrix4<Float32>.perspective(
-            verticalFieldOfView: Degrees(60).radians,
+            verticalFieldOfView: Degrees(45).radians,
             width: Float32(canvas.width.number!),
             height: Float32(canvas.height.number!),
             near: 0.1,
@@ -195,20 +195,11 @@ let animate = JSClosure { args in
     _ = gl.uniformMatrix4fv(
         modelViewMatrixUniform.location,
         false,
-        Matrix4<Float32>
-            .identity
-            .translate(
-                Vector3(
-                    x: 0,
-                    y: 0,
-                    z: -6
-                )
-            )
-            .rotate(
-                axis: Vector3(x: 0, y: 1, z: 0),
-                angle: rotation.radians
-            )
-            .data
+        Matrix4<Float32>.lookAt(
+            position: Vector3(x: rotation.cos, y: 0, z: rotation.sin) * 6,
+            target: Vector3(x: 0, y: 0, z: 0),
+            up: Vector3(x: 0, y: 1, z: 0)
+        ).data
     )
 
     vertexArray.bind()
