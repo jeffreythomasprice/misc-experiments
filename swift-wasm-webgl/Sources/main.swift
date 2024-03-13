@@ -169,7 +169,15 @@ _ = JSObject.global.window.addEventListener(
     })
 resize()
 
+// TODO no rotation? camera
 var rotation = Degrees<Float32>(0)
+
+var camera = PerspectiveCamera(
+    position: Vector3(x: 0, y: 0, z: -6),
+    target: Vector3(x: 1, y: 0, z: 0),
+    up: Vector3(x: 0, y: 1, z: 0)
+)
+
 var lastTime: Float64 = 0
 let animate = JSClosure { args in
     let time = args[0].number!

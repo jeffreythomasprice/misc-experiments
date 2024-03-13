@@ -1,6 +1,6 @@
 import JavaScriptKit
 
-struct Radians<T: TypedArrayElement> {
+struct Radians<T> {
     let value: T
 
     init(_ value: T) {
@@ -44,7 +44,7 @@ extension Radians where T: Trigonometry {
     var tan: T { value.tan }
 }
 
-struct Degrees<T: TypedArrayElement> {
+struct Degrees<T> {
     let value: T
 
     init(_ value: T) {

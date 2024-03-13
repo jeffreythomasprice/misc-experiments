@@ -107,3 +107,20 @@ extension Vector3 where T: Mathable & Sqrt {
 
     var normalized: Self { self / magnitude }
 }
+
+// TODO also do this for 2d and 4d vectors
+extension Vector3 where T: Mathable & Sqrt & Trigonometry {
+    static func angleBetween(_ a: Vector3<T>, _ b: Vector3<T>) -> Radians<T> {
+        /*
+        https://stackoverflow.com/a/16544330/9290998
+        https://stackoverflow.com/a/67719217/9290998
+        x = dot(a, b)
+        y = dot(n, cross(a, b))
+        angle = atan2(y, x)
+        */
+        return T.atan2(
+            y: cross(a, b).magnitude,
+            x: dot(a, b)
+        )
+    }
+}
