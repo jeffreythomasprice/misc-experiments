@@ -73,6 +73,18 @@ extension Vector3 where T: Mathable {
         )
     }
 
+    static prefix func + (unary: Self) -> Self {
+        unary
+    }
+
+    static prefix func - (unary: Self) -> Self {
+        Self(
+            x: -unary.x,
+            y: -unary.y,
+            z: -unary.z
+        )
+    }
+
     static func dot(_ left: Self, _ right: Self) -> T {
         left.x * right.x + left.y * right.y + left.z * right.z
     }
@@ -86,20 +98,6 @@ extension Vector3 where T: Mathable {
     }
 
     var magnitudeSquared: T { x * x + y * y + z * z }
-}
-
-extension Vector3 where T: FloatingPoint {
-    static prefix func + (unary: Self) -> Self {
-        unary
-    }
-
-    static prefix func - (unary: Self) -> Self {
-        Self(
-            x: -unary.x,
-            y: -unary.y,
-            z: -unary.z
-        )
-    }
 }
 
 extension Vector3 where T: Mathable & Sqrt {

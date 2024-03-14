@@ -174,7 +174,7 @@ var rotation = Degrees<Float32>(0)
 
 var camera = PerspectiveCamera(
     position: Vector3(x: 0, y: 0, z: -6),
-    target: Vector3(x: 1, y: 0, z: 0),
+    target: Vector3(x: 1, y: 1, z: 0),
     up: Vector3(x: 0, y: 1, z: 0)
 )
 

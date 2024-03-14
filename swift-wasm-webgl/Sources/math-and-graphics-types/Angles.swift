@@ -30,11 +30,31 @@ extension Radians: Mathable where T: Mathable {
     static func / (left: Radians<T>, right: Radians<T>) -> Radians<T> {
         Radians<T>(left.value / right.value)
     }
+
+    static prefix func + (unary: Self) -> Self {
+        unary
+    }
+
+    static prefix func - (unary: Self) -> Self {
+        Self(-unary.value)
+    }
 }
 
 extension Radians: TruncatingRemainderable where T: TruncatingRemainderable {
     func truncatingRemainder(dividingBy: Radians<T>) -> Radians<T> {
         Self(value.truncatingRemainder(dividingBy: dividingBy.value))
+    }
+}
+
+extension Radians: Equatable where T: Equatable {
+    static func == (left: Self, right: Self) -> Bool {
+        left.value == right.value
+    }
+}
+
+extension Radians: Comparable where T: Comparable {
+    static func < (left: Self, right: Self) -> Bool {
+        left.value < right.value
     }
 }
 
@@ -74,11 +94,31 @@ extension Degrees: Mathable where T: Mathable {
     static func / (left: Degrees<T>, right: Degrees<T>) -> Degrees<T> {
         Degrees<T>(left.value / right.value)
     }
+
+    static prefix func + (unary: Self) -> Self {
+        unary
+    }
+
+    static prefix func - (unary: Self) -> Self {
+        Self(-unary.value)
+    }
 }
 
 extension Degrees: TruncatingRemainderable where T: TruncatingRemainderable {
     func truncatingRemainder(dividingBy: Degrees<T>) -> Degrees<T> {
         Self(value.truncatingRemainder(dividingBy: dividingBy.value))
+    }
+}
+
+extension Degrees: Equatable where T: Equatable {
+    static func == (left: Self, right: Self) -> Bool {
+        left.value == right.value
+    }
+}
+
+extension Degrees: Comparable where T: Comparable {
+    static func < (left: Self, right: Self) -> Bool {
+        left.value < right.value
     }
 }
 

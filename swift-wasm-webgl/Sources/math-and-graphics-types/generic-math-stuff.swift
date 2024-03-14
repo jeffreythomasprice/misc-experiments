@@ -5,15 +5,13 @@ protocol Mathable {
     static func - (left: Self, right: Self) -> Self
     static func * (left: Self, right: Self) -> Self
     static func / (left: Self, right: Self) -> Self
+    static prefix func + (unary: Self) -> Self
+    static prefix func - (unary: Self) -> Self
 }
 
-extension UInt8: Mathable {}
 extension Int8: Mathable {}
-extension UInt16: Mathable {}
 extension Int16: Mathable {}
-extension UInt32: Mathable {}
 extension Int32: Mathable {}
-extension UInt64: Mathable {}
 extension Int64: Mathable {}
 extension Float32: Mathable {}
 extension Float64: Mathable {}
@@ -130,5 +128,15 @@ extension Float64: AbsoluteValue {
             return -self
         }
         return self
+    }
+}
+
+func clamp<T: Comparable>(value: T, min: T, max: T) -> T {
+    if value < min {
+        min
+    } else if value > max {
+        max
+    } else {
+        value
     }
 }

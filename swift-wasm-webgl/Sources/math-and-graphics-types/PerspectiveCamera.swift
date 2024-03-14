@@ -1,6 +1,9 @@
 import JavaScriptKit
 
-class PerspectiveCamera<T: TypedArrayElement & StaticSized & FloatingPoint & Mathable & Sqrt & Trigonometry & AbsoluteValue> {
+class PerspectiveCamera<
+    T: TypedArrayElement & StaticSized & FloatingPoint & Mathable & Sqrt & Trigonometry & AbsoluteValue & TruncatingRemainderable
+        & ExpressibleByFloatLiteral
+> {
     // when the angles are both 0, points into the camera along the midpoint of the screen
     private let defaultForward: Vector3<T>
     // points toawrds the top of the screen
@@ -11,8 +14,8 @@ class PerspectiveCamera<T: TypedArrayElement & StaticSized & FloatingPoint & Mat
 	- Rotate around the local Y axis, i.e. turn the camera left or right. Positive values turn right.
 	- Rotate around the new local X axis, i.e. turn the camera up or down. Positive values are up.
 	*/
-    private var angleRight: Radians<T>
-    private var angleUp: Radians<T>
+    private var _angleRight: Radians<T>
+    private var _angleUp: Radians<T>
 
     private var position: Vector3<T>
 
@@ -21,10 +24,6 @@ class PerspectiveCamera<T: TypedArrayElement & StaticSized & FloatingPoint & Mat
         target: Vector3<T>,
         up: Vector3<T>
     ) {
-        print("TODO position = \(position)")
-        print("TODO target = \(target)")
-        print("TODO up = \(up)")
-
         let forward = (target - position).normalized
         if forward.x.abs > forward.y.abs && forward.x.abs > forward.z.abs {
             if forward.x > 0 {
@@ -45,31 +44,48 @@ class PerspectiveCamera<T: TypedArrayElement & StaticSized & FloatingPoint & Mat
                 defaultForward = Vector3(x: 0, y: 0, z: -1)
             }
         }
-        print("TODO defaultForward = \(defaultForward)")
 
         defaultUp = up.normalized
-        print("TODO defaultUp = \(defaultUp)")
+
+        let defaultRight = Vector3.cross(defaultUp, defaultForward)
 
         let q = Plane(normal: defaultUp, point: position).closestPointTo(point: target)
-        print("TODO q = \(q)")
         let u = q - position
-        print("TODO u = \(u)")
         let angleRight = Vector3.angleBetween(defaultForward, u)
-        print("TODO angleRight = \(angleRight.degrees)")
-        // TODO adjust angleRight based on whether target is to the left or right
+        let angleRightFixed =
+            if Vector3.dot(defaultRight, forward) > 0 {
+                angleRight
+            } else {
+                Radians(T.pi * 2) - angleRight
+            }
+        self._angleRight = PerspectiveCamera.fixAngleRight(value: angleRightFixed)
 
         let g = target - position
         let angleUp = Vector3.angleBetween(g, u)
-        print("TODO angleUp = \(angleUp.degrees)")
-        // TODO adjust angleUp based on whether target is up or down
-
-        self.angleRight = angleRight
-        self.angleUp = angleUp
+        let angleUpFixed =
+            if Vector3.dot(defaultUp, forward) > 0 {
+                angleUp
+            } else {
+                -angleUp
+            }
+        self._angleUp = PerspectiveCamera.fixAngleUp(value: angleUpFixed)
 
         self.position = position
     }
 
-    // TODO accessors
+    var angleRight: Radians<T> {
+        get { self._angleRight }
+        set {
+            self._angleRight = PerspectiveCamera.fixAngleRight(value: newValue)
+        }
+    }
+
+    var angleUp: Radians<T> {
+        get { self._angleUp }
+        set {
+            self._angleUp = PerspectiveCamera.fixAngleUp(value: newValue)
+        }
+    }
 
     // TODO helper for moving
 
@@ -78,4 +94,18 @@ class PerspectiveCamera<T: TypedArrayElement & StaticSized & FloatingPoint & Mat
     // TODO projection matrix
 
     // TODO modelview matrix
+
+    private static func fixAngleRight(value: Radians<T>) -> Radians<T> {
+        let x = value.truncatingRemainder(dividingBy: Radians(T.pi * 2))
+        return if x < Radians(0) {
+            x + Radians(T.pi * 2)
+        } else {
+            x
+        }
+    }
+
+    private static func fixAngleUp(value: Radians<T>) -> Radians<T> {
+        let limit = Radians(T.pi * 0.99)
+        return clamp(value: value, min: -limit, max: limit)
+    }
 }

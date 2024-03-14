@@ -63,14 +63,6 @@ extension Vector2 where T: Mathable {
         )
     }
 
-    static func dot(_ left: Self, _ right: Self) -> T {
-        left.x * right.x + left.y * right.y
-    }
-
-    var magnitudeSquared: T { x * x + y * y }
-}
-
-extension Vector2 where T: FloatingPoint {
     static prefix func + (unary: Self) -> Self {
         unary
     }
@@ -81,6 +73,12 @@ extension Vector2 where T: FloatingPoint {
             y: -unary.y
         )
     }
+
+    static func dot(_ left: Self, _ right: Self) -> T {
+        left.x * right.x + left.y * right.y
+    }
+
+    var magnitudeSquared: T { x * x + y * y }
 }
 
 extension Vector2 where T: Mathable & Sqrt {
