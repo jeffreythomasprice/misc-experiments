@@ -127,3 +127,21 @@ extension Matrix4 where T: FloatingPoint & Mathable & Sqrt & Trigonometry {
         ]).translate(-position)
     }
 }
+
+extension Matrix4 where T: Mathable {
+    func applyTo(vector: Vector3<T>) -> Vector3<T> {
+        Vector3(
+            x: data[0] * vector.x + data[4] * vector.y + data[8] * vector.z,
+            y: data[1] * vector.x + data[5] * vector.y + data[9] * vector.z,
+            z: data[2] * vector.x + data[6] * vector.y + data[10] * vector.z
+        )
+    }
+
+    func applyTo(point: Vector3<T>) -> Vector3<T> {
+        Vector3(
+            x: data[0] * point.x + data[4] * point.y + data[8] * point.z + data[12],
+            y: data[1] * point.x + data[5] * point.y + data[9] * point.z + data[13],
+            z: data[2] * point.x + data[6] * point.y + data[10] * point.z + data[14]
+        )
+    }
+}

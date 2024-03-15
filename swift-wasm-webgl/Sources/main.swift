@@ -169,14 +169,94 @@ _ = JSObject.global.window.addEventListener(
     })
 resize()
 
-// TODO no rotation? camera
 var rotation = Degrees<Float32>(0)
 
-var camera = PerspectiveCamera(
+var camera = LookAtCamera<Float32>(
     position: Vector3(x: 0, y: 0, z: -6),
-    target: Vector3(x: 1, y: 1, z: 0),
+    target: Vector3(x: 0, y: 0, z: 0),
     up: Vector3(x: 0, y: 1, z: 0)
 )
+
+_ = JSObject.global.window.addEventListener(
+    "mousemove",
+    JSClosure { arg in
+        let e = arg[0]
+
+        let clientX = Int(e.clientX.number!)
+        let clientY = Int(e.clientY.number!)
+
+        let canvasWidth = Int(canvas.width.number!)
+        let canvasHeight = Int(canvas.height.number!)
+
+        let desiredX = canvasWidth / 2
+        let desiredY = canvasHeight / 2
+
+        // if we're grabbing the mouse, and we're not currently at the center of the canvas, do whatever this mouse movement indicates
+        if JSObject.global.document.pointerLockElement == canvas && clientX != desiredX && clientY != desiredY {
+            let movementX = Float32(e.movementX.number!)
+            let movementY = Float32(e.movementY.number!)
+            camera.turn(mouseMovement: Vector2(x: movementX, y: -movementY))
+        }
+        return .undefined
+    })
+
+_ = JSObject.global.window.addEventListener(
+    "mouseup",
+    JSClosure { arg in
+        let e = arg[0]
+        let button = Int(e.button.number!)
+        if button == 0 {
+            Task {
+                do {
+                    if JSObject.global.document.pointerLockElement == canvas {
+                        _ = JSObject.global.document.exitPointerLock()
+                    } else {
+                        if let p = JSPromise(
+                            from: canvas.requestPointerLock([
+                                "unadjustedMovement": true
+                            ]))
+                        {
+                            _ = try await p.value
+                        }
+                    }
+                } catch {
+                    print("mousemove error \(error)")
+                }
+            }
+        }
+        return .undefined
+    })
+
+var keyCodeState: [Int: Bool] = [:]
+
+func getKeyCodeState(key: Int) -> Bool {
+    keyCodeState[key] ?? false
+}
+
+func getKeyCodeState(keys: [Int]) -> Bool {
+    keys
+        .first { key in getKeyCodeState(key: key) }
+        .map { _ in true }
+        ?? false
+}
+
+_ = JSObject.global.window.addEventListener(
+    "keydown",
+    JSClosure { arg in
+        let e = arg[0]
+        let keyCode = Int(e.keyCode.number!)
+        keyCodeState[keyCode] = true
+        return .undefined
+    })
+
+_ = JSObject.global.window.addEventListener(
+    "keyup",
+    JSClosure { arg in
+        let e = arg[0]
+        let keyCode = Int(e.keyCode.number!)
+        keyCodeState[keyCode] = false
+        return .undefined
+    })
 
 var lastTime: Float64 = 0
 let animate = JSClosure { args in
@@ -185,6 +265,62 @@ let animate = JSClosure { args in
     lastTime = time
     // TODO Put math opers that take left or right hand side as the primitive type
     rotation = (rotation + Degrees<Float32>(90) * Degrees(timeDelta)).truncatingRemainder(dividingBy: Degrees(360))
+
+    do {
+        var forward: Float32 = 0
+        if getKeyCodeState(keys: [
+            // up
+            38,
+            // w
+            87,
+        ]) {
+            forward += 1
+        }
+        if getKeyCodeState(keys: [
+            // down
+            40,
+            // s
+            83,
+        ]) {
+            forward -= 1
+        }
+        var strafe: Float32 = 0
+        if getKeyCodeState(keys: [
+            // right
+            39,
+            // d
+            68,
+        ]) {
+            strafe -= 1
+        }
+        if getKeyCodeState(keys: [
+            // left
+            37,
+            // a
+            65,
+        ]) {
+            strafe += 1
+        }
+        var up: Float32 = 0
+        if getKeyCodeState(keys: [
+            // space
+            32
+        ]) {
+            up += 1
+        }
+        if getKeyCodeState(keys: [
+            // shift
+            16
+        ]) {
+            up -= 1
+        }
+        let speed = timeDelta * 7
+        camera.move(
+            forward: forward * speed,
+            strafe: strafe * speed,
+            up: up * speed
+        )
+    }
 
     _ = gl.clearColor(0.25, 0.5, 0.75, 1.0)
     _ = gl.clear(gl.COLOR_BUFFER_BIT)
@@ -203,11 +339,8 @@ let animate = JSClosure { args in
     _ = gl.uniformMatrix4fv(
         modelViewMatrixUniform.location,
         false,
-        Matrix4<Float32>.lookAt(
-            position: Vector3(x: rotation.cos, y: 0, z: rotation.sin) * 6,
-            target: Vector3(x: 0, y: 0, z: 0),
-            up: Vector3(x: 0, y: 1, z: 0)
-        ).data
+        // TODO also apply rotation
+        camera.transformMatrix.data
     )
 
     vertexArray.bind()

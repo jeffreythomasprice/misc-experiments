@@ -1,6 +1,6 @@
 import JavaScriptKit
 
-class PerspectiveCamera<
+class LookAtCamera<
     T: TypedArrayElement & StaticSized & FloatingPoint & Mathable & Sqrt & Trigonometry & AbsoluteValue & TruncatingRemainderable
         & ExpressibleByFloatLiteral
 > {
@@ -17,7 +17,7 @@ class PerspectiveCamera<
     private var _angleRight: Radians<T>
     private var _angleUp: Radians<T>
 
-    private var position: Vector3<T>
+    private var _position: Vector3<T>
 
     init(
         position: Vector3<T>,
@@ -58,7 +58,7 @@ class PerspectiveCamera<
             } else {
                 Radians(T.pi * 2) - angleRight
             }
-        self._angleRight = PerspectiveCamera.fixAngleRight(value: angleRightFixed)
+        self._angleRight = LookAtCamera.fixAngleRight(value: angleRightFixed)
 
         let g = target - position
         let angleUp = Vector3.angleBetween(g, u)
@@ -68,36 +68,73 @@ class PerspectiveCamera<
             } else {
                 -angleUp
             }
-        self._angleUp = PerspectiveCamera.fixAngleUp(value: angleUpFixed)
+        self._angleUp = LookAtCamera.fixAngleUp(value: angleUpFixed)
 
-        self.position = position
+        self._position = position
     }
 
     var angleRight: Radians<T> {
         get { self._angleRight }
         set {
-            self._angleRight = PerspectiveCamera.fixAngleRight(value: newValue)
+            self._angleRight = LookAtCamera.fixAngleRight(value: newValue)
         }
     }
 
     var angleUp: Radians<T> {
         get { self._angleUp }
         set {
-            self._angleUp = PerspectiveCamera.fixAngleUp(value: newValue)
+            self._angleUp = LookAtCamera.fixAngleUp(value: newValue)
         }
     }
 
-    // TODO helper for moving
+    var position: Vector3<T> {
+        get { self._position }
+        set { self._position = newValue }
+    }
 
-    // TODO helper for turning
+    func turn(mouseMovement: Vector2<T>) {
+        // TODO put constants somewhere
+        let v = mouseMovement / 700
+        angleRight = angleRight + Degrees(45).radians * Radians(v.x)
+        angleUp = angleUp + Degrees(45).radians * Radians(v.y)
+    }
 
-    // TODO projection matrix
+    func move(forward: T, strafe: T, up: T) {
+        position =
+            position
+            + self.forward * forward
+            + rightRightAngleOnly * strafe
+            + defaultUp * up
+    }
 
-    // TODO modelview matrix
+    var transformMatrix: Matrix4<T> {
+        // TODO cache
+        return Matrix4.lookAt(
+            position: position,
+            target: position + forward,
+            up: defaultUp
+        )
+    }
+
+    private var forward: Vector3<T> {
+        // TODO cache
+        return Matrix4.rotation(axis: rightRightAngleOnly, angle: angleUp).applyTo(vector: forwardRightAngleOnly)
+    }
+
+    private var rightRightAngleOnly: Vector3<T> {
+        // TODO cache
+        Vector3.cross(defaultUp, forwardRightAngleOnly)
+    }
+
+    private var forwardRightAngleOnly: Vector3<T> {
+        // TODO cache
+        Matrix4.rotation(axis: defaultUp, angle: angleRight).applyTo(vector: defaultForward)
+    }
 
     private static func fixAngleRight(value: Radians<T>) -> Radians<T> {
         let x = value.truncatingRemainder(dividingBy: Radians(T.pi * 2))
         return if x < Radians(0) {
+            // TODO put constants somewhere
             x + Radians(T.pi * 2)
         } else {
             x
@@ -105,7 +142,8 @@ class PerspectiveCamera<
     }
 
     private static func fixAngleUp(value: Radians<T>) -> Radians<T> {
-        let limit = Radians(T.pi * 0.99)
+        // TODO put constants somewhere
+        let limit = Radians(T.pi * 0.49)
         return clamp(value: value, min: -limit, max: limit)
     }
 }
