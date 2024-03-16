@@ -1,5 +1,62 @@
+import Foundation
 import JavaScriptEventLoop
 import JavaScriptKit
+
+// TODO move me
+class FPS {
+    let MAX_BUCKET_TIME: TimeInterval = 1
+    let MAX_BUCKETS = 100
+
+    private class Bucket {
+        var count: Int = 0
+        var total: TimeInterval = 0
+
+        init(count: Int, total: TimeInterval) {
+            self.count = count
+            self.total = total
+        }
+    }
+
+    private var buckets: [Bucket] = []
+    private var lastTime: Date? = nil
+
+    init() {}
+
+    var fps: Float64 {
+        var count: Int = 0
+        var total: TimeInterval = 0
+        for b in buckets {
+            count += b.count
+            total += b.total
+        }
+        return Float64(count) / total
+    }
+
+    var fpsString: String {
+        String(format: "%.2f", fps)
+    }
+
+    func tick() {
+        let now = Date()
+        if case .some(let lastTime) = lastTime {
+            let delta = lastTime.distance(to: now)
+            if case .some(let lastBucket) = buckets.last {
+                if lastBucket.total < MAX_BUCKET_TIME {
+                    lastBucket.count += 1
+                    lastBucket.total += delta
+                } else {
+                    buckets.append(Bucket(count: 1, total: delta))
+                    if buckets.count > MAX_BUCKETS {
+                        buckets.remove(at: 0)
+                    }
+                }
+            } else {
+                buckets.append(Bucket(count: 1, total: delta))
+            }
+        }
+        lastTime = now
+    }
+}
 
 struct Vertex {
     let position: Vector3<Float32>
@@ -38,22 +95,57 @@ extension Vertex: TypedArraySerialization & StaticSized {
     }
 }
 
+func styleString(attrs: [String: String]) -> String {
+    attrs
+        .map { key, value in "\(key): \(value)" }
+        .joined(separator: "; ")
+}
+
+func setStyle(elem: inout JSValue, attrs: [String: String]) {
+    elem.style = .string(styleString(attrs: attrs))
+}
+
 JavaScriptEventLoop.installGlobalExecutor()
 
 var canvas = JSObject.global.document.createElement("canvas")
-canvas.style = .string(
-    [
+setStyle(
+    elem: &canvas,
+    attrs: [
         "position": "absolute",
         "left": "0px",
         "top": "0px",
         "width": "100%",
         "height": "100%",
     ]
-    .map { key, value in "\(key): \(value)" }
-    .joined(separator: "; "))
+)
 _ = JSObject.global.document.body.replaceChildren(canvas)
 
-var gl = canvas.getContext("webgl2", ["powerPreference": "high-performance"])
+var gl = canvas.getContext(
+    "webgl2",
+    [
+        "powerPreference": JSValue.string("high-performance"),
+        "desynchronized": .boolean(true),
+    ]
+)
+
+var debugOutput = JSObject.global.document.createElement("div")
+setStyle(
+    elem: &debugOutput,
+    attrs: [
+        "position": "absolute",
+        "left": "0px",
+        "top": "0px",
+        "width": "100%",
+        "height": "100%",
+        "font-family": "mono",
+        "font-size": "16pt",
+    ]
+)
+_ = JSObject.global.document.body.appendChild(debugOutput)
+
+func setDebugString(_ s: String) {
+    debugOutput.innerText = .string(s)
+}
 
 let shader: WebGLShader
 do {
@@ -259,12 +351,16 @@ _ = JSObject.global.window.addEventListener(
     })
 
 var lastTime: Float64 = 0
+var fps = FPS()
 let animate = JSClosure { args in
     let time = args[0].number!
     let timeDelta = Float32((time - lastTime) / 1000)
     lastTime = time
     // TODO Put math opers that take left or right hand side as the primitive type
     rotation = (rotation + Degrees<Float32>(90) * Degrees(timeDelta)).truncatingRemainder(dividingBy: Degrees(360))
+
+    fps.tick()
+    setDebugString("FPS: \(fps.fpsString)")
 
     do {
         var forward: Float32 = 0
@@ -340,7 +436,9 @@ let animate = JSClosure { args in
         modelViewMatrixUniform.location,
         false,
         // TODO also apply rotation
-        camera.transformMatrix.data
+        camera.transformMatrix
+            .rotate(axis: Vector3(x: 0, y: 1, z: 0), angle: rotation.radians)
+            .data
     )
 
     vertexArray.bind()
