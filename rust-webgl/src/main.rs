@@ -1,4 +1,5 @@
 mod errors;
+mod runner;
 mod shaders;
 
 use std::{cell::RefCell, mem::forget, panic, rc::Rc};
@@ -7,6 +8,7 @@ use errors::JsInteropError;
 use js_sys::Uint8Array;
 use log::*;
 use nalgebra::{Matrix4, Unit, Vector3};
+use runner::{App, EventHandler};
 use serde::Serialize;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlVertexArrayObject};
@@ -26,47 +28,28 @@ struct Vertex {
     color: RGBA,
 }
 
-struct AppState {
-    canvas: HtmlCanvasElement,
-    gl: Rc<WebGl2RenderingContext>,
+struct DemoState {
     shader_program: ShaderProgram,
     vertex_array: WebGlVertexArrayObject,
 
-    last_ticks: f64,
-
     rotation: f32,
+
+    perspective_transform: Matrix4<f32>,
 }
 
-impl AppState {
-    pub fn go() -> Result<(), JsInteropError> {
-        let canvas = create_canvas()?;
-        body()?.replace_children_with_node_1(&canvas);
+#[derive(Debug)]
+enum DemoError {
+    Js(JsInteropError),
+}
 
-        #[derive(Serialize)]
-        struct WebGLOptions {
-            #[serde(rename = "powerPreference")]
-            power_preference: String,
-        }
-        let gl: Rc<WebGl2RenderingContext> = Rc::new(
-            canvas
-                .get_context_with_context_options(
-                    "webgl2",
-                    &serde_wasm_bindgen::to_value(&WebGLOptions {
-                        power_preference: "high-performance".to_owned(),
-                    })?,
-                )?
-                .ok_or(JsInteropError::NotFound(
-                    "failed to make webgl context".to_owned(),
-                ))?
-                .dyn_into()
-                .map_err(|_| {
-                    JsInteropError::CastError(
-                        "created a canvas graphics context, but it wasn't the expected type"
-                            .to_owned(),
-                    )
-                })?,
-        );
+impl From<JsInteropError> for DemoError {
+    fn from(value: JsInteropError) -> Self {
+        DemoError::Js(value)
+    }
+}
 
+impl EventHandler<DemoError> for DemoState {
+    fn init(gl: Rc<WebGl2RenderingContext>) -> Result<Self, DemoError> {
         let shader_program = ShaderProgram::new(
             gl.clone(),
             include_str!("shader.vert"),
@@ -158,82 +141,42 @@ impl AppState {
         gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
         gl.bind_vertex_array(None);
 
-        let state = Rc::new(RefCell::new(AppState {
-            canvas,
-            gl,
+        Ok(Self {
             shader_program,
             vertex_array,
 
-            last_ticks: 0.0,
+            rotation: 0f32,
 
-            rotation: 0.0,
-        }));
+            perspective_transform: Matrix4::identity(),
+        })
+    }
 
-        // call once on program start because the resize handler won't call until the window actually changes size otherwise
-        if let Err(e) = state.borrow_mut().resize() {
-            error!("error resizing: {e:?}");
-        }
+    fn resize(
+        &mut self,
+        gl: Rc<WebGl2RenderingContext>,
+        width: f64,
+        height: f64,
+    ) -> Result<(), DemoError> {
+        gl.viewport(0, 0, width as i32, height as i32);
 
-        {
-            // register as the window resize handler
-            let state = state.clone();
-            let c = Closure::<dyn Fn()>::new(move || {
-                if let Err(e) = state.borrow_mut().resize() {
-                    error!("error resizing: {e:?}");
-                }
-            });
-            window()?.add_event_listener_with_callback("resize", c.as_ref().unchecked_ref())?;
-            // don't ever free this so the js callback stays valid
-            forget(c);
-        }
-
-        {
-            fn request_animation_frame(state: Rc<RefCell<AppState>>) {
-                let state = state.clone();
-                if let Err(e) = (move || -> Result<(), JsInteropError> {
-                    {
-                        let state = state.clone();
-                        let c = Closure::once_into_js(move |time| {
-                            if let Err(e) = state.borrow_mut().anim(time) {
-                                error!("error invoking animation frame: {e:?}");
-                            }
-
-                            request_animation_frame(state.clone());
-                        });
-                        window()?.request_animation_frame(c.as_ref().unchecked_ref())?;
-                    }
-
-                    Ok(())
-                })() {
-                    error!("error registering next animation frame callback: {e:?}");
-                }
-            }
-
-            // kick off the first frame
-            request_animation_frame(state.clone());
-        }
+        self.perspective_transform =
+            Matrix4::new_perspective((width / height) as f32, 60.0f32.to_radians(), 1.0, 100.0);
 
         Ok(())
     }
 
-    pub fn resize(&mut self) -> Result<(), JsInteropError> {
-        let width: f64 = window()?.inner_width()?.try_into()?;
-        let height: f64 = window()?.inner_height()?.try_into()?;
-
-        self.canvas.set_width(width as u32);
-        self.canvas.set_height(height as u32);
-        self.gl.viewport(0, 0, width as i32, height as i32);
-
-        Ok(())
-    }
-
-    pub fn anim(&mut self, time: f64) -> Result<(), JsInteropError> {
+    fn animate(
+        &mut self,
+        gl: Rc<WebGl2RenderingContext>,
+        _total_time: f64,
+        delta: std::time::Duration,
+    ) -> Result<(), DemoError> {
         // cornflower blue, #6495ED
-        self.gl.clear_color(0.39, 0.58, 0.93, 1.0);
-        self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        gl.clear_color(0.39, 0.58, 0.93, 1.0);
+        gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
         self.shader_program.use_program();
-        self.gl.uniform_matrix4fv_with_f32_array(
+        gl.uniform_matrix4fv_with_f32_array(
             Some(
                 &self
                     .shader_program
@@ -244,15 +187,9 @@ impl AppState {
                     .location,
             ),
             false,
-            Matrix4::new_perspective(
-                (self.canvas.width() as f32) / (self.canvas.height() as f32),
-                60.0f32.to_radians(),
-                1.0,
-                100.0,
-            )
-            .as_slice(),
+            self.perspective_transform.as_slice(),
         );
-        self.gl.uniform_matrix4fv_with_f32_array(
+        gl.uniform_matrix4fv_with_f32_array(
             Some(
                 &self
                     .shader_program
@@ -271,14 +208,12 @@ impl AppState {
             .as_slice(),
         );
 
-        self.gl.bind_vertex_array(Some(&self.vertex_array));
-        self.gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
-        self.gl.bind_vertex_array(None);
+        gl.bind_vertex_array(Some(&self.vertex_array));
+        gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+        gl.bind_vertex_array(None);
 
-        self.gl.use_program(None);
+        gl.use_program(None);
 
-        let delta = std::time::Duration::from_millis((time - self.last_ticks) as u64);
-        self.last_ticks = time;
         self.rotation += (delta.as_secs_f32() * 90.0f32.to_radians()) % 360.0f32.to_radians();
 
         Ok(())
@@ -289,7 +224,7 @@ fn main() -> Result<(), JsInteropError> {
     console_log::init_with_level(Level::Trace).unwrap();
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-    if let Err(e) = AppState::go() {
+    if let Err(e) = App::<DemoState>::run() {
         error!("app init error: {e:?}");
     }
 
