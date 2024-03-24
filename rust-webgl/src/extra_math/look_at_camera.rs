@@ -70,31 +70,31 @@ impl LookAtCamera {
         }
     }
 
-    fn angle_right(&self) -> f32 {
+    pub fn angle_right(&self) -> f32 {
         self.angle_right
     }
 
-    fn set_angle_right(&mut self, value: f32) {
+    pub fn set_angle_right(&mut self, value: f32) {
         self.angle_right = Self::fix_angle_right(value);
     }
 
-    fn angle_up(&self) -> f32 {
+    pub fn angle_up(&self) -> f32 {
         self.angle_up
     }
 
-    fn set_angle_up(&mut self, value: f32) {
+    pub fn set_angle_up(&mut self, value: f32) {
         self.angle_up = Self::fix_angle_up(value);
     }
 
-    fn position(&self) -> Point3<Float> {
+    pub fn position(&self) -> Point3<Float> {
         self.position
     }
 
-    fn set_position(&mut self, value: Point3<Float>) {
+    pub fn set_position(&mut self, value: Point3<Float>) {
         self.position = value
     }
 
-    fn turn(&mut self, mouse_movement: Vector2<Float>) {
+    pub fn turn(&mut self, mouse_movement: Vector2<Float>) {
         // TODO put constants somewhere
         let v = mouse_movement / 700.0;
         let rotation_constant = (45.0 as Float).to_radians();
@@ -103,15 +103,15 @@ impl LookAtCamera {
         self.set_angle_up(self.angle_up + v.y);
     }
 
-    fn move_position(&mut self, forward: Float, strafe: Float, up: Float) {
+    pub fn move_position(&mut self, forward: Float, strafe: Float, up: Float) {
         self.position += self.forward() * forward;
         self.position += *self.right_right_angle_only() * strafe;
         self.position += *self.default_up * up;
     }
 
-    fn transform_matrix(&self) -> Matrix4<Float> {
+    pub fn transform_matrix(&self) -> Matrix4<Float> {
         // TODO cache
-        Matrix4::look_at_rh(
+        Matrix4::look_at_lh(
             &self.position,
             &Point3::from(self.position.coords + self.forward()),
             &self.default_up,
@@ -148,7 +148,7 @@ impl LookAtCamera {
 
     fn fix_angle_up(value: f32) -> f32 {
         // TODO put constants somewhere
-        let limit = (PI * 0.49).to_radians();
+        let limit = PI * 0.49;
         clamp(value, -limit, limit)
     }
 }

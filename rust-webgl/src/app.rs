@@ -10,6 +10,7 @@ use crate::errors::JsInteropError;
 
 #[derive(Clone)]
 pub struct AppContext {
+    pub canvas: HtmlCanvasElement,
     pub gl: Rc<WebGl2RenderingContext>,
 }
 
@@ -299,22 +300,23 @@ where
 
     fn context(&self) -> AppContext {
         AppContext {
+            canvas: self.canvas.clone(),
             gl: self.gl.clone(),
         }
     }
 }
 
-fn window() -> Result<web_sys::Window, JsInteropError> {
+pub fn window() -> Result<web_sys::Window, JsInteropError> {
     web_sys::window().ok_or(JsInteropError::NotFound("failed to get window".to_owned()))
 }
 
-fn document() -> Result<web_sys::Document, JsInteropError> {
+pub fn document() -> Result<web_sys::Document, JsInteropError> {
     window()?.document().ok_or(JsInteropError::NotFound(
         "failed to get document".to_owned(),
     ))
 }
 
-fn body() -> Result<web_sys::HtmlElement, JsInteropError> {
+pub fn body() -> Result<web_sys::HtmlElement, JsInteropError> {
     document()?
         .body()
         .ok_or(JsInteropError::NotFound("failed to get body".to_owned()))

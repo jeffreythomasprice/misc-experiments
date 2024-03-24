@@ -10,10 +10,10 @@ use errors::JsInteropError;
 use extra_math::LookAtCamera;
 use js_sys::Uint8Array;
 use log::*;
-use nalgebra::{Matrix4, Point3, Unit, Vector3};
+use nalgebra::{Matrix4, Point2, Point3, Unit, Vector2, Vector3};
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject};
 
-use crate::shaders::ShaderProgram;
+use crate::{app::document, shaders::ShaderProgram};
 
 #[allow(dead_code)]
 struct Rgba {
@@ -170,10 +170,12 @@ impl EventHandler<DemoError> for DemoState {
     fn handle_event(&mut self, event: app::Event) -> Result<(), DemoError> {
         match event {
             app::Event::Resize {
-                context: AppContext { gl },
+                context,
                 width,
                 height,
             } => {
+                let gl = context.gl;
+
                 gl.viewport(0, 0, width as i32, height as i32);
 
                 self.perspective_transform = Matrix4::new_perspective(
@@ -188,34 +190,44 @@ impl EventHandler<DemoError> for DemoState {
 
             app::Event::MouseDown {
                 context: _,
-                button,
-                point,
-            } => {
-                debug!("TODO mouse down button={button}, point={point}");
-                Ok(())
-            }
+                button: _,
+                point: _,
+            } => Ok(()),
 
             app::Event::MouseUp {
-                context: _,
-                button,
-                point,
+                context,
+                button: _,
+                point: _,
             } => {
-                debug!("TODO mouse up button={button}, point={point}");
+                if document()?.pointer_lock_element() == Some(context.canvas.clone().into()) {
+                    document()?.exit_pointer_lock();
+                } else {
+                    context.canvas.request_pointer_lock();
+                }
+
                 Ok(())
             }
 
             app::Event::MouseMove {
-                context: _,
+                context,
                 point,
                 delta,
             } => {
-                debug!("TODO mouse move point={point}, delta={delta}");
+                let desired =
+                    Point2::from(Vector2::new(context.canvas.width(), context.canvas.height()) / 2);
+                if document()?.pointer_lock_element() == Some(context.canvas.clone().into())
+                    && point != desired
+                {
+                    self.camera
+                        .turn(Vector2::new(-delta.x as f32, -delta.y as f32));
+                }
+
                 Ok(())
             }
 
-            app::Event::Render {
-                context: AppContext { gl },
-            } => {
+            app::Event::Render { context } => {
+                let gl = context.gl;
+
                 // cornflower blue, #6495ED
                 gl.clear_color(0.39, 0.58, 0.93, 1.0);
                 gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
@@ -245,12 +257,15 @@ impl EventHandler<DemoError> for DemoState {
                             .location,
                     ),
                     false,
-                    (Matrix4::new_translation(&Vector3::new(0.0, 0.0, -6.0))
-                        * Matrix4::from_axis_angle(
-                            &Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0)),
-                            self.rotation,
-                        ))
-                    .as_slice(),
+                    self.camera
+                        .transform_matrix()
+                        // TODO also include rotation in camera matrix
+                        // (Matrix4::new_translation(&Vector3::new(0.0, 0.0, -6.0))
+                        //     * Matrix4::from_axis_angle(
+                        //         &Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0)),
+                        //         self.rotation,
+                        //     ))
+                        .as_slice(),
                 );
 
                 gl.bind_vertex_array(Some(&self.vertex_array));
