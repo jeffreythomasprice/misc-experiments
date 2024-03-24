@@ -1,6 +1,7 @@
 use std::{cell::RefCell, fmt::Debug, mem::forget, rc::Rc, time::Duration};
 
 use log::*;
+use nalgebra::{Point2, Vector2};
 use serde::Serialize;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, MouseEvent, WebGl2RenderingContext};
@@ -18,10 +19,20 @@ pub enum Event {
         width: u32,
         height: u32,
     },
+    MouseDown {
+        context: AppContext,
+        button: i16,
+        point: Point2<u32>,
+    },
+    MouseUp {
+        context: AppContext,
+        button: i16,
+        point: Point2<u32>,
+    },
     MouseMove {
         context: AppContext,
-        x: u32,
-        y: u32,
+        point: Point2<u32>,
+        delta: Vector2<i32>,
     },
     Render {
         context: AppContext,
@@ -113,6 +124,7 @@ where
             error!("error resizing: {e:?}");
         }
 
+        // resize events
         {
             let state = state.clone();
             let c = Closure::<dyn Fn()>::new(move || {
@@ -128,17 +140,69 @@ where
             forget(c);
         }
 
+        // mouse down events
         {
-            let canvas = state.borrow_mut().canvas.clone();
             let state = state.clone();
+            let canvas = state.borrow_mut().canvas.clone();
+            let c =
+                Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
+                    let context = state.borrow().context();
+                    if let Err(e) = state.borrow_mut().event_handler.borrow_mut().handle_event(
+                        Event::MouseDown {
+                            context,
+                            button: e.button(),
+                            point: Point2::new(e.x() as u32, e.y() as u32),
+                        },
+                    ) {
+                        error!("error handling mouse move: {e:?}");
+                    }
+                });
+            canvas
+                .add_event_listener_with_callback("mousedown", c.as_ref().unchecked_ref())
+                .map_err(|e| Error::Js(e.into()))?;
+            // don't ever free this so the js callback stays valid
+            forget(c);
+        }
+
+        // mouse up events
+        {
+            let state = state.clone();
+            let canvas = state.borrow_mut().canvas.clone();
+            let c = Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
+                let context = state.borrow().context();
+                if let Err(e) =
+                    state
+                        .borrow_mut()
+                        .event_handler
+                        .borrow_mut()
+                        .handle_event(Event::MouseUp {
+                            context,
+                            button: e.button(),
+                            point: Point2::new(e.x() as u32, e.y() as u32),
+                        })
+                {
+                    error!("error handling mouse move: {e:?}");
+                }
+            });
+            canvas
+                .add_event_listener_with_callback("mouseup", c.as_ref().unchecked_ref())
+                .map_err(|e| Error::Js(e.into()))?;
+            // don't ever free this so the js callback stays valid
+            forget(c);
+        }
+
+        // mouse move events
+        {
+            let state = state.clone();
+            let canvas = state.borrow_mut().canvas.clone();
             let c =
                 Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
                     let context = state.borrow().context();
                     if let Err(e) = state.borrow_mut().event_handler.borrow_mut().handle_event(
                         Event::MouseMove {
                             context,
-                            x: e.x() as u32,
-                            y: e.y() as u32,
+                            point: Point2::new(e.x() as u32, e.y() as u32),
+                            delta: Vector2::new(e.movement_x(), e.movement_y()),
                         },
                     ) {
                         error!("error handling mouse move: {e:?}");
@@ -151,6 +215,7 @@ where
             forget(c);
         }
 
+        // render and update events
         {
             fn request_animation_frame<EH, EHError>(state: Rc<RefCell<App<EH>>>)
             where

@@ -177,7 +177,7 @@ impl EventHandler<DemoError> for DemoState {
                 gl.viewport(0, 0, width as i32, height as i32);
 
                 self.perspective_transform = Matrix4::new_perspective(
-                    (width / height) as f32,
+                    width as f32 / height as f32,
                     60.0f32.to_radians(),
                     1.0,
                     100.0,
@@ -186,8 +186,30 @@ impl EventHandler<DemoError> for DemoState {
                 Ok(())
             }
 
-            app::Event::MouseMove { context: _, x, y } => {
-                debug!("TODO mouse move ({}, {})", x, y);
+            app::Event::MouseDown {
+                context: _,
+                button,
+                point,
+            } => {
+                debug!("TODO mouse down button={button}, point={point}");
+                Ok(())
+            }
+
+            app::Event::MouseUp {
+                context: _,
+                button,
+                point,
+            } => {
+                debug!("TODO mouse up button={button}, point={point}");
+                Ok(())
+            }
+
+            app::Event::MouseMove {
+                context: _,
+                point,
+                delta,
+            } => {
+                debug!("TODO mouse move point={point}, delta={delta}");
                 Ok(())
             }
 
