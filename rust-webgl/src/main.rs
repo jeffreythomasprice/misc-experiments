@@ -5,7 +5,7 @@ mod shaders;
 
 use std::{panic, rc::Rc};
 
-use app::{App, EventHandler};
+use app::{App, AppContext, EventHandler};
 use errors::JsInteropError;
 use extra_math::LookAtCamera;
 use js_sys::Uint8Array;
@@ -167,87 +167,96 @@ impl EventHandler<DemoError> for DemoState {
         })
     }
 
-    fn resize(
-        &mut self,
-        gl: Rc<WebGl2RenderingContext>,
-        width: f64,
-        height: f64,
-    ) -> Result<(), DemoError> {
-        gl.viewport(0, 0, width as i32, height as i32);
+    fn handle_event(&mut self, event: app::Event) -> Result<(), DemoError> {
+        match event {
+            app::Event::Resize {
+                context: AppContext { gl },
+                width,
+                height,
+            } => {
+                gl.viewport(0, 0, width as i32, height as i32);
 
-        self.perspective_transform =
-            Matrix4::new_perspective((width / height) as f32, 60.0f32.to_radians(), 1.0, 100.0);
+                self.perspective_transform = Matrix4::new_perspective(
+                    (width / height) as f32,
+                    60.0f32.to_radians(),
+                    1.0,
+                    100.0,
+                );
 
-        Ok(())
-    }
+                Ok(())
+            }
 
-    fn mouse_move(&mut self, x: i32, y: i32) -> Result<(), DemoError> {
-        debug!("TODO mouse move ({}, {})", x, y);
-        Ok(())
-    }
+            app::Event::MouseMove { context: _, x, y } => {
+                debug!("TODO mouse move ({}, {})", x, y);
+                Ok(())
+            }
 
-    fn animate(
-        &mut self,
-        gl: Rc<WebGl2RenderingContext>,
-        _total_time: f64,
-        delta: std::time::Duration,
-    ) -> Result<(), DemoError> {
-        // cornflower blue, #6495ED
-        gl.clear_color(0.39, 0.58, 0.93, 1.0);
-        gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+            app::Event::Render {
+                context: AppContext { gl },
+            } => {
+                // cornflower blue, #6495ED
+                gl.clear_color(0.39, 0.58, 0.93, 1.0);
+                gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-        self.shader_program.use_program();
-        gl.uniform_matrix4fv_with_f32_array(
-            Some(
-                &self
-                    .shader_program
-                    .get_uniform_by_name("projectionMatrix")
-                    .ok_or(JsInteropError::NotFound(
-                        "failed to find uniform".to_owned(),
-                    ))?
-                    .location,
-            ),
-            false,
-            self.perspective_transform.as_slice(),
-        );
-        gl.uniform_matrix4fv_with_f32_array(
-            Some(
-                &self
-                    .shader_program
-                    .get_uniform_by_name("modelViewMatrix")
-                    .ok_or(JsInteropError::NotFound(
-                        "failed to find uniform".to_owned(),
-                    ))?
-                    .location,
-            ),
-            false,
-            (Matrix4::new_translation(&Vector3::new(0.0, 0.0, -6.0))
-                * Matrix4::from_axis_angle(
-                    &Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0)),
-                    self.rotation,
-                ))
-            .as_slice(),
-        );
+                self.shader_program.use_program();
+                gl.uniform_matrix4fv_with_f32_array(
+                    Some(
+                        &self
+                            .shader_program
+                            .get_uniform_by_name("projectionMatrix")
+                            .ok_or(JsInteropError::NotFound(
+                                "failed to find uniform".to_owned(),
+                            ))?
+                            .location,
+                    ),
+                    false,
+                    self.perspective_transform.as_slice(),
+                );
+                gl.uniform_matrix4fv_with_f32_array(
+                    Some(
+                        &self
+                            .shader_program
+                            .get_uniform_by_name("modelViewMatrix")
+                            .ok_or(JsInteropError::NotFound(
+                                "failed to find uniform".to_owned(),
+                            ))?
+                            .location,
+                    ),
+                    false,
+                    (Matrix4::new_translation(&Vector3::new(0.0, 0.0, -6.0))
+                        * Matrix4::from_axis_angle(
+                            &Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0)),
+                            self.rotation,
+                        ))
+                    .as_slice(),
+                );
 
-        gl.bind_vertex_array(Some(&self.vertex_array));
-        gl.bind_buffer(
-            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
-            Some(&self.element_array_buffer),
-        );
-        gl.draw_elements_with_i32(
-            WebGl2RenderingContext::TRIANGLES,
-            6,
-            WebGl2RenderingContext::UNSIGNED_SHORT,
-            0,
-        );
-        gl.bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, None);
-        gl.bind_vertex_array(None);
+                gl.bind_vertex_array(Some(&self.vertex_array));
+                gl.bind_buffer(
+                    WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+                    Some(&self.element_array_buffer),
+                );
+                gl.draw_elements_with_i32(
+                    WebGl2RenderingContext::TRIANGLES,
+                    6,
+                    WebGl2RenderingContext::UNSIGNED_SHORT,
+                    0,
+                );
+                gl.bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, None);
+                gl.bind_vertex_array(None);
 
-        gl.use_program(None);
+                gl.use_program(None);
 
-        self.rotation += (delta.as_secs_f32() * 90.0f32.to_radians()) % 360.0f32.to_radians();
+                Ok(())
+            }
 
-        Ok(())
+            app::Event::Update { context: _, delta } => {
+                self.rotation +=
+                    (delta.as_secs_f32() * 90.0f32.to_radians()) % 360.0f32.to_radians();
+
+                Ok(())
+            }
+        }
     }
 }
 

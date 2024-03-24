@@ -7,25 +7,38 @@ use web_sys::{HtmlCanvasElement, MouseEvent, WebGl2RenderingContext};
 
 use crate::errors::JsInteropError;
 
+#[derive(Clone)]
+pub struct AppContext {
+    pub gl: Rc<WebGl2RenderingContext>,
+}
+
+pub enum Event {
+    Resize {
+        context: AppContext,
+        width: u32,
+        height: u32,
+    },
+    MouseMove {
+        context: AppContext,
+        x: u32,
+        y: u32,
+    },
+    Render {
+        context: AppContext,
+    },
+    Update {
+        context: AppContext,
+        delta: Duration,
+    },
+}
+
 // TODO should actually be message handling? like an enum that could be resize, mouse move, render, update, etc.?
 pub trait EventHandler<Error>
 where
     Self: Sized,
 {
     fn init(gl: Rc<WebGl2RenderingContext>) -> Result<Self, Error>;
-    fn resize(
-        &mut self,
-        gl: Rc<WebGl2RenderingContext>,
-        width: f64,
-        height: f64,
-    ) -> Result<(), Error>;
-    fn mouse_move(&mut self, x: i32, y: i32) -> Result<(), Error>;
-    fn animate(
-        &mut self,
-        gl: Rc<WebGl2RenderingContext>,
-        total_time: f64,
-        delta: Duration,
-    ) -> Result<(), Error>;
+    fn handle_event(&mut self, event: Event) -> Result<(), Error>;
 }
 
 #[derive(Debug)]
@@ -118,16 +131,19 @@ where
         {
             let canvas = state.borrow_mut().canvas.clone();
             let state = state.clone();
-            let c = Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
-                if let Err(e) = state
-                    .borrow_mut()
-                    .event_handler
-                    .borrow_mut()
-                    .mouse_move(e.x(), e.y())
-                {
-                    error!("error handling mouse move: {e:?}");
-                }
-            });
+            let c =
+                Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
+                    let context = state.borrow().context();
+                    if let Err(e) = state.borrow_mut().event_handler.borrow_mut().handle_event(
+                        Event::MouseMove {
+                            context,
+                            x: e.x() as u32,
+                            y: e.y() as u32,
+                        },
+                    ) {
+                        error!("error handling mouse move: {e:?}");
+                    }
+                });
             canvas
                 .add_event_listener_with_callback("mousemove", c.as_ref().unchecked_ref())
                 .map_err(|e| Error::Js(e.into()))?;
@@ -175,12 +191,19 @@ where
     {
         let width: f64 = window()?.inner_width()?.try_into()?;
         let height: f64 = window()?.inner_height()?.try_into()?;
+        let width = width as u32;
+        let height = height as u32;
 
-        self.canvas.set_width(width as u32);
-        self.canvas.set_height(height as u32);
+        self.canvas.set_width(width);
+        self.canvas.set_height(height);
 
+        let context = self.context();
         let mut eh = self.event_handler.borrow_mut();
-        if let Err(e) = eh.resize(self.gl.clone(), width, height) {
+        if let Err(e) = eh.handle_event(Event::Resize {
+            context,
+            width,
+            height,
+        }) {
             error!("event handler resize error: {e:?}");
         }
 
@@ -195,12 +218,24 @@ where
         let delta = std::time::Duration::from_millis((time - self.last_ticks) as u64);
         self.last_ticks = time;
 
+        let context = self.context();
         let mut eh = self.event_handler.borrow_mut();
-        if let Err(e) = eh.animate(self.gl.clone(), time, delta) {
-            error!("event handler animate error: {e:?}");
+        if let Err(e) = eh.handle_event(Event::Render { context }) {
+            error!("error handling render event: {e:?}");
+        }
+
+        let context = self.context();
+        if let Err(e) = eh.handle_event(Event::Update { context, delta }) {
+            error!("event handling update error: {e:?}");
         }
 
         Ok(())
+    }
+
+    fn context(&self) -> AppContext {
+        AppContext {
+            gl: self.gl.clone(),
+        }
     }
 }
 
