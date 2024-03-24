@@ -1,14 +1,16 @@
+mod app;
 mod errors;
-mod runner;
+mod extra_math;
 mod shaders;
 
 use std::{panic, rc::Rc};
 
+use app::{App, EventHandler};
 use errors::JsInteropError;
+use extra_math::LookAtCamera;
 use js_sys::Uint8Array;
 use log::*;
-use nalgebra::{Matrix4, Unit, Vector3};
-use runner::{App, EventHandler};
+use nalgebra::{Matrix4, Point3, Unit, Vector3};
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject};
 
 use crate::shaders::ShaderProgram;
@@ -34,6 +36,7 @@ struct DemoState {
     rotation: f32,
 
     perspective_transform: Matrix4<f32>,
+    camera: LookAtCamera,
 }
 
 #[allow(dead_code)]
@@ -156,6 +159,11 @@ impl EventHandler<DemoError> for DemoState {
             rotation: 0f32,
 
             perspective_transform: Matrix4::identity(),
+            camera: LookAtCamera::new(
+                Point3::new(0.0, 0.0, -6.0),
+                Point3::new(0.0, 0.0, 0.0),
+                Vector3::new(0.0, 1.0, 0.0),
+            ),
         })
     }
 
@@ -170,6 +178,11 @@ impl EventHandler<DemoError> for DemoState {
         self.perspective_transform =
             Matrix4::new_perspective((width / height) as f32, 60.0f32.to_radians(), 1.0, 100.0);
 
+        Ok(())
+    }
+
+    fn mouse_move(&mut self, x: i32, y: i32) -> Result<(), DemoError> {
+        debug!("TODO mouse move ({}, {})", x, y);
         Ok(())
     }
 

@@ -3,10 +3,11 @@ use std::{cell::RefCell, fmt::Debug, mem::forget, rc::Rc, time::Duration};
 use log::*;
 use serde::Serialize;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
+use web_sys::{HtmlCanvasElement, MouseEvent, WebGl2RenderingContext};
 
 use crate::errors::JsInteropError;
 
+// TODO should actually be message handling? like an enum that could be resize, mouse move, render, update, etc.?
 pub trait EventHandler<Error>
 where
     Self: Sized,
@@ -18,6 +19,7 @@ where
         width: f64,
         height: f64,
     ) -> Result<(), Error>;
+    fn mouse_move(&mut self, x: i32, y: i32) -> Result<(), Error>;
     fn animate(
         &mut self,
         gl: Rc<WebGl2RenderingContext>,
@@ -99,16 +101,35 @@ where
         }
 
         {
-            // register as the window resize handler
             let state = state.clone();
             let c = Closure::<dyn Fn()>::new(move || {
                 if let Err(e) = state.borrow_mut().resize() {
-                    error!("error resizing: {e:?}");
+                    error!("error handling resize: {e:?}");
                 }
             });
             window()
                 .map_err(|e| Error::Js(e))?
                 .add_event_listener_with_callback("resize", c.as_ref().unchecked_ref())
+                .map_err(|e| Error::Js(e.into()))?;
+            // don't ever free this so the js callback stays valid
+            forget(c);
+        }
+
+        {
+            let canvas = state.borrow_mut().canvas.clone();
+            let state = state.clone();
+            let c = Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
+                if let Err(e) = state
+                    .borrow_mut()
+                    .event_handler
+                    .borrow_mut()
+                    .mouse_move(e.x(), e.y())
+                {
+                    error!("error handling mouse move: {e:?}");
+                }
+            });
+            canvas
+                .add_event_listener_with_callback("mousemove", c.as_ref().unchecked_ref())
                 .map_err(|e| Error::Js(e.into()))?;
             // don't ever free this so the js callback stays valid
             forget(c);
