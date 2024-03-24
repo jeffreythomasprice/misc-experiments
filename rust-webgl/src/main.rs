@@ -9,7 +9,7 @@ use js_sys::Uint8Array;
 use log::*;
 use nalgebra::{Matrix4, Unit, Vector3};
 use runner::{App, EventHandler};
-use web_sys::{WebGl2RenderingContext, WebGlVertexArrayObject};
+use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlVertexArrayObject};
 
 use crate::shaders::ShaderProgram;
 
@@ -28,6 +28,7 @@ struct Vertex {
 
 struct DemoState {
     shader_program: ShaderProgram,
+    element_array_buffer: WebGlBuffer,
     vertex_array: WebGlVertexArrayObject,
 
     rotation: f32,
@@ -59,8 +60,10 @@ impl EventHandler<DemoError> for DemoState {
             "failed to create buffer".to_owned(),
         ))?;
         gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&array_buffer));
-        unsafe {
-            let data = [
+        buffer_data_with_slice(
+            &gl,
+            WebGl2RenderingContext::ARRAY_BUFFER,
+            &[
                 Vertex {
                     position: Vector3::new(-1.0, -1.0, 0.0),
                     color: Rgba {
@@ -80,7 +83,7 @@ impl EventHandler<DemoError> for DemoState {
                     },
                 },
                 Vertex {
-                    position: Vector3::new(0.0, 1.0, 0.0),
+                    position: Vector3::new(1.0, 1.0, 0.0),
                     color: Rgba {
                         r: 0.0,
                         g: 1.0,
@@ -88,60 +91,66 @@ impl EventHandler<DemoError> for DemoState {
                         a: 1.0,
                     },
                 },
-            ];
-            gl.buffer_data_with_array_buffer_view(
-                WebGl2RenderingContext::ARRAY_BUFFER,
-                &Uint8Array::view_mut_raw(
-                    data.as_ptr() as *mut u8,
-                    core::mem::size_of::<Vertex>() * data.len(),
-                ),
-                WebGl2RenderingContext::STATIC_DRAW,
-            );
-        };
+                Vertex {
+                    position: Vector3::new(-1.0, 1.0, 0.0),
+                    color: Rgba {
+                        r: 0.5,
+                        g: 0.0,
+                        b: 0.5,
+                        a: 1.0,
+                    },
+                },
+            ],
+            WebGl2RenderingContext::STATIC_DRAW,
+        );
         gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
+
+        let element_array_buffer = gl.create_buffer().ok_or(JsInteropError::NotFound(
+            "failed to create element buffer".to_owned(),
+        ))?;
+        gl.bind_buffer(
+            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+            Some(&element_array_buffer),
+        );
+        buffer_data_with_slice::<u16>(
+            &gl,
+            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+            &[0, 1, 2, 2, 3, 0],
+            WebGl2RenderingContext::STATIC_DRAW,
+        );
+        gl.bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, None);
 
         let vertex_array = gl.create_vertex_array().ok_or(JsInteropError::NotFound(
             "failed to create vertex array object".to_owned(),
         ))?;
         gl.bind_vertex_array(Some(&vertex_array));
         gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&array_buffer));
-        {
-            let attr = shader_program
-                .get_attribute_by_name("positionAttribute")
-                .ok_or(JsInteropError::NotFound(
-                    "failed to find attribute".to_owned(),
-                ))?;
-            gl.vertex_attrib_pointer_with_i32(
-                attr.index,
-                3,
-                WebGl2RenderingContext::FLOAT,
-                false,
-                core::mem::size_of::<Vertex>() as i32,
-                core::mem::offset_of!(Vertex, position) as i32,
-            );
-            gl.enable_vertex_attrib_array(attr.index);
-        }
-        {
-            let attr = shader_program
-                .get_attribute_by_name("colorAttribute")
-                .ok_or(JsInteropError::NotFound(
-                    "failed to find attribute".to_owned(),
-                ))?;
-            gl.vertex_attrib_pointer_with_i32(
-                attr.index,
-                4,
-                WebGl2RenderingContext::FLOAT,
-                false,
-                core::mem::size_of::<Vertex>() as i32,
-                core::mem::offset_of!(Vertex, color) as i32,
-            );
-            gl.enable_vertex_attrib_array(attr.index);
-        }
+        enable_vertex_attribute_and_set_pointer(
+            &gl,
+            &shader_program,
+            "positionAttribute",
+            3,
+            WebGl2RenderingContext::FLOAT,
+            false,
+            core::mem::size_of::<Vertex>() as i32,
+            core::mem::offset_of!(Vertex, position) as i32,
+        )?;
+        enable_vertex_attribute_and_set_pointer(
+            &gl,
+            &shader_program,
+            "colorAttribute",
+            4,
+            WebGl2RenderingContext::FLOAT,
+            false,
+            core::mem::size_of::<Vertex>() as i32,
+            core::mem::offset_of!(Vertex, color) as i32,
+        )?;
         gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
         gl.bind_vertex_array(None);
 
         Ok(Self {
             shader_program,
+            element_array_buffer,
             vertex_array,
 
             rotation: 0f32,
@@ -208,7 +217,17 @@ impl EventHandler<DemoError> for DemoState {
         );
 
         gl.bind_vertex_array(Some(&self.vertex_array));
-        gl.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+        gl.bind_buffer(
+            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+            Some(&self.element_array_buffer),
+        );
+        gl.draw_elements_with_i32(
+            WebGl2RenderingContext::TRIANGLES,
+            6,
+            WebGl2RenderingContext::UNSIGNED_SHORT,
+            0,
+        );
+        gl.bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, None);
         gl.bind_vertex_array(None);
 
         gl.use_program(None);
@@ -228,4 +247,39 @@ fn main() -> Result<(), JsInteropError> {
     }
 
     Ok(())
+}
+
+// TODO JEFF buffers.rs?
+
+fn enable_vertex_attribute_and_set_pointer(
+    gl: &WebGl2RenderingContext,
+    shader: &ShaderProgram,
+    attr_name: &str,
+    size: i32,
+    type_: u32,
+    normalized: bool,
+    stride: i32,
+    offset: i32,
+) -> Result<(), JsInteropError> {
+    let attr = shader
+        .get_attribute_by_name(attr_name)
+        .ok_or(JsInteropError::NotFound(
+            "failed to find attribute".to_owned(),
+        ))?;
+    gl.vertex_attrib_pointer_with_i32(attr.index, size, type_, normalized, stride, offset);
+    gl.enable_vertex_attrib_array(attr.index);
+    Ok(())
+}
+
+fn buffer_data_with_slice<T>(gl: &WebGl2RenderingContext, target: u32, src_data: &[T], usage: u32) {
+    unsafe {
+        gl.buffer_data_with_array_buffer_view(
+            target,
+            &Uint8Array::view_mut_raw(
+                src_data.as_ptr() as *mut u8,
+                core::mem::size_of::<T>() * src_data.len(),
+            ),
+            usage,
+        );
+    }
 }
