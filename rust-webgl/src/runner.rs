@@ -2,7 +2,7 @@ use std::{cell::RefCell, fmt::Debug, mem::forget, rc::Rc, time::Duration};
 
 use log::*;
 use serde::Serialize;
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 use crate::errors::JsInteropError;

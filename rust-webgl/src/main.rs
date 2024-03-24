@@ -2,21 +2,19 @@ mod errors;
 mod runner;
 mod shaders;
 
-use std::{cell::RefCell, mem::forget, panic, rc::Rc};
+use std::{panic, rc::Rc};
 
 use errors::JsInteropError;
 use js_sys::Uint8Array;
 use log::*;
 use nalgebra::{Matrix4, Unit, Vector3};
 use runner::{App, EventHandler};
-use serde::Serialize;
-use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebGlVertexArrayObject};
+use web_sys::{WebGl2RenderingContext, WebGlVertexArrayObject};
 
 use crate::shaders::ShaderProgram;
 
 #[allow(dead_code)]
-struct RGBA {
+struct Rgba {
     r: f32,
     g: f32,
     b: f32,
@@ -25,7 +23,7 @@ struct RGBA {
 
 struct Vertex {
     position: Vector3<f32>,
-    color: RGBA,
+    color: Rgba,
 }
 
 struct DemoState {
@@ -37,6 +35,7 @@ struct DemoState {
     perspective_transform: Matrix4<f32>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 enum DemoError {
     Js(JsInteropError),
@@ -64,7 +63,7 @@ impl EventHandler<DemoError> for DemoState {
             let data = [
                 Vertex {
                     position: Vector3::new(-1.0, -1.0, 0.0),
-                    color: RGBA {
+                    color: Rgba {
                         r: 1.0,
                         g: 0.0,
                         b: 1.0,
@@ -73,7 +72,7 @@ impl EventHandler<DemoError> for DemoState {
                 },
                 Vertex {
                     position: Vector3::new(1.0, -1.0, 0.0),
-                    color: RGBA {
+                    color: Rgba {
                         r: 1.0,
                         g: 1.0,
                         b: 0.0,
@@ -82,7 +81,7 @@ impl EventHandler<DemoError> for DemoState {
                 },
                 Vertex {
                     position: Vector3::new(0.0, 1.0, 0.0),
-                    color: RGBA {
+                    color: Rgba {
                         r: 0.0,
                         g: 1.0,
                         b: 1.0,
@@ -229,39 +228,4 @@ fn main() -> Result<(), JsInteropError> {
     }
 
     Ok(())
-}
-
-fn window() -> Result<web_sys::Window, JsInteropError> {
-    web_sys::window().ok_or(JsInteropError::NotFound("failed to get window".to_owned()))
-}
-
-fn document() -> Result<web_sys::Document, JsInteropError> {
-    window()?.document().ok_or(JsInteropError::NotFound(
-        "failed to get document".to_owned(),
-    ))
-}
-
-fn body() -> Result<web_sys::HtmlElement, JsInteropError> {
-    document()?
-        .body()
-        .ok_or(JsInteropError::NotFound("failed to get body".to_owned()))
-}
-
-fn create_canvas() -> Result<web_sys::HtmlCanvasElement, JsInteropError> {
-    let result: web_sys::HtmlCanvasElement = document()?
-        .create_element("canvas")?
-        .dyn_into()
-        .map_err(|_| {
-            JsInteropError::CastError(
-                "created a canvas element, but it wasn't the expected type".to_owned(),
-            )
-        })?;
-
-    result.style().set_property("position", "absolute")?;
-    result.style().set_property("width", "100%")?;
-    result.style().set_property("height", "100%")?;
-    result.style().set_property("left", "0px")?;
-    result.style().set_property("top", "0px")?;
-
-    Ok(result)
 }
