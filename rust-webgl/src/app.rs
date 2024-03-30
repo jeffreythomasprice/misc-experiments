@@ -4,7 +4,7 @@ use log::*;
 use nalgebra::{Point2, Vector2};
 use serde::Serialize;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{HtmlCanvasElement, MouseEvent, WebGl2RenderingContext};
+use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 use crate::errors::JsInteropError;
 
@@ -14,27 +14,86 @@ pub struct AppContext {
     pub gl: Rc<WebGl2RenderingContext>,
 }
 
+impl Debug for AppContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppContext")
+            .field("canvas.width", &self.canvas.width())
+            .field("canvas.height", &self.canvas.height())
+            .finish()
+    }
+}
+
+pub struct MouseEvent {
+    pub context: AppContext,
+    pub event: web_sys::MouseEvent,
+}
+
+impl MouseEvent {
+    pub fn point(&self) -> Point2<u32> {
+        Point2::new(self.event.x() as u32, self.event.y() as u32)
+    }
+}
+
+impl Debug for MouseEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MouseEvent")
+            .field("context", &self.context)
+            .field("point", &self.point())
+            .field("button", &self.event.button())
+            .finish()
+    }
+}
+
+pub struct MouseMoveEvent {
+    pub context: AppContext,
+    pub event: web_sys::MouseEvent,
+}
+
+impl MouseMoveEvent {
+    pub fn point(&self) -> Point2<u32> {
+        Point2::new(self.event.x() as u32, self.event.y() as u32)
+    }
+
+    pub fn delta(&self) -> Vector2<i32> {
+        Vector2::new(self.event.movement_x(), self.event.movement_y())
+    }
+}
+
+impl Debug for MouseMoveEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MouseMoveEvent")
+            .field("context", &self.context)
+            .field("point", &self.point())
+            .field("delta", &self.delta())
+            .finish()
+    }
+}
+
+pub struct KeyboardEvent {
+    pub context: AppContext,
+    pub event: web_sys::KeyboardEvent,
+}
+
+impl Debug for KeyboardEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeyboardEvent")
+            .field("context", &self.context)
+            .field("key_code", &self.event.key_code())
+            .finish()
+    }
+}
+
 pub enum Event {
     Resize {
         context: AppContext,
         width: u32,
         height: u32,
     },
-    MouseDown {
-        context: AppContext,
-        button: i16,
-        point: Point2<u32>,
-    },
-    MouseUp {
-        context: AppContext,
-        button: i16,
-        point: Point2<u32>,
-    },
-    MouseMove {
-        context: AppContext,
-        point: Point2<u32>,
-        delta: Vector2<i32>,
-    },
+    MouseDown(MouseEvent),
+    MouseUp(MouseEvent),
+    MouseMove(MouseMoveEvent),
+    KeyDown(KeyboardEvent),
+    KeyUp(KeyboardEvent),
     Render {
         context: AppContext,
     },
@@ -44,7 +103,6 @@ pub enum Event {
     },
 }
 
-// TODO should actually be message handling? like an enum that could be resize, mouse move, render, update, etc.?
 pub trait EventHandler<Error>
 where
     Self: Sized,
@@ -146,15 +204,14 @@ where
             let state = state.clone();
             let canvas = state.borrow_mut().canvas.clone();
             let c =
-                Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
+                Closure::<dyn Fn(web_sys::MouseEvent)>::new(move |event: web_sys::MouseEvent| {
                     let context = state.borrow().context();
-                    if let Err(e) = state.borrow_mut().event_handler.borrow_mut().handle_event(
-                        Event::MouseDown {
-                            context,
-                            button: e.button(),
-                            point: Point2::new(e.x() as u32, e.y() as u32),
-                        },
-                    ) {
+                    if let Err(e) = state
+                        .borrow_mut()
+                        .event_handler
+                        .borrow_mut()
+                        .handle_event(Event::MouseDown(MouseEvent { context, event }))
+                    {
                         error!("error handling mouse move: {e:?}");
                     }
                 });
@@ -169,22 +226,18 @@ where
         {
             let state = state.clone();
             let canvas = state.borrow_mut().canvas.clone();
-            let c = Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
-                let context = state.borrow().context();
-                if let Err(e) =
-                    state
+            let c =
+                Closure::<dyn Fn(web_sys::MouseEvent)>::new(move |event: web_sys::MouseEvent| {
+                    let context = state.borrow().context();
+                    if let Err(e) = state
                         .borrow_mut()
                         .event_handler
                         .borrow_mut()
-                        .handle_event(Event::MouseUp {
-                            context,
-                            button: e.button(),
-                            point: Point2::new(e.x() as u32, e.y() as u32),
-                        })
-                {
-                    error!("error handling mouse move: {e:?}");
-                }
-            });
+                        .handle_event(Event::MouseUp(MouseEvent { context, event }))
+                    {
+                        error!("error handling mouse move: {e:?}");
+                    }
+                });
             canvas
                 .add_event_listener_with_callback("mouseup", c.as_ref().unchecked_ref())
                 .map_err(|e| Error::Js(e.into()))?;
@@ -197,20 +250,69 @@ where
             let state = state.clone();
             let canvas = state.borrow_mut().canvas.clone();
             let c =
-                Closure::<dyn Fn(MouseEvent)>::new(move |e: MouseEvent| {
+                Closure::<dyn Fn(web_sys::MouseEvent)>::new(move |event: web_sys::MouseEvent| {
                     let context = state.borrow().context();
-                    if let Err(e) = state.borrow_mut().event_handler.borrow_mut().handle_event(
-                        Event::MouseMove {
-                            context,
-                            point: Point2::new(e.x() as u32, e.y() as u32),
-                            delta: Vector2::new(e.movement_x(), e.movement_y()),
-                        },
-                    ) {
+                    if let Err(e) = state
+                        .borrow_mut()
+                        .event_handler
+                        .borrow_mut()
+                        .handle_event(Event::MouseMove(MouseMoveEvent { context, event }))
+                    {
                         error!("error handling mouse move: {e:?}");
                     }
                 });
             canvas
                 .add_event_listener_with_callback("mousemove", c.as_ref().unchecked_ref())
+                .map_err(|e| Error::Js(e.into()))?;
+            // don't ever free this so the js callback stays valid
+            forget(c);
+        }
+
+        // key down events
+        {
+            let state = state.clone();
+            let canvas = state.borrow_mut().canvas.clone();
+            let c = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(
+                move |event: web_sys::KeyboardEvent| {
+                    let context = state.borrow().context();
+                    if let Err(e) = state
+                        .borrow_mut()
+                        .event_handler
+                        .borrow_mut()
+                        .handle_event(Event::KeyDown(KeyboardEvent { context, event }))
+                    {
+                        error!("error handling mouse move: {e:?}");
+                    }
+                },
+            );
+            window()
+                .map_err(|e| Error::Js(e))?
+                .add_event_listener_with_callback("keydown", c.as_ref().unchecked_ref())
+                .map_err(|e| Error::Js(e.into()))?;
+            // don't ever free this so the js callback stays valid
+            forget(c);
+        }
+
+        // key up events
+        {
+            let state = state.clone();
+            let canvas = state.borrow_mut().canvas.clone();
+            let c = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(
+                move |event: web_sys::KeyboardEvent| {
+                    let context = state.borrow().context();
+                    if let Err(e) = state
+                        .borrow_mut()
+                        .event_handler
+                        .borrow_mut()
+                        .handle_event(Event::KeyUp(KeyboardEvent { context, event }))
+                    {
+                        error!("error handling mouse move: {e:?}");
+                    }
+                },
+            );
+            window()
+                .map_err(|e| Error::Js(e))?
+                .add_event_listener_with_callback("keyup", c.as_ref().unchecked_ref())
                 .map_err(|e| Error::Js(e.into()))?;
             // don't ever free this so the js callback stays valid
             forget(c);

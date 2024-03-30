@@ -3,9 +3,9 @@ mod errors;
 mod extra_math;
 mod shaders;
 
-use std::{panic, rc::Rc};
+use std::{collections::HashMap, panic, rc::Rc};
 
-use app::{App, AppContext, EventHandler};
+use app::{App, AppContext, EventHandler, MouseEvent};
 use errors::JsInteropError;
 use extra_math::LookAtCamera;
 use js_sys::Uint8Array;
@@ -33,10 +33,18 @@ struct DemoState {
     element_array_buffer: WebGlBuffer,
     vertex_array: WebGlVertexArrayObject,
 
+    key_state: HashMap<u32, bool>,
+
     rotation: f32,
 
     perspective_transform: Matrix4<f32>,
     camera: LookAtCamera,
+}
+
+impl DemoState {
+    pub fn is_key_pressed(&self, key_code: u32) -> bool {
+        *self.key_state.get(&key_code).unwrap_or(&false)
+    }
 }
 
 #[allow(dead_code)]
@@ -156,6 +164,8 @@ impl EventHandler<DemoError> for DemoState {
             element_array_buffer,
             vertex_array,
 
+            key_state: HashMap::new(),
+
             rotation: 0f32,
 
             perspective_transform: Matrix4::identity(),
@@ -188,40 +198,39 @@ impl EventHandler<DemoError> for DemoState {
                 Ok(())
             }
 
-            app::Event::MouseDown {
-                context: _,
-                button: _,
-                point: _,
-            } => Ok(()),
+            app::Event::MouseDown(_) => Ok(()),
 
-            app::Event::MouseUp {
-                context,
-                button: _,
-                point: _,
-            } => {
-                if document()?.pointer_lock_element() == Some(context.canvas.clone().into()) {
+            app::Event::MouseUp(e) => {
+                if document()?.pointer_lock_element() == Some(e.context.canvas.clone().into()) {
                     document()?.exit_pointer_lock();
                 } else {
-                    context.canvas.request_pointer_lock();
+                    e.context.canvas.request_pointer_lock();
                 }
 
                 Ok(())
             }
 
-            app::Event::MouseMove {
-                context,
-                point,
-                delta,
-            } => {
-                let desired =
-                    Point2::from(Vector2::new(context.canvas.width(), context.canvas.height()) / 2);
-                if document()?.pointer_lock_element() == Some(context.canvas.clone().into())
-                    && point != desired
+            app::Event::MouseMove(e) => {
+                let desired = Point2::from(
+                    Vector2::new(e.context.canvas.width(), e.context.canvas.height()) / 2,
+                );
+                if document()?.pointer_lock_element() == Some(e.context.canvas.clone().into())
+                    && e.point() != desired
                 {
                     self.camera
-                        .turn(Vector2::new(-delta.x as f32, -delta.y as f32));
+                        .turn(Vector2::new(-e.delta().x as f32, -e.delta().y as f32));
                 }
 
+                Ok(())
+            }
+
+            app::Event::KeyDown(e) => {
+                self.key_state.insert(e.event.key_code(), true);
+                Ok(())
+            }
+
+            app::Event::KeyUp(e) => {
+                self.key_state.insert(e.event.key_code(), false);
                 Ok(())
             }
 
@@ -257,15 +266,12 @@ impl EventHandler<DemoError> for DemoState {
                             .location,
                     ),
                     false,
-                    self.camera
-                        .transform_matrix()
-                        // TODO also include rotation in camera matrix
-                        // (Matrix4::new_translation(&Vector3::new(0.0, 0.0, -6.0))
-                        //     * Matrix4::from_axis_angle(
-                        //         &Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0)),
-                        //         self.rotation,
-                        //     ))
-                        .as_slice(),
+                    (self.camera.transform_matrix()
+                        * Matrix4::from_axis_angle(
+                            &Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0)),
+                            self.rotation,
+                        ))
+                    .as_slice(),
                 );
 
                 gl.bind_vertex_array(Some(&self.vertex_array));
@@ -290,6 +296,51 @@ impl EventHandler<DemoError> for DemoState {
             app::Event::Update { context: _, delta } => {
                 self.rotation +=
                     (delta.as_secs_f32() * 90.0f32.to_radians()) % 360.0f32.to_radians();
+
+                const UP: u32 = 38;
+                const LEFT: u32 = 37;
+                const DOWN: u32 = 40;
+                const RIGHT: u32 = 39;
+                const W: u32 = 87;
+                const A: u32 = 65;
+                const S: u32 = 83;
+                const D: u32 = 68;
+                const SHIFT: u32 = 16;
+                const SPACE: u32 = 32;
+                let forward = if self.is_key_pressed(UP) || self.is_key_pressed(W) {
+                    1f32
+                } else {
+                    0f32
+                } + if self.is_key_pressed(DOWN) || self.is_key_pressed(S) {
+                    -1f32
+                } else {
+                    0f32
+                };
+                let strafe = if self.is_key_pressed(RIGHT) || self.is_key_pressed(D) {
+                    1f32
+                } else {
+                    0f32
+                } + if self.is_key_pressed(LEFT) || self.is_key_pressed(A) {
+                    -1f32
+                } else {
+                    0f32
+                };
+                let up = if self.is_key_pressed(SPACE) {
+                    1f32
+                } else {
+                    0f32
+                } + if self.is_key_pressed(SHIFT) {
+                    -1f32
+                } else {
+                    0f32
+                };
+                const CAMERA_SPEED: f32 = 3.5f32;
+                let camera_delta = CAMERA_SPEED * delta.as_secs_f32();
+                self.camera.move_position(
+                    forward * camera_delta,
+                    strafe * camera_delta,
+                    up * camera_delta,
+                );
 
                 Ok(())
             }

@@ -111,7 +111,7 @@ impl LookAtCamera {
 
     pub fn transform_matrix(&self) -> Matrix4<Float> {
         // TODO cache
-        Matrix4::look_at_lh(
+        Matrix4::look_at_rh(
             &self.position,
             &Point3::from(self.position.coords + self.forward()),
             &self.default_up,
@@ -120,7 +120,7 @@ impl LookAtCamera {
 
     fn forward(&self) -> Vector3<Float> {
         // TODO cache
-        Matrix4::from_axis_angle(&self.right_right_angle_only(), self.angle_up)
+        -Matrix4::from_axis_angle(&self.right_right_angle_only(), self.angle_up)
             .transform_vector(&self.forward_right_angle_only())
     }
 
