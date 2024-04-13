@@ -242,6 +242,7 @@ impl EventHandler<DemoError> for DemoState {
                 gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
                 self.shader_program.use_program();
+
                 gl.uniform_matrix4fv_with_f32_array(
                     Some(
                         &self
@@ -255,6 +256,7 @@ impl EventHandler<DemoError> for DemoState {
                     false,
                     self.perspective_transform.as_slice(),
                 );
+
                 gl.uniform_matrix4fv_with_f32_array(
                     Some(
                         &self

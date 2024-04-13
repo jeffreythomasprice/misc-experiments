@@ -45,17 +45,7 @@ func main() {
 		return ClickResults(clicks), nil
 	}))
 
-	e.GET("/ws", WebsocketHandler[shared.WebsocketServerToClientMessage, shared.WebsocketClientToServerMessage](func(send chan<- shared.WebsocketServerToClientMessage, receive <-chan shared.WebsocketClientToServerMessage) {
-		go func() {
-			send <- shared.WebsocketServerToClientMessage{
-				Message: "Hello from the server",
-			}
-		}()
-
-		for msg := range receive {
-			log.Info().Str("msg", msg.Message).Msg("received message")
-		}
-	}))
+	e.GET(shared.ReloadPath, ReloadHandler())
 
 	if err := e.Start("127.0.0.1:8000"); err != nil {
 		log.Fatal().Err(err).Msg("server error")
