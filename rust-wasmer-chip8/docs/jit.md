@@ -105,7 +105,7 @@ instruction sequence, and the host loop can check for whether it's waiting on in
 
 Input registers, memory-mapped input devices, or reading from ports can all be implemented by having the host write to shared memory.
 
-Input that triggers interrupts can have the host write interrupt state to shared memory when the even occurs.
+Input that triggers interrupts can have the host write interrupt state to shared memory when the event occurs.
 
 # Psuedocode
 
