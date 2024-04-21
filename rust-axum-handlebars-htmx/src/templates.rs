@@ -21,57 +21,21 @@ impl Templates {
         })
     }
 
-    pub async fn counter_page(&self, count: u64) -> anyhow::Result<(HeaderMap, String)> {
-        #[derive(Serialize)]
-        struct Data {
-            count: u64,
-        }
-        self.page(
-            &self
-                .render_template_to_string("counter", "counter.html", &Data { count })
-                .await?,
-        )
-        .await
-    }
-
-    pub async fn click_response(&self, count: u64) -> anyhow::Result<(HeaderMap, String)> {
-        #[derive(Serialize)]
-        struct Data {
-            count: u64,
-        }
-        self.fragment(
-            self.render_template_to_string(
-                "click-response",
-                "click-response.html",
-                &Data { count },
-            )
-            .await?,
-        )
-    }
-
-    async fn page<'a>(&self, content: &'a str) -> anyhow::Result<(HeaderMap, String)> {
+    pub async fn html_page<'a>(&self, content: &'a str) -> anyhow::Result<(HeaderMap, String)> {
         #[derive(Serialize)]
         struct Data<'a> {
             content: &'a str,
         }
-        self.fragment(
-            self.render_template_to_string("page", "page.html", &Data { content })
-                .await?,
-        )
+        self.html_fragment(self.render("page", "page.html", &Data { content }).await?)
     }
 
-    fn fragment(&self, content: String) -> anyhow::Result<(HeaderMap, String)> {
+    pub fn html_fragment(&self, content: String) -> anyhow::Result<(HeaderMap, String)> {
         let mut headers = HeaderMap::new();
         headers.insert("content-type", "text/html; charset=utf-8".parse()?);
         Ok((headers, content))
     }
 
-    async fn render_template_to_string<T>(
-        &self,
-        name: &str,
-        path: &str,
-        data: &T,
-    ) -> anyhow::Result<String>
+    pub async fn render<T>(&self, name: &str, path: &str, data: &T) -> anyhow::Result<String>
     where
         T: Serialize,
     {

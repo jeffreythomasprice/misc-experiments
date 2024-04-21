@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tower_http::trace::TraceLayer;
@@ -73,7 +74,16 @@ async fn index(
     State(t): State<Templates>,
 ) -> HttpResult<impl IntoResponse> {
     let count = app.count.lock().await;
-    Ok(t.counter_page(*count).await?)
+
+    #[derive(Serialize)]
+    struct Data {
+        count: u64,
+    }
+    Ok(t.html_page(
+        &t.render("counter", "counter.html", &Data { count: *count })
+            .await?,
+    )
+    .await?)
 }
 
 async fn click(
@@ -82,5 +92,17 @@ async fn click(
 ) -> HttpResult<impl IntoResponse> {
     let mut count = app.count.lock().await;
     *count += 1;
-    Ok(t.click_response(*count).await?)
+
+    #[derive(Serialize)]
+    struct Data {
+        count: u64,
+    }
+    Ok(t.html_fragment(
+        t.render(
+            "click-response",
+            "click-response.html",
+            &Data { count: *count },
+        )
+        .await?,
+    )?)
 }
