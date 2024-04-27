@@ -1,0 +1,3 @@
+```
+dotnet watch --project Server
+```
