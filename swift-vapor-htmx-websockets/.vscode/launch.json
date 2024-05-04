@@ -1,0 +1,28 @@
+{
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"sourceLanguages": [
+				"swift"
+			],
+			"args": [],
+			"cwd": "${workspaceFolder:swift-vapor-htmx-websockets}",
+			"name": "Debug swift-experiment",
+			"program": "${workspaceFolder:swift-vapor-htmx-websockets}/.build/debug/swift-experiment",
+			"preLaunchTask": "swift: Build Debug swift-experiment"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"sourceLanguages": [
+				"swift"
+			],
+			"args": [],
+			"cwd": "${workspaceFolder:swift-vapor-htmx-websockets}",
+			"name": "Release swift-experiment",
+			"program": "${workspaceFolder:swift-vapor-htmx-websockets}/.build/release/swift-experiment",
+			"preLaunchTask": "swift: Build Release swift-experiment"
+		}
+	]
+}

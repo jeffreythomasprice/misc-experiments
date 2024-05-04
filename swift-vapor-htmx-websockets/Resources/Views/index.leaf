@@ -1,0 +1,19 @@
+#extend("page"):
+#export("body"):
+<div
+	hx-ext="ws"
+	ws-connect="/ws"
+>
+	<div id="wsOutput"></div>
+	<form
+		id="wsForm"
+		ws-send
+	>
+		<input
+			name="message"
+			type="text"
+		/>
+	</form>
+</div>
+#endexport
+#endextend

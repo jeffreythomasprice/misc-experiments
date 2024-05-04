@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
-    <AssemblyName>Server.App</AssemblyName>
+    <AssemblyName>Experiment.Server</AssemblyName>
     <EnableDefaultContentItems>false</EnableDefaultContentItems>
   </PropertyGroup>
 

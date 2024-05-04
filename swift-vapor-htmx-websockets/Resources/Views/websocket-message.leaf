@@ -1,0 +1,6 @@
+<div
+	id="wsOutput"
+	hx-swap-oob="beforeend"
+>
+	<div class="message">#(message)</div>
+</div>
