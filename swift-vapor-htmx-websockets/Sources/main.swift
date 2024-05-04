@@ -39,15 +39,16 @@ app.webSocket("ws") { req, ws in
             let message = try JSONDecoder().decode(WebsocketInput.self, from: ByteBuffer(string: text))
             logger.info("received text message: \(message.message)")
 
-            var response = try await req.view.render("websocket-message", WebsocketOutput(message: message.message)).get()
-            if let responseStr = response.data.readString(length: response.data.readableBytes) {
+            var response = try await app.leaf.renderer.render(path: "websocket-message", context: WebsocketOutput(message: message.message))
+                .get()
+            if let responseStr = response.readString(length: response.readableBytes) {
                 logger.debug("response: \(responseStr)")
                 try await ws.send(responseStr)
             } else {
                 logger.error("failed to render a valid response string")
             }
         } catch {
-            logger.error("error decoding text message: \(error)")
+            logger.error("error handling text message: \(error)")
         }
     }
 
