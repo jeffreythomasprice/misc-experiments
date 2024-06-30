@@ -1,0 +1,31 @@
+package main
+
+templ index(component func() templ.Component) {
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<meta charset="UTF-8"/>
+			<link
+				rel="stylesheet"
+				href="index.css"
+			/>
+			<script src="htmx.min.js"></script>
+			<script>
+				htmx.logAll();
+			</script>
+		</head>
+		<body>
+			@component()
+		</body>
+	</html>
+}
+
+templ clickComp(clicks string) {
+	<div id="clickResults">@clickResultsComp(clicks)
+</div>
+	<button hx-post="/click" hx-target="#clickResults">Click Me</button>
+}
+
+templ clickResultsComp(clicks string) {
+	Clicks { clicks }
+}

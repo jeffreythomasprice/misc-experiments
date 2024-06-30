@@ -11,15 +11,11 @@ open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open Giraffe.ViewEngine
 open Microsoft.AspNetCore.Http
+open System.Collections.Generic
 
 let mutable clicks = 0
 
-// TODO JEFF no, logger should be easier
-type loggerPlaceholderType = interface end
-
-let getLogger (ctx: HttpContext) =
-    let t = typeof<loggerPlaceholderType>.DeclaringType
-    ctx.GetLogger(t.FullName)
+let getLogger (ctx: HttpContext) = ctx.GetLogger("Experiment.Server")
 
 let page (content: XmlNode list) =
     html
@@ -63,9 +59,6 @@ let formTest: HttpHandler =
 
     fun (next) (ctx) ->
         let logger = ctx |> getLogger
-        let logger2 = ctx.GetLogger()
-        logger.LogInformation("test1")
-        logger2.LogInformation("test2")
 
         task {
             let! request = ctx.BindFormAsync<Request>()
