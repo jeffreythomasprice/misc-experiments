@@ -1,0 +1,19 @@
+#loginContent {
+	min-width: 300px;
+	max-width: 600px;
+
+	#loginForm {
+		display: grid;
+		grid-template-columns: 180px auto;
+		gap: 10px;
+
+		label {
+			text-align: right;
+		}
+	}
+
+	#buttons {
+		margin-top: 10px;
+		float: right;
+	}
+}

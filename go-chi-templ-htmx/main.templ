@@ -20,12 +20,88 @@ templ index(component func() templ.Component) {
 	</html>
 }
 
-templ clickComp(clicks string) {
-	<div id="clickResults">@clickResultsComp(clicks)
-</div>
-	<button hx-post="/click" hx-target="#clickResults">Click Me</button>
+templ loginForm() {
+	<div id="loginContent">
+		<form
+			id="loginForm"
+			hx-post="/login"
+		>
+			<label
+				for="username"
+			>Username:</label>
+			<input
+				type="text"
+				name="username"
+				placeholder="Username"
+			/>
+			<label
+				for="password"
+			>Password:</label>
+			<input
+				type="password"
+				name="password"
+				placeholder="Password"
+			/>
+		</form>
+		<div id="buttons">
+			<a
+				hx-get="/createUser"
+				hx-target="#loginContent"
+				hx-swap="outerHTML"
+			>
+				<button>Create User</button>
+			</a>
+			<button
+				form="loginForm"
+				type="submit"
+			>Login</button>
+		</div>
+	</div>
 }
 
-templ clickResultsComp(clicks string) {
-	Clicks { clicks }
+templ createUserForm() {
+	<div id="loginContent">
+		<form
+			id="loginForm"
+			hx-post="/createUser"
+		>
+			<label
+				for="username"
+			>Username:</label>
+			<input
+				type="text"
+				name="username"
+				placeholder="Username"
+			/>
+			<label
+				for="password"
+			>Password:</label>
+			<input
+				type="password"
+				name="password"
+				placeholder="Password"
+			/>
+			<label
+				for="confirmPassword"
+			>Confirm Password:</label>
+			<input
+				type="password"
+				name="confirmPassword"
+				placeholder="Password"
+			/>
+		</form>
+		<div id="buttons">
+			<a
+				hx-get="/login"
+				hx-target="#loginContent"
+				hx-swap="outerHTML"
+			>
+				<button>Cancel</button>
+			</a>
+			<button
+				form="loginForm"
+				type="submit"
+			>Create User</button>
+		</div>
+	</div>
 }

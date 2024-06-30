@@ -1,12 +1,12 @@
 package main
 
 import (
+	"database/sql"
 	_ "embed"
 	"fmt"
 	"net/http"
 	"os"
 	"path"
-	"strconv"
 
 	"github.com/Lavalier/zchi"
 	"github.com/a-h/templ"
@@ -34,6 +34,7 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to find data dir")
 	}
 
+	var db *sqlx.DB
 	{
 		driver := "sqlite3"
 		connectionStr := fmt.Sprintf("file:%s/experiment.db", dataDir)
@@ -42,7 +43,7 @@ func main() {
 			Str("connection", connectionStr).
 			Logger()
 		log.Debug().Msg("connecting to database")
-		db, err := sqlx.Connect(driver, connectionStr)
+		db, err = sqlx.Connect(driver, connectionStr)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to open database")
 		}
@@ -62,21 +63,71 @@ func main() {
 	r.Get("/htmx.min.js", serveStaticBytes("text/javascript", htmxJs))
 	r.Get("/index.css", serveStaticBytes("text/css", indexCss))
 
-	clicks := 0
-
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		clicksStr := strconv.FormatInt(int64(clicks), 10)
 		index(
 			func() templ.Component {
-				return clickComp(clicksStr)
+				return loginForm()
 			},
 		).Render(r.Context(), w)
 	})
 
-	r.Post("/click", func(w http.ResponseWriter, r *http.Request) {
-		clicks++
-		clicksStr := strconv.FormatInt(int64(clicks), 10)
-		clickResultsComp(clicksStr).Render(r.Context(), w)
+	r.Get("/login", func(w http.ResponseWriter, r *http.Request) {
+		// TODO deduplicate
+		index(
+			func() templ.Component {
+				return loginForm()
+			},
+		).Render(r.Context(), w)
+	})
+
+	r.Get("/createUser", func(w http.ResponseWriter, r *http.Request) {
+		index(
+			func() templ.Component {
+				return createUserForm()
+			},
+		).Render(r.Context(), w)
+	})
+
+	r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			log.Panic().Err(err).Msg("failed to parse form")
+		}
+		username := r.Form.Get("username")
+		password := r.Form.Get("password")
+		log.Trace().
+			Str("username", username).
+			Str("password", password).
+			Msg("login")
+		panic("TODO not implemented")
+	})
+
+	r.Post("/createUser", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			log.Panic().Err(err).Msg("failed to parse form")
+		}
+		username := r.Form.Get("username")
+		password := r.Form.Get("password")
+		confirmPassword := r.Form.Get("confirmPassword")
+		log.Trace().
+			Str("username", username).
+			Msg("createUser")
+		if len(username) < 1 {
+			// TODO error
+		}
+		if len(password) < 1 {
+			// TODO error
+		}
+		if password != confirmPassword {
+			// TODO error
+		}
+		if err = createUser(db, &User{
+			Username: username,
+			Password: sql.NullString{String: password, Valid: true},
+		}); err != nil {
+			// TODO error
+		}
+		// TODO return login form
+		panic("TODO not implemented")
 	})
 
 	address := "127.0.0.1:8000"
