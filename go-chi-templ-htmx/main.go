@@ -2,14 +2,18 @@ package main
 
 import (
 	_ "embed"
+	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 
 	"github.com/Lavalier/zchi"
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -24,6 +28,29 @@ func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
 	zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05.000Z"})
+
+	dataDir, err := dataDir()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to find data dir")
+	}
+
+	{
+		driver := "sqlite3"
+		connectionStr := fmt.Sprintf("file:%s/experiment.db", dataDir)
+		log := log.With().
+			Str("driver", driver).
+			Str("connection", connectionStr).
+			Logger()
+		log.Debug().Msg("connecting to database")
+		db, err := sqlx.Connect(driver, connectionStr)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to open database")
+		}
+		err = migrate(db)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to execute database migration")
+		}
+	}
 
 	r := chi.NewRouter()
 
@@ -62,4 +89,17 @@ func serveStaticBytes(contentType string, data []byte) http.HandlerFunc {
 		w.Header().Add("Content-Type", contentType)
 		w.Write(data)
 	}
+}
+
+func dataDir() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("failed to find executable path: %w", err)
+	}
+	result := path.Dir(exePath)
+	log.Trace().
+		Str("exePath", exePath).
+		Str("dataDir", result).
+		Msg("")
+	return result, nil
 }
