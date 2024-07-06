@@ -1,0 +1,67 @@
+package main
+
+templ index(body func() templ.Component) {
+	<!DOCTYPE html>
+	<html>
+		<head>
+			<meta charset="utf-8"/>
+			<link rel="stylesheet" href="static/index.css"/>
+			<script src="static/htmx.min.js"></script>
+			<script>
+				htmx.logAll();
+			</script>
+		</head>
+		<body>
+			@body()
+		</body>
+	</html>
+}
+
+templ loginForm(previousRequest LoginRequest, errorMessages []string) {
+	<div id="loginForm">
+		<form
+			class="loginForm"
+			hx-post="/login"
+			hx-target="#loginForm"
+			hx-swap="outerHTML"
+		>
+			<label
+				for="username"
+			>Username</label>
+			<input
+				name="username"
+				type="text"
+				placeholder="Username"
+				value={ previousRequest.Username }
+			/>
+			<label
+				for="password"
+			>Password</label>
+			<input
+				name="password"
+				type="password"
+				placeholder="Password"
+				value={ previousRequest.Password }
+			/>
+			<div
+				class="buttons"
+			>
+				<button
+					type="submit"
+				>Log In</button>
+			</div>
+		</form>
+		<div
+			id="errors"
+			class="errors"
+		>
+			for _, msg := range errorMessages {
+				<div>{ msg }</div>
+			}
+		</div>
+	</div>
+}
+
+templ testContent() {
+	<div>Hello, World!</div>
+}

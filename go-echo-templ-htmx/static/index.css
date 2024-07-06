@@ -1,0 +1,18 @@
+.loginForm {
+	max-width: 500px;
+	display: grid;
+	grid-template-columns: 150px auto;
+	gap: 10px;
+
+	.buttons {
+		grid-column: 1/-1;
+
+		* {
+			float: right;
+		}
+	}
+}
+
+.errors {
+	color: red;
+}

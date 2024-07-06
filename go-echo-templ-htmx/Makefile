@@ -8,10 +8,10 @@ all: build
 
 build:
 	templ generate
-	go build -o bin/experiment ./...
+	go build -o bin/experiment
 
 clean:
-	rm -rf bin server/generated
+	rm -rf bin
 	find . -name '*_templ.go' -delete
 
 run: build
