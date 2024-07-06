@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/labstack/echo/v4"
@@ -48,6 +49,27 @@ func main() {
 	}))
 	e.HideBanner = true
 
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if err := next(c); err != nil {
+				return err
+			}
+
+			// TODO deduplicate cookie name
+			auth, err := c.Cookie("auth")
+			if err != nil {
+				return err
+			}
+			if auth != nil {
+				log.Debug().Str("auth", auth.Value).Msg("TODO auth cookie")
+			} else {
+				log.Debug().Msg("TODO no auth cookie")
+			}
+
+			return nil
+		}
+	})
+
 	e.GET(
 		"/static/*",
 		echo.WrapHandler(
@@ -68,12 +90,15 @@ func main() {
 		var request LoginRequest
 
 		respondWithError := func(messages ...string) error {
+			log.Warn().Strs("errorMessages", messages).Msg("login request failed")
 			return templCompToEchoCtx(c, loginForm(request, messages))
 		}
 
 		if err := c.Bind(&request); err != nil {
 			return respondWithError(fmt.Sprintf("Bad request: %v", err))
 		}
+		log.Debug().Str("username", request.Username).Msg("login request")
+
 		errorMessages := make([]string, 0)
 		if len(request.Username) == 0 {
 			errorMessages = append(errorMessages, "Username is required")
@@ -85,8 +110,15 @@ func main() {
 			return respondWithError(errorMessages...)
 		}
 
-		log.Debug().Str("username", request.Username).Str("password", request.Password).Msg("TODO")
+		// TODO use real db here
 		if request.Username == "admin" && request.Password == "admin" {
+			c.SetCookie(&http.Cookie{
+				// TODO deduplicate cookie name
+				Name:    "auth",
+				Value:   "TODO jwt here",
+				Expires: time.Now().Add(24 * time.Hour),
+			})
+			// TODO redirect with set cookie?
 			return templCompToEchoCtx(c, index(func() templ.Component {
 				return testContent()
 			}))
