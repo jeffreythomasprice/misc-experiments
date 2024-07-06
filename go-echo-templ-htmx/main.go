@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -57,7 +58,8 @@ func main() {
 
 			// TODO deduplicate cookie name
 			auth, err := c.Cookie("auth")
-			if err != nil {
+			if err != nil && errors.Is(err, echo.ErrCookieNotFound) {
+				log.Error().Err(err).Msg("failed to get auth cookie")
 				return err
 			}
 			if auth != nil {
