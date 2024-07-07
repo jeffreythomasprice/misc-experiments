@@ -2,11 +2,14 @@ package main
 
 import (
 	"embed"
+	"errors"
 	"experiment/auth"
+	"experiment/db"
 	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
+	"path"
 
 	"github.com/a-h/templ"
 	"github.com/labstack/echo/v4"
@@ -14,6 +17,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/ziflex/lecho/v3"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
@@ -34,6 +39,17 @@ func main() {
 		Timestamp().
 		Logger()
 	log.Logger = zerologLogInstance
+
+	if err := changeWorkingDirToExecutableDir(); err != nil {
+		log.Fatal().Err(err).Send()
+	}
+
+	dbInstance, err := db.New(func() (*gorm.DB, error) {
+		return gorm.Open(sqlite.Open("local.db"))
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to open db")
+	}
 
 	staticFilesFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -97,17 +113,22 @@ func main() {
 			return respondWithError(errorMessages...)
 		}
 
-		// TODO use real db here
-		if request.Username == "admin" && request.Password == "admin" {
-			if err := auth.NewCookie(c, &auth.NewJwtRequest{
-				Username: request.Username,
-			}); err != nil {
+		// check against db
+		user, err := dbInstance.CheckCredentials(request.Username, request.Password)
+		if err != nil {
+			if errors.Is(err, db.ErrInvalidCredentials) {
+				return respondWithError("Invalid credentials")
+			} else {
+				log.Error().Err(err).Msg("credential check failed")
 				return err
 			}
-			return htmxRedirect(c, "/")
-		} else {
-			return respondWithError("Invalid credentials")
 		}
+		if err := auth.NewCookie(c, &auth.NewJwtRequest{
+			Username: user.Username,
+		}); err != nil {
+			return err
+		}
+		return htmxRedirect(c, "/")
 	})
 
 	e.POST("/logout", func(c echo.Context) error {
@@ -126,4 +147,30 @@ func main() {
 
 func templCompToEchoCtx(c echo.Context, comp templ.Component) error {
 	return comp.Render(c.Request().Context(), c.Response().Writer)
+}
+
+func changeWorkingDirToExecutableDir() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get exe location: %w", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working dir: %w", err)
+	}
+
+	desired := path.Dir(exe)
+
+	log.Debug().
+		Str("exe", exe).
+		Str("workingDir", wd).
+		Str("desired", desired).
+		Msg("changing current working dir")
+
+	err = os.Chdir(desired)
+	if err != nil {
+		return fmt.Errorf("failed to change working dir: %w", err)
+	}
+	return nil
 }
