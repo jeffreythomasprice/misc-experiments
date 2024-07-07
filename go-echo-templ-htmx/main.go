@@ -5,6 +5,7 @@ import (
 	"errors"
 	"experiment/auth"
 	"experiment/db"
+	"experiment/views"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -20,11 +21,6 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
-
-type LoginRequest struct {
-	Username string `form:"username"`
-	Password string `form:"password"`
-}
 
 //go:embed static/*
 var staticFiles embed.FS
@@ -82,17 +78,17 @@ func main() {
 	)
 
 	e.GET("/login", func(c echo.Context) error {
-		return templCompToEchoCtx(c, index(func() templ.Component {
-			return loginForm(LoginRequest{}, nil)
+		return templCompToEchoCtx(c, views.Page(func() templ.Component {
+			return views.LoginForm(views.LoginRequest{}, nil)
 		}))
 	})
 
 	e.POST("/login", func(c echo.Context) error {
-		var request LoginRequest
+		var request views.LoginRequest
 
 		respondWithError := func(messages ...string) error {
 			log.Warn().Strs("errorMessages", messages).Msg("login request failed")
-			return templCompToEchoCtx(c, loginForm(request, messages))
+			return templCompToEchoCtx(c, views.LoginForm(request, messages))
 		}
 
 		// parse
@@ -137,8 +133,8 @@ func main() {
 	})
 
 	authRoutes.GET("/", func(c echo.Context) error {
-		return templCompToEchoCtx(c, index(func() templ.Component {
-			return testContent(auth.Get(c).Username)
+		return templCompToEchoCtx(c, views.Page(func() templ.Component {
+			return views.TestContent(auth.Get(c).Username)
 		}))
 	})
 

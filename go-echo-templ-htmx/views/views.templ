@@ -1,6 +1,6 @@
-package main
+package views
 
-templ index(body func() templ.Component) {
+templ Page(body func() templ.Component) {
 	<!DOCTYPE html>
 	<html>
 		<head>
@@ -17,7 +17,7 @@ templ index(body func() templ.Component) {
 	</html>
 }
 
-templ loginForm(previousRequest LoginRequest, errorMessages []string) {
+templ LoginForm(previousRequest LoginRequest, errorMessages []string) {
 	<div id="loginForm">
 		<form
 			class="loginForm"
@@ -62,7 +62,7 @@ templ loginForm(previousRequest LoginRequest, errorMessages []string) {
 	</div>
 }
 
-templ testContent(username string) {
+templ TestContent(username string) {
 	<div>
 		<div>Hello, { username }!</div>
 		<button hx-post="/logout">Log Out</button>
