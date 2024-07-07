@@ -17,9 +17,14 @@ fn LoginForm() -> impl IntoView {
     let (username, set_username) = create_signal("".to_string());
     let (password, set_password) = create_signal("".to_string());
 
-    let login_action = create_action(|input: &(String, String)| async {
+    let login_action = create_action(|input: &(String, String)| {
         let (username, password) = input.clone();
-        let result = login(username, password).await.unwrap();
+        async {
+            match login(username, password).await {
+                Ok(response) => info!("TODO login successful: {response:?}"),
+                Err(e) => error!("TODO login failed: {:?}", e.0.messages),
+            }
+        }
     });
 
     view! {
@@ -76,6 +81,12 @@ async fn login(username: String, password: String) -> Result<LoginResponse, Erro
         .json(&request)
         .send()
         .await?;
-    // TODO check if it's an error response
-    Ok(response.json::<LoginResponse>().await?)
+    trace!("login response = {response:?}");
+    if response.status().is_success() {
+        Ok(response.json::<LoginResponse>().await?)
+    } else {
+        Err(ErrorResponse(
+            response.json::<shared::ErrorResponse>().await?,
+        ))
+    }
 }

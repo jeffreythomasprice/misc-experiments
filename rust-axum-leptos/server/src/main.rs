@@ -91,19 +91,16 @@ async fn login(
     State(state): State<AppState>,
     request: Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, ErrorResponse> {
+    debug!("checking password for {}", request.username);
     let db_conn = state.db_conn.lock().await;
-    info!("TODO request = {request:?}");
-    info!(
-        "TODO pw check? {:?}",
-        db::check_password(&db_conn, "admin", "admin")?
-    );
-    info!(
-        "TODO pw check? {:?}",
-        db::check_password(&db_conn, "admin", "admin2")?
-    );
-
-    Err(ErrorResponse {
-        status_code: StatusCode::UNAUTHORIZED,
-        messages: vec!["TODO not implemented".into()],
-    })
+    match db::check_password(&db_conn, &request.username, &request.password)? {
+        Some(user) => Ok(Json(LoginResponse {
+            username: user.username,
+            is_admin: user.is_admin,
+        })),
+        None => Err(ErrorResponse {
+            status_code: StatusCode::UNAUTHORIZED,
+            messages: vec!["Invalid credentials".into()],
+        }),
+    }
 }
