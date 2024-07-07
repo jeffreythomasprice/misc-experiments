@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use leptos::*;
 use log::*;
 use shared::{LoginRequest, LoginResponse};
@@ -17,11 +19,16 @@ fn LoginForm() -> impl IntoView {
     let (username, set_username) = create_signal("".to_string());
     let (password, set_password) = create_signal("".to_string());
 
-    let login_action = create_action(|input: &(String, String)| {
+    let set_user = use_context::<WriteSignal<Option<LoginResponse>>>().unwrap();
+
+    let login_action = create_action(move |input: &(String, String)| {
         let (username, password) = input.clone();
-        async {
+        async move {
             match login(username, password).await {
-                Ok(response) => info!("TODO login successful: {response:?}"),
+                Ok(response) => {
+                    trace!("login successful: {response:?}");
+                    set_user(Some(response));
+                }
                 Err(e) => error!("TODO login failed: {:?}", e.0.messages),
             }
         }
@@ -61,7 +68,15 @@ fn LoginForm() -> impl IntoView {
 
 #[component]
 fn App() -> impl IntoView {
-    view! { <LoginForm/> }
+    let (user, set_user) = create_signal::<Option<LoginResponse>>(None);
+    provide_context(set_user);
+
+    view! {
+        <LoginForm/>
+        <Show when=move || { user().is_some() }>
+            <div>"Hello, " {user().unwrap().username}</div>
+        </Show>
+    }
 }
 
 fn main() {
