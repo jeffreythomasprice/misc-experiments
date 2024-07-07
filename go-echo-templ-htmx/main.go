@@ -2,12 +2,11 @@ package main
 
 import (
 	"embed"
-	"errors"
+	"experiment/auth"
 	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/a-h/templ"
 	"github.com/labstack/echo/v4"
@@ -50,27 +49,11 @@ func main() {
 	}))
 	e.HideBanner = true
 
-	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			if err := next(c); err != nil {
-				return err
-			}
-
-			// TODO deduplicate cookie name
-			auth, err := c.Cookie("auth")
-			if err != nil && errors.Is(err, echo.ErrCookieNotFound) {
-				log.Error().Err(err).Msg("failed to get auth cookie")
-				return err
-			}
-			if auth != nil {
-				log.Debug().Str("auth", auth.Value).Msg("TODO auth cookie")
-			} else {
-				log.Debug().Msg("TODO no auth cookie")
-			}
-
-			return nil
-		}
-	})
+	authRoutes := e.Group("", auth.RequireAuth(func(c echo.Context, err error) error {
+		// TODO handle different errors
+		log.Warn().Err(err).Msg("redirecting to login")
+		return htmxRedirect(c, "/login")
+	}))
 
 	e.GET(
 		"/static/*",
@@ -82,7 +65,7 @@ func main() {
 		),
 	)
 
-	e.GET("/", func(c echo.Context) error {
+	e.GET("/login", func(c echo.Context) error {
 		return templCompToEchoCtx(c, index(func() templ.Component {
 			return loginForm(LoginRequest{}, nil)
 		}))
@@ -96,11 +79,13 @@ func main() {
 			return templCompToEchoCtx(c, loginForm(request, messages))
 		}
 
+		// parse
 		if err := c.Bind(&request); err != nil {
 			return respondWithError(fmt.Sprintf("Bad request: %v", err))
 		}
 		log.Debug().Str("username", request.Username).Msg("login request")
 
+		// validate
 		errorMessages := make([]string, 0)
 		if len(request.Username) == 0 {
 			errorMessages = append(errorMessages, "Username is required")
@@ -114,24 +99,31 @@ func main() {
 
 		// TODO use real db here
 		if request.Username == "admin" && request.Password == "admin" {
-			c.SetCookie(&http.Cookie{
-				// TODO deduplicate cookie name
-				Name:    "auth",
-				Value:   "TODO jwt here",
-				Expires: time.Now().Add(24 * time.Hour),
-			})
-			// TODO redirect with set cookie?
-			return templCompToEchoCtx(c, index(func() templ.Component {
-				return testContent()
-			}))
+			if err := auth.NewCookie(c, &auth.NewJwtRequest{
+				Username: request.Username,
+			}); err != nil {
+				return err
+			}
+			return htmxRedirect(c, "/")
 		} else {
 			return respondWithError("Invalid credentials")
 		}
 	})
 
+	e.POST("/logout", func(c echo.Context) error {
+		auth.ClearCookie(c)
+		return htmxRedirect(c, "/login")
+	})
+
+	authRoutes.GET("/", func(c echo.Context) error {
+		return templCompToEchoCtx(c, index(func() templ.Component {
+			return testContent(auth.Get(c).Username)
+		}))
+	})
+
 	e.Logger.Fatal(e.Start("127.0.0.1:8000"))
 }
 
-func templCompToEchoCtx(ctx echo.Context, c templ.Component) error {
-	return c.Render(ctx.Request().Context(), ctx.Response().Writer)
+func templCompToEchoCtx(c echo.Context, comp templ.Component) error {
+	return comp.Render(c.Request().Context(), c.Response().Writer)
 }

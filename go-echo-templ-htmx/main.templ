@@ -62,6 +62,9 @@ templ loginForm(previousRequest LoginRequest, errorMessages []string) {
 	</div>
 }
 
-templ testContent() {
-	<div>Hello, World!</div>
+templ testContent(username string) {
+	<div>
+		<div>Hello, { username }!</div>
+		<button hx-post="/logout">Log Out</button>
+	</div>
 }

@@ -2,6 +2,7 @@ use leptos::*;
 use log::*;
 use shared::{LoginRequest, LoginResponse};
 
+#[derive(Debug)]
 struct ErrorResponse(shared::ErrorResponse);
 
 impl From<reqwest::Error> for ErrorResponse {
@@ -16,20 +17,17 @@ fn LoginForm() -> impl IntoView {
     let (username, set_username) = create_signal("".to_string());
     let (password, set_password) = create_signal("".to_string());
 
-    let do_login = move || {
-        create_action(|input: &(String, String)| {
-            let (username, password) = input.clone();
-            login(username, password)
-        })
-        .dispatch((username(), password()));
-    };
+    let login_action = create_action(|input: &(String, String)| async {
+        let (username, password) = input.clone();
+        let result = login(username, password).await.unwrap();
+    });
 
     view! {
         <form
             class="loginForm"
             on:submit=move |ev| {
                 ev.prevent_default();
-                do_login();
+                login_action.dispatch((username(), password()));
             }
         >
 
