@@ -132,6 +132,7 @@ impl Cell {
     pub fn from_input(existing: Cell, input: Number, is_pencil_marking: bool) -> Self {
         match (existing, is_pencil_marking) {
             (Cell::PuzzleInput(existing), _) => Cell::PuzzleInput(existing),
+            (Cell::Solution(existing), false) if existing == input => Cell::Empty,
             (Cell::Empty, false) | (Cell::Solution(_), false) | (Cell::PencilMark(_), false) => {
                 Cell::Solution(input)
             }
