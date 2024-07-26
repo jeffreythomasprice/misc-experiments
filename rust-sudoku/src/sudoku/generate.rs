@@ -1,10 +1,11 @@
-use std::fmt::Display;
+use std::{fmt::Display, mem::swap, ops::Index};
 
 use super::{Cell, GameState, Number, Point};
 use crate::Result;
 use log::*;
 use rand::{seq::SliceRandom, Rng};
 
+#[derive(Clone)]
 struct Possible {
     data: [[Number; 9]; 9],
 }
@@ -33,6 +34,27 @@ impl Possible {
         Ok(result)
     }
 
+    pub fn new_with_some_random_change<R>(parent: &Possible, rng: &mut R) -> Result<Self>
+    where
+        R: Rng,
+    {
+        let mut result = Self {
+            data: parent.data.clone(),
+        };
+        let row = rng.gen_range(0..9);
+        let column1 = rng.gen_range(0..9);
+        let column2 = rng.gen_range(0..8);
+        let column2 = if column1 == column2 {
+            column2 + 1
+        } else {
+            column2
+        };
+        let temp = result.data[row][column1];
+        result.data[row][column1] = result.data[row][column2];
+        result.data[row][column2] = temp;
+        Ok(result)
+    }
+
     /// how many cells have no conflicts
     pub fn score(&self) -> i32 {
         let mut result = 0;
@@ -40,11 +62,11 @@ impl Possible {
             for column in 0..9 {
                 let mut good = true;
 
-                for column2 in 0..9 {
-                    if column == column2 {
+                for row2 in 0..9 {
+                    if row == row2 {
                         continue;
                     }
-                    if self.data[row][column] == self.data[row][column2] {
+                    if self.data[row][column] == self.data[row2][column] {
                         good = false;
                         break;
                     }
@@ -75,13 +97,21 @@ impl Possible {
     }
 }
 
-// TODO no
-impl Display for Possible {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for row in self.data.iter() {
-            write!(f, "{row:?}\n")?;
-        }
-        Ok(())
+impl Index<Point> for Possible {
+    type Output = Number;
+
+    fn index(&self, index: Point) -> &Self::Output {
+        &self.data[index.row.0 as usize][index.column.0 as usize]
+    }
+}
+
+impl Into<GameState> for &Possible {
+    fn into(self) -> GameState {
+        let mut result = GameState::new();
+        Point::all_possible_values().iter().for_each(|p| {
+            result[*p] = Cell::PuzzleInput(self[*p]);
+        });
+        result
     }
 }
 
@@ -91,20 +121,66 @@ impl GameState {
         R: Rng,
     {
         // generate a few possible solutions
-        let population = (0..10)
+        let mut population = (0..10)
             .map(|_| Possible::new_random(rng))
             .collect::<Result<Vec<_>, _>>()?;
 
-        /*
-        TODO finish
+        // while we haven't found a valid puzzle yet
+        let mut generations = 0;
+        loop {
+            // that the current population and score them all
+            // we'll be doing random selection weighted by score, so each element in the scores is the sum of all the scores before it and
+            // this one
+            // then when we generate the next number we can find the last one we're less than
+            let mut total = 0;
+            let mut scores = Vec::new();
+            let mut best = None;
+            for p in population.iter() {
+                let score = p.score();
+                total += score;
+                scores.push((p, score, total));
+                // remember the best one for later
+                best = match best {
+                    Some((best_score, best_ref)) => {
+                        if score > best_score {
+                            Some((score, p))
+                        } else {
+                            Some((best_score, best_ref))
+                        }
+                    }
+                    None => Some((score, p)),
+                };
+            }
+            let (best_score, best) = best.unwrap();
+            log::trace!("generation {}, best score = {}", generations, best_score);
 
-        while nobody has a perfect score {
-            generate a new random population of the same size
-            each new element is a random perturbation of an existing item
-            chance of selecting any given original population member is proportional to their score
+            if best_score == 81 {
+                log::trace!("success on generation {}", generations);
+                return Ok(best.into());
+            }
+
+            // we're going to iterate backwards so we find the last one we're less than
+            scores.reverse();
+
+            let mut new_generation = (0..(population.len() - 1))
+                .map(|_| -> Result<Possible> {
+                    let target = rng.gen_range(0..total);
+                    // TODO binary search
+                    let (parent, _, _) = scores
+                        .iter()
+                        .find(|(_, _, total)| target < *total)
+                        .ok_or(format!(
+                    "expected to always find a next item when generating new possible solutions"
+                ))?;
+                    Ok(Possible::new_with_some_random_change(parent, rng)?)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            // always keep the current best around unchanged, just in case
+            new_generation.push(best.clone());
+            swap(&mut new_generation, &mut population);
+
+            generations += 1;
+            log::trace!("end of generation {}", generations);
         }
-        */
-
-        todo!()
     }
 }
