@@ -13,6 +13,7 @@ use errors::*;
 use dom::{body, create_canvas, get_context, window};
 use graphics::{Point, Rectangle, Size, UIState};
 use log::*;
+use rand::{rngs::ThreadRng, thread_rng};
 use sudoku::{GameState, Number};
 use web_sys::{
     wasm_bindgen::{closure::Closure, JsCast},
@@ -20,6 +21,8 @@ use web_sys::{
 };
 
 struct AppState {
+    rng: ThreadRng,
+
     canvas: HtmlCanvasElement,
     context: CanvasRenderingContext2d,
 
@@ -29,11 +32,15 @@ struct AppState {
 
 impl AppState {
     fn new(canvas: HtmlCanvasElement, context: CanvasRenderingContext2d) -> Result<Self> {
+        let mut rng = thread_rng();
+        let state = GameState::new_random(&mut rng)?;
         Ok(Self {
+            rng,
+
             canvas,
             context,
 
-            state: GameState::new_random()?,
+            state,
             ui_state: UIState::new(Rectangle::from_two_points(
                 &Point { x: 0.0, y: 0.0 },
                 &Point { x: 0.0, y: 0.0 },
@@ -129,7 +136,7 @@ impl AppState {
 }
 
 fn main() -> Result<()> {
-    console_log::init_with_level(Level::Debug).map_err(|e| e.to_string())?;
+    console_log::init_with_level(Level::Trace).map_err(|e| e.to_string())?;
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
     let canvas = create_canvas()?;
