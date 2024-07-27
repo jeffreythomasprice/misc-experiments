@@ -116,10 +116,17 @@ impl Into<GameState> for &Possible {
 }
 
 impl GameState {
-    pub fn new_random<R>(rng: &mut R) -> Result<Self>
+    pub fn new_random<R>(rng: &mut R, num_puzzle_inputs: i32) -> Result<Self>
     where
         R: Rng,
     {
+        if !(0..=81).contains(&num_puzzle_inputs) {
+            Err(format!(
+                "number of puzzle inputs outside value range {}",
+                num_puzzle_inputs
+            ))?;
+        }
+
         // generate a few possible solutions
         let mut population = (0..10)
             .map(|_| Possible::new_random(rng))
@@ -156,7 +163,16 @@ impl GameState {
 
             if best_score == 81 {
                 log::trace!("success on generation {}", generations);
-                return Ok(best.into());
+                let mut result: GameState = best.into();
+                let mut all_possible_points = Point::all_possible_values();
+                all_possible_points.shuffle(rng);
+                for p in all_possible_points
+                    .iter()
+                    .take((81 - num_puzzle_inputs) as usize)
+                {
+                    result[*p] = Cell::Empty;
+                }
+                return Ok(result);
             }
 
             // we're going to iterate backwards so we find the last one we're less than

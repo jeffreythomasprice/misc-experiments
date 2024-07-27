@@ -33,7 +33,7 @@ struct AppState {
 impl AppState {
     fn new(canvas: HtmlCanvasElement, context: CanvasRenderingContext2d) -> Result<Self> {
         let mut rng = thread_rng();
-        let state = GameState::new_random(&mut rng)?;
+        let state = GameState::new_random(&mut rng, 25)?;
         Ok(Self {
             rng,
 
