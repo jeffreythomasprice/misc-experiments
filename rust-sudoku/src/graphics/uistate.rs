@@ -4,7 +4,10 @@ use log::*;
 use web_sys::CanvasRenderingContext2d;
 
 use crate::{
-    sudoku::{self, AllPointsIterator, Cell, Coordinate, GameState, Number, PencilMarkMask},
+    sudoku::{
+        self, AllPointsIterator, Cell, ColumnIterator, Coordinate, GameState, NeighborIterator,
+        Number, PencilMarkMask, RowIterator, SquareIterator,
+    },
     Result,
 };
 
@@ -524,15 +527,23 @@ impl UIState {
         F: FnOnce(&Cell) -> Cell,
     {
         if let Some(p) = self.select_location {
-            let x = &mut state[p];
-            match x {
+            let p_value = state[p];
+            match p_value {
                 Cell::PuzzleInput(_) => {
                     trace!("not assigning value because selected cell is puzzle input");
                 }
                 _ => {
-                    let new = f(x);
-                    trace!("replacing {:?} with {:?}", *x, new);
-                    *x = new;
+                    let new = f(&p_value);
+                    trace!("replacing {:?} with {:?}", p_value, new);
+                    if let Cell::Solution(number) = new {
+                        trace!("removing {number} from neighboring pencil marks");
+                        for q in NeighborIterator::new(p) {
+                            if let Cell::PencilMark(mask) = state[q] {
+                                state[q] = Cell::PencilMark(mask.clear(number));
+                            }
+                        }
+                    }
+                    state[p] = new;
                 }
             };
         } else {

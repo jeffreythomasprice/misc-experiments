@@ -5,7 +5,7 @@ use crate::{
     Error,
 };
 
-use super::{AllPointsIterator, Cell, Point, RowIterator};
+use super::{AllPointsIterator, Cell, NeighborIterator, Point, RowIterator};
 
 #[derive(Debug)]
 pub enum CellStatus {
@@ -37,30 +37,7 @@ impl GameState {
         let p_cell = &self[*p];
         match p_cell.number() {
             Some(p_num) => {
-                for q in RowIterator::new_containing_point(p) {
-                    if q == *p {
-                        continue;
-                    }
-                    if let Some(q_num) = self[q].number() {
-                        if p_num == q_num {
-                            return (p_cell, CellStatus::Conflict);
-                        }
-                    }
-                }
-                for q in ColumnIterator::new_containing_point(p) {
-                    if q == *p {
-                        continue;
-                    }
-                    if let Some(q_num) = self[q].number() {
-                        if p_num == q_num {
-                            return (p_cell, CellStatus::Conflict);
-                        }
-                    }
-                }
-                for q in SquareIterator::new_containing_point(p) {
-                    if q == *p {
-                        continue;
-                    }
+                for q in NeighborIterator::new(*p) {
                     if let Some(q_num) = self[q].number() {
                         if p_num == q_num {
                             return (p_cell, CellStatus::Conflict);

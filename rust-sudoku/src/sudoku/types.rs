@@ -84,11 +84,19 @@ impl PencilMarkMask {
         (self.0 & PencilMarkMask::mask_from_number(number)) != 0
     }
 
+    pub fn set(&self, number: Number) -> Self {
+        Self(self.0 | PencilMarkMask::mask_from_number(number))
+    }
+
+    pub fn clear(&self, number: Number) -> Self {
+        Self(self.0 & !PencilMarkMask::mask_from_number(number))
+    }
+
     pub fn toggle(&self, number: Number) -> Self {
         if self.is_set(number) {
-            Self(self.0 & !PencilMarkMask::mask_from_number(number))
+            self.clear(number)
         } else {
-            Self(self.0 | PencilMarkMask::mask_from_number(number))
+            self.set(number)
         }
     }
 
@@ -348,6 +356,69 @@ impl Iterator for AllPointsIterator {
                 Some(Point { row, column })
             }
             None => None,
+        }
+    }
+}
+
+pub struct NeighborIterator<'a> {
+    p: Point,
+    row: Option<RowIterator>,
+    column: Option<ColumnIterator>,
+    square: Option<SquareIterator<'a>>,
+}
+
+impl<'a> NeighborIterator<'a> {
+    pub fn new(p: Point) -> Self {
+        Self {
+            p,
+            row: Some(RowIterator::new_containing_point(&p)),
+            column: Some(ColumnIterator::new_containing_point(&p)),
+            square: Some(SquareIterator::new_containing_point(&p)),
+        }
+    }
+}
+impl<'a> Iterator for NeighborIterator<'a> {
+    type Item = Point;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(row) = &mut self.row {
+                match row.next() {
+                    Some(result) => {
+                        if result == self.p {
+                            continue;
+                        }
+                        return Some(result);
+                    }
+                    None => self.row = None,
+                }
+            }
+
+            if let Some(column) = &mut self.column {
+                match column.next() {
+                    Some(result) => {
+                        if result == self.p {
+                            continue;
+                        }
+                        return Some(result);
+                    }
+                    None => self.column = None,
+                }
+            }
+
+            if let Some(square) = &mut self.square {
+                match square.next() {
+                    Some(result) => {
+                        if result == self.p {
+                            continue;
+                        }
+                        return Some(result);
+                    }
+                    None => self.square = None,
+                }
+            }
+
+            return None;
         }
     }
 }
