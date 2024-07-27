@@ -41,6 +41,7 @@ pub struct UIState {
     grid_line_color: String,
     puzzle_input_text_color: String,
     solution_text_color: String,
+    conflict_text_color: String,
     buttons_background_color: String,
     button_deselected_color: String,
     button_selected_color: String,
@@ -69,6 +70,7 @@ impl UIState {
             grid_line_color: "black".into(),
             puzzle_input_text_color: "#555555".into(),
             solution_text_color: "black".into(),
+            conflict_text_color: "red".into(),
             buttons_background_color: "#ff9999".into(),
             button_deselected_color: "#888888".into(),
             button_selected_color: "#ddddff".into(),
@@ -229,21 +231,6 @@ impl UIState {
         add_rect_to_context(context, &ds.buttons_bounds);
         context.fill();
 
-        for i in 0..=9 {
-            let x = ds.puzzle_bounds.min().x + (i as f64) * ds.cell_size.width();
-            let y = ds.puzzle_bounds.min().y + (i as f64) * ds.cell_size.height();
-            context.set_stroke_style(&self.grid_line_color.clone().into());
-            context.set_line_width(if i % 3 == 0 { 5.0 } else { 1.0 });
-            context.begin_path();
-            context.move_to(x, ds.puzzle_bounds.min().y);
-            context.line_to(x, ds.puzzle_bounds.max().y);
-            context.stroke();
-            context.begin_path();
-            context.move_to(ds.puzzle_bounds.min().x, y);
-            context.line_to(ds.puzzle_bounds.max().x, y);
-            context.stroke();
-        }
-
         for p in AllPointsIterator::new() {
             let cell_bounds = self.cell_bounds(p)?;
 
@@ -259,7 +246,8 @@ impl UIState {
                 context.fill();
             }
 
-            match state[p] {
+            let (cell_value, cell_status) = state.status_at(&p);
+            match cell_value {
                 sudoku::Cell::Empty => (),
                 sudoku::Cell::PuzzleInput(value) => {
                     context.set_fill_style(&self.puzzle_input_text_color.clone().into());
@@ -273,7 +261,11 @@ impl UIState {
                     )?;
                 }
                 sudoku::Cell::Solution(value) => {
-                    context.set_fill_style(&self.solution_text_color.clone().into());
+                    let color = match cell_status {
+                        sudoku::CellStatus::Conflict => &self.conflict_text_color,
+                        sudoku::CellStatus::NoConflict => &self.solution_text_color,
+                    };
+                    context.set_fill_style(&color.clone().into());
                     fill_string(
                         context,
                         &format!("{}", value),
@@ -310,6 +302,21 @@ impl UIState {
                     }
                 }
             }
+        }
+
+        for i in 0..=9 {
+            let x = ds.puzzle_bounds.min().x + (i as f64) * ds.cell_size.width();
+            let y = ds.puzzle_bounds.min().y + (i as f64) * ds.cell_size.height();
+            context.set_stroke_style(&self.grid_line_color.clone().into());
+            context.set_line_width(if i % 3 == 0 { 5.0 } else { 1.0 });
+            context.begin_path();
+            context.move_to(x, ds.puzzle_bounds.min().y);
+            context.line_to(x, ds.puzzle_bounds.max().y);
+            context.stroke();
+            context.begin_path();
+            context.move_to(ds.puzzle_bounds.min().x, y);
+            context.line_to(ds.puzzle_bounds.max().x, y);
+            context.stroke();
         }
 
         for number in Number::all() {
