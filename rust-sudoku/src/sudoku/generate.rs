@@ -1,15 +1,13 @@
 use std::{fmt::Display, mem::swap, ops::Index};
 
-use super::{AllPointsIterator, Cell, GameState, Number, Point};
+use super::{AllPointsIterator, Cell, CellStatus, Coordinate, GameState, Number, Point};
 use crate::Result;
 use log::*;
 use rand::{seq::SliceRandom, Rng};
 
-// TODO replace Possible with GameState, make use of the iterators
-
 #[derive(Clone)]
 struct Possible {
-    data: [[Number; 9]; 9],
+    state: GameState,
 }
 
 impl Possible {
@@ -17,23 +15,28 @@ impl Possible {
     where
         R: Rng,
     {
-        let mut result = Self {
-            data: [[
-                1.try_into()?,
-                2.try_into()?,
-                3.try_into()?,
-                4.try_into()?,
-                5.try_into()?,
-                6.try_into()?,
-                7.try_into()?,
-                8.try_into()?,
-                9.try_into()?,
-            ]; 9],
-        };
-        for row in result.data.iter_mut() {
-            row.shuffle(rng);
+        let mut state = GameState::new();
+        for row in 0..9 {
+            let mut row_data = [
+                Cell::PuzzleInput(1.try_into()?),
+                Cell::PuzzleInput(2.try_into()?),
+                Cell::PuzzleInput(3.try_into()?),
+                Cell::PuzzleInput(4.try_into()?),
+                Cell::PuzzleInput(5.try_into()?),
+                Cell::PuzzleInput(6.try_into()?),
+                Cell::PuzzleInput(7.try_into()?),
+                Cell::PuzzleInput(8.try_into()?),
+                Cell::PuzzleInput(9.try_into()?),
+            ];
+            row_data.shuffle(rng);
+            for column in 0..9 {
+                state[Point {
+                    row: row.try_into()?,
+                    column: column.try_into()?,
+                }] = row_data[column as usize];
+            }
         }
-        Ok(result)
+        Ok(Self { state })
     }
 
     pub fn new_with_some_random_change<R>(parent: &Possible, rng: &mut R) -> Result<Self>
@@ -41,79 +44,40 @@ impl Possible {
         R: Rng,
     {
         let mut result = Self {
-            data: parent.data.clone(),
+            state: parent.state.clone(),
         };
-        let row = rng.gen_range(0..9);
-        let column1 = rng.gen_range(0..9);
-        let column2 = rng.gen_range(0..8);
+        let row: Coordinate = rng.gen_range(0..9).try_into()?;
+        let column1: Coordinate = rng.gen_range(0..9).try_into()?;
+        let column2: Coordinate = rng.gen_range(0..8).try_into()?;
         let column2 = if column1 == column2 {
-            column2 + 1
+            (column2.0 + 1).try_into()?
         } else {
             column2
         };
-        let temp = result.data[row][column1];
-        result.data[row][column1] = result.data[row][column2];
-        result.data[row][column2] = temp;
+        let p1 = Point {
+            row,
+            column: column1,
+        };
+        let p2 = Point {
+            row,
+            column: column2,
+        };
+        let temp = result.state[p1];
+        result.state[p1] = result.state[p2];
+        result.state[p2] = temp;
         Ok(result)
     }
 
     /// how many cells have no conflicts
     pub fn score(&self) -> i32 {
-        let mut result = 0;
-        for row in 0..9 {
-            for column in 0..9 {
-                let mut good = true;
-
-                for row2 in 0..9 {
-                    if row == row2 {
-                        continue;
-                    }
-                    if self.data[row][column] == self.data[row2][column] {
-                        good = false;
-                        break;
-                    }
+        AllPointsIterator::new()
+            .map(|p| self.state.status_at(&p))
+            .fold(0, |sum, (_, status)| {
+                sum + match status {
+                    CellStatus::Conflict => 0,
+                    CellStatus::NoConflict => 1,
                 }
-
-                if good {
-                    let square_start_row = row / 3 * 3;
-                    let square_start_column = column / 3 * 3;
-                    for row2 in square_start_row..(square_start_row + 3) {
-                        for column2 in square_start_column..(square_start_column + 3) {
-                            if row == row2 && column == column2 {
-                                continue;
-                            }
-                            if self.data[row][column] == self.data[row2][column2] {
-                                good = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if good {
-                    result += 1;
-                }
-            }
-        }
-        result
-    }
-}
-
-impl Index<Point> for Possible {
-    type Output = Number;
-
-    fn index(&self, index: Point) -> &Self::Output {
-        &self.data[index.row.0 as usize][index.column.0 as usize]
-    }
-}
-
-impl Into<GameState> for &Possible {
-    fn into(self) -> GameState {
-        let mut result = GameState::new();
-        AllPointsIterator::new().for_each(|p| {
-            result[p] = Cell::PuzzleInput(self[p]);
-        });
-        result
+            })
     }
 }
 
@@ -165,7 +129,7 @@ impl GameState {
 
             if best_score == 81 {
                 log::trace!("success on generation {}", generations);
-                let mut result: GameState = best.into();
+                let mut result = best.state.clone();
                 let mut all_possible_points = AllPointsIterator::new().collect::<Vec<_>>();
                 all_possible_points.shuffle(rng);
                 for p in all_possible_points
