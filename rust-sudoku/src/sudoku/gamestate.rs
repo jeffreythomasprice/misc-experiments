@@ -1,13 +1,22 @@
 use std::ops::{Index, IndexMut};
 
-use crate::Error;
+use crate::{
+    sudoku::{ColumnIterator, SquareIterator},
+    Error,
+};
 
-use super::{Cell, Point};
+use super::{Cell, Point, RowIterator};
+
+#[derive(Debug)]
+pub enum CellStatus {
+    Conflict,
+    NoConflict,
+}
 
 #[derive(Debug)]
 pub enum Status {
-    Valid,
-    Invalid,
+    NoConflict,
+    Conflict,
     Solved,
 }
 
@@ -24,90 +33,59 @@ impl GameState {
         }
     }
 
+    pub fn status_at(&self, p: &Point) -> (&Cell, CellStatus) {
+        let p_cell = &self[*p];
+        match p_cell.number() {
+            Some(p_num) => {
+                for q in RowIterator::new_containing_point(p) {
+                    if q == *p {
+                        continue;
+                    }
+                    if let Some(q_num) = self[q].number() {
+                        if p_num == q_num {
+                            return (p_cell, CellStatus::Conflict);
+                        }
+                    }
+                }
+                for q in ColumnIterator::new_containing_point(p) {
+                    if q == *p {
+                        continue;
+                    }
+                    if let Some(q_num) = self[q].number() {
+                        if p_num == q_num {
+                            return (p_cell, CellStatus::Conflict);
+                        }
+                    }
+                }
+                for q in SquareIterator::new_containing_point(p) {
+                    if q == *p {
+                        continue;
+                    }
+                    if let Some(q_num) = self[q].number() {
+                        if p_num == q_num {
+                            return (p_cell, CellStatus::Conflict);
+                        }
+                    }
+                }
+                (p_cell, CellStatus::NoConflict)
+            }
+            None => (p_cell, CellStatus::NoConflict),
+        }
+    }
+
     pub fn status(&self) -> Status {
-        // will be set to false when we definitely have an incomplete section
-        let mut complete = true;
-
-        // each kind of section will early exit when we definitely have a conflict
-
-        // rows
-        for row in 0..9 {
-            let mut numbers = [false; 9];
-            let mut count = 0;
-            for column in 0..9 {
-                match self.data[row][column] {
-                    Cell::PuzzleInput(value) | Cell::Solution(value) => {
-                        let index: i8 = value.into();
-                        let n = &mut numbers[(index - 1) as usize];
-                        if *n {
-                            return Status::Invalid;
-                        }
-                        *n = true;
-                        count += 1;
-                    }
-                    _ => (),
-                }
-            }
-            if count < 9 {
-                complete = false;
-            }
+        let mut empty_or_pencil_mark_count = 0;
+        for p in Point::all_possible_values().iter() {
+            match self.status_at(p) {
+                (_, CellStatus::Conflict) => return Status::Conflict,
+                (Cell::Empty, _) | (Cell::PencilMark(_), _) => empty_or_pencil_mark_count += 1,
+                _ => (),
+            };
         }
-
-        // columns
-        for column in 0..9 {
-            let mut numbers = [false; 9];
-            let mut count = 0;
-            for row in 0..9 {
-                match self.data[row][column] {
-                    Cell::PuzzleInput(value) | Cell::Solution(value) => {
-                        let index: i8 = value.into();
-                        let n = &mut numbers[(index - 1) as usize];
-                        if *n {
-                            return Status::Invalid;
-                        }
-                        *n = true;
-                        count += 1;
-                    }
-                    _ => (),
-                }
-            }
-            if count < 9 {
-                complete = false;
-            }
-        }
-
-        // squares
-        for square_row in 0..3 {
-            for square_column in 0..3 {
-                let mut numbers = [false; 9];
-                let mut count = 0;
-                for row in (square_row * 3)..(square_row * 3 + 3) {
-                    for column in (square_column * 3)..(square_column * 3 + 3) {
-                        match self.data[row][column] {
-                            Cell::PuzzleInput(value) | Cell::Solution(value) => {
-                                let index: i8 = value.into();
-                                let n = &mut numbers[(index - 1) as usize];
-                                if *n {
-                                    return Status::Invalid;
-                                }
-                                *n = true;
-                                count += 1;
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                if count < 9 {
-                    complete = false;
-                }
-            }
-        }
-
-        // if every section was complete then it's a solved puzzle
-        if complete {
+        if empty_or_pencil_mark_count == 0 {
             Status::Solved
         } else {
-            Status::Valid
+            Status::NoConflict
         }
     }
 }

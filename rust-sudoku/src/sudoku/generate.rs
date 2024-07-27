@@ -5,6 +5,8 @@ use crate::Result;
 use log::*;
 use rand::{seq::SliceRandom, Rng};
 
+// TODO replace Possible with GameState, make use of the iterators
+
 #[derive(Clone)]
 struct Possible {
     data: [[Number; 9]; 9],

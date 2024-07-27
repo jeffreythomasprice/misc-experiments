@@ -81,6 +81,7 @@ pub struct Point {
 }
 
 impl Point {
+    // TODO iterator
     pub fn all_possible_values() -> Vec<Point> {
         Coordinate::all_possible_values()
             .map(|row| Coordinate::all_possible_values().map(|column| Point { row, column }))
@@ -151,4 +152,167 @@ impl Cell {
             }
         }
     }
+
+    pub fn number(&self) -> Option<Number> {
+        match self {
+            Cell::Empty | Cell::PencilMark(_) => None,
+            Cell::PuzzleInput(result) | Cell::Solution(result) => Some(*result),
+        }
+    }
 }
+
+pub struct RowIterator {
+    row: Coordinate,
+    cur: Option<Coordinate>,
+}
+
+impl RowIterator {
+    pub fn new(row: Coordinate) -> Self {
+        Self {
+            row,
+            cur: Some(Coordinate(0)),
+        }
+    }
+
+    pub fn new_containing_point(p: &Point) -> Self {
+        Self::new(p.row)
+    }
+}
+
+impl Iterator for RowIterator {
+    type Item = Point;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (result, next) = match self.cur {
+            Some(Coordinate(8)) => (
+                Some(Point {
+                    row: self.row,
+                    column: Coordinate(8),
+                }),
+                None,
+            ),
+            Some(cur) => (
+                Some(Point {
+                    row: self.row,
+                    column: cur,
+                }),
+                Some(Coordinate(cur.0 + 1)),
+            ),
+            None => (None, None),
+        };
+        self.cur = next;
+        result
+    }
+}
+
+pub struct ColumnIterator {
+    column: Coordinate,
+    cur: Option<Coordinate>,
+}
+
+impl ColumnIterator {
+    pub fn new(column: Coordinate) -> Self {
+        Self {
+            column,
+            cur: Some(Coordinate(0)),
+        }
+    }
+
+    pub fn new_containing_point(p: &Point) -> Self {
+        Self::new(p.column)
+    }
+}
+
+impl Iterator for ColumnIterator {
+    type Item = Point;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (result, next) = match self.cur {
+            Some(Coordinate(8)) => (
+                Some(Point {
+                    column: self.column,
+                    row: Coordinate(8),
+                }),
+                None,
+            ),
+            Some(cur) => (
+                Some(Point {
+                    column: self.column,
+                    row: cur,
+                }),
+                Some(Coordinate(cur.0 + 1)),
+            ),
+            None => (None, None),
+        };
+        self.cur = next;
+        result
+    }
+}
+
+pub struct SquareIterator<'a> {
+    start: Point,
+    cur: std::slice::Iter<'a, Point>,
+}
+
+impl<'a> SquareIterator<'a> {
+    pub fn new_containing_point(p: &Point) -> Self {
+        static SQUARE_OFFSETS: [Point; 9] = [
+            Point {
+                row: Coordinate(0),
+                column: Coordinate(0),
+            },
+            Point {
+                row: Coordinate(1),
+                column: Coordinate(0),
+            },
+            Point {
+                row: Coordinate(2),
+                column: Coordinate(0),
+            },
+            Point {
+                row: Coordinate(0),
+                column: Coordinate(1),
+            },
+            Point {
+                row: Coordinate(1),
+                column: Coordinate(1),
+            },
+            Point {
+                row: Coordinate(2),
+                column: Coordinate(1),
+            },
+            Point {
+                row: Coordinate(0),
+                column: Coordinate(2),
+            },
+            Point {
+                row: Coordinate(1),
+                column: Coordinate(2),
+            },
+            Point {
+                row: Coordinate(2),
+                column: Coordinate(2),
+            },
+        ];
+        Self {
+            start: Point {
+                row: Coordinate(p.row.0 / 3 * 3),
+                column: Coordinate(p.column.0 / 3 * 3),
+            },
+            cur: SQUARE_OFFSETS.iter(),
+        }
+    }
+}
+
+impl<'a> Iterator for SquareIterator<'a> {
+    type Item = Point;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.cur.next().map(|offset| Point {
+            row: Coordinate(self.start.row.0 + offset.row.0),
+            column: Coordinate(self.start.column.0 + offset.column.0),
+        })
+    }
+}
+
+// TODO all points iterator

@@ -150,6 +150,7 @@ impl UIState {
         if let Some(p) = self.select_location {
             state[p] = Cell::from_input(state[p], number, self.is_penciling);
         }
+        debug!("TODO game state new status = {:?}", state.status());
         Ok(())
     }
 
