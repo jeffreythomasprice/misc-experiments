@@ -54,6 +54,7 @@ pub struct UIState {
     hover_location: Option<sudoku::Point>,
     select_location: Option<sudoku::Point>,
     is_penciling: bool,
+    clipboard: Option<Cell>,
 }
 
 impl UIState {
@@ -81,6 +82,7 @@ impl UIState {
             hover_location: None,
             select_location: None,
             is_penciling: false,
+            clipboard: None,
         }
     }
 
@@ -120,6 +122,7 @@ impl UIState {
     pub fn select(&mut self, state: &GameState, p: Option<&Point>) -> Result<()> {
         match p {
             Some(p) => {
+                // TODO handle points that are inside buttons
                 for sp in AllPointsIterator::new() {
                     if self.cell_bounds(sp)?.contains(p) {
                         self.select_location = Some(sp);
@@ -174,10 +177,34 @@ impl UIState {
         self.set_selected_cell_value(state, |_| Cell::Empty);
     }
 
-    pub fn toggle_pencil_mode(&mut self) -> Result<()> {
+    pub fn toggle_pencil_mode(&mut self) {
         self.is_penciling = !self.is_penciling;
         debug!("is_penciling = {}", self.is_penciling);
-        Ok(())
+    }
+
+    pub fn undo(&mut self, state: &mut GameState) {
+        todo!("undo")
+    }
+
+    pub fn redo(&mut self, state: &mut GameState) {
+        todo!("redo")
+    }
+
+    pub fn copy(&mut self, state: &GameState) {
+        self.clipboard = self
+            .select_location
+            .map(|p| match state[p] {
+                Cell::PuzzleInput(_) => None,
+                value => Some(value),
+            })
+            .flatten();
+        trace!("clipboard = {:?}", self.clipboard);
+    }
+
+    pub fn paste(&mut self, state: &mut GameState) {
+        if let Some(clipboard) = self.clipboard {
+            self.set_selected_cell_value(state, |_| clipboard);
+        }
     }
 
     pub fn draw_to_context(
@@ -492,9 +519,17 @@ impl UIState {
         if let Some(p) = self.select_location {
             let x = &mut state[p];
             match x {
-                Cell::PuzzleInput(_) => (),
-                _ => *x = f(x),
+                Cell::PuzzleInput(_) => {
+                    trace!("not assigning value because selected cell is puzzle input");
+                }
+                _ => {
+                    let new = f(x);
+                    trace!("replacing {:?} with {:?}", *x, new);
+                    *x = new;
+                }
             };
+        } else {
+            trace!("no selected cell, can't assign new value");
         }
     }
 }

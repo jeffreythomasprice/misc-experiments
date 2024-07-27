@@ -95,33 +95,28 @@ impl AppState {
     }
 
     fn keyup(&mut self, e: KeyboardEvent) -> Result<()> {
-        info!(
-            "TODO code={}, key={}, key_code={}",
-            e.code(),
-            e.key(),
-            e.key_code()
-        );
-
         let mut number: Option<Number> = None;
-        match e.code().as_str() {
-            "Digit1" | "Numpad1" => number = Some(1.try_into()?),
-            "Digit2" | "Numpad2" => number = Some(2.try_into()?),
-            "Digit3" | "Numpad3" => number = Some(3.try_into()?),
-            "Digit4" | "Numpad4" => number = Some(4.try_into()?),
-            "Digit5" | "Numpad5" => number = Some(5.try_into()?),
-            "Digit6" | "Numpad6" => number = Some(6.try_into()?),
-            "Digit7" | "Numpad7" => number = Some(7.try_into()?),
-            "Digit8" | "Numpad8" => number = Some(8.try_into()?),
-            "Digit9" | "Numpad9" => number = Some(9.try_into()?),
-            "Escape" => self.ui_state.select(&self.state, None)?,
-            "KeyP" => self.ui_state.toggle_pencil_mode()?,
-            "Backspace" | "Delete" => self.ui_state.clear(&mut self.state),
-            "ArrowLeft" => self.ui_state.move_select(0, -1)?,
-            "ArrowRight" => self.ui_state.move_select(0, 1)?,
-            "ArrowUp" => self.ui_state.move_select(-1, 0)?,
-            "ArrowDown" => self.ui_state.move_select(1, 0)?,
-            // TODO undo, redo
-            // TODO copy, paste
+        match (e.code().as_str(), e.ctrl_key()) {
+            ("Digit1", false) | ("Numpad1", false) => number = Some(1.try_into()?),
+            ("Digit2", false) | ("Numpad2", false) => number = Some(2.try_into()?),
+            ("Digit3", false) | ("Numpad3", false) => number = Some(3.try_into()?),
+            ("Digit4", false) | ("Numpad4", false) => number = Some(4.try_into()?),
+            ("Digit5", false) | ("Numpad5", false) => number = Some(5.try_into()?),
+            ("Digit6", false) | ("Numpad6", false) => number = Some(6.try_into()?),
+            ("Digit7", false) | ("Numpad7", false) => number = Some(7.try_into()?),
+            ("Digit8", false) | ("Numpad8", false) => number = Some(8.try_into()?),
+            ("Digit9", false) | ("Numpad9", false) => number = Some(9.try_into()?),
+            ("Escape", false) => self.ui_state.select(&self.state, None)?,
+            ("KeyP", false) => self.ui_state.toggle_pencil_mode(),
+            ("Backspace", false) | ("Delete", false) => self.ui_state.clear(&mut self.state),
+            ("ArrowLeft", false) => self.ui_state.move_select(0, -1)?,
+            ("ArrowRight", false) => self.ui_state.move_select(0, 1)?,
+            ("ArrowUp", false) => self.ui_state.move_select(-1, 0)?,
+            ("ArrowDown", false) => self.ui_state.move_select(1, 0)?,
+            ("KeyZ", true) => self.ui_state.undo(&mut self.state),
+            ("KeyY", true) => self.ui_state.redo(&mut self.state),
+            ("KeyC", true) => self.ui_state.copy(&self.state),
+            ("KeyV", true) => self.ui_state.paste(&mut self.state),
             _ => (),
         };
 
