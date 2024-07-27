@@ -1,7 +1,5 @@
 use std::fmt::{Debug, Display};
 
-use web_sys::js_sys::Reflect::is_extensible;
-
 use crate::Error;
 
 /*
@@ -68,26 +66,10 @@ impl TryFrom<i8> for Coordinate {
     }
 }
 
-impl Coordinate {
-    pub fn all_possible_values() -> [Coordinate; 9] {
-        core::array::from_fn(|i| Coordinate::try_from(i as i8).unwrap())
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Point {
     pub row: Coordinate,
     pub column: Coordinate,
-}
-
-impl Point {
-    // TODO iterator
-    pub fn all_possible_values() -> Vec<Point> {
-        Coordinate::all_possible_values()
-            .map(|row| Coordinate::all_possible_values().map(|column| Point { row, column }))
-            .as_flattened()
-            .to_vec()
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,4 +297,57 @@ impl<'a> Iterator for SquareIterator<'a> {
     }
 }
 
-// TODO all points iterator
+pub struct AllPointsIterator {
+    cur: Option<Point>,
+}
+
+impl AllPointsIterator {
+    pub fn new() -> Self {
+        Self {
+            cur: Some(Point {
+                row: Coordinate(0),
+                column: Coordinate(0),
+            }),
+        }
+    }
+}
+
+impl Iterator for AllPointsIterator {
+    type Item = Point;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.cur {
+            Some(Point {
+                row: Coordinate(8),
+                column: Coordinate(8),
+            }) => {
+                self.cur = None;
+                Some(Point {
+                    row: Coordinate(8),
+                    column: Coordinate(8),
+                })
+            }
+            Some(Point {
+                row,
+                column: Coordinate(8),
+            }) => {
+                self.cur = Some(Point {
+                    row: Coordinate(row.0 + 1),
+                    column: Coordinate(0),
+                });
+                Some(Point {
+                    row,
+                    column: Coordinate(8),
+                })
+            }
+            Some(Point { row, column }) => {
+                self.cur = Some(Point {
+                    row,
+                    column: Coordinate(column.0 + 1),
+                });
+                Some(Point { row, column })
+            }
+            None => None,
+        }
+    }
+}

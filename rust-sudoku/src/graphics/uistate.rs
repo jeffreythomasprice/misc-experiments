@@ -4,7 +4,7 @@ use log::*;
 use web_sys::CanvasRenderingContext2d;
 
 use crate::{
-    sudoku::{self, Cell, GameState, Number, PencilMarkMask},
+    sudoku::{self, AllPointsIterator, Cell, GameState, Number, PencilMarkMask},
     Result,
 };
 
@@ -107,7 +107,7 @@ impl UIState {
     }
 
     pub fn hover(&mut self, state: &GameState, p: &Point) -> Result<()> {
-        for sp in sudoku::Point::all_possible_values() {
+        for sp in AllPointsIterator::new() {
             if self.cell_bounds(sp)?.contains(p) {
                 self.hover_location = Some(sp);
                 return Ok(());
@@ -120,7 +120,7 @@ impl UIState {
     pub fn select(&mut self, state: &GameState, p: Option<&Point>) -> Result<()> {
         match p {
             Some(p) => {
-                for sp in sudoku::Point::all_possible_values() {
+                for sp in AllPointsIterator::new() {
                     if self.cell_bounds(sp)?.contains(p) {
                         self.select_location = match state[sp] {
                             sudoku::Cell::PuzzleInput(_) => {
@@ -197,7 +197,7 @@ impl UIState {
             context.stroke();
         }
 
-        for p in sudoku::Point::all_possible_values() {
+        for p in AllPointsIterator::new() {
             let cell_bounds = self.cell_bounds(p)?;
 
             if self.select_location == Some(p) {

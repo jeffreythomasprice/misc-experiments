@@ -5,7 +5,7 @@ use crate::{
     Error,
 };
 
-use super::{Cell, Point, RowIterator};
+use super::{AllPointsIterator, Cell, Point, RowIterator};
 
 #[derive(Debug)]
 pub enum CellStatus {
@@ -75,8 +75,8 @@ impl GameState {
 
     pub fn status(&self) -> Status {
         let mut empty_or_pencil_mark_count = 0;
-        for p in Point::all_possible_values().iter() {
-            match self.status_at(p) {
+        for p in AllPointsIterator::new() {
+            match self.status_at(&p) {
                 (_, CellStatus::Conflict) => return Status::Conflict,
                 (Cell::Empty, _) | (Cell::PencilMark(_), _) => empty_or_pencil_mark_count += 1,
                 _ => (),

@@ -1,6 +1,6 @@
 use std::{fmt::Display, mem::swap, ops::Index};
 
-use super::{Cell, GameState, Number, Point};
+use super::{AllPointsIterator, Cell, GameState, Number, Point};
 use crate::Result;
 use log::*;
 use rand::{seq::SliceRandom, Rng};
@@ -110,8 +110,8 @@ impl Index<Point> for Possible {
 impl Into<GameState> for &Possible {
     fn into(self) -> GameState {
         let mut result = GameState::new();
-        Point::all_possible_values().iter().for_each(|p| {
-            result[*p] = Cell::PuzzleInput(self[*p]);
+        AllPointsIterator::new().for_each(|p| {
+            result[p] = Cell::PuzzleInput(self[p]);
         });
         result
     }
@@ -166,7 +166,7 @@ impl GameState {
             if best_score == 81 {
                 log::trace!("success on generation {}", generations);
                 let mut result: GameState = best.into();
-                let mut all_possible_points = Point::all_possible_values();
+                let mut all_possible_points = AllPointsIterator::new().collect::<Vec<_>>();
                 all_possible_points.shuffle(rng);
                 for p in all_possible_points
                     .iter()
