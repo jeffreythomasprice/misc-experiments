@@ -1,11 +1,7 @@
 use std::ops::{Index, IndexMut};
 
-use crate::{
-    sudoku::{ColumnIterator, SquareIterator},
-    Error,
-};
 
-use super::{AllPointsIterator, Cell, NeighborIterator, Point, RowIterator};
+use super::{AllPointsIterator, Cell, NeighborIterator, Point};
 
 #[derive(Debug)]
 pub enum CellStatus {

@@ -10,7 +10,7 @@ pub struct Number(i8);
 
 impl Number {
     pub fn all() -> [Number; 9] {
-        return [
+        [
             Number(1),
             Number(2),
             Number(3),
@@ -20,7 +20,7 @@ impl Number {
             Number(7),
             Number(8),
             Number(9),
-        ];
+        ]
     }
 }
 
@@ -42,9 +42,9 @@ impl TryFrom<i8> for Number {
     }
 }
 
-impl Into<i8> for Number {
-    fn into(self) -> i8 {
-        self.0
+impl From<Number> for i8 {
+    fn from(val: Number) -> Self {
+        val.0
     }
 }
 

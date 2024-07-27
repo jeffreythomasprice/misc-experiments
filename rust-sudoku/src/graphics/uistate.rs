@@ -187,11 +187,10 @@ impl UIState {
     pub fn copy(&mut self, state: &GameState) {
         self.clipboard = self
             .select_location
-            .map(|p| match state[p] {
+            .and_then(|p| match state[p] {
                 Cell::PuzzleInput(_) => None,
                 value => Some(value),
-            })
-            .flatten();
+            });
         trace!("clipboard = {:?}", self.clipboard);
     }
 

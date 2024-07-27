@@ -6,7 +6,6 @@ use std::{
     mem::forget,
     panic,
     sync::{Arc, Mutex},
-    thread::current,
 };
 mod history;
 
@@ -16,7 +15,7 @@ use dom::{body, create_canvas, get_context, window};
 use graphics::{Point, Rectangle, Size, UIState};
 use history::History;
 use log::*;
-use rand::{rngs::ThreadRng, thread_rng};
+use rand::thread_rng;
 use sudoku::{GameState, Number};
 use web_sys::{
     wasm_bindgen::{closure::Closure, JsCast},

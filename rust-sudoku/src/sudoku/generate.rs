@@ -1,8 +1,7 @@
-use std::{fmt::Display, mem::swap, ops::Index};
+use std::mem::swap;
 
-use super::{AllPointsIterator, Cell, CellStatus, Coordinate, GameState, Number, Point};
+use super::{AllPointsIterator, Cell, CellStatus, Coordinate, GameState, Point};
 use crate::Result;
-use log::*;
 use rand::{seq::SliceRandom, Rng};
 
 #[derive(Clone)]
@@ -151,10 +150,8 @@ impl GameState {
                     let (parent, _, _) = scores
                         .iter()
                         .find(|(_, _, total)| target < *total)
-                        .ok_or(format!(
-                    "expected to always find a next item when generating new possible solutions"
-                ))?;
-                    Ok(Possible::new_with_some_random_change(parent, rng)?)
+                        .ok_or("expected to always find a next item when generating new possible solutions".to_string())?;
+                    Possible::new_with_some_random_change(parent, rng)
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             // always keep the current best around unchanged, just in case
