@@ -6,12 +6,15 @@ use std::{
     mem::forget,
     panic,
     sync::{Arc, Mutex},
+    thread::current,
 };
+mod history;
 
 use errors::*;
 
 use dom::{body, create_canvas, get_context, window};
 use graphics::{Point, Rectangle, Size, UIState};
+use history::History;
 use log::*;
 use rand::{rngs::ThreadRng, thread_rng};
 use sudoku::{GameState, Number};
@@ -21,12 +24,10 @@ use web_sys::{
 };
 
 struct AppState {
-    rng: ThreadRng,
-
     canvas: HtmlCanvasElement,
     context: CanvasRenderingContext2d,
 
-    state: GameState,
+    state: History<GameState>,
     ui_state: UIState,
 }
 
@@ -35,12 +36,10 @@ impl AppState {
         let mut rng = thread_rng();
         let state = GameState::new_random(&mut rng, 25)?;
         Ok(Self {
-            rng,
-
             canvas,
             context,
 
-            state,
+            state: History::new(state),
             ui_state: UIState::new(Rectangle::from_two_points(
                 &Point { x: 0.0, y: 0.0 },
                 &Point { x: 0.0, y: 0.0 },
@@ -73,24 +72,18 @@ impl AppState {
     }
 
     fn mousemove(&mut self, e: MouseEvent) -> Result<()> {
-        self.ui_state.hover(
-            &self.state,
-            &Point {
-                x: e.client_x() as f64,
-                y: e.client_y() as f64,
-            },
-        )?;
+        self.ui_state.hover(&Point {
+            x: e.client_x() as f64,
+            y: e.client_y() as f64,
+        })?;
         Ok(())
     }
 
     fn mouseup(&mut self, e: MouseEvent) -> Result<()> {
-        self.ui_state.select(
-            &self.state,
-            Some(&Point {
-                x: e.client_x() as f64,
-                y: e.client_y() as f64,
-            }),
-        )?;
+        self.ui_state.select(Some(&Point {
+            x: e.client_x() as f64,
+            y: e.client_y() as f64,
+        }))?;
         Ok(())
     }
 
@@ -106,31 +99,45 @@ impl AppState {
             ("Digit7", false) | ("Numpad7", false) => number = Some(7.try_into()?),
             ("Digit8", false) | ("Numpad8", false) => number = Some(8.try_into()?),
             ("Digit9", false) | ("Numpad9", false) => number = Some(9.try_into()?),
-            ("Escape", false) => self.ui_state.select(&self.state, None)?,
+            ("Escape", false) => self.ui_state.select(None)?,
             ("KeyP", false) => self.ui_state.toggle_pencil_mode(),
-            ("Backspace", false) | ("Delete", false) => self.ui_state.clear(&mut self.state),
+            ("Backspace", false) | ("Delete", false) => {
+                self.apply_state_change(|app, state| app.ui_state.clear(state))
+            }
             ("ArrowLeft", false) => self.ui_state.move_select(0, -1)?,
             ("ArrowRight", false) => self.ui_state.move_select(0, 1)?,
             ("ArrowUp", false) => self.ui_state.move_select(-1, 0)?,
             ("ArrowDown", false) => self.ui_state.move_select(1, 0)?,
-            ("KeyZ", true) => self.ui_state.undo(&mut self.state),
-            ("KeyY", true) => self.ui_state.redo(&mut self.state),
-            ("KeyC", true) => self.ui_state.copy(&self.state),
-            ("KeyV", true) => self.ui_state.paste(&mut self.state),
+            ("KeyZ", true) => self.state.undo(),
+            ("KeyY", true) => self.state.redo(),
+            ("KeyC", true) => self.apply_state_change(|app, state| app.ui_state.copy(state)),
+            ("KeyV", true) => self.apply_state_change(|app, state| app.ui_state.paste(state)),
             _ => (),
         };
 
         if let Some(number) = number {
-            self.ui_state.number(&mut self.state, number);
+            self.apply_state_change(|app, state| app.ui_state.number(state, number));
         }
 
         Ok(())
     }
 
     fn animate(&mut self, _time: f64) -> Result<()> {
-        self.ui_state.draw_to_context(&self.context, &self.state)?;
+        self.ui_state
+            .draw_to_context(&self.context, self.state.current())?;
 
         Ok(())
+    }
+
+    fn apply_state_change<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut AppState, &mut GameState),
+    {
+        let mut state = self.state.current().clone();
+        f(self, &mut state);
+        if state != *self.state.current() {
+            self.state.push(state);
+        }
     }
 }
 

@@ -20,7 +20,7 @@ pub enum Status {
     Solved,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct GameState {
     // indices are [row][column]
     data: [[Cell; 9]; 9],

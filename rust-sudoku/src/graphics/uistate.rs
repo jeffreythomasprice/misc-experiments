@@ -4,10 +4,7 @@ use log::*;
 use web_sys::CanvasRenderingContext2d;
 
 use crate::{
-    sudoku::{
-        self, AllPointsIterator, Cell, ColumnIterator, Coordinate, GameState, NeighborIterator,
-        Number, PencilMarkMask, RowIterator, SquareIterator,
-    },
+    sudoku::{self, AllPointsIterator, Cell, Coordinate, GameState, NeighborIterator, Number},
     Result,
 };
 
@@ -113,7 +110,7 @@ impl UIState {
         self.select_location
     }
 
-    pub fn hover(&mut self, state: &GameState, p: &Point) -> Result<()> {
+    pub fn hover(&mut self, p: &Point) -> Result<()> {
         for sp in AllPointsIterator::new() {
             if self.cell_bounds(sp)?.contains(p) {
                 self.hover_location = Some(sp);
@@ -124,7 +121,7 @@ impl UIState {
         Ok(())
     }
 
-    pub fn select(&mut self, state: &GameState, p: Option<&Point>) -> Result<()> {
+    pub fn select(&mut self, p: Option<&Point>) -> Result<()> {
         match p {
             Some(p) => {
                 // TODO handle points that are inside buttons
@@ -185,14 +182,6 @@ impl UIState {
     pub fn toggle_pencil_mode(&mut self) {
         self.is_penciling = !self.is_penciling;
         debug!("is_penciling = {}", self.is_penciling);
-    }
-
-    pub fn undo(&mut self, state: &mut GameState) {
-        todo!("undo")
-    }
-
-    pub fn redo(&mut self, state: &mut GameState) {
-        todo!("redo")
     }
 
     pub fn copy(&mut self, state: &GameState) {
