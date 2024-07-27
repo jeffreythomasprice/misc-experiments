@@ -4,7 +4,7 @@ use log::*;
 use web_sys::CanvasRenderingContext2d;
 
 use crate::{
-    sudoku::{self, AllPointsIterator, Cell, GameState, Number, PencilMarkMask},
+    sudoku::{self, AllPointsIterator, Cell, Coordinate, GameState, Number, PencilMarkMask},
     Result,
 };
 
@@ -122,41 +122,61 @@ impl UIState {
             Some(p) => {
                 for sp in AllPointsIterator::new() {
                     if self.cell_bounds(sp)?.contains(p) {
-                        self.select_location = match state[sp] {
-                            sudoku::Cell::PuzzleInput(_) => {
-                                debug!("TODO deselecting because you can't select puzzle input");
-                                None
-                            }
-                            _ => {
-                                debug!("TODO selecting {sp:?}");
-                                Some(sp)
-                            }
-                        };
+                        self.select_location = Some(sp);
+                        trace!("selecting {sp:?}");
                         return Ok(());
                     }
                 }
-                debug!("TODO deselecting because clicked off puzzle");
+                trace!("deselecting because clicked off puzzle");
                 self.select_location = None;
             }
             None => {
-                debug!("TODO force deselecting");
+                trace!("force deselecting");
                 self.select_location = None
             }
         }
         Ok(())
     }
 
-    pub fn number(&mut self, state: &mut GameState, number: Number) -> Result<()> {
-        if let Some(p) = self.select_location {
-            state[p] = Cell::from_input(state[p], number, self.is_penciling);
-        }
-        debug!("TODO game state new status = {:?}", state.status());
+    pub fn move_select(&mut self, rows: i8, columns: i8) -> Result<()> {
+        self.select_location = match self.select_location {
+            Some(cur) => {
+                let row: Result<Coordinate> = (cur.row.0 + rows).try_into();
+                let column: Result<Coordinate> = (cur.column.0 + columns).try_into();
+                match (row, column) {
+                    (Ok(row), Ok(column)) => {
+                        let result = sudoku::Point { row, column };
+                        trace!("moving to {result:?}");
+                        Some(result)
+                    }
+                    _ => {
+                        trace!("deselecting, moving off the puzzle");
+                        None
+                    }
+                }
+            }
+            None => {
+                trace!("no selection, can't move");
+                None
+            }
+        };
         Ok(())
+    }
+
+    pub fn number(&mut self, state: &mut GameState, number: Number) {
+        let is_penciling = self.is_penciling;
+        self.set_selected_cell_value(state, |existing| {
+            Cell::from_input(*existing, number, is_penciling)
+        });
+    }
+
+    pub fn clear(&mut self, state: &mut GameState) {
+        self.set_selected_cell_value(state, |_| Cell::Empty);
     }
 
     pub fn toggle_pencil_mode(&mut self) -> Result<()> {
         self.is_penciling = !self.is_penciling;
-        debug!("TODO is_penciling = {}", self.is_penciling);
+        debug!("is_penciling = {}", self.is_penciling);
         Ok(())
     }
 
@@ -463,6 +483,19 @@ impl UIState {
         )?;
 
         Ok(())
+    }
+
+    fn set_selected_cell_value<F>(&mut self, state: &mut GameState, f: F)
+    where
+        F: FnOnce(&Cell) -> Cell,
+    {
+        if let Some(p) = self.select_location {
+            let x = &mut state[p];
+            match x {
+                Cell::PuzzleInput(_) => (),
+                _ => *x = f(x),
+            };
+        }
     }
 }
 

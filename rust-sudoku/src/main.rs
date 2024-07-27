@@ -115,14 +115,18 @@ impl AppState {
             "Digit9" | "Numpad9" => number = Some(9.try_into()?),
             "Escape" => self.ui_state.select(&self.state, None)?,
             "KeyP" => self.ui_state.toggle_pencil_mode()?,
+            "Backspace" | "Delete" => self.ui_state.clear(&mut self.state),
+            "ArrowLeft" => self.ui_state.move_select(0, -1)?,
+            "ArrowRight" => self.ui_state.move_select(0, 1)?,
+            "ArrowUp" => self.ui_state.move_select(-1, 0)?,
+            "ArrowDown" => self.ui_state.move_select(1, 0)?,
             // TODO undo, redo
-            // TODO delete
             // TODO copy, paste
             _ => (),
         };
 
         if let Some(number) = number {
-            self.ui_state.number(&mut self.state, number)?;
+            self.ui_state.number(&mut self.state, number);
         }
 
         Ok(())
