@@ -1,0 +1,23 @@
+{
+	"files.exclude": {
+		"**/.git": true,
+		"**/.svn": true,
+		"**/.hg": true,
+		"**/CVS": true,
+		"**/.DS_Store": true,
+		"**/Thumbs.db": true,
+		"**/dist": true,
+		"**/target": true,
+	},
+	"rust-analyzer.procMacro.ignored": {
+		"leptos_macro": [
+			"component",
+			"server"
+		],
+	},
+	"rust-analyzer.rustfmt.overrideCommand": [
+		"leptosfmt",
+		"--stdin",
+		"--rustfmt"
+	],
+}
