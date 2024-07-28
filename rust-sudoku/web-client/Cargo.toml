@@ -11,3 +11,4 @@ getrandom = { version = "0.2.15", features = ["js"] }
 log = "0.4.22"
 rand = "0.8.5"
 web-sys = { version = "0.3.69", features = ["HtmlCanvasElement", "Document", "Window", "CssStyleDeclaration", "CanvasRenderingContext2d", "TextMetrics", "MouseEvent", "KeyboardEvent"] }
+rusttype = "0.9.3"

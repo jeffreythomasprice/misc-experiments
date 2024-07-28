@@ -1,13 +1,13 @@
-use std::rc::Rc;
+use std::{borrow::BorrowMut, rc::Rc};
 
 use log::*;
 use web_sys::CanvasRenderingContext2d;
 
-use super::text::{
-    fill_string, fit_strings_to_size, Font, HorizontalStringAlign, VerticalStringAlign,
-};
 use lib::{
-    graphics::{Rectangle, Size},
+    graphics::{
+        fill_rectangle, fill_string, fit_strings_to_size, stroke_line, stroke_rectangle,
+        HorizontalStringAlign, RGBColor, Rectangle, Renderer, Size, VerticalStringAlign,
+    },
     AllPointsIterator, Cell, CellStatus, Coordinate, GameState, NeighborIterator, Number, Point,
     Result,
 };
@@ -24,18 +24,15 @@ struct ButtonLocation {
     column: Number,
 }
 
-struct Button {
+struct Button<R>
+where
+    R: Renderer,
+{
     location: ButtonLocation,
     on_draw: Box<
-        dyn Fn(
-            &ButtonLocation,
-            &UIState,
-            &DependentState,
-            &CanvasRenderingContext2d,
-            &GameState,
-        ) -> Result<()>,
+        dyn Fn(&ButtonLocation, &UIState<R>, &DependentState, &mut R, &GameState) -> Result<()>,
     >,
-    on_click: Box<dyn Fn(&ButtonLocation, &mut UIState, &mut GameState)>,
+    on_click: Box<dyn Fn(&ButtonLocation, &mut UIState<R>, &mut GameState)>,
 }
 
 struct DependentState {
@@ -44,9 +41,8 @@ struct DependentState {
     sub_cell_size: Size,
 
     buttons_bounds: Rectangle,
-
-    cell_font: Font,
-    sub_cell_font: Font,
+    cell_font_scale: rusttype::Scale,
+    sub_cell_font_scale: rusttype::Scale,
 }
 
 impl DependentState {
@@ -65,14 +61,19 @@ impl DependentState {
         ))
     }
 
-    fn draw_button(
+    fn draw_button<R>(
         &self,
-        ui: &UIState,
-        context: &CanvasRenderingContext2d,
+        ui: &UIState<R>,
+        renderer: &mut R,
         location: &ButtonLocation,
         s: &str,
         selected: bool,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        R: Renderer,
+    {
+        let renderer = &mut *renderer.borrow_mut();
+
         let button_bounds = self.button_bounds(location)?;
 
         let bg_color = if selected {
@@ -80,22 +81,17 @@ impl DependentState {
         } else {
             &ui.button_deselected_color
         };
-        context.set_fill_style(&bg_color.clone().into());
-        context.begin_path();
-        add_rect_to_context(context, &button_bounds);
-        context.fill();
+        fill_rectangle(renderer, &button_bounds, bg_color);
 
-        context.set_stroke_style(&ui.button_border_color.clone().into());
-        context.begin_path();
-        add_rect_to_context(context, &button_bounds);
-        context.stroke();
+        stroke_rectangle(renderer, &button_bounds, &ui.button_border_color, 1.0);
 
-        context.set_fill_style(&ui.button_text_color.clone().into());
+        renderer.set_fill_color(&ui.button_text_color);
         fill_string(
-            context,
+            renderer,
             s,
             &button_bounds,
-            &self.cell_font,
+            &ui.font,
+            self.cell_font_scale,
             HorizontalStringAlign::Center,
             VerticalStringAlign::Center,
         )?;
@@ -104,26 +100,28 @@ impl DependentState {
     }
 }
 
-pub struct UIState {
+pub struct UIState<R>
+where
+    R: Renderer,
+{
     destination_bounds: Rectangle,
+    font: rusttype::Font<'static>,
 
-    background_color: String,
-    puzzle_color: String,
-    hover_color: String,
-    select_color: String,
-    grid_line_color: String,
-    puzzle_input_text_color: String,
-    solution_text_color: String,
-    conflict_text_color: String,
-    buttons_background_color: String,
-    button_deselected_color: String,
-    button_selected_color: String,
-    button_border_color: String,
-    button_text_color: String,
+    background_color: RGBColor,
+    puzzle_color: RGBColor,
+    hover_color: RGBColor,
+    select_color: RGBColor,
+    grid_line_color: RGBColor,
+    puzzle_input_text_color: RGBColor,
+    solution_text_color: RGBColor,
+    conflict_text_color: RGBColor,
+    buttons_background_color: RGBColor,
+    button_deselected_color: RGBColor,
+    button_selected_color: RGBColor,
+    button_border_color: RGBColor,
+    button_text_color: RGBColor,
 
-    font_family: String,
-
-    buttons: Vec<Rc<Button>>,
+    buttons: Vec<Rc<Button<R>>>,
 
     dependent_state: Option<Result<Rc<DependentState>>>,
 
@@ -133,8 +131,11 @@ pub struct UIState {
     clipboard: Option<Cell>,
 }
 
-impl UIState {
-    pub fn new(destination_bounds: Rectangle) -> Result<Self> {
+impl<R> UIState<R>
+where
+    R: Renderer,
+{
+    pub fn new(destination_bounds: Rectangle, font: rusttype::Font<'static>) -> Result<Self> {
         let mut buttons = Vec::new();
         for number in Number::all() {
             let row = ButtonRow::Top;
@@ -143,7 +144,7 @@ impl UIState {
                     row,
                     column: number,
                 },
-                on_draw: Box::new(|location, ui, ds, context, state| {
+                on_draw: Box::new(|location, ui, ds, renderer, state| {
                     let number = location.column;
                     let is_number_selected = match ui.select_location {
                         Some(p) => match state[p] {
@@ -156,7 +157,7 @@ impl UIState {
                     };
                     ds.draw_button(
                         ui,
-                        context,
+                        renderer,
                         &location,
                         format!("{}", number).as_str(),
                         is_number_selected,
@@ -174,8 +175,8 @@ impl UIState {
                 row: ButtonRow::Bottom,
                 column: 1.try_into()?,
             },
-            on_draw: Box::new(|location, ui, ds, context, _state| {
-                ds.draw_button(ui, context, &location, "P", ui.is_penciling)?;
+            on_draw: Box::new(|location, ui, ds, renderer, _state| {
+                ds.draw_button(ui, renderer, &location, "P", ui.is_penciling)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, ui, _state| {
@@ -263,22 +264,73 @@ impl UIState {
 
         Ok(Self {
             destination_bounds,
+            font,
 
-            background_color: "#222222".into(),
-            puzzle_color: "white".into(),
-            hover_color: "#ddddff".into(),
-            select_color: "#6666ff".into(),
-            grid_line_color: "black".into(),
-            puzzle_input_text_color: "#555555".into(),
-            solution_text_color: "black".into(),
-            conflict_text_color: "red".into(),
-            buttons_background_color: "#ff9999".into(),
-            button_deselected_color: "#888888".into(),
-            button_selected_color: "#ddddff".into(),
-            button_border_color: "black".into(),
-            button_text_color: "black".into(),
-
-            font_family: "monospace".into(),
+            background_color: RGBColor {
+                red: 0x22,
+                green: 0x22,
+                blue: 0x22,
+            },
+            puzzle_color: RGBColor {
+                red: 0xff,
+                green: 0xff,
+                blue: 0xff,
+            },
+            hover_color: RGBColor {
+                red: 0xdd,
+                green: 0xdd,
+                blue: 0xff,
+            },
+            select_color: RGBColor {
+                red: 0x66,
+                green: 0x66,
+                blue: 0xff,
+            },
+            grid_line_color: RGBColor {
+                red: 0x00,
+                green: 0x00,
+                blue: 0x00,
+            },
+            puzzle_input_text_color: RGBColor {
+                red: 0x55,
+                green: 0x55,
+                blue: 0x55,
+            },
+            solution_text_color: RGBColor {
+                red: 0x00,
+                green: 0x00,
+                blue: 0x00,
+            },
+            conflict_text_color: RGBColor {
+                red: 0xff,
+                green: 0x00,
+                blue: 0x00,
+            },
+            buttons_background_color: RGBColor {
+                red: 0xff,
+                green: 0x99,
+                blue: 0x99,
+            },
+            button_deselected_color: RGBColor {
+                red: 0x88,
+                green: 0x88,
+                blue: 0x88,
+            },
+            button_selected_color: RGBColor {
+                red: 0xdd,
+                green: 0xdd,
+                blue: 0xff,
+            },
+            button_border_color: RGBColor {
+                red: 0x00,
+                green: 0x00,
+                blue: 0x00,
+            },
+            button_text_color: RGBColor {
+                red: 0x00,
+                green: 0x00,
+                blue: 0x00,
+            },
 
             buttons,
 
@@ -297,15 +349,6 @@ impl UIState {
 
     pub fn set_destination_bounds(&mut self, r: Rectangle) {
         self.destination_bounds = r;
-        self.dependent_state = None;
-    }
-
-    pub fn font_family(&self) -> &String {
-        &self.font_family
-    }
-
-    pub fn set_font_family(&mut self, s: String) {
-        self.font_family = s;
         self.dependent_state = None;
     }
 
@@ -427,68 +470,50 @@ impl UIState {
         }
     }
 
-    pub fn draw_to_context(
-        &mut self,
-        context: &CanvasRenderingContext2d,
-        state: &GameState,
-    ) -> Result<()> {
+    pub fn draw_to_context(&mut self, renderer: &mut R, state: &GameState) -> Result<()> {
         let ds = self.refresh_dependent_state()?;
 
-        context.set_fill_style(&self.background_color.clone().into());
-        context.begin_path();
-        add_rect_to_context(context, &self.destination_bounds);
-        context.fill();
+        fill_rectangle(renderer, &self.destination_bounds, &self.background_color);
 
-        context.set_fill_style(&self.puzzle_color.clone().into());
-        context.begin_path();
-        add_rect_to_context(context, &ds.puzzle_bounds);
-        context.fill();
+        fill_rectangle(renderer, &ds.puzzle_bounds, &self.puzzle_color);
 
-        context.set_fill_style(&self.buttons_background_color.clone().into());
-        context.begin_path();
-        add_rect_to_context(context, &ds.buttons_bounds);
-        context.fill();
+        fill_rectangle(renderer, &ds.buttons_bounds, &self.buttons_background_color);
 
         for p in AllPointsIterator::new() {
             let cell_bounds = self.cell_bounds(p)?;
 
             if self.select_location == Some(p) {
-                context.set_fill_style(&self.select_color.clone().into());
-                context.begin_path();
-                add_rect_to_context(context, &cell_bounds);
-                context.fill();
+                fill_rectangle(renderer, &cell_bounds, &self.select_color);
             } else if self.hover_location == Some(p) {
-                context.set_fill_style(&self.hover_color.clone().into());
-                context.begin_path();
-                add_rect_to_context(context, &cell_bounds);
-                context.fill();
+                fill_rectangle(renderer, &cell_bounds, &self.hover_color);
             }
 
             let (cell_value, cell_status) = state.status_at(&p);
             match cell_value {
                 Cell::Empty => (),
                 Cell::PuzzleInput(value) => {
-                    context.set_fill_style(&self.puzzle_input_text_color.clone().into());
+                    renderer.set_fill_color(&self.puzzle_input_text_color);
                     fill_string(
-                        context,
+                        renderer,
                         &format!("{}", value),
                         &cell_bounds,
-                        &ds.cell_font,
+                        &self.font,
+                        ds.cell_font_scale,
                         HorizontalStringAlign::Center,
                         VerticalStringAlign::Center,
                     )?;
                 }
                 Cell::Solution(value) => {
-                    let color = match cell_status {
+                    renderer.set_fill_color(match cell_status {
                         CellStatus::Conflict => &self.conflict_text_color,
                         CellStatus::NoConflict => &self.solution_text_color,
-                    };
-                    context.set_fill_style(&color.clone().into());
+                    });
                     fill_string(
-                        context,
+                        renderer,
                         &format!("{}", value),
                         &cell_bounds,
-                        &ds.cell_font,
+                        &self.font,
+                        ds.cell_font_scale,
                         HorizontalStringAlign::Center,
                         VerticalStringAlign::Center,
                     )?;
@@ -500,12 +525,13 @@ impl UIState {
                             let sub_cell_bounds = self.sub_cell_bounds(p, x_sub, y_sub)?;
 
                             if value.is_set(number) {
-                                context.set_fill_style(&self.solution_text_color.clone().into());
+                                renderer.set_fill_color(&self.solution_text_color);
                                 fill_string(
-                                    context,
+                                    renderer,
                                     &format!("{}", number),
                                     &sub_cell_bounds,
-                                    &ds.sub_cell_font,
+                                    &self.font,
+                                    ds.sub_cell_font_scale,
                                     HorizontalStringAlign::Center,
                                     VerticalStringAlign::Center,
                                 )?;
@@ -519,20 +545,38 @@ impl UIState {
         for i in 0..=9 {
             let x = ds.puzzle_bounds.min().x + (i as f64) * ds.cell_size.width();
             let y = ds.puzzle_bounds.min().y + (i as f64) * ds.cell_size.height();
-            context.set_stroke_style(&self.grid_line_color.clone().into());
-            context.set_line_width(if i % 3 == 0 { 5.0 } else { 1.0 });
-            context.begin_path();
-            context.move_to(x, ds.puzzle_bounds.min().y);
-            context.line_to(x, ds.puzzle_bounds.max().y);
-            context.stroke();
-            context.begin_path();
-            context.move_to(ds.puzzle_bounds.min().x, y);
-            context.line_to(ds.puzzle_bounds.max().x, y);
-            context.stroke();
+            let width = if i % 3 == 0 { 5.0 } else { 1.0 };
+            let c = &self.grid_line_color;
+            stroke_line(
+                renderer,
+                &lib::graphics::Point {
+                    x: x,
+                    y: ds.puzzle_bounds.min().y,
+                },
+                &lib::graphics::Point {
+                    x: x,
+                    y: ds.puzzle_bounds.max().y,
+                },
+                c,
+                width,
+            );
+            stroke_line(
+                renderer,
+                &lib::graphics::Point {
+                    x: ds.puzzle_bounds.min().x,
+                    y: y,
+                },
+                &lib::graphics::Point {
+                    x: ds.puzzle_bounds.max().x,
+                    y: y,
+                },
+                c,
+                width,
+            );
         }
 
         for button in self.buttons.iter() {
-            (*button.on_draw)(&button.location, self, &ds, context, state)?;
+            (*button.on_draw)(&button.location, self, &ds, renderer, state)?;
         }
 
         Ok(())
@@ -592,7 +636,6 @@ impl UIState {
                 let sub_cell_size = Size::new(sub_cell_size, sub_cell_size)
                     .map_err(|e| format!("bad sub-cell size: {e:?}"))?;
 
-                let font_family = self.font_family.clone();
                 let possible_strings = vec![
                     "1".into(),
                     "2".into(),
@@ -604,21 +647,28 @@ impl UIState {
                     "8".into(),
                     "9".into(),
                 ];
-                let cell_font = fit_strings_to_size(&possible_strings, &cell_size, &font_family)?
-                    .ok_or("expected a font but got none".to_string())?
-                    .scaled_by(0.8);
-                let sub_cell_font =
-                    fit_strings_to_size(&possible_strings, &sub_cell_size, &font_family)?
-                        .ok_or("expected a font but got none".to_string())?
-                        .scaled_by(0.8);
+                let cell_font_scale =
+                    fit_strings_to_size(&possible_strings, &cell_size, &self.font)?
+                        .ok_or("expected a font but got none".to_string())?;
+                let cell_font_scale = rusttype::Scale {
+                    x: cell_font_scale.x * 0.8,
+                    y: cell_font_scale.y * 0.8,
+                };
+                let sub_cell_font_scale =
+                    fit_strings_to_size(&possible_strings, &sub_cell_size, &self.font)?
+                        .ok_or("expected a font but got none".to_string())?;
+                let sub_cell_font_scale = rusttype::Scale {
+                    x: sub_cell_font_scale.x * 0.8,
+                    y: sub_cell_font_scale.y * 0.8,
+                };
 
                 Ok(Rc::new(DependentState {
                     puzzle_bounds,
                     cell_size,
                     sub_cell_size,
                     buttons_bounds,
-                    cell_font,
-                    sub_cell_font,
+                    cell_font_scale,
+                    sub_cell_font_scale,
                 }))
             })
             .clone()

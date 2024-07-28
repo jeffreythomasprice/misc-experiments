@@ -20,14 +20,3 @@ pub fn create_canvas() -> Result<web_sys::HtmlCanvasElement> {
         .dyn_into()
         .map_err(|_| "created a canvas element, but it wasn't the expected type")?)
 }
-
-pub fn get_context(
-    canvas: &web_sys::HtmlCanvasElement,
-) -> Result<web_sys::CanvasRenderingContext2d> {
-    Ok(canvas
-        .get_context("2d")
-        .map_err(|e| format!("{e:?}"))?
-        .ok_or("failed to make 2d context")?
-        .dyn_into::<web_sys::CanvasRenderingContext2d>()
-        .map_err(|_| "created a context element, but it wasn't the expected type")?)
-}

@@ -6,41 +6,51 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use dom::{body, create_canvas, get_context, window};
-use graphics::UIState;
+use dom::{body, create_canvas, window};
+use graphics::{CanvasRenderingContext2dRenderer, UIState};
 use lib::{
-    graphics::{Rectangle, Size},
+    graphics::{Rectangle, Renderer, Size},
     Number, Result,
 };
 use lib::{GameState, History};
 use log::*;
 use rand::thread_rng;
+use rusttype::Font;
 use web_sys::{
     wasm_bindgen::{closure::Closure, JsCast},
-    CanvasRenderingContext2d, HtmlCanvasElement, KeyboardEvent, MouseEvent,
+    HtmlCanvasElement, KeyboardEvent, MouseEvent,
 };
 
 struct AppState {
     canvas: HtmlCanvasElement,
-    context: CanvasRenderingContext2d,
+    renderer: CanvasRenderingContext2dRenderer,
 
     state: History<GameState>,
-    ui_state: UIState,
+    ui_state: UIState<CanvasRenderingContext2dRenderer>,
 }
 
 impl AppState {
-    fn new(canvas: HtmlCanvasElement, context: CanvasRenderingContext2d) -> Result<Self> {
+    fn new(canvas: HtmlCanvasElement, renderer: CanvasRenderingContext2dRenderer) -> Result<Self> {
         let mut rng = thread_rng();
         let state = GameState::new_random(&mut rng, 25)?;
+
+        let font = Font::try_from_bytes(include_bytes!(
+            "../assets/Space_Grotesk/static/SpaceGrotesk-Medium.ttf"
+        ))
+        .ok_or(format!("failed to parse font"))?;
+
         Ok(Self {
             canvas,
-            context,
+            renderer,
 
             state: History::new(state),
-            ui_state: UIState::new(Rectangle::from_two_points(
-                &lib::graphics::Point { x: 0.0, y: 0.0 },
-                &lib::graphics::Point { x: 0.0, y: 0.0 },
-            ))?,
+            ui_state: UIState::new(
+                Rectangle::from_two_points(
+                    &lib::graphics::Point { x: 0.0, y: 0.0 },
+                    &lib::graphics::Point { x: 0.0, y: 0.0 },
+                ),
+                font,
+            )?,
         })
     }
 
@@ -141,7 +151,7 @@ impl AppState {
 
     fn animate(&mut self, _time: f64) -> Result<()> {
         self.ui_state
-            .draw_to_context(&self.context, self.state.current())?;
+            .draw_to_context(&mut self.renderer, self.state.current())?;
 
         Ok(())
     }
@@ -186,9 +196,9 @@ fn main() -> Result<()> {
         .map_err(|e| format!("{e:?}"))?;
     body()?.replace_children_with_node_1(&canvas);
 
-    let context = get_context(&canvas)?;
+    let renderer = CanvasRenderingContext2dRenderer::new_from_canvas(&canvas)?;
 
-    let state = Arc::new(Mutex::new(AppState::new(canvas, context)?));
+    let state = Arc::new(Mutex::new(AppState::new(canvas, renderer)?));
 
     // resize events
     {

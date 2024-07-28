@@ -79,9 +79,9 @@ impl Rectangle {
         }
     }
 
-    pub fn from_points<I>(points: I) -> Result<Self, Error>
+    pub fn from_points<'a, I>(points: I) -> Result<Self, Error>
     where
-        I: Iterator<Item = Point>,
+        I: Iterator<Item = &'a Point>,
     {
         let mut x1: Option<f64> = None;
         let mut y1: Option<f64> = None;
@@ -152,5 +152,17 @@ impl Rectangle {
 impl Display for Rectangle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Rectangle(origin={}, size={})", self.origin, self.size)
+    }
+}
+
+pub struct RGBColor {
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+}
+
+impl Display for RGBColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RGB({}, {}, {})", self.red, self.green, self.blue)
     }
 }
