@@ -42,7 +42,7 @@ impl AppState {
             ui_state: UIState::new(Rectangle::from_two_points(
                 &Point { x: 0.0, y: 0.0 },
                 &Point { x: 0.0, y: 0.0 },
-            )),
+            ))?,
         })
     }
 
@@ -79,11 +79,15 @@ impl AppState {
     }
 
     fn mouseup(&mut self, e: MouseEvent) -> Result<()> {
-        self.ui_state.select(Some(&Point {
-            x: e.client_x() as f64,
-            y: e.client_y() as f64,
-        }))?;
-        Ok(())
+        self.apply_state_change(|app, state| {
+            app.ui_state.select(
+                state,
+                Some(&Point {
+                    x: e.client_x() as f64,
+                    y: e.client_y() as f64,
+                }),
+            )
+        })
     }
 
     fn keyup(&mut self, e: KeyboardEvent) -> Result<()> {
@@ -98,10 +102,15 @@ impl AppState {
             ("Digit7", false) | ("Numpad7", false) => number = Some(7.try_into()?),
             ("Digit8", false) | ("Numpad8", false) => number = Some(8.try_into()?),
             ("Digit9", false) | ("Numpad9", false) => number = Some(9.try_into()?),
-            ("Escape", false) => self.ui_state.select(None)?,
+            ("Escape", false) => {
+                self.apply_state_change(|app, state| app.ui_state.select(state, None))?
+            }
             ("KeyP", false) => self.ui_state.toggle_pencil_mode(),
             ("Backspace", false) | ("Delete", false) => {
-                self.apply_state_change(|app, state| app.ui_state.clear(state))
+                self.apply_state_change(|app, state| {
+                    app.ui_state.clear(state);
+                    Ok(())
+                })?;
             }
             ("ArrowLeft", false) => self.ui_state.move_select(0, -1)?,
             ("ArrowRight", false) => self.ui_state.move_select(0, 1)?,
@@ -109,13 +118,22 @@ impl AppState {
             ("ArrowDown", false) => self.ui_state.move_select(1, 0)?,
             ("KeyZ", true) => self.state.undo(),
             ("KeyY", true) => self.state.redo(),
-            ("KeyC", true) => self.apply_state_change(|app, state| app.ui_state.copy(state)),
-            ("KeyV", true) => self.apply_state_change(|app, state| app.ui_state.paste(state)),
+            ("KeyC", true) => self.apply_state_change(|app, state| {
+                app.ui_state.copy(state);
+                Ok(())
+            })?,
+            ("KeyV", true) => self.apply_state_change(|app, state| {
+                app.ui_state.paste(state);
+                Ok(())
+            })?,
             _ => (),
         };
 
         if let Some(number) = number {
-            self.apply_state_change(|app, state| app.ui_state.number(state, number));
+            self.apply_state_change(|app, state| {
+                app.ui_state.number(state, number);
+                Ok(())
+            })?;
         }
 
         Ok(())
@@ -128,15 +146,16 @@ impl AppState {
         Ok(())
     }
 
-    fn apply_state_change<F>(&mut self, f: F)
+    fn apply_state_change<F>(&mut self, f: F) -> Result<()>
     where
-        F: FnOnce(&mut AppState, &mut GameState),
+        F: FnOnce(&mut AppState, &mut GameState) -> Result<()>,
     {
         let mut state = self.state.current().clone();
-        f(self, &mut state);
+        f(self, &mut state)?;
         if state != *self.state.current() {
             self.state.push(state);
         }
+        Ok(())
     }
 }
 

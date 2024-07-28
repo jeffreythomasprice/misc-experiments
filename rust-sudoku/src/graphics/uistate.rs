@@ -20,6 +20,26 @@ enum ButtonRow {
     Bottom,
 }
 
+#[derive(Debug)]
+struct ButtonLocation {
+    row: ButtonRow,
+    column: Number,
+}
+
+struct Button {
+    location: ButtonLocation,
+    on_draw: Box<
+        dyn Fn(
+            &ButtonLocation,
+            &UIState,
+            &DependentState,
+            &CanvasRenderingContext2d,
+            &GameState,
+        ) -> Result<()>,
+    >,
+    on_click: Box<dyn Fn(&ButtonLocation, &mut UIState, &mut GameState)>,
+}
+
 struct DependentState {
     puzzle_bounds: Rectangle,
     cell_size: Size,
@@ -29,6 +49,58 @@ struct DependentState {
 
     cell_font: Font,
     sub_cell_font: Font,
+}
+
+impl DependentState {
+    fn button_bounds(&self, location: &ButtonLocation) -> Result<Rectangle> {
+        // TODO cache
+        let column: i8 = location.column.into();
+        let x = self.buttons_bounds.min().x + ((column - 1) as f64) * self.cell_size.width();
+        let y = self.buttons_bounds.min().y
+            + match location.row {
+                ButtonRow::Top => 0.0,
+                ButtonRow::Bottom => self.cell_size.height(),
+            };
+        Ok(Rectangle::from_origin_size(Point { x, y }, self.cell_size))
+    }
+
+    fn draw_button(
+        &self,
+        ui: &UIState,
+        context: &CanvasRenderingContext2d,
+        location: &ButtonLocation,
+        s: &str,
+        selected: bool,
+    ) -> Result<()> {
+        let button_bounds = self.button_bounds(location)?;
+
+        let bg_color = if selected {
+            &ui.button_selected_color
+        } else {
+            &ui.button_deselected_color
+        };
+        context.set_fill_style(&bg_color.clone().into());
+        context.begin_path();
+        add_rect_to_context(context, &button_bounds);
+        context.fill();
+
+        context.set_stroke_style(&ui.button_border_color.clone().into());
+        context.begin_path();
+        add_rect_to_context(context, &button_bounds);
+        context.stroke();
+
+        context.set_fill_style(&ui.button_text_color.clone().into());
+        fill_string(
+            context,
+            s,
+            &button_bounds,
+            &self.cell_font,
+            HorizontalStringAlign::Center,
+            VerticalStringAlign::Center,
+        )?;
+
+        Ok(())
+    }
 }
 
 pub struct UIState {
@@ -50,6 +122,8 @@ pub struct UIState {
 
     font_family: String,
 
+    buttons: Vec<Rc<Button>>,
+
     dependent_state: Option<Result<Rc<DependentState>>>,
 
     hover_location: Option<sudoku::Point>,
@@ -59,8 +133,65 @@ pub struct UIState {
 }
 
 impl UIState {
-    pub fn new(destination_bounds: Rectangle) -> Self {
-        Self {
+    pub fn new(destination_bounds: Rectangle) -> Result<Self> {
+        let mut buttons = Vec::new();
+        for number in Number::all() {
+            let row = ButtonRow::Top;
+            buttons.push(Rc::new(Button {
+                location: ButtonLocation {
+                    row,
+                    column: number,
+                },
+                on_draw: Box::new(|location, ui, ds, context, state| {
+                    let number = location.column;
+                    let is_number_selected = match ui.select_location {
+                        Some(p) => match state[p] {
+                            Cell::Empty => false,
+                            Cell::PuzzleInput(_) => false,
+                            Cell::Solution(value) => value == number,
+                            Cell::PencilMark(value) => value.is_set(number),
+                        },
+                        None => false,
+                    };
+                    ds.draw_button(
+                        ui,
+                        context,
+                        &location,
+                        format!("{}", number).as_str(),
+                        is_number_selected,
+                    )?;
+                    Ok(())
+                }),
+                on_click: Box::new(|location, ui, state| {
+                    let number = location.column;
+                    ui.number(state, number)
+                }),
+            }));
+        }
+        buttons.push(Rc::new(Button {
+            location: ButtonLocation {
+                row: ButtonRow::Bottom,
+                column: 1.try_into()?,
+            },
+            on_draw: Box::new(|location, ui, ds, context, _state| {
+                ds.draw_button(ui, context, &location, "P", ui.is_penciling)?;
+                Ok(())
+            }),
+            on_click: Box::new(|_location, ui, _state| {
+                ui.toggle_pencil_mode();
+            }),
+        }));
+
+        /*
+        TODO more buttons
+        undo
+        redo
+        delete
+        copy
+        paste
+        */
+
+        Ok(Self {
             destination_bounds,
 
             background_color: "#222222".into(),
@@ -79,13 +210,15 @@ impl UIState {
 
             font_family: "monospace".into(),
 
+            buttons,
+
             dependent_state: None,
 
             hover_location: None,
             select_location: None,
             is_penciling: false,
             clipboard: None,
-        }
+        })
     }
 
     pub fn destination_bounds(&self) -> &Rectangle {
@@ -121,17 +254,30 @@ impl UIState {
         Ok(())
     }
 
-    pub fn select(&mut self, p: Option<&Point>) -> Result<()> {
+    pub fn select(&mut self, state: &mut GameState, p: Option<&Point>) -> Result<()> {
         match p {
             Some(p) => {
-                // TODO handle points that are inside buttons
                 for sp in AllPointsIterator::new() {
                     if self.cell_bounds(sp)?.contains(p) {
                         self.select_location = Some(sp);
-                        trace!("selecting {sp:?}");
+                        trace!("selecting puzzle cell {sp:?}");
                         return Ok(());
                     }
                 }
+                let ds = self.refresh_dependent_state()?;
+
+                let mut selected_button = None;
+                for button in self.buttons.iter() {
+                    if ds.button_bounds(&button.location)?.contains(p) {
+                        selected_button = Some(button.clone());
+                    }
+                }
+                if let Some(button) = selected_button {
+                    trace!("selecting button {:?}", button.location);
+                    (*button.on_click)(&button.location, self, state);
+                    return Ok(());
+                }
+
                 trace!("deselecting because clicked off puzzle");
                 self.select_location = None;
             }
@@ -168,7 +314,7 @@ impl UIState {
         Ok(())
     }
 
-    pub fn number(&mut self, state: &mut GameState, number: Number) {
+    pub fn number(&self, state: &mut GameState, number: Number) {
         let is_penciling = self.is_penciling;
         self.set_selected_cell_value(state, |existing| {
             Cell::from_input(*existing, number, is_penciling)
@@ -185,12 +331,10 @@ impl UIState {
     }
 
     pub fn copy(&mut self, state: &GameState) {
-        self.clipboard = self
-            .select_location
-            .and_then(|p| match state[p] {
-                Cell::PuzzleInput(_) => None,
-                value => Some(value),
-            });
+        self.clipboard = self.select_location.and_then(|p| match state[p] {
+            Cell::PuzzleInput(_) => None,
+            value => Some(value),
+        });
         trace!("clipboard = {:?}", self.clipboard);
     }
 
@@ -310,39 +454,9 @@ impl UIState {
             context.stroke();
         }
 
-        for number in Number::all() {
-            let is_number_selected = match self.select_location {
-                Some(p) => match state[p] {
-                    Cell::Empty => false,
-                    Cell::PuzzleInput(_) => false,
-                    Cell::Solution(value) => value == number,
-                    Cell::PencilMark(value) => value.is_set(number),
-                },
-                None => false,
-            };
-            self.draw_button(
-                context,
-                ButtonRow::Top,
-                number,
-                format!("{}", number).as_str(),
-                is_number_selected,
-            )?;
+        for button in self.buttons.iter() {
+            (*button.on_draw)(&button.location, self, &ds, context, state)?;
         }
-        self.draw_button(
-            context,
-            ButtonRow::Bottom,
-            1.try_into()?,
-            "P",
-            self.is_penciling,
-        )?;
-        /*
-        TODO more buttons
-        undo
-        redo
-        delete
-        copy
-        paste
-        */
 
         Ok(())
     }
@@ -458,59 +572,7 @@ impl UIState {
         ))
     }
 
-    fn button_bounds(&mut self, row: ButtonRow, column: Number) -> Result<Rectangle> {
-        // TODO cache
-        let ds = self.refresh_dependent_state()?;
-        let column: i8 = column.into();
-        let x = ds.buttons_bounds.min().x + ((column - 1) as f64) * ds.cell_size.width();
-        let y = ds.buttons_bounds.min().y
-            + match row {
-                ButtonRow::Top => 0.0,
-                ButtonRow::Bottom => ds.cell_size.height(),
-            };
-        Ok(Rectangle::from_origin_size(Point { x, y }, ds.cell_size))
-    }
-
-    fn draw_button(
-        &mut self,
-        context: &CanvasRenderingContext2d,
-        row: ButtonRow,
-        column: Number,
-        s: &str,
-        selected: bool,
-    ) -> Result<()> {
-        let ds = self.refresh_dependent_state()?;
-        let button_bounds = self.button_bounds(row, column)?;
-
-        let bg_color = if selected {
-            &self.button_selected_color
-        } else {
-            &self.button_deselected_color
-        };
-        context.set_fill_style(&bg_color.clone().into());
-        context.begin_path();
-        add_rect_to_context(context, &button_bounds);
-        context.fill();
-
-        context.set_stroke_style(&self.button_border_color.clone().into());
-        context.begin_path();
-        add_rect_to_context(context, &button_bounds);
-        context.stroke();
-
-        context.set_fill_style(&self.button_text_color.clone().into());
-        fill_string(
-            context,
-            s,
-            &button_bounds,
-            &ds.cell_font,
-            HorizontalStringAlign::Center,
-            VerticalStringAlign::Center,
-        )?;
-
-        Ok(())
-    }
-
-    fn set_selected_cell_value<F>(&mut self, state: &mut GameState, f: F)
+    fn set_selected_cell_value<F>(&self, state: &mut GameState, f: F)
     where
         F: FnOnce(&Cell) -> Cell,
     {
