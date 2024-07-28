@@ -1,8 +1,4 @@
-#![allow(dead_code)]
-
 use std::fmt::{Debug, Display};
-
-use web_sys::wasm_bindgen::JsValue;
 
 #[derive(Debug, Clone)]
 pub struct Error(String);
@@ -26,12 +22,6 @@ impl From<&str> for Error {
 impl From<String> for Error {
     fn from(value: String) -> Self {
         Self(value)
-    }
-}
-
-impl From<JsValue> for Error {
-    fn from(value: JsValue) -> Self {
-        Self(format!("{value:?}"))
     }
 }
 

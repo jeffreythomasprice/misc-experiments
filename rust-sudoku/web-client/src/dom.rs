@@ -1,4 +1,4 @@
-use crate::Result;
+use lib::Result;
 use web_sys::wasm_bindgen::JsCast;
 
 pub fn window() -> Result<web_sys::Window> {
@@ -15,7 +15,8 @@ pub fn body() -> Result<web_sys::HtmlElement> {
 
 pub fn create_canvas() -> Result<web_sys::HtmlCanvasElement> {
     Ok(document()?
-        .create_element("canvas")?
+        .create_element("canvas")
+        .map_err(|e| format!("{e:?}"))?
         .dyn_into()
         .map_err(|_| "created a canvas element, but it wasn't the expected type")?)
 }
@@ -24,7 +25,8 @@ pub fn get_context(
     canvas: &web_sys::HtmlCanvasElement,
 ) -> Result<web_sys::CanvasRenderingContext2d> {
     Ok(canvas
-        .get_context("2d")?
+        .get_context("2d")
+        .map_err(|e| format!("{e:?}"))?
         .ok_or("failed to make 2d context")?
         .dyn_into::<web_sys::CanvasRenderingContext2d>()
         .map_err(|_| "created a context element, but it wasn't the expected type")?)

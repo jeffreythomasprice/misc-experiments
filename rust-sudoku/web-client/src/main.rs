@@ -1,22 +1,20 @@
 mod dom;
-mod errors;
 mod graphics;
-mod sudoku;
 use std::{
     mem::forget,
     panic,
     sync::{Arc, Mutex},
 };
-mod history;
-
-use errors::*;
 
 use dom::{body, create_canvas, get_context, window};
-use graphics::{Point, Rectangle, Size, UIState};
-use history::History;
+use graphics::UIState;
+use lib::{
+    graphics::{Rectangle, Size},
+    Number, Result,
+};
+use lib::{GameState, History};
 use log::*;
 use rand::thread_rng;
-use sudoku::{GameState, Number};
 use web_sys::{
     wasm_bindgen::{closure::Closure, JsCast},
     CanvasRenderingContext2d, HtmlCanvasElement, KeyboardEvent, MouseEvent,
@@ -40,19 +38,21 @@ impl AppState {
 
             state: History::new(state),
             ui_state: UIState::new(Rectangle::from_two_points(
-                &Point { x: 0.0, y: 0.0 },
-                &Point { x: 0.0, y: 0.0 },
+                &lib::graphics::Point { x: 0.0, y: 0.0 },
+                &lib::graphics::Point { x: 0.0, y: 0.0 },
             ))?,
         })
     }
 
     fn resize(&mut self) -> Result<()> {
         let width = window()?
-            .inner_width()?
+            .inner_width()
+            .map_err(|e| format!("{e:?}"))?
             .as_f64()
             .ok_or("failed to get width as f64")?;
         let height = window()?
-            .inner_height()?
+            .inner_height()
+            .map_err(|e| format!("{e:?}"))?
             .as_f64()
             .ok_or("failed to get height as f64".to_string())?;
 
@@ -62,7 +62,7 @@ impl AppState {
         if let Ok(size) = Size::new(width, height) {
             self.ui_state
                 .set_destination_bounds(Rectangle::from_origin_size(
-                    Point { x: 0.0, y: 0.0 },
+                    lib::graphics::Point { x: 0.0, y: 0.0 },
                     size,
                 ));
         }
@@ -71,7 +71,7 @@ impl AppState {
     }
 
     fn mousemove(&mut self, e: MouseEvent) -> Result<()> {
-        self.ui_state.hover(&Point {
+        self.ui_state.hover(&lib::graphics::Point {
             x: e.client_x() as f64,
             y: e.client_y() as f64,
         })?;
@@ -82,7 +82,7 @@ impl AppState {
         self.apply_state_change(|app, state| {
             app.ui_state.select(
                 state,
-                Some(&Point {
+                Some(&lib::graphics::Point {
                     x: e.client_x() as f64,
                     y: e.client_y() as f64,
                 }),
@@ -164,11 +164,26 @@ fn main() -> Result<()> {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
     let canvas = create_canvas()?;
-    canvas.style().set_property("position", "absolute")?;
-    canvas.style().set_property("width", "100%")?;
-    canvas.style().set_property("height", "100%")?;
-    canvas.style().set_property("left", "0px")?;
-    canvas.style().set_property("top", "0px")?;
+    canvas
+        .style()
+        .set_property("position", "absolute")
+        .map_err(|e| format!("{e:?}"))?;
+    canvas
+        .style()
+        .set_property("width", "100%")
+        .map_err(|e| format!("{e:?}"))?;
+    canvas
+        .style()
+        .set_property("height", "100%")
+        .map_err(|e| format!("{e:?}"))?;
+    canvas
+        .style()
+        .set_property("left", "0px")
+        .map_err(|e| format!("{e:?}"))?;
+    canvas
+        .style()
+        .set_property("top", "0px")
+        .map_err(|e| format!("{e:?}"))?;
     body()?.replace_children_with_node_1(&canvas);
 
     let context = get_context(&canvas)?;
@@ -184,7 +199,9 @@ fn main() -> Result<()> {
                 error!("{e:?}");
             }
         });
-        window()?.add_event_listener_with_callback("resize", c.as_ref().unchecked_ref())?;
+        window()?
+            .add_event_listener_with_callback("resize", c.as_ref().unchecked_ref())
+            .map_err(|e| format!("{e:?}"))?;
         // don't ever free this so the js callback stays valid
         forget(c);
     }
@@ -204,7 +221,8 @@ fn main() -> Result<()> {
             let state = state.lock().unwrap();
             state
                 .canvas
-                .add_event_listener_with_callback("mousemove", c.as_ref().unchecked_ref())?;
+                .add_event_listener_with_callback("mousemove", c.as_ref().unchecked_ref())
+                .map_err(|e| format!("{e:?}"))?;
             // don't ever free this so the js callback stays valid
         }
         forget(c);
@@ -225,7 +243,8 @@ fn main() -> Result<()> {
             let state = state.lock().unwrap();
             state
                 .canvas
-                .add_event_listener_with_callback("mouseup", c.as_ref().unchecked_ref())?;
+                .add_event_listener_with_callback("mouseup", c.as_ref().unchecked_ref())
+                .map_err(|e| format!("{e:?}"))?;
             // don't ever free this so the js callback stays valid
         }
         forget(c);
@@ -242,7 +261,9 @@ fn main() -> Result<()> {
                 }
             })
         };
-        window()?.add_event_listener_with_callback("keyup", c.as_ref().unchecked_ref())?;
+        window()?
+            .add_event_listener_with_callback("keyup", c.as_ref().unchecked_ref())
+            .map_err(|e| format!("{e:?}"))?;
         // don't ever free this so the js callback stays valid
         forget(c);
     }
@@ -260,7 +281,9 @@ fn main() -> Result<()> {
                 error!("{e:?}");
             }
         });
-        window()?.request_animation_frame(c.as_ref().unchecked_ref())?;
+        window()?
+            .request_animation_frame(c.as_ref().unchecked_ref())
+            .map_err(|e| format!("{e:?}"))?;
         Ok(())
     }
 

@@ -1,11 +1,11 @@
+use lib::graphics::{Point, Rectangle, Size};
 use std::fmt::Display;
 use web_sys::CanvasRenderingContext2d;
 
 use crate::{
-    dom::{create_canvas, get_context}, Result,
+    dom::{create_canvas, get_context},
+    Result,
 };
-
-use super::{Point, Rectangle, Size};
 
 #[derive(Debug, Clone, Copy)]
 pub enum SizeUnits {
@@ -109,7 +109,7 @@ pub fn fill_string(
                 VerticalStringAlign::Bottom => 1.0,
             };
 
-    context.fill_text(s, x, y)?;
+    context.fill_text(s, x, y).map_err(|e| format!("{e:?}"))?;
 
     Ok(())
 }
@@ -165,7 +165,7 @@ pub fn fit_str_to_size(s: &str, destination: &Size, font_family: &str) -> Result
 }
 
 fn measure_text(context: &CanvasRenderingContext2d, s: &str) -> Result<Rectangle> {
-    let m = context.measure_text(s)?;
+    let m = context.measure_text(s).map_err(|e| format!("{e:?}"))?;
     Ok(Rectangle::from_origin_size(
         Point {
             x: m.actual_bounding_box_left(),

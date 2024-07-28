@@ -3,15 +3,13 @@ use std::rc::Rc;
 use log::*;
 use web_sys::CanvasRenderingContext2d;
 
-use crate::{
-    sudoku::{self, AllPointsIterator, Cell, Coordinate, GameState, NeighborIterator, Number},
-    Result,
+use super::text::{
+    fill_string, fit_strings_to_size, Font, HorizontalStringAlign, VerticalStringAlign,
 };
-
-use super::{
-    text::{fill_string, fit_strings_to_size, Font, HorizontalStringAlign, VerticalStringAlign},
-    types::Rectangle,
-    Point, Size,
+use lib::{
+    graphics::{Rectangle, Size},
+    AllPointsIterator, Cell, CellStatus, Coordinate, GameState, NeighborIterator, Number, Point,
+    Result,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +59,10 @@ impl DependentState {
                 ButtonRow::Top => 0.0,
                 ButtonRow::Bottom => self.cell_size.height(),
             };
-        Ok(Rectangle::from_origin_size(Point { x, y }, self.cell_size))
+        Ok(Rectangle::from_origin_size(
+            lib::graphics::Point { x, y },
+            self.cell_size,
+        ))
     }
 
     fn draw_button(
@@ -126,8 +127,8 @@ pub struct UIState {
 
     dependent_state: Option<Result<Rc<DependentState>>>,
 
-    hover_location: Option<sudoku::Point>,
-    select_location: Option<sudoku::Point>,
+    hover_location: Option<Point>,
+    select_location: Option<Point>,
     is_penciling: bool,
     clipboard: Option<Cell>,
 }
@@ -308,11 +309,11 @@ impl UIState {
         self.dependent_state = None;
     }
 
-    pub fn selected(&self) -> Option<sudoku::Point> {
+    pub fn selected(&self) -> Option<Point> {
         self.select_location
     }
 
-    pub fn hover(&mut self, p: &Point) -> Result<()> {
+    pub fn hover(&mut self, p: &lib::graphics::Point) -> Result<()> {
         for sp in AllPointsIterator::new() {
             if self.cell_bounds(sp)?.contains(p) {
                 self.hover_location = Some(sp);
@@ -332,7 +333,11 @@ impl UIState {
         Ok(())
     }
 
-    pub fn select(&mut self, state: &mut GameState, p: Option<&Point>) -> Result<()> {
+    pub fn select(
+        &mut self,
+        state: &mut GameState,
+        p: Option<&lib::graphics::Point>,
+    ) -> Result<()> {
         match p {
             Some(p) => {
                 for sp in AllPointsIterator::new() {
@@ -374,7 +379,7 @@ impl UIState {
                 let column: Result<Coordinate> = (cur.column.0 + columns).try_into();
                 match (row, column) {
                     (Ok(row), Ok(column)) => {
-                        let result = sudoku::Point { row, column };
+                        let result = Point { row, column };
                         trace!("moving to {result:?}");
                         Some(result)
                     }
@@ -461,8 +466,8 @@ impl UIState {
 
             let (cell_value, cell_status) = state.status_at(&p);
             match cell_value {
-                sudoku::Cell::Empty => (),
-                sudoku::Cell::PuzzleInput(value) => {
+                Cell::Empty => (),
+                Cell::PuzzleInput(value) => {
                     context.set_fill_style(&self.puzzle_input_text_color.clone().into());
                     fill_string(
                         context,
@@ -473,10 +478,10 @@ impl UIState {
                         VerticalStringAlign::Center,
                     )?;
                 }
-                sudoku::Cell::Solution(value) => {
+                Cell::Solution(value) => {
                     let color = match cell_status {
-                        sudoku::CellStatus::Conflict => &self.conflict_text_color,
-                        sudoku::CellStatus::NoConflict => &self.solution_text_color,
+                        CellStatus::Conflict => &self.conflict_text_color,
+                        CellStatus::NoConflict => &self.solution_text_color,
                     };
                     context.set_fill_style(&color.clone().into());
                     fill_string(
@@ -488,7 +493,7 @@ impl UIState {
                         VerticalStringAlign::Center,
                     )?;
                 }
-                sudoku::Cell::PencilMark(value) => {
+                Cell::PencilMark(value) => {
                     for x_sub in 0..3 {
                         for y_sub in 0..3 {
                             let number = (y_sub * 3 + x_sub + 1).try_into()?;
@@ -570,11 +575,11 @@ impl UIState {
 
                 // the bounding rectangle for drawing the buttons
                 let buttons_bounds = Rectangle::from_two_points(
-                    &Point {
+                    &lib::graphics::Point {
                         x: total_bounds.min().x,
                         y: puzzle_bounds.max().y,
                     },
-                    &Point {
+                    &lib::graphics::Point {
                         x: total_bounds.max().x,
                         y: total_bounds.max().y,
                     },
@@ -619,11 +624,11 @@ impl UIState {
             .clone()
     }
 
-    fn cell_bounds(&mut self, p: sudoku::Point) -> Result<Rectangle> {
+    fn cell_bounds(&mut self, p: Point) -> Result<Rectangle> {
         //TODO cache
         let ds = self.refresh_dependent_state()?;
         Ok(Rectangle::from_origin_size(
-            Point {
+            lib::graphics::Point {
                 x: ds.puzzle_bounds.origin().x + (p.column.0 as f64) * ds.cell_size.width(),
                 y: ds.puzzle_bounds.origin().y + (p.row.0 as f64) * ds.cell_size.height(),
             },
@@ -631,12 +636,12 @@ impl UIState {
         ))
     }
 
-    fn sub_cell_bounds(&mut self, p: sudoku::Point, x_sub: i8, y_sub: i8) -> Result<Rectangle> {
+    fn sub_cell_bounds(&mut self, p: Point, x_sub: i8, y_sub: i8) -> Result<Rectangle> {
         //TODO cache
         let cell_bounds = self.cell_bounds(p)?;
         let ds = self.refresh_dependent_state()?;
         Ok(Rectangle::from_origin_size(
-            Point {
+            lib::graphics::Point {
                 x: cell_bounds.origin().x + (x_sub as f64) * ds.sub_cell_size.width(),
                 y: cell_bounds.origin().y + (y_sub as f64) * ds.sub_cell_size.height(),
             },

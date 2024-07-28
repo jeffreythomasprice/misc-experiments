@@ -1,4 +1,4 @@
-I was seeing trunk serve crash, so wrap in wachexec:
 ```
-watchexec trunk serve
+cd web-client
+trunk serve
 ```

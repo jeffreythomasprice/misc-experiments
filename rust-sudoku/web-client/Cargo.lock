@@ -57,14 +57,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lib"
-version = "0.1.0"
-dependencies = [
- "log",
- "rand",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.155"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -137,10 +129,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sudoku"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "console_log",
+ "getrandom",
+ "log",
+ "rand",
+ "web-sys",
+]
+
+[[package]]
 name = "syn"
-version = "2.0.72"
+version = "2.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc4b9b9bf2add8093d3f2c0204471e951b2285580335de42f9d2534f3ae7a8af"
+checksum = "b146dcf730474b4bcd16c311627b31ede9ab149045db4d6088b3becaea046462"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -212,19 +216,6 @@ name = "wasm-bindgen-shared"
 version = "0.2.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af190c94f2773fdb3729c55b007a722abb5384da03bc0986df4c289bf5567e96"
-
-[[package]]
-name = "web-client"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "console_log",
- "getrandom",
- "lib",
- "log",
- "rand",
- "web-sys",
-]
 
 [[package]]
 name = "web-sys"
