@@ -181,15 +181,84 @@ impl UIState {
                 ui.toggle_pencil_mode();
             }),
         }));
-
-        /*
-        TODO more buttons
-        undo
-        redo
-        delete
-        copy
-        paste
-        */
+        buttons.push(Rc::new(Button {
+            location: ButtonLocation {
+                row: ButtonRow::Bottom,
+                column: 2.try_into()?,
+            },
+            on_draw: Box::new(|location, ui, ds, context, _state| {
+                ds.draw_button(ui, context, &location, "⎀", false)?;
+                Ok(())
+            }),
+            on_click: Box::new(|_location, _ui, _state| {
+                todo!("copy");
+            }),
+        }));
+        buttons.push(Rc::new(Button {
+            location: ButtonLocation {
+                row: ButtonRow::Bottom,
+                column: 3.try_into()?,
+            },
+            on_draw: Box::new(|location, ui, ds, context, _state| {
+                ds.draw_button(ui, context, &location, "📋", false)?;
+                Ok(())
+            }),
+            on_click: Box::new(|_location, _ui, _state| {
+                todo!("paste");
+            }),
+        }));
+        buttons.push(Rc::new(Button {
+            location: ButtonLocation {
+                row: ButtonRow::Bottom,
+                column: 3.try_into()?,
+            },
+            on_draw: Box::new(|location, ui, ds, context, _state| {
+                ds.draw_button(ui, context, &location, "📋", false)?;
+                Ok(())
+            }),
+            on_click: Box::new(|_location, _ui, _state| {
+                todo!("paste");
+            }),
+        }));
+        buttons.push(Rc::new(Button {
+            location: ButtonLocation {
+                row: ButtonRow::Bottom,
+                column: 4.try_into()?,
+            },
+            on_draw: Box::new(|location, ui, ds, context, _state| {
+                ds.draw_button(ui, context, &location, "🗑", false)?;
+                Ok(())
+            }),
+            on_click: Box::new(|_location, _ui, _state| {
+                todo!("delete");
+            }),
+        }));
+        buttons.push(Rc::new(Button {
+            location: ButtonLocation {
+                row: ButtonRow::Bottom,
+                column: 5.try_into()?,
+            },
+            on_draw: Box::new(|location, ui, ds, context, _state| {
+                ds.draw_button(ui, context, &location, "⎌", false)?;
+                Ok(())
+            }),
+            on_click: Box::new(|_location, _ui, _state| {
+                todo!("undo");
+            }),
+        }));
+        buttons.push(Rc::new(Button {
+            location: ButtonLocation {
+                row: ButtonRow::Bottom,
+                column: 6.try_into()?,
+            },
+            on_draw: Box::new(|location, ui, ds, context, _state| {
+                ds.draw_button(ui, context, &location, "⟳", false)?;
+                Ok(())
+            }),
+            on_click: Box::new(|_location, _ui, _state| {
+                todo!("redo");
+            }),
+        }));
 
         Ok(Self {
             destination_bounds,
@@ -251,6 +320,15 @@ impl UIState {
             }
         }
         self.hover_location = None;
+
+        let ds = self.refresh_dependent_state()?;
+        for button in self.buttons.iter() {
+            if ds.button_bounds(&button.location)?.contains(p) {
+                trace!("TODO hover text for button {:?}", button.location);
+                break;
+            }
+        }
+
         Ok(())
     }
 
@@ -264,8 +342,8 @@ impl UIState {
                         return Ok(());
                     }
                 }
-                let ds = self.refresh_dependent_state()?;
 
+                let ds = self.refresh_dependent_state()?;
                 let mut selected_button = None;
                 for button in self.buttons.iter() {
                     if ds.button_bounds(&button.location)?.contains(p) {
@@ -415,12 +493,6 @@ impl UIState {
                         for y_sub in 0..3 {
                             let number = (y_sub * 3 + x_sub + 1).try_into()?;
                             let sub_cell_bounds = self.sub_cell_bounds(p, x_sub, y_sub)?;
-
-                            context.set_stroke_style(&self.grid_line_color.clone().into());
-                            context.set_line_width(1.0);
-                            context.begin_path();
-                            add_rect_to_context(context, &sub_cell_bounds);
-                            context.stroke();
 
                             if value.is_set(number) {
                                 context.set_fill_style(&self.solution_text_color.clone().into());
