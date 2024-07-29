@@ -1,4 +1,5 @@
 mod dom;
+mod fetch;
 mod graphics;
 use std::{
     mem::forget,
@@ -7,15 +8,17 @@ use std::{
 };
 
 use dom::{body, create_canvas, window};
+use fetch::fetch_bytes;
 use graphics::{CanvasRenderingContext2dRenderer, UIState};
 use lib::{
-    graphics::{Rectangle, Renderer, Size},
+    graphics::{Rectangle, Size},
     Number, Result,
 };
 use lib::{GameState, History};
 use log::*;
 use rand::thread_rng;
 use rusttype::Font;
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{
     wasm_bindgen::{closure::Closure, JsCast},
     HtmlCanvasElement, KeyboardEvent, MouseEvent,
@@ -30,14 +33,13 @@ struct AppState {
 }
 
 impl AppState {
-    fn new(canvas: HtmlCanvasElement, renderer: CanvasRenderingContext2dRenderer) -> Result<Self> {
+    fn new(
+        canvas: HtmlCanvasElement,
+        renderer: CanvasRenderingContext2dRenderer,
+        font: Font<'static>,
+    ) -> Result<Self> {
         let mut rng = thread_rng();
         let state = GameState::new_random(&mut rng, 25)?;
-
-        let font = Font::try_from_bytes(include_bytes!(
-            "../assets/Space_Grotesk/static/SpaceGrotesk-Medium.ttf"
-        ))
-        .ok_or(format!("failed to parse font"))?;
 
         Ok(Self {
             canvas,
@@ -173,6 +175,16 @@ fn main() -> Result<()> {
     console_log::init_with_level(Level::Trace).map_err(|e| e.to_string())?;
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
+    spawn_local(async {
+        if let Err(e) = init().await {
+            error!("error initializing: {e:?}");
+        }
+    });
+
+    Ok(())
+}
+
+async fn init() -> Result<()> {
     let canvas = create_canvas()?;
     canvas
         .style()
@@ -198,7 +210,10 @@ fn main() -> Result<()> {
 
     let renderer = CanvasRenderingContext2dRenderer::new_from_canvas(&canvas)?;
 
-    let state = Arc::new(Mutex::new(AppState::new(canvas, renderer)?));
+    let font = Font::try_from_vec(fetch_bytes("SpaceGrotesk-Medium.ttf").await?)
+        .ok_or(format!("failed to parse font"))?;
+
+    let state = Arc::new(Mutex::new(AppState::new(canvas, renderer, font)?));
 
     // resize events
     {
