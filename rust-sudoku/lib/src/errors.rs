@@ -1,4 +1,8 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    str::Utf8Error,
+    time::SystemTimeError,
+};
 
 #[derive(Debug, Clone)]
 pub struct Error(String);
@@ -28,5 +32,11 @@ impl From<String> for Error {
 impl From<&Error> for Error {
     fn from(value: &Error) -> Self {
         value.clone()
+    }
+}
+
+impl From<Utf8Error> for Error {
+    fn from(value: Utf8Error) -> Self {
+        Self(format!("{value:?}"))
     }
 }

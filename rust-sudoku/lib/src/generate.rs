@@ -1,7 +1,11 @@
-use std::mem::swap;
+use std::{
+    mem::swap,
+    time::{Duration, SystemTime},
+};
 
 use super::{AllPointsIterator, Cell, CellStatus, Coordinate, GameState, Point};
 use crate::Result;
+use chrono::{prelude::*, DurationRound, TimeDelta};
 use rand::{seq::SliceRandom, Rng};
 
 #[derive(Clone)]
@@ -99,6 +103,7 @@ impl GameState {
 
         // while we haven't found a valid puzzle yet
         let mut generations = 0;
+        let mut last_log_time = Utc::now();
         loop {
             // that the current population and score them all
             // we'll be doing random selection weighted by score, so each element in the scores is the sum of all the scores before it and
@@ -124,7 +129,6 @@ impl GameState {
                 };
             }
             let (best_score, best) = best.unwrap();
-            log::trace!("generation {}, best score = {}", generations, best_score);
 
             if best_score == 81 {
                 log::trace!("success on generation {}", generations);
@@ -159,7 +163,16 @@ impl GameState {
             swap(&mut new_generation, &mut population);
 
             generations += 1;
-            log::trace!("end of generation {}", generations);
+            let now = Utc::now();
+            let time_since_last_log = now.signed_duration_since(last_log_time);
+            if time_since_last_log > TimeDelta::seconds(1) {
+                log::trace!(
+                    "end of generation {}, best score = {}",
+                    generations,
+                    best_score
+                );
+                last_log_time = now;
+            }
         }
     }
 }

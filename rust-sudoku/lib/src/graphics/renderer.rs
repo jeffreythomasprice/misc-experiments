@@ -1,6 +1,9 @@
 use super::{Point, RGBColor, Rectangle};
+use crate::Result;
 
 pub trait Renderer {
+    type SVG;
+
     fn set_stroke_color(&mut self, c: &RGBColor);
     fn set_line_width(&mut self, x: f64);
     fn set_fill_color(&mut self, c: &RGBColor);
@@ -12,6 +15,9 @@ pub trait Renderer {
     fn close_path(&mut self);
     fn stroke(&mut self);
     fn fill(&mut self);
+
+    fn new_svg(&self, source: &str) -> Result<Self::SVG>;
+    fn draw_svg(&mut self, source: &Self::SVG, destination: &Rectangle) -> Result<()>;
 }
 
 pub fn add_rectangle_path<R>(renderer: &mut R, bounds: &Rectangle)
