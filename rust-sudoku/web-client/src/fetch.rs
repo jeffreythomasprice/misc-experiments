@@ -20,3 +20,9 @@ pub async fn fetch_bytes(url: &str) -> Result<Vec<u8>> {
     let response = Uint8Array::new(&response);
     Ok(response.to_vec())
 }
+
+pub async fn fetch_utf8(url: &str) -> Result<String> {
+    let bytes = fetch_bytes(url).await?;
+    let result = core::str::from_utf8(&bytes)?;
+    Ok(result.to_owned())
+}

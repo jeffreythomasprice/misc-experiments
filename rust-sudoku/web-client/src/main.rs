@@ -1,6 +1,7 @@
 mod dom;
 mod fetch;
 mod graphics;
+use core::str;
 use std::{
     mem::forget,
     panic,
@@ -8,10 +9,10 @@ use std::{
 };
 
 use dom::{body, create_canvas, window};
-use fetch::fetch_bytes;
-use graphics::{CanvasRenderingContext2dRenderer, UIState};
+use fetch::{fetch_bytes, fetch_utf8};
+use graphics::{CanavsRenderingContext2dSVG, CanvasRenderingContext2dRenderer, UIState};
 use lib::{
-    graphics::{Rectangle, Size},
+    graphics::{Rectangle, Renderer, Size},
     Number, Result,
 };
 use lib::{GameState, History};
@@ -21,12 +22,12 @@ use rusttype::Font;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{
     wasm_bindgen::{closure::Closure, JsCast},
-    HtmlCanvasElement, KeyboardEvent, MouseEvent,
+    CanvasRenderingContext2d, HtmlCanvasElement, KeyboardEvent, MouseEvent,
 };
 
 struct AppState {
     canvas: HtmlCanvasElement,
-    renderer: CanvasRenderingContext2dRenderer,
+    renderer: Arc<Mutex<CanvasRenderingContext2dRenderer>>,
 
     state: History<GameState>,
     ui_state: UIState<CanvasRenderingContext2dRenderer>,
@@ -37,21 +38,26 @@ impl AppState {
         canvas: HtmlCanvasElement,
         renderer: CanvasRenderingContext2dRenderer,
         font: Font<'static>,
+        copy_svg: CanavsRenderingContext2dSVG,
     ) -> Result<Self> {
         let mut rng = thread_rng();
         let state = GameState::new_random(&mut rng, 25)?;
 
+        let renderer = Arc::new(Mutex::new(renderer));
+
         Ok(Self {
             canvas,
-            renderer,
+            renderer: renderer.clone(),
 
             state: History::new(state),
             ui_state: UIState::new(
+                renderer.clone(),
                 Rectangle::from_two_points(
                     &lib::graphics::Point { x: 0.0, y: 0.0 },
                     &lib::graphics::Point { x: 0.0, y: 0.0 },
                 ),
                 font,
+                copy_svg,
             )?,
         })
     }
@@ -152,8 +158,7 @@ impl AppState {
     }
 
     fn animate(&mut self, _time: f64) -> Result<()> {
-        self.ui_state
-            .draw_to_context(&mut self.renderer, self.state.current())?;
+        self.ui_state.draw_to_context(self.state.current())?;
 
         Ok(())
     }
@@ -210,10 +215,15 @@ async fn init() -> Result<()> {
 
     let renderer = CanvasRenderingContext2dRenderer::new_from_canvas(&canvas)?;
 
+    // TODO do fetches in parallel
+
     let font = Font::try_from_vec(fetch_bytes("SpaceGrotesk-Medium.ttf").await?)
         .ok_or(format!("failed to parse font"))?;
 
-    let state = Arc::new(Mutex::new(AppState::new(canvas, renderer, font)?));
+    let copy_svg =
+        renderer.new_svg(&fetch_utf8("clipboard-copy-duplicate-paste-2-svgrepo-com.svg").await?)?;
+
+    let state = Arc::new(Mutex::new(AppState::new(canvas, renderer, font, copy_svg)?));
 
     // resize events
     {

@@ -1,4 +1,9 @@
-use std::{borrow::BorrowMut, rc::Rc};
+use std::{
+    borrow::BorrowMut,
+    ops::DerefMut,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
 use log::*;
 use web_sys::CanvasRenderingContext2d;
@@ -46,6 +51,29 @@ struct DependentState {
 }
 
 impl DependentState {
+    fn cell_bounds(&self, p: Point) -> Result<Rectangle> {
+        //TODO cache
+        Ok(Rectangle::from_origin_size(
+            lib::graphics::Point {
+                x: self.puzzle_bounds.origin().x + (p.column.0 as f64) * self.cell_size.width(),
+                y: self.puzzle_bounds.origin().y + (p.row.0 as f64) * self.cell_size.height(),
+            },
+            self.cell_size,
+        ))
+    }
+
+    fn sub_cell_bounds(&self, p: Point, x_sub: i8, y_sub: i8) -> Result<Rectangle> {
+        //TODO cache
+        let cell_bounds = self.cell_bounds(p)?;
+        Ok(Rectangle::from_origin_size(
+            lib::graphics::Point {
+                x: cell_bounds.origin().x + (x_sub as f64) * self.sub_cell_size.width(),
+                y: cell_bounds.origin().y + (y_sub as f64) * self.sub_cell_size.height(),
+            },
+            self.sub_cell_size,
+        ))
+    }
+
     fn button_bounds(&self, location: &ButtonLocation) -> Result<Rectangle> {
         // TODO cache
         let column: i8 = location.column.into();
@@ -61,7 +89,7 @@ impl DependentState {
         ))
     }
 
-    fn draw_button<R>(
+    fn draw_button_str<R>(
         &self,
         ui: &UIState<R>,
         renderer: &mut R,
@@ -72,8 +100,6 @@ impl DependentState {
     where
         R: Renderer,
     {
-        let renderer = &mut *renderer.borrow_mut();
-
         let button_bounds = self.button_bounds(location)?;
 
         let bg_color = if selected {
@@ -98,14 +124,47 @@ impl DependentState {
 
         Ok(())
     }
+
+    fn draw_button_svg<R>(
+        &self,
+        ui: &UIState<R>,
+        renderer: &mut R,
+        location: &ButtonLocation,
+        svg: &R::SVG,
+        selected: bool,
+    ) -> Result<()>
+    where
+        R: Renderer,
+    {
+        // TODO top part of this is shared with the other draw_button
+        let button_bounds = self.button_bounds(location)?;
+
+        let bg_color = if selected {
+            &ui.button_selected_color
+        } else {
+            &ui.button_deselected_color
+        };
+        fill_rectangle(renderer, &button_bounds, bg_color);
+
+        stroke_rectangle(renderer, &button_bounds, &ui.button_border_color, 1.0);
+
+        // TODO what to do if selected = true?
+
+        // TODO keep svg aspect ratio and scale to fit inside button bounds
+        renderer.draw_svg(svg, &button_bounds)?;
+
+        Ok(())
+    }
 }
 
 pub struct UIState<R>
 where
     R: Renderer,
 {
+    renderer: Arc<Mutex<R>>,
     destination_bounds: Rectangle,
     font: rusttype::Font<'static>,
+    copy_svg: R::SVG,
 
     background_color: RGBColor,
     puzzle_color: RGBColor,
@@ -135,7 +194,12 @@ impl<R> UIState<R>
 where
     R: Renderer,
 {
-    pub fn new(destination_bounds: Rectangle, font: rusttype::Font<'static>) -> Result<Self> {
+    pub fn new(
+        renderer: Arc<Mutex<R>>,
+        destination_bounds: Rectangle,
+        font: rusttype::Font<'static>,
+        copy_svg: R::SVG,
+    ) -> Result<Self> {
         let mut buttons = Vec::new();
         for number in Number::all() {
             let row = ButtonRow::Top;
@@ -155,7 +219,7 @@ where
                         },
                         None => false,
                     };
-                    ds.draw_button(
+                    ds.draw_button_str(
                         ui,
                         renderer,
                         &location,
@@ -176,7 +240,8 @@ where
                 column: 1.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button(ui, renderer, &location, "P", ui.is_penciling)?;
+                // TODO pencil svg
+                ds.draw_button_str(ui, renderer, &location, "P", ui.is_penciling)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, ui, _state| {
@@ -188,8 +253,8 @@ where
                 row: ButtonRow::Bottom,
                 column: 2.try_into()?,
             },
-            on_draw: Box::new(|location, ui, ds, context, _state| {
-                ds.draw_button(ui, context, &location, "⎀", false)?;
+            on_draw: Box::new(|location, ui, ds, renderer, _state| {
+                ds.draw_button_svg(ui, renderer, location, &ui.copy_svg, false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -201,21 +266,8 @@ where
                 row: ButtonRow::Bottom,
                 column: 3.try_into()?,
             },
-            on_draw: Box::new(|location, ui, ds, context, _state| {
-                ds.draw_button(ui, context, &location, "📋", false)?;
-                Ok(())
-            }),
-            on_click: Box::new(|_location, _ui, _state| {
-                todo!("paste");
-            }),
-        }));
-        buttons.push(Rc::new(Button {
-            location: ButtonLocation {
-                row: ButtonRow::Bottom,
-                column: 3.try_into()?,
-            },
-            on_draw: Box::new(|location, ui, ds, context, _state| {
-                ds.draw_button(ui, context, &location, "📋", false)?;
+            on_draw: Box::new(|location, ui, ds, renderer, _state| {
+                ds.draw_button_str(ui, renderer, &location, "📋", false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -227,8 +279,8 @@ where
                 row: ButtonRow::Bottom,
                 column: 4.try_into()?,
             },
-            on_draw: Box::new(|location, ui, ds, context, _state| {
-                ds.draw_button(ui, context, &location, "🗑", false)?;
+            on_draw: Box::new(|location, ui, ds, renderer, _state| {
+                ds.draw_button_str(ui, renderer, &location, "🗑", false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -240,8 +292,8 @@ where
                 row: ButtonRow::Bottom,
                 column: 5.try_into()?,
             },
-            on_draw: Box::new(|location, ui, ds, context, _state| {
-                ds.draw_button(ui, context, &location, "⎌", false)?;
+            on_draw: Box::new(|location, ui, ds, renderer, _state| {
+                ds.draw_button_str(ui, renderer, &location, "⎌", false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -253,8 +305,8 @@ where
                 row: ButtonRow::Bottom,
                 column: 6.try_into()?,
             },
-            on_draw: Box::new(|location, ui, ds, context, _state| {
-                ds.draw_button(ui, context, &location, "⟳", false)?;
+            on_draw: Box::new(|location, ui, ds, renderer, _state| {
+                ds.draw_button_str(ui, renderer, &location, "⟳", false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -263,8 +315,10 @@ where
         }));
 
         Ok(Self {
+            renderer,
             destination_bounds,
             font,
+            copy_svg,
 
             background_color: RGBColor {
                 red: 0x22,
@@ -357,15 +411,16 @@ where
     }
 
     pub fn hover(&mut self, p: &lib::graphics::Point) -> Result<()> {
+        let ds = self.refresh_dependent_state()?;
+
         for sp in AllPointsIterator::new() {
-            if self.cell_bounds(sp)?.contains(p) {
+            if ds.cell_bounds(sp)?.contains(p) {
                 self.hover_location = Some(sp);
                 return Ok(());
             }
         }
         self.hover_location = None;
 
-        let ds = self.refresh_dependent_state()?;
         for button in self.buttons.iter() {
             if ds.button_bounds(&button.location)?.contains(p) {
                 trace!("TODO hover text for button {:?}", button.location);
@@ -381,17 +436,18 @@ where
         state: &mut GameState,
         p: Option<&lib::graphics::Point>,
     ) -> Result<()> {
+        let ds = self.refresh_dependent_state()?;
+
         match p {
             Some(p) => {
                 for sp in AllPointsIterator::new() {
-                    if self.cell_bounds(sp)?.contains(p) {
+                    if ds.cell_bounds(sp)?.contains(p) {
                         self.select_location = Some(sp);
                         trace!("selecting puzzle cell {sp:?}");
                         return Ok(());
                     }
                 }
 
-                let ds = self.refresh_dependent_state()?;
                 let mut selected_button = None;
                 for button in self.buttons.iter() {
                     if ds.button_bounds(&button.location)?.contains(p) {
@@ -470,8 +526,11 @@ where
         }
     }
 
-    pub fn draw_to_context(&mut self, renderer: &mut R, state: &GameState) -> Result<()> {
+    pub fn draw_to_context(&mut self, state: &GameState) -> Result<()> {
         let ds = self.refresh_dependent_state()?;
+
+        let renderer = &mut self.renderer.lock().unwrap();
+        let renderer = renderer.deref_mut();
 
         fill_rectangle(renderer, &self.destination_bounds, &self.background_color);
 
@@ -480,7 +539,7 @@ where
         fill_rectangle(renderer, &ds.buttons_bounds, &self.buttons_background_color);
 
         for p in AllPointsIterator::new() {
-            let cell_bounds = self.cell_bounds(p)?;
+            let cell_bounds = ds.cell_bounds(p)?;
 
             if self.select_location == Some(p) {
                 fill_rectangle(renderer, &cell_bounds, &self.select_color);
@@ -522,7 +581,7 @@ where
                     for x_sub in 0..3 {
                         for y_sub in 0..3 {
                             let number = (y_sub * 3 + x_sub + 1).try_into()?;
-                            let sub_cell_bounds = self.sub_cell_bounds(p, x_sub, y_sub)?;
+                            let sub_cell_bounds = ds.sub_cell_bounds(p, x_sub, y_sub)?;
 
                             if value.is_set(number) {
                                 renderer.set_fill_color(&self.solution_text_color);
@@ -583,6 +642,9 @@ where
     }
 
     fn refresh_dependent_state(&mut self) -> Result<Rc<DependentState>> {
+        let renderer = &mut self.renderer.lock().unwrap();
+        let renderer = renderer.deref_mut();
+
         self.dependent_state
             .get_or_insert_with(|| {
                 // number of effective cells
@@ -674,31 +736,6 @@ where
             .clone()
     }
 
-    fn cell_bounds(&mut self, p: Point) -> Result<Rectangle> {
-        //TODO cache
-        let ds = self.refresh_dependent_state()?;
-        Ok(Rectangle::from_origin_size(
-            lib::graphics::Point {
-                x: ds.puzzle_bounds.origin().x + (p.column.0 as f64) * ds.cell_size.width(),
-                y: ds.puzzle_bounds.origin().y + (p.row.0 as f64) * ds.cell_size.height(),
-            },
-            ds.cell_size,
-        ))
-    }
-
-    fn sub_cell_bounds(&mut self, p: Point, x_sub: i8, y_sub: i8) -> Result<Rectangle> {
-        //TODO cache
-        let cell_bounds = self.cell_bounds(p)?;
-        let ds = self.refresh_dependent_state()?;
-        Ok(Rectangle::from_origin_size(
-            lib::graphics::Point {
-                x: cell_bounds.origin().x + (x_sub as f64) * ds.sub_cell_size.width(),
-                y: cell_bounds.origin().y + (y_sub as f64) * ds.sub_cell_size.height(),
-            },
-            ds.sub_cell_size,
-        ))
-    }
-
     fn set_selected_cell_value<F>(&self, state: &mut GameState, f: F)
     where
         F: FnOnce(&Cell) -> Cell,
@@ -727,13 +764,4 @@ where
             trace!("no selected cell, can't assign new value");
         }
     }
-}
-
-fn add_rect_to_context(context: &CanvasRenderingContext2d, r: &Rectangle) {
-    context.rect(
-        r.origin().x,
-        r.origin().y,
-        r.size().width(),
-        r.size().height(),
-    );
 }
