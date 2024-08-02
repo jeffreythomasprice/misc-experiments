@@ -150,7 +150,6 @@ impl DependentState {
 
         // TODO what to do if selected = true?
 
-        // TODO keep svg aspect ratio and scale to fit inside button bounds
         renderer.draw_svg(svg, &button_bounds)?;
 
         Ok(())

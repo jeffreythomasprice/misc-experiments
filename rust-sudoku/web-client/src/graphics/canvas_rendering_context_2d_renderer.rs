@@ -1,58 +1,16 @@
+use base64::prelude::BASE64_STANDARD;
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use lib::graphics::{Rectangle, Renderer, Size};
 use lib::Result;
 use web_sys::wasm_bindgen::{Clamped, JsCast};
 use web_sys::{
-    CanvasRenderingContext2d, HtmlCanvasElement, ImageData, OffscreenCanvas,
-    OffscreenCanvasRenderingContext2d,
+    CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageData, OffscreenCanvas,
+    OffscreenCanvasRenderingContext2d, SvgImageElement,
 };
 
 pub struct CanavsRenderingContext2dSVG {
-    tree: usvg::Tree,
-}
-
-impl CanavsRenderingContext2dSVG {
-    pub fn render_to_offscreen_canvas(&self, desired_size: &Size) -> Result<OffscreenCanvas> {
-        let size = self.tree.size();
-
-        let scale = (desired_size.width() / (size.width() as f64))
-            .min(desired_size.height() / (size.height() as f64));
-
-        let desired_pixmap_size = tiny_skia::IntSize::from_wh(
-            desired_size.width().ceil() as u32,
-            desired_size.height().ceil() as u32,
-        )
-        .ok_or("failed to get desired size out of input bounding rectangle")?;
-
-        let mut pixmap =
-            tiny_skia::Pixmap::new(desired_pixmap_size.width(), desired_pixmap_size.height())
-                .ok_or("failed to create temporary pixmap")?;
-        resvg::render(
-            &self.tree,
-            tiny_skia::Transform::from_scale(scale as f32, scale as f32),
-            &mut pixmap.as_mut(),
-        );
-
-        let image_data = ImageData::new_with_u8_clamped_array(
-            Clamped(pixmap.data()),
-            desired_pixmap_size.width(),
-        )
-        .map_err(|e| format!("failed to create image data from svg pixmap: {e:?}"))?;
-
-        let offscreen_canvas =
-            OffscreenCanvas::new(desired_pixmap_size.width(), desired_pixmap_size.height())
-                .map_err(|e| format!("failed to create offscreen canvas for image data: {e:?}"))?;
-        let offscreen_context = offscreen_canvas
-            .get_context("2d")
-            .map_err(|e| format!("failed to get context for offscreen canvas: {e:?}"))?
-            .ok_or("no value for offscreen canvas context")?
-            .dyn_into::<OffscreenCanvasRenderingContext2d>()
-            .map_err(|_| "created an offscreen context element, but it wasn't the expected type")?;
-        offscreen_context
-            .put_image_data(&image_data, 0.0, 0.0)
-            .map_err(|e| format!("error putting image data to offscreen context: {e:?}"))?;
-
-        Ok(offscreen_canvas)
-    }
+    image: HtmlImageElement,
+    default_size: Size,
 }
 
 pub struct CanvasRenderingContext2dRenderer {
@@ -127,18 +85,43 @@ impl Renderer for CanvasRenderingContext2dRenderer {
     }
 
     fn new_svg(&self, source: &str) -> Result<Self::SVG> {
+        let image = HtmlImageElement::new()
+            .map_err(|e| format!("failed to make html image element: {e:?}"))?;
+        image.set_src(&format!(
+            "data:image/svg+xml;base64,{}",
+            BASE64_STANDARD.encode(source)
+        ));
+
         let tree = usvg::Tree::from_str(source, &usvg::Options::default())
             .map_err(|e| format!("failed to parse svg: {e:?}"))?;
-        Ok(Self::SVG { tree })
+        let size = tree.size();
+
+        Ok(Self::SVG {
+            image,
+            default_size: Size::new(size.width() as f64, size.height() as f64)?,
+        })
     }
 
     fn draw_svg(&mut self, source: &Self::SVG, destination: &Rectangle) -> Result<()> {
-        // TODO cache a bunch of different sizes and scale the best one to the destination
-        let temp = source.render_to_offscreen_canvas(destination.size())?;
-        // TODO put at the right location
+        // find the largest rectangle that fits in the given destination bounds with the same aspect ratio as this svg
+        let scale = (destination.size().width() / source.default_size.width())
+            .min(destination.size().height() / source.default_size.height());
+        let size = Size::new(
+            source.default_size.width() * scale,
+            source.default_size.height() * scale,
+        )?;
+        let bounds = Rectangle::from_centered_size(destination, size);
+
+        // actually draw
         self.context
-            .draw_image_with_offscreen_canvas(&temp, 0.0, 0.0)
-            .map_err(|e| format!("failed to draw offscreen canvas for svg: {e:?}"))?;
+            .draw_image_with_html_image_element_and_dw_and_dh(
+                &source.image,
+                bounds.origin().x,
+                bounds.origin().y,
+                bounds.size().width(),
+                bounds.size().height(),
+            )
+            .map_err(|e| format!("failed to draw svg image: {e:?}"))?;
         Ok(())
     }
 }
