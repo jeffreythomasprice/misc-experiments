@@ -22,6 +22,12 @@ pub struct GameState {
     data: [[Cell; 9]; 9],
 }
 
+impl Default for GameState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GameState {
     pub fn new() -> Self {
         Self {

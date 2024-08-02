@@ -191,5 +191,5 @@ fn measure_text(font: &rusttype::Font, scale: rusttype::Scale, s: &str) -> Resul
             };
         }
     }
-    Ok(result.ok_or(format!("empty bounding rectangle"))?)
+    Ok(result.ok_or("empty bounding rectangle".to_string())?)
 }

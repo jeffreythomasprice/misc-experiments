@@ -1,11 +1,10 @@
 use base64::prelude::BASE64_STANDARD;
-use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+use base64::Engine as _;
 use lib::graphics::{Rectangle, Renderer, Size};
 use lib::Result;
-use web_sys::wasm_bindgen::{Clamped, JsCast};
+use web_sys::wasm_bindgen::JsCast;
 use web_sys::{
-    CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageData, OffscreenCanvas,
-    OffscreenCanvasRenderingContext2d, SvgImageElement,
+    CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement,
 };
 
 pub struct CanavsRenderingContext2dSVG {

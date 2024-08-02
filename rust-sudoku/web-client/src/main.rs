@@ -1,7 +1,6 @@
 mod dom;
 mod fetch;
 mod graphics;
-use core::str;
 use std::{
     mem::forget,
     panic,
@@ -21,8 +20,7 @@ use rand::thread_rng;
 use rusttype::Font;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{
-    wasm_bindgen::{closure::Closure, JsCast},
-    CanvasRenderingContext2d, HtmlCanvasElement, KeyboardEvent, MouseEvent,
+    wasm_bindgen::{closure::Closure, JsCast}, HtmlCanvasElement, KeyboardEvent, MouseEvent,
 };
 
 struct AppState {
@@ -218,7 +216,7 @@ async fn init() -> Result<()> {
     // TODO do fetches in parallel
 
     let font = Font::try_from_vec(fetch_bytes("SpaceGrotesk-Medium.ttf").await?)
-        .ok_or(format!("failed to parse font"))?;
+        .ok_or("failed to parse font".to_string())?;
 
     let copy_svg =
         renderer.new_svg(&fetch_utf8("clipboard-copy-duplicate-paste-2-svgrepo-com.svg").await?)?;

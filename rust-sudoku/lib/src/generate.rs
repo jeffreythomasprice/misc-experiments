@@ -1,11 +1,8 @@
-use std::{
-    mem::swap,
-    time::{Duration, SystemTime},
-};
+use std::mem::swap;
 
 use super::{AllPointsIterator, Cell, CellStatus, Coordinate, GameState, Point};
 use crate::Result;
-use chrono::{prelude::*, DurationRound, TimeDelta};
+use chrono::{prelude::*, TimeDelta};
 use rand::{seq::SliceRandom, Rng};
 
 #[derive(Clone)]

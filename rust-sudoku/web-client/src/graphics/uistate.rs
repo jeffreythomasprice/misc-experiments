@@ -1,12 +1,10 @@
 use std::{
-    borrow::BorrowMut,
     ops::DerefMut,
     rc::Rc,
     sync::{Arc, Mutex},
 };
 
 use log::*;
-use web_sys::CanvasRenderingContext2d;
 
 use lib::{
     graphics::{
@@ -221,7 +219,7 @@ where
                     ds.draw_button_str(
                         ui,
                         renderer,
-                        &location,
+                        location,
                         format!("{}", number).as_str(),
                         is_number_selected,
                     )?;
@@ -240,7 +238,7 @@ where
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
                 // TODO pencil svg
-                ds.draw_button_str(ui, renderer, &location, "P", ui.is_penciling)?;
+                ds.draw_button_str(ui, renderer, location, "P", ui.is_penciling)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, ui, _state| {
@@ -266,7 +264,7 @@ where
                 column: 3.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button_str(ui, renderer, &location, "📋", false)?;
+                ds.draw_button_str(ui, renderer, location, "📋", false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -279,7 +277,7 @@ where
                 column: 4.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button_str(ui, renderer, &location, "🗑", false)?;
+                ds.draw_button_str(ui, renderer, location, "🗑", false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -292,7 +290,7 @@ where
                 column: 5.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button_str(ui, renderer, &location, "⎌", false)?;
+                ds.draw_button_str(ui, renderer, location, "⎌", false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -305,7 +303,7 @@ where
                 column: 6.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button_str(ui, renderer, &location, "⟳", false)?;
+                ds.draw_button_str(ui, renderer, location, "⟳", false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -608,11 +606,11 @@ where
             stroke_line(
                 renderer,
                 &lib::graphics::Point {
-                    x: x,
+                    x,
                     y: ds.puzzle_bounds.min().y,
                 },
                 &lib::graphics::Point {
-                    x: x,
+                    x,
                     y: ds.puzzle_bounds.max().y,
                 },
                 c,
@@ -622,11 +620,11 @@ where
                 renderer,
                 &lib::graphics::Point {
                     x: ds.puzzle_bounds.min().x,
-                    y: y,
+                    y,
                 },
                 &lib::graphics::Point {
                     x: ds.puzzle_bounds.max().x,
-                    y: y,
+                    y,
                 },
                 c,
                 width,

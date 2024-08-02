@@ -309,6 +309,12 @@ pub struct AllPointsIterator {
     cur: Option<Point>,
 }
 
+impl Default for AllPointsIterator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AllPointsIterator {
     pub fn new() -> Self {
         Self {
