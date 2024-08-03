@@ -46,6 +46,7 @@ impl AppState {
         trash_svg: CanavsRenderingContext2dSVG,
         undo_svg: CanavsRenderingContext2dSVG,
         redo_svg: CanavsRenderingContext2dSVG,
+        pencil_svg: CanavsRenderingContext2dSVG,
     ) -> Result<Self> {
         let mut rng = thread_rng();
         let state = GameState::new_random(&mut rng, 25)?;
@@ -69,6 +70,7 @@ impl AppState {
                 trash_svg,
                 undo_svg,
                 redo_svg,
+                pencil_svg,
             )?,
         })
     }
@@ -108,15 +110,13 @@ impl AppState {
     }
 
     fn mouseup(&mut self, e: MouseEvent) -> Result<()> {
-        self.apply_state_change(|app, state| {
-            app.ui_state.select(
-                state,
-                Some(&lib::graphics::Point {
-                    x: e.client_x() as f64,
-                    y: e.client_y() as f64,
-                }),
-            )
-        })
+        self.ui_state.select(
+            &mut self.state,
+            Some(&lib::graphics::Point {
+                x: e.client_x() as f64,
+                y: e.client_y() as f64,
+            }),
+        )
     }
 
     fn keyup(&mut self, e: KeyboardEvent) -> Result<()> {
@@ -131,38 +131,22 @@ impl AppState {
             ("Digit7", false) | ("Numpad7", false) => number = Some(7.try_into()?),
             ("Digit8", false) | ("Numpad8", false) => number = Some(8.try_into()?),
             ("Digit9", false) | ("Numpad9", false) => number = Some(9.try_into()?),
-            ("Escape", false) => {
-                self.apply_state_change(|app, state| app.ui_state.select(state, None))?
-            }
+            ("Escape", false) => self.ui_state.select(&mut self.state, None)?,
             ("KeyP", false) => self.ui_state.toggle_pencil_mode(),
-            ("Backspace", false) | ("Delete", false) => {
-                self.apply_state_change(|app, state| {
-                    app.ui_state.clear(state);
-                    Ok(())
-                })?;
-            }
+            ("Backspace", false) | ("Delete", false) => self.ui_state.clear(&mut self.state),
             ("ArrowLeft", false) => self.ui_state.move_select(0, -1)?,
             ("ArrowRight", false) => self.ui_state.move_select(0, 1)?,
             ("ArrowUp", false) => self.ui_state.move_select(-1, 0)?,
             ("ArrowDown", false) => self.ui_state.move_select(1, 0)?,
             ("KeyZ", true) => self.state.undo(),
             ("KeyY", true) => self.state.redo(),
-            ("KeyC", true) => self.apply_state_change(|app, state| {
-                app.ui_state.copy(state);
-                Ok(())
-            })?,
-            ("KeyV", true) => self.apply_state_change(|app, state| {
-                app.ui_state.paste(state);
-                Ok(())
-            })?,
+            ("KeyC", true) => self.ui_state.copy(self.state.current()),
+            ("KeyV", true) => self.ui_state.paste(&mut self.state),
             _ => (),
         };
 
         if let Some(number) = number {
-            self.apply_state_change(|app, state| {
-                app.ui_state.number(state, number);
-                Ok(())
-            })?;
+            self.ui_state.number(&mut self.state, number)
         }
 
         Ok(())
@@ -171,18 +155,6 @@ impl AppState {
     fn animate(&mut self, _time: f64) -> Result<()> {
         self.ui_state.draw_to_context(self.state.current())?;
 
-        Ok(())
-    }
-
-    fn apply_state_change<F>(&mut self, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut AppState, &mut GameState) -> Result<()>,
-    {
-        let mut state = self.state.current().clone();
-        f(self, &mut state)?;
-        if state != *self.state.current() {
-            self.state.push(state);
-        }
         Ok(())
     }
 }
@@ -226,13 +198,14 @@ async fn init() -> Result<()> {
 
     let renderer = Mutex::new(CanvasRenderingContext2dRenderer::new_from_canvas(&canvas)?);
 
-    let (font, copy_svg, paste_svg, trash_svg, undo_svg, redo_svg) = join!(
+    let (font, copy_svg, paste_svg, trash_svg, undo_svg, redo_svg, pencil_svg) = join!(
         load_font_url("SpaceGrotesk-Medium.ttf"),
         load_svg_url(&renderer, "copy-svgrepo-com.svg"),
         load_svg_url(&renderer, "paste-svgrepo-com.svg"),
         load_svg_url(&renderer, "trash-blank-alt-svgrepo-com.svg"),
         load_svg_url(&renderer, "undo-svgrepo-com.svg"),
         load_svg_url(&renderer, "redo-svgrepo-com.svg"),
+        load_svg_url(&renderer, "pencil-svgrepo-com.svg"),
     )
     .await;
 
@@ -245,6 +218,7 @@ async fn init() -> Result<()> {
         trash_svg?,
         undo_svg?,
         redo_svg?,
+        pencil_svg?,
     )?));
 
     // resize events

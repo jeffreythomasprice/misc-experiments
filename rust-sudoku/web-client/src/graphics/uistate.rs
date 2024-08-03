@@ -11,8 +11,8 @@ use lib::{
         fill_rectangle, fill_string, fit_strings_to_size, stroke_line, stroke_rectangle,
         HorizontalStringAlign, RGBColor, Rectangle, Renderer, Size, VerticalStringAlign,
     },
-    AllPointsIterator, Cell, CellStatus, Coordinate, GameState, NeighborIterator, Number, Point,
-    Result,
+    AllPointsIterator, Cell, CellStatus, Coordinate, GameState, History, NeighborIterator, Number,
+    Point, Result,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,7 +35,7 @@ where
     on_draw: Box<
         dyn Fn(&ButtonLocation, &UIState<R>, &DependentState, &mut R, &GameState) -> Result<()>,
     >,
-    on_click: Box<dyn Fn(&ButtonLocation, &mut UIState<R>, &mut GameState)>,
+    on_click: Box<dyn Fn(&ButtonLocation, &mut UIState<R>, &mut History<GameState>)>,
 }
 
 struct DependentState {
@@ -98,17 +98,7 @@ impl DependentState {
     where
         R: Renderer,
     {
-        let button_bounds = self.button_bounds(location)?;
-
-        let bg_color = if selected {
-            &ui.button_selected_color
-        } else {
-            &ui.button_deselected_color
-        };
-        fill_rectangle(renderer, &button_bounds, bg_color);
-
-        stroke_rectangle(renderer, &button_bounds, &ui.button_border_color, 1.0);
-
+        let button_bounds = self.draw_button_common(ui, renderer, location, selected)?;
         renderer.set_fill_color(&ui.button_text_color);
         fill_string(
             renderer,
@@ -119,7 +109,6 @@ impl DependentState {
             HorizontalStringAlign::Center,
             VerticalStringAlign::Center,
         )?;
-
         Ok(())
     }
 
@@ -134,7 +123,21 @@ impl DependentState {
     where
         R: Renderer,
     {
-        // TODO top part of this is shared with the other draw_button
+        let button_bounds = self.draw_button_common(ui, renderer, location, selected)?;
+        renderer.draw_svg(svg, &button_bounds)?;
+        Ok(())
+    }
+
+    fn draw_button_common<R>(
+        &self,
+        ui: &UIState<R>,
+        renderer: &mut R,
+        location: &ButtonLocation,
+        selected: bool,
+    ) -> Result<Rectangle>
+    where
+        R: Renderer,
+    {
         let button_bounds = self.button_bounds(location)?;
 
         let bg_color = if selected {
@@ -146,11 +149,7 @@ impl DependentState {
 
         stroke_rectangle(renderer, &button_bounds, &ui.button_border_color, 1.0);
 
-        // TODO what to do if selected = true?
-
-        renderer.draw_svg(svg, &button_bounds)?;
-
-        Ok(())
+        Ok(button_bounds)
     }
 }
 
@@ -166,6 +165,7 @@ where
     trash_svg: R::SVG,
     undo_svg: R::SVG,
     redo_svg: R::SVG,
+    pencil_svg: R::SVG,
 
     background_color: RGBColor,
     puzzle_color: RGBColor,
@@ -204,6 +204,7 @@ where
         trash_svg: R::SVG,
         undo_svg: R::SVG,
         redo_svg: R::SVG,
+        pencil_svg: R::SVG,
     ) -> Result<Self> {
         let mut buttons = Vec::new();
         for number in Number::all() {
@@ -235,7 +236,7 @@ where
                 }),
                 on_click: Box::new(|location, ui, state| {
                     let number = location.column;
-                    ui.number(state, number)
+                    ui.number(state, number);
                 }),
             }));
         }
@@ -245,8 +246,7 @@ where
                 column: 1.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                // TODO pencil svg
-                ds.draw_button_str(ui, renderer, location, "P", ui.is_penciling)?;
+                ds.draw_button_svg(ui, renderer, location, &ui.pencil_svg, ui.is_penciling)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, ui, _state| {
@@ -262,9 +262,7 @@ where
                 ds.draw_button_svg(ui, renderer, location, &ui.copy_svg, false)?;
                 Ok(())
             }),
-            on_click: Box::new(|_location, _ui, _state| {
-                todo!("copy");
-            }),
+            on_click: Box::new(|_location, ui, state| ui.copy(state.current())),
         }));
         buttons.push(Rc::new(Button {
             location: ButtonLocation {
@@ -275,9 +273,7 @@ where
                 ds.draw_button_svg(ui, renderer, location, &ui.paste_svg, false)?;
                 Ok(())
             }),
-            on_click: Box::new(|_location, _ui, _state| {
-                todo!("paste");
-            }),
+            on_click: Box::new(|_location, ui, state| ui.paste(state)),
         }));
         buttons.push(Rc::new(Button {
             location: ButtonLocation {
@@ -288,9 +284,7 @@ where
                 ds.draw_button_svg(ui, renderer, location, &ui.trash_svg, false)?;
                 Ok(())
             }),
-            on_click: Box::new(|_location, _ui, _state| {
-                todo!("delete");
-            }),
+            on_click: Box::new(|_location, ui, state| ui.clear(state)),
         }));
         buttons.push(Rc::new(Button {
             location: ButtonLocation {
@@ -301,9 +295,7 @@ where
                 ds.draw_button_svg(ui, renderer, location, &ui.undo_svg, false)?;
                 Ok(())
             }),
-            on_click: Box::new(|_location, _ui, _state| {
-                todo!("undo");
-            }),
+            on_click: Box::new(|_location, _ui, state| state.undo()),
         }));
         buttons.push(Rc::new(Button {
             location: ButtonLocation {
@@ -314,9 +306,7 @@ where
                 ds.draw_button_svg(ui, renderer, location, &ui.redo_svg, false)?;
                 Ok(())
             }),
-            on_click: Box::new(|_location, _ui, _state| {
-                todo!("redo");
-            }),
+            on_click: Box::new(|_location, _ui, state| state.redo()),
         }));
 
         Ok(Self {
@@ -328,7 +318,7 @@ where
             trash_svg,
             undo_svg,
             redo_svg,
-
+            pencil_svg,
             background_color: RGBColor {
                 red: 0x22,
                 green: 0x22,
@@ -442,7 +432,7 @@ where
 
     pub fn select(
         &mut self,
-        state: &mut GameState,
+        state: &mut History<GameState>,
         p: Option<&lib::graphics::Point>,
     ) -> Result<()> {
         let ds = self.refresh_dependent_state()?;
@@ -505,14 +495,14 @@ where
         Ok(())
     }
 
-    pub fn number(&self, state: &mut GameState, number: Number) {
+    pub fn number(&self, state: &mut History<GameState>, number: Number) {
         let is_penciling = self.is_penciling;
         self.set_selected_cell_value(state, |existing| {
             Cell::from_input(*existing, number, is_penciling)
         });
     }
 
-    pub fn clear(&mut self, state: &mut GameState) {
+    pub fn clear(&mut self, state: &mut History<GameState>) {
         self.set_selected_cell_value(state, |_| Cell::Empty);
     }
 
@@ -529,7 +519,7 @@ where
         trace!("clipboard = {:?}", self.clipboard);
     }
 
-    pub fn paste(&mut self, state: &mut GameState) {
+    pub fn paste(&mut self, state: &mut History<GameState>) {
         if let Some(clipboard) = self.clipboard {
             self.set_selected_cell_value(state, |_| clipboard);
         }
@@ -745,12 +735,13 @@ where
             .clone()
     }
 
-    fn set_selected_cell_value<F>(&self, state: &mut GameState, f: F)
+    fn set_selected_cell_value<F>(&self, state: &mut History<GameState>, f: F)
     where
         F: FnOnce(&Cell) -> Cell,
     {
         if let Some(p) = self.select_location {
-            let p_value = state[p];
+            let mut next = state.current().clone();
+            let p_value = next[p];
             match p_value {
                 Cell::PuzzleInput(_) => {
                     trace!("not assigning value because selected cell is puzzle input");
@@ -761,14 +752,15 @@ where
                     if let Cell::Solution(number) = new {
                         trace!("removing {number} from neighboring pencil marks");
                         for q in NeighborIterator::new(p) {
-                            if let Cell::PencilMark(mask) = state[q] {
-                                state[q] = Cell::PencilMark(mask.clear(number));
+                            if let Cell::PencilMark(mask) = next[q] {
+                                next[q] = Cell::PencilMark(mask.clear(number));
                             }
                         }
                     }
-                    state[p] = new;
+                    next[p] = new;
                 }
             };
+            state.push(next);
         } else {
             trace!("no selected cell, can't assign new value");
         }
