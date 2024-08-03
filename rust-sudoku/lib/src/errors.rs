@@ -12,8 +12,6 @@ impl Display for Error {
     }
 }
 
-impl core::error::Error for Error {}
-
 pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 impl From<&str> for Error {

@@ -1,10 +1,7 @@
-#![feature(future_join)]
-
 mod dom;
 mod fetch;
 mod graphics;
 use std::{
-    future::join,
     mem::forget,
     panic,
     sync::{Arc, Mutex},
@@ -30,7 +27,6 @@ use web_sys::{
 
 struct AppState {
     canvas: HtmlCanvasElement,
-    renderer: Arc<Mutex<CanvasRenderingContext2dRenderer>>,
 
     state: History<GameState>,
     ui_state: UIState<CanvasRenderingContext2dRenderer>,
@@ -55,7 +51,6 @@ impl AppState {
 
         Ok(Self {
             canvas,
-            renderer: renderer.clone(),
 
             state: History::new(state),
             ui_state: UIState::new(
@@ -198,27 +193,32 @@ async fn init() -> Result<()> {
 
     let renderer = Mutex::new(CanvasRenderingContext2dRenderer::new_from_canvas(&canvas)?);
 
-    let (font, copy_svg, paste_svg, trash_svg, undo_svg, redo_svg, pencil_svg) = join!(
-        load_font_url("SpaceGrotesk-Medium.ttf"),
-        load_svg_url(&renderer, "copy-svgrepo-com.svg"),
-        load_svg_url(&renderer, "paste-svgrepo-com.svg"),
-        load_svg_url(&renderer, "trash-blank-alt-svgrepo-com.svg"),
-        load_svg_url(&renderer, "undo-svgrepo-com.svg"),
-        load_svg_url(&renderer, "redo-svgrepo-com.svg"),
-        load_svg_url(&renderer, "pencil-svgrepo-com.svg"),
-    )
-    .await;
+    let font = load_font_url("SpaceGrotesk-Medium.ttf");
+    let copy_svg = load_svg_url(&renderer, "copy-svgrepo-com.svg");
+    let paste_svg = load_svg_url(&renderer, "paste-svgrepo-com.svg");
+    let trash_svg = load_svg_url(&renderer, "trash-blank-alt-svgrepo-com.svg");
+    let undo_svg = load_svg_url(&renderer, "undo-svgrepo-com.svg");
+    let redo_svg = load_svg_url(&renderer, "redo-svgrepo-com.svg");
+    let pencil_svg = load_svg_url(&renderer, "pencil-svgrepo-com.svg");
+
+    let font = font.await?;
+    let copy_svg = copy_svg.await?;
+    let paste_svg = paste_svg.await?;
+    let trash_svg = trash_svg.await?;
+    let undo_svg = undo_svg.await?;
+    let redo_svg = redo_svg.await?;
+    let pencil_svg = pencil_svg.await?;
 
     let state = Arc::new(Mutex::new(AppState::new(
         canvas,
         renderer.into_inner().unwrap(),
-        font?,
-        copy_svg?,
-        paste_svg?,
-        trash_svg?,
-        undo_svg?,
-        redo_svg?,
-        pencil_svg?,
+        font,
+        copy_svg,
+        paste_svg,
+        trash_svg,
+        undo_svg,
+        redo_svg,
+        pencil_svg,
     )?));
 
     // resize events

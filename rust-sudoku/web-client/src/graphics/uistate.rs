@@ -641,9 +641,6 @@ where
     }
 
     fn refresh_dependent_state(&mut self) -> Result<Rc<DependentState>> {
-        let renderer = &mut self.renderer.lock().unwrap();
-        let renderer = renderer.deref_mut();
-
         self.dependent_state
             .get_or_insert_with(|| {
                 // number of effective cells
