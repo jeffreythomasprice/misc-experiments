@@ -5,6 +5,7 @@ use pixels::{Pixels, SurfaceTexture};
 use std::env;
 use winit::{
     application::ApplicationHandler,
+    dpi::LogicalSize,
     event::{ElementState, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{Key, NamedKey},
@@ -14,6 +15,7 @@ use winit::{
 struct AppWindow {
     window: Window,
     pixels: Pixels,
+    buffer_size: LogicalSize<u32>,
 }
 
 struct App {
@@ -29,8 +31,14 @@ impl ApplicationHandler for App {
         let width = window.inner_size().width;
         let height = window.inner_size().height;
         let surface_texture = SurfaceTexture::new(width, height, &window);
-        let pixels = Pixels::new(width, height, surface_texture).expect("failed to create pixels");
-        self.window = Some(AppWindow { window, pixels });
+        let buffer_size = LogicalSize::new(640, 480);
+        let pixels = Pixels::new(buffer_size.width, buffer_size.height, surface_texture)
+            .expect("failed to create pixels");
+        self.window = Some(AppWindow {
+            window,
+            pixels,
+            buffer_size,
+        });
     }
 
     fn window_event(
@@ -43,11 +51,7 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 if let Some(window) = self.window.as_mut() {
                     window.window.pre_present_notify();
-                    draw(
-                        window.window.inner_size().width,
-                        window.window.inner_size().height,
-                        window.pixels.frame_mut(),
-                    );
+                    draw(window.buffer_size, window.pixels.frame_mut());
                     if let Err(e) = window.pixels.render() {
                         error!("pixels render error: {e:?}");
                         self.close_requested = true;
@@ -57,11 +61,6 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => {
                 if let Some(window) = self.window.as_mut() {
                     if let Err(e) = window.pixels.resize_surface(size.width, size.height) {
-                        error!("pixels resize error: {e:?}");
-                        self.close_requested = true;
-                    }
-                    // TODO should be able to use a fixed size buffer and let it do the scaling to fit the window
-                    if let Err(e) = window.pixels.resize_buffer(size.width, size.height) {
                         error!("pixels resize error: {e:?}");
                         self.close_requested = true;
                     }
@@ -118,13 +117,13 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn draw(width: u32, height: u32, pixels: &mut [u8]) {
+fn draw(size: LogicalSize<u32>, pixels: &mut [u8]) {
     for (i, pixel) in pixels.chunks_exact_mut(4).enumerate() {
-        let x = i % (width as usize);
-        let y = i / (width as usize);
+        let x = i % (size.width as usize);
+        let y = i / (size.width as usize);
 
-        let a = ((x as f64) / (width as f64) * 255.0) as u8;
-        let b = ((y as f64) / (height as f64) * 255.0) as u8;
+        let a = ((x as f64) / (size.width as f64) * 255.0) as u8;
+        let b = ((y as f64) / (size.height as f64) * 255.0) as u8;
 
         pixel.copy_from_slice(&[a, b, 255 - a, 0xff]);
     }
