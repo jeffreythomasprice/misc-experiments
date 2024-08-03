@@ -1,3 +1,7 @@
 https://fonts.google.com/specimen/Space+Grotesk
 
-https://www.svgrepo.com/download/404561/clipboard-copy-duplicate-paste-2.svg
+https://www.svgrepo.com/svg/500354/copy
+https://www.svgrepo.com/svg/510466/paste
+https://www.svgrepo.com/svg/533017/trash-blank-alt
+https://www.svgrepo.com/svg/511181/undo
+https://www.svgrepo.com/svg/511110/redo

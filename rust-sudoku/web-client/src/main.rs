@@ -1,14 +1,18 @@
+#![feature(future_join)]
+
 mod dom;
 mod fetch;
 mod graphics;
 use std::{
+    future::join,
     mem::forget,
     panic,
     sync::{Arc, Mutex},
 };
 
+use chrono::{prelude::*, TimeDelta};
 use dom::{body, create_canvas, window};
-use fetch::{fetch_bytes, fetch_utf8};
+use fetch::{load_font_url, load_svg_url};
 use graphics::{CanavsRenderingContext2dSVG, CanvasRenderingContext2dRenderer, UIState};
 use lib::{
     graphics::{Rectangle, Renderer, Size},
@@ -18,9 +22,11 @@ use lib::{GameState, History};
 use log::*;
 use rand::thread_rng;
 use rusttype::Font;
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
-    wasm_bindgen::{closure::Closure, JsCast}, HtmlCanvasElement, KeyboardEvent, MouseEvent,
+    js_sys,
+    wasm_bindgen::{closure::Closure, JsCast},
+    HtmlCanvasElement, KeyboardEvent, MouseEvent,
 };
 
 struct AppState {
@@ -37,6 +43,10 @@ impl AppState {
         renderer: CanvasRenderingContext2dRenderer,
         font: Font<'static>,
         copy_svg: CanavsRenderingContext2dSVG,
+        paste_svg: CanavsRenderingContext2dSVG,
+        trash_svg: CanavsRenderingContext2dSVG,
+        undo_svg: CanavsRenderingContext2dSVG,
+        redo_svg: CanavsRenderingContext2dSVG,
     ) -> Result<Self> {
         let mut rng = thread_rng();
         let state = GameState::new_random(&mut rng, 25)?;
@@ -56,6 +66,10 @@ impl AppState {
                 ),
                 font,
                 copy_svg,
+                paste_svg,
+                trash_svg,
+                undo_svg,
+                redo_svg,
             )?,
         })
     }
@@ -211,17 +225,28 @@ async fn init() -> Result<()> {
         .map_err(|e| format!("{e:?}"))?;
     body()?.replace_children_with_node_1(&canvas);
 
-    let renderer = CanvasRenderingContext2dRenderer::new_from_canvas(&canvas)?;
+    let renderer = Mutex::new(CanvasRenderingContext2dRenderer::new_from_canvas(&canvas)?);
 
-    // TODO do fetches in parallel
+    let (font, copy_svg, paste_svg, trash_svg, undo_svg, redo_svg) = join!(
+        load_font_url("SpaceGrotesk-Medium.ttf"),
+        load_svg_url(&renderer, "copy-svgrepo-com.svg"),
+        load_svg_url(&renderer, "paste-svgrepo-com.svg"),
+        load_svg_url(&renderer, "trash-blank-alt-svgrepo-com.svg"),
+        load_svg_url(&renderer, "undo-svgrepo-com.svg"),
+        load_svg_url(&renderer, "redo-svgrepo-com.svg"),
+    )
+    .await;
 
-    let font = Font::try_from_vec(fetch_bytes("SpaceGrotesk-Medium.ttf").await?)
-        .ok_or("failed to parse font".to_string())?;
-
-    let copy_svg =
-        renderer.new_svg(&fetch_utf8("clipboard-copy-duplicate-paste-2-svgrepo-com.svg").await?)?;
-
-    let state = Arc::new(Mutex::new(AppState::new(canvas, renderer, font, copy_svg)?));
+    let state = Arc::new(Mutex::new(AppState::new(
+        canvas,
+        renderer.into_inner().unwrap(),
+        font?,
+        copy_svg?,
+        paste_svg?,
+        trash_svg?,
+        undo_svg?,
+        redo_svg?,
+    )?));
 
     // resize events
     {
@@ -334,4 +359,19 @@ async fn init() -> Result<()> {
     }
 
     Ok(())
+}
+
+// TODO unneeded?
+async fn sleep(delay: u32) {
+    let mut promise_callback = |resolve: js_sys::Function, reject: js_sys::Function| {
+        if let Err(e) = web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, delay as i32)
+        {
+            error!("error setting timeout: {e:?}");
+        }
+    };
+    if let Err(e) = JsFuture::from(js_sys::Promise::new(&mut promise_callback)).await {
+        error!("error delaying: {e:?}");
+    }
 }

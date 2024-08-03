@@ -162,6 +162,10 @@ where
     destination_bounds: Rectangle,
     font: rusttype::Font<'static>,
     copy_svg: R::SVG,
+    paste_svg: R::SVG,
+    trash_svg: R::SVG,
+    undo_svg: R::SVG,
+    redo_svg: R::SVG,
 
     background_color: RGBColor,
     puzzle_color: RGBColor,
@@ -196,6 +200,10 @@ where
         destination_bounds: Rectangle,
         font: rusttype::Font<'static>,
         copy_svg: R::SVG,
+        paste_svg: R::SVG,
+        trash_svg: R::SVG,
+        undo_svg: R::SVG,
+        redo_svg: R::SVG,
     ) -> Result<Self> {
         let mut buttons = Vec::new();
         for number in Number::all() {
@@ -264,7 +272,7 @@ where
                 column: 3.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button_str(ui, renderer, location, "📋", false)?;
+                ds.draw_button_svg(ui, renderer, location, &ui.paste_svg, false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -277,7 +285,7 @@ where
                 column: 4.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button_str(ui, renderer, location, "🗑", false)?;
+                ds.draw_button_svg(ui, renderer, location, &ui.trash_svg, false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -290,7 +298,7 @@ where
                 column: 5.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button_str(ui, renderer, location, "⎌", false)?;
+                ds.draw_button_svg(ui, renderer, location, &ui.undo_svg, false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -303,7 +311,7 @@ where
                 column: 6.try_into()?,
             },
             on_draw: Box::new(|location, ui, ds, renderer, _state| {
-                ds.draw_button_str(ui, renderer, location, "⟳", false)?;
+                ds.draw_button_svg(ui, renderer, location, &ui.redo_svg, false)?;
                 Ok(())
             }),
             on_click: Box::new(|_location, _ui, _state| {
@@ -316,6 +324,10 @@ where
             destination_bounds,
             font,
             copy_svg,
+            paste_svg,
+            trash_svg,
+            undo_svg,
+            redo_svg,
 
             background_color: RGBColor {
                 red: 0x22,

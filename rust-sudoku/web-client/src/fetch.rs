@@ -1,5 +1,8 @@
+use std::sync::Mutex;
+
 use crate::dom::window;
-use lib::Result;
+use lib::{graphics::Renderer, Result};
+use rusttype::Font;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{js_sys::Uint8Array, wasm_bindgen, Request, RequestInit, RequestMode, Response};
@@ -25,4 +28,18 @@ pub async fn fetch_utf8(url: &str) -> Result<String> {
     let bytes = fetch_bytes(url).await?;
     let result = core::str::from_utf8(&bytes)?;
     Ok(result.to_owned())
+}
+
+pub async fn load_font_url(url: &str) -> Result<Font<'static>> {
+    let bytes = fetch_bytes(url).await?;
+    Ok(Font::try_from_vec(bytes).ok_or("failed to parse font".to_string())?)
+}
+
+pub async fn load_svg_url<R>(renderer: &Mutex<R>, url: &str) -> Result<R::SVG>
+where
+    R: Renderer,
+{
+    let s = fetch_utf8(url).await?;
+    let renderer = renderer.lock().unwrap();
+    Ok(renderer.new_svg(&s)?)
 }
