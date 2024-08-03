@@ -218,6 +218,9 @@ dependencies = [
  "leptos",
  "log",
  "pharos",
+ "serde",
+ "serde_json",
+ "shared",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -1501,11 +1504,12 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.120"
+version = "1.0.122"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e0d21c9a8cae1235ad58a00c11cb40d4b1e5c784f1ef2c537876ed6ffd8b7c5"
+checksum = "784b6203951c57ff748476b126ccb5e8e2959a5c19e5c617ab1956be3dbc68da"
 dependencies = [
  "itoa",
+ "memchr",
  "ryu",
  "serde",
 ]
@@ -1549,6 +1553,9 @@ dependencies = [
  "anyhow",
  "futures-util",
  "poem",
+ "serde",
+ "serde_json",
+ "shared",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1631,6 +1638,10 @@ dependencies = [
 [[package]]
 name = "shared"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "signal-hook-registry"

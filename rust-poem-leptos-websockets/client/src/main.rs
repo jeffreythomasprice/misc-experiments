@@ -1,12 +1,69 @@
-use std::panic;
+use std::{panic, pin::Pin};
 
 use anyhow::{anyhow, Result};
-use futures::{SinkExt, StreamExt};
+use futures::{stream, Sink, SinkExt, StreamExt};
 use leptos::*;
 use log::Level;
 use log::*;
-use pharos::{Observable, Observe, ObserveConfig};
-use ws_stream_wasm::{WsMessage, WsMeta};
+use pharos::{Observable, ObserveConfig};
+use serde::Serialize;
+use ws_stream_wasm::{WsErr, WsMessage, WsMeta};
+
+struct WebsocketClient<OutgoingMessage> {
+    sink: Pin<Box<dyn Sink<OutgoingMessage, Error = WsErr>>>,
+}
+
+impl<OutgoingMessage> WebsocketClient<OutgoingMessage>
+where
+    OutgoingMessage: Serialize + 'static,
+{
+    pub async fn new_with_url(url: &str) -> Result<Self> {
+        let (mut ws, wsio) = WsMeta::connect(url, None).await?;
+
+        let mut events = ws.observe(ObserveConfig::default()).await?;
+
+        spawn_local(async move {
+            while let Some(e) = events.next().await {
+                trace!("websocket event: {e:?}");
+            }
+        });
+
+        let (sink, stream) = wsio.split();
+
+        let sink = Box::pin(sink.with_flat_map(|msg| {
+            stream::iter(match serde_json::to_string(&msg) {
+                Ok(msg) => vec![Ok(WsMessage::Text(msg))],
+                Err(e) => {
+                    error!("failed to serialize outgoing websocket message: {e:}");
+                    Vec::new()
+                }
+            })
+        }));
+
+        let mut stream = stream
+            .filter_map(|msg| async {
+                match msg {
+                    // TODO parse as incoming message
+                    WsMessage::Text(msg) => Some(msg),
+                    WsMessage::Binary(_) => todo!(),
+                }
+            })
+            .boxed();
+        spawn_local(async move {
+            while let Some(msg) = stream.next().await {
+                info!("received message from websocket: {msg:?}");
+            }
+        });
+
+        Ok(Self { sink })
+    }
+
+    pub async fn send(&mut self, msg: OutgoingMessage) {
+        if let Err(e) = self.sink.send(msg).await {
+            error!("error sending to websocket: {e:?}");
+        }
+    }
+}
 
 fn main() -> Result<()> {
     console_log::init_with_level(Level::Trace)
@@ -15,8 +72,8 @@ fn main() -> Result<()> {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
     spawn_local(async {
-        if let Err(e) = websocket_client().await {
-            error!("error launching websocket client: {e:?}");
+        if let Err(e) = websocket_demo().await {
+            error!("error running websocket demo: {e:?}");
         }
     });
 
@@ -25,35 +82,8 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-async fn websocket_client() -> Result<()> {
-    let (mut ws, wsio) = WsMeta::connect("ws://127.0.0.1:8001/websocket", None).await?;
-
-    let mut events = ws.observe(ObserveConfig::default()).await?;
-
-    spawn_local(async move {
-        while let Some(e) = events.next().await {
-            debug!("websocket event: {e:?}");
-        }
-    });
-
-    let (mut sink, mut stream) = wsio.split();
-
-    spawn_local(async move {
-        while let Some(msg) = stream.next().await {
-            match msg {
-                WsMessage::Text(msg) => {
-                    debug!("received message from websocket: {msg}");
-                }
-                WsMessage::Binary(msg) => todo!(),
-            }
-        }
-    });
-
-    spawn_local(async move {
-        if let Err(e) = sink.send(WsMessage::Text(format!("Hello, World!"))).await {
-            error!("error sending to websocket: {e:?}");
-        }
-    });
-
+async fn websocket_demo() -> Result<()> {
+    let mut ws = WebsocketClient::new_with_url("ws://127.0.0.1:8001/websocket").await?;
+    ws.send("Hello, World!".to_owned()).await;
     Ok(())
 }
