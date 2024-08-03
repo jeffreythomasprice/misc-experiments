@@ -41,5 +41,5 @@ where
 {
     let s = fetch_utf8(url).await?;
     let renderer = renderer.lock().unwrap();
-    Ok(renderer.new_svg(&s)?)
+    renderer.new_svg(&s)
 }

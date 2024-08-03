@@ -10,12 +10,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use chrono::{prelude::*, TimeDelta};
 use dom::{body, create_canvas, window};
 use fetch::{load_font_url, load_svg_url};
 use graphics::{CanavsRenderingContext2dSVG, CanvasRenderingContext2dRenderer, UIState};
 use lib::{
-    graphics::{Rectangle, Renderer, Size},
+    graphics::{Rectangle, Size},
     Number, Result,
 };
 use lib::{GameState, History};
