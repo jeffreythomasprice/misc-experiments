@@ -19,9 +19,13 @@ use tracing::*;
 use uuid::Uuid;
 use websockets::split_websocket_stream;
 
+struct ActiveWebsocket {
+    id: Uuid,
+    sender: tokio::sync::mpsc::Sender<WebsocketServerToClientMessage>,
+}
+
 struct AppState {
-    active_websockets:
-        Arc<Mutex<HashMap<Uuid, tokio::sync::mpsc::Sender<WebsocketServerToClientMessage>>>>,
+    active_websockets: Arc<Mutex<HashMap<Uuid, Arc<ActiveWebsocket>>>>,
 }
 
 #[tokio::main]
@@ -58,7 +62,7 @@ fn websocket(
 
     let active_websockets = state.active_websockets.clone();
     ws.on_upgrade(move |socket| async move {
-        let (sink, mut stream) = split_websocket_stream::<
+        let (sender, mut stream) = split_websocket_stream::<
             WebsocketServerToClientMessage,
             WebsocketClientToServerMessage,
         >(socket);
@@ -71,12 +75,12 @@ fn websocket(
                     let new_msg =
                         WebsocketServerToClientMessage::Message(format!("response to: {:?}", msg));
                     let active_websockets = active_websockets.lock().unwrap();
-                    for (id, sink) in active_websockets.iter() {
-                        debug!("sending to {}, msg = {:?}", id, new_msg.clone());
-                        let sink = sink.clone();
+                    for (_, ws) in active_websockets.iter() {
+                        debug!("sending to {}, msg = {:?}", ws.id, new_msg.clone());
+                        let ws = ws.clone();
                         let new_msg = new_msg.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = sink.send(new_msg).await {
+                            if let Err(e) = ws.sender.send(new_msg).await {
                                 error!("error sending message to websocket: {e:?}");
                             }
                         });
@@ -90,6 +94,6 @@ fn websocket(
         }
 
         let mut active_websockets = active_websockets.lock().unwrap();
-        active_websockets.insert(id, sink);
+        active_websockets.insert(id, Arc::new(ActiveWebsocket { id, sender }));
     })
 }
