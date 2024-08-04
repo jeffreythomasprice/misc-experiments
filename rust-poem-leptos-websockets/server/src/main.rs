@@ -81,6 +81,10 @@ fn websocket(
                         tokio::spawn(async move { if let Err(e) = sink.send(new_msg).await {} });
                     }
                 }
+
+                debug!("websocket closed {id:?}");
+                let mut active_websockets = active_websockets.lock().unwrap();
+                active_websockets.remove(&id);
             });
         }
 

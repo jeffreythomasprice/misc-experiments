@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8" />
+	<script src="generated/wasm_exec.js"></script>
+	<script>
+		(async () => {
+			const go = new Go();
+			const { instance } = await WebAssembly.instantiateStreaming(fetch("generated/client.wasm"), go.importObject);
+			go.run(instance);
+		})()
+			.catch(err => console.error("error loading client wasm", err));
+	</script>
+</head>
+
+<body>
+	<div>Hello, World!</div>
+</body>
+
+</html>
