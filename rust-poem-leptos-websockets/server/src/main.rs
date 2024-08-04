@@ -1,3 +1,4 @@
+mod db;
 mod websockets;
 
 use std::{
@@ -6,12 +7,21 @@ use std::{
 };
 
 use anyhow::Result;
+use db::connection;
+use diesel::prelude::*;
+use diesel::{
+    r2d2::{ConnectionManager, Pool},
+    ExpressionMethods, PgConnection, RunQueryDsl, SelectableHelper,
+};
+use dotenvy::dotenv;
 use futures_util::StreamExt;
 use poem::{
     get, handler,
+    http::StatusCode,
     listener::TcpListener,
     middleware::{AddData, Tracing},
-    web::{websocket::WebSocket, Data, RemoteAddr},
+    post,
+    web::{websocket::WebSocket, Data, Json, RemoteAddr},
     EndpointExt, IntoResponse, Route, Server,
 };
 use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
@@ -25,28 +35,37 @@ struct ActiveWebsocket {
 }
 
 struct AppState {
+    db: Pool<ConnectionManager<PgConnection>>,
     active_websockets: Arc<Mutex<HashMap<Uuid, Arc<ActiveWebsocket>>>>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    if std::env::var_os("RUST_LOG").is_none() {
-        std::env::set_var("RUST_LOG", "server=trace,poem=debug");
-    }
+    dotenv()?;
+
     tracing_subscriber::fmt::init();
 
     let state = Arc::new(AppState {
+        db: connection()?,
         active_websockets: Arc::new(Mutex::new(HashMap::new())),
     });
 
     let app = Route::new()
         .at("/websocket", get(websocket))
+        .nest(
+            "/users",
+            Route::new().at("/", get(list_users).post(create_user)),
+        )
+        .at("/login", post(log_in))
         .with(Tracing)
         .with(AddData::new(state));
-    Server::new(TcpListener::bind("127.0.0.1:8001"))
-        .name("hello-world")
-        .run(app)
-        .await?;
+    Server::new(TcpListener::bind(format!(
+        "{}:{}",
+        std::env::var("ADDRESS")?,
+        std::env::var("PORT")?
+    )))
+    .run(app)
+    .await?;
 
     Ok(())
 }
@@ -96,4 +115,78 @@ fn websocket(
         let mut active_websockets = active_websockets.lock().unwrap();
         active_websockets.insert(id, Arc::new(ActiveWebsocket { id, sender }));
     })
+}
+
+#[handler]
+fn list_users(
+    Data(state): Data<&Arc<AppState>>,
+) -> Result<Json<Vec<shared::UserResponse>>, StatusCode> {
+    use self::db::schema::users::dsl::*;
+
+    let db = &mut state.db.get().unwrap();
+    let results = users
+        .select(db::models::User::as_select())
+        .load(db)
+        .map_err(|e| {
+            error!("error selecting users: {e:?}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .into_iter()
+        .map(|x| x.into())
+        .collect();
+    Ok(Json(results))
+}
+
+#[handler]
+fn create_user(
+    Data(state): Data<&Arc<AppState>>,
+    Json(request): Json<shared::CreateUserRequest>,
+) -> Result<Json<shared::UserResponse>, StatusCode> {
+    use self::db::schema::users;
+
+    let request: db::models::UserWithJustUsernameAndPassword = request.into();
+    let db = &mut state.db.get().unwrap();
+    let result: shared::UserResponse = diesel::insert_into(users::table)
+        .values(&request)
+        .returning(db::models::User::as_returning())
+        .get_result(db)
+        .map_err(|e| {
+            error!("error inserting new user: {e:?}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .into();
+    Ok(Json(result))
+}
+
+#[handler]
+fn log_in(
+    Data(state): Data<&Arc<AppState>>,
+    Json(request): Json<shared::LogInRequest>,
+) -> Result<Json<shared::UserResponse>, StatusCode> {
+    use self::db::schema::users::dsl::*;
+
+    let db = &mut state.db.get().unwrap();
+    let results: Vec<db::models::User> = users
+        .filter(
+            username
+                .eq(request.username)
+                .and(password.eq(request.password)),
+        )
+        .limit(1)
+        .select(db::models::User::as_select())
+        .load(db)
+        .map_err(|e| {
+            error!("error checking user credentials: {e:?}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    match &results[..] {
+        [user] => {
+            debug!("found user with correct credentials");
+            Ok(Json((*user).clone().into()))
+        }
+        _ => {
+            debug!("incorrect credentials");
+            Err(StatusCode::UNAUTHORIZED)
+        }
+    }
 }

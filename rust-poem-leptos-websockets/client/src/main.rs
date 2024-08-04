@@ -22,6 +22,7 @@ struct DisplayedMessage {
 }
 
 #[component]
+#[allow(non_snake_case)]
 fn Messages(
     messages: ReadSignal<Vec<DisplayedMessage>>,
     on_submit: impl Fn(String) + 'static,
@@ -87,6 +88,18 @@ fn main() -> Result<()> {
             };
         });
     }
+
+    // TODO testing
+    create_resource(
+        || (),
+        |_| async move {
+            debug!("TODO resource?");
+        },
+    );
+
+    // TODO login form
+    // TODO create user form
+    // TODO page to see when logged in with logout button
 
     mount_to_body(move || {
         view! {
