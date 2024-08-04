@@ -38,10 +38,8 @@ async fn main() -> Result<()> {
         active_websockets: Arc::new(Mutex::new(HashMap::new())),
     });
 
-    let (websocket_sender, _) = tokio::sync::broadcast::channel::<String>(32);
-
     let app = Route::new()
-        .at("/websocket", get(websocket.data(websocket_sender)))
+        .at("/websocket", get(websocket))
         .with(Tracing)
         .with(AddData::new(state));
     Server::new(TcpListener::bind("127.0.0.1:8001"))
@@ -54,47 +52,47 @@ async fn main() -> Result<()> {
 
 #[handler]
 fn websocket(
-    state: Data<&Arc<AppState>>,
+    Data(state): Data<&Arc<AppState>>,
     ws: WebSocket,
     remote_addr: &RemoteAddr,
-    sender: Data<&tokio::sync::broadcast::Sender<String>>,
 ) -> impl IntoResponse {
     let id = Uuid::new_v4();
     debug!("incoming websocket connection from: {remote_addr}, id={id}");
 
-    let sender = sender.clone();
-    let mut receiver = sender.subscribe();
-
+    let active_websockets = state.active_websockets.clone();
     ws.on_upgrade(move |socket| async move {
         let (sink, mut stream) = split_websocket_stream::<
             WebsocketServerToClientMessage,
             WebsocketClientToServerMessage,
         >(socket);
 
-        tokio::spawn(async move {
-            while let Some(msg) = stream.next().await {
-                debug!("received incoming websocket message: {msg:?}");
-                // TODO send to all open websockets
-            }
-        });
+        {
+            let active_websockets = active_websockets.clone();
+            tokio::spawn(async move {
+                while let Some(msg) = stream.next().await {
+                    debug!("received incoming websocket message: {msg:?}");
+                    let new_msg =
+                        WebsocketServerToClientMessage::Message(format!("response to: {:?}", msg));
+                    let active_websockets = active_websockets.lock().unwrap();
+                    for (id, sink) in active_websockets.iter() {
+                        debug!("sending to {}, msg = {:?}", id, new_msg.clone());
+                        let sink = sink.clone();
+                        let new_msg = new_msg.clone();
+                        tokio::spawn(async move { if let Err(e) = sink.send(new_msg).await {} });
+                    }
+                }
+            });
+        }
 
-        // TODO add to list of active websockets
-
-        // tokio::spawn(async move {
-        //     while let Ok(msg) = receiver.recv().await {
-        //         if let Err(e) = sink.send(Message::Text(format!("{id}:{msg}"))).await {
-        //             error!("error sending to websocket client on websocket {id}: {e:?}");
-        //             break;
-        //         }
-        //     }
-        // });
+        let mut active_websockets = active_websockets.lock().unwrap();
+        active_websockets.insert(id, sink);
     })
 }
 
 fn split_websocket_stream<OutgoingMessage, IncomingMessage>(
     socket: WebSocketStream,
 ) -> (
-    std::pin::Pin<Box<dyn Sink<OutgoingMessage, Error = std::io::Error>>>,
+    tokio::sync::mpsc::Sender<OutgoingMessage>,
     std::pin::Pin<Box<dyn Stream<Item = IncomingMessage> + Send>>,
 )
 where
@@ -103,7 +101,7 @@ where
 {
     let (sink, stream) = socket.split();
 
-    let sink = Box::pin(sink.with_flat_map(|msg| {
+    let mut sink = Box::pin(sink.with_flat_map(|msg| {
         stream::iter(match serde_json::to_string(&msg) {
             Ok(msg) => vec![Ok(poem::web::websocket::Message::Text(msg))],
             Err(e) => {
@@ -112,6 +110,15 @@ where
             }
         })
     }));
+
+    let (sink_sender, mut sink_receiver) = tokio::sync::mpsc::channel::<OutgoingMessage>(1);
+    tokio::spawn(async move {
+        while let Some(msg) = sink_receiver.recv().await {
+            if let Err(e) = sink.send(msg).await {
+                error!("error writing message to websocket: {e:?}");
+            }
+        }
+    });
 
     let stream = stream
         .filter_map(|msg| async {
@@ -135,5 +142,5 @@ where
         })
         .boxed();
 
-    (sink, stream)
+    (sink_sender, stream)
 }

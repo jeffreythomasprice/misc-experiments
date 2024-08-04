@@ -1,4 +1,4 @@
-use std::{panic, pin::Pin};
+use std::{fmt::Debug, panic, pin::Pin};
 
 use anyhow::{anyhow, Result};
 use futures::{stream, Sink, SinkExt, StreamExt};
@@ -6,7 +6,8 @@ use leptos::*;
 use log::Level;
 use log::*;
 use pharos::{Observable, ObserveConfig};
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
+use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
 use ws_stream_wasm::{WsErr, WsMessage, WsMeta};
 
 struct WebsocketClient<OutgoingMessage> {
@@ -17,7 +18,10 @@ impl<OutgoingMessage> WebsocketClient<OutgoingMessage>
 where
     OutgoingMessage: Serialize + 'static,
 {
-    pub async fn new_with_url(url: &str) -> Result<Self> {
+    pub async fn new_with_url<IncomingMessage>(url: &str) -> Result<Self>
+    where
+        IncomingMessage: DeserializeOwned + Debug,
+    {
         let (mut ws, wsio) = WsMeta::connect(url, None).await?;
 
         let mut events = ws.observe(ObserveConfig::default()).await?;
@@ -51,7 +55,10 @@ where
             .boxed();
         spawn_local(async move {
             while let Some(msg) = stream.next().await {
-                info!("received message from websocket: {msg:?}");
+                match serde_json::from_str::<IncomingMessage>(&msg) {
+                    Ok(msg) => info!("received message from websocket: {msg:?}"),
+                    Err(e) => error!("failed to deserialize incoming websocket message: {e:?}"),
+                };
             }
         });
 
@@ -83,7 +90,14 @@ fn main() -> Result<()> {
 }
 
 async fn websocket_demo() -> Result<()> {
-    let mut ws = WebsocketClient::new_with_url("ws://127.0.0.1:8001/websocket").await?;
-    ws.send("Hello, World!".to_owned()).await;
+    let mut ws: WebsocketClient<WebsocketClientToServerMessage> =
+        WebsocketClient::new_with_url::<WebsocketServerToClientMessage>(
+            "ws://127.0.0.1:8001/websocket",
+        )
+        .await?;
+    ws.send(WebsocketClientToServerMessage::Message(
+        "Hello, World!".to_owned(),
+    ))
+    .await;
     Ok(())
 }
