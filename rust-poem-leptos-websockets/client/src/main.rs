@@ -93,7 +93,7 @@ fn main() -> Result<()> {
             <Messages
                 messages=messages
                 on_submit=move |msg| {
-                    info!("TODO submit: {msg}");
+                    info!("submitting outgoing message: {msg}");
                     let websocket_sink = websocket_sink.clone();
                     spawn_local(async move {
                         if let Some(sink) = &mut *websocket_sink.lock().unwrap() {
@@ -118,7 +118,7 @@ async fn websocket_demo(
 ) -> Result<
     std::pin::Pin<Box<dyn Sink<WebsocketClientToServerMessage, Error = ws_stream_wasm::WsErr>>>,
 > {
-    let (mut sink, mut stream) = new_websocket_with_url::<
+    let (sink, mut stream) = new_websocket_with_url::<
         WebsocketClientToServerMessage,
         WebsocketServerToClientMessage,
     >("ws://127.0.0.1:8001/websocket")
