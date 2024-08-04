@@ -6,7 +6,7 @@ use futures::{Sink, SinkExt, StreamExt};
 use leptos::*;
 use log::Level;
 use log::*;
-use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
+use shared::{UserResponse, WebsocketClientToServerMessage, WebsocketServerToClientMessage};
 use std::{
     panic,
     sync::{Arc, Mutex},
@@ -93,7 +93,9 @@ fn main() -> Result<()> {
     create_resource(
         || (),
         |_| async move {
-            debug!("TODO resource?");
+            if let Err(e) = list_users().await {
+                error!("error listing users: {e:?}");
+            }
         },
     );
 
@@ -126,6 +128,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+// TODO rename me? move me?
 async fn websocket_demo(
     output: impl Fn(WebsocketServerToClientMessage) + 'static,
 ) -> Result<
@@ -145,4 +148,15 @@ async fn websocket_demo(
     });
 
     Ok(sink)
+}
+
+// TODO move me?
+async fn list_users() -> Result<Vec<UserResponse>> {
+    // TODO env file with base url?
+    let response = reqwest::get("http://localhost:8001/users").await?;
+    debug!("list users response: {:?}", response);
+    let response_body = response.bytes().await?;
+    let response_body = serde_json::from_slice(&response_body)?;
+    debug!("list users response body: {:?}", response_body);
+    Ok(response_body)
 }

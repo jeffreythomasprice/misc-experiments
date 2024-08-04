@@ -20,3 +20,4 @@ web-sys = "0.3.69"
 ws_stream_wasm = "0.7.4"
 chrono = "0.4.38"
 uuid = { version = "1.10.0", features = ["v4"] }
+reqwest = "0.12.5"

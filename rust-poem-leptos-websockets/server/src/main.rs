@@ -19,7 +19,7 @@ use poem::{
     get, handler,
     http::StatusCode,
     listener::TcpListener,
-    middleware::{AddData, Tracing},
+    middleware::{AddData, Cors, Tracing},
     post,
     web::{websocket::WebSocket, Data, Json, RemoteAddr},
     EndpointExt, IntoResponse, Route, Server,
@@ -58,7 +58,8 @@ async fn main() -> Result<()> {
         )
         .at("/login", post(log_in))
         .with(Tracing)
-        .with(AddData::new(state));
+        .with(AddData::new(state))
+        .with(Cors::new());
     Server::new(TcpListener::bind(format!(
         "{}:{}",
         std::env::var("ADDRESS")?,
