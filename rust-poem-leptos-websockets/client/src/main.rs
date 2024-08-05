@@ -1,7 +1,9 @@
+mod constants;
 mod websockets;
 
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
+use constants::{BASE_URL, WS_URL};
 use futures::{Sink, SinkExt, StreamExt};
 use leptos::*;
 use log::Level;
@@ -56,9 +58,7 @@ fn Messages(
 }
 
 fn main() -> Result<()> {
-    console_log::init_with_level(Level::Trace)
-        .map_err(|e| e.to_string())
-        .map_err(|e| anyhow!("{e:?}"))?;
+    console_log::init_with_level(Level::Trace).map_err(|e| anyhow!("{e:?}"))?;
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
     let (messages, set_messages) = create_signal(Vec::new());
@@ -137,7 +137,7 @@ async fn websocket_demo(
     let (sink, mut stream) = new_websocket_with_url::<
         WebsocketClientToServerMessage,
         WebsocketServerToClientMessage,
-    >("ws://127.0.0.1:8001/websocket")
+    >(WS_URL)
     .await?;
 
     spawn_local(async move {
@@ -152,8 +152,7 @@ async fn websocket_demo(
 
 // TODO move me?
 async fn list_users() -> Result<Vec<UserResponse>> {
-    // TODO env file with base url?
-    let response = reqwest::get("http://localhost:8001/users").await?;
+    let response = reqwest::get(format!("{}/users", BASE_URL)).await?;
     debug!("list users response: {:?}", response);
     let response_body = response.bytes().await?;
     let response_body = serde_json::from_slice(&response_body)?;
