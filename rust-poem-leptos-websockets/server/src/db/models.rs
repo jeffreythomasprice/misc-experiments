@@ -9,11 +9,11 @@ pub struct User {
     pub username: String,
 }
 
-impl Into<shared::UserResponse> for User {
-    fn into(self) -> shared::UserResponse {
+impl From<User> for shared::UserResponse {
+    fn from(val: User) -> Self {
         shared::UserResponse {
-            id: self.id,
-            username: self.username,
+            id: val.id,
+            username: val.username,
         }
     }
 }
