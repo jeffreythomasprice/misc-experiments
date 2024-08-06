@@ -8,7 +8,9 @@ use futures::{Sink, SinkExt, StreamExt};
 use leptos::*;
 use log::Level;
 use log::*;
-use shared::{UserResponse, WebsocketClientToServerMessage, WebsocketServerToClientMessage};
+use shared::{
+    LogInRequest, UserResponse, WebsocketClientToServerMessage, WebsocketServerToClientMessage,
+};
 use std::{
     panic,
     sync::{Arc, Mutex},
@@ -54,6 +56,58 @@ fn Messages(
                 }
             }
         />
+    }
+}
+
+#[component]
+#[allow(non_snake_case)]
+fn LoginForm() -> impl IntoView {
+    let (username, set_username) = create_signal("".to_owned());
+    let (password, set_password) = create_signal("".to_owned());
+
+    let log_in_action = create_action(|request: &LogInRequest| {
+        let request = request.clone();
+        async move {
+            match log_in(&request).await {
+                Ok(response) => {
+                    // TODO pass this up the chain
+                    debug!("TODO login response: {response:?}");
+                }
+                Err(e) => {
+                    // TODO put error message on screen
+                    error!("error logging in: {e:?}");
+                }
+            };
+        }
+    });
+
+    view! {
+        <form on:submit=move |e| {
+            e.prevent_default();
+            log_in_action
+                .dispatch(LogInRequest {
+                    username: username.get(),
+                    password: password.get(),
+                });
+        }>
+            <label for="username">Username</label>
+            <input
+                name="username"
+                type="text"
+                placeholder="Username"
+                prop:value=username
+                on:input=move |e| set_username.set(event_target_value(&e))
+            />
+            <label for="password">Password</label>
+            <input
+                name="password"
+                type="password"
+                placeholder="Password"
+                prop:value=password
+                on:input=move |e| set_password.set(event_target_value(&e))
+            />
+            <button type="submit">Log In</button>
+        </form>
     }
 }
 
@@ -122,6 +176,8 @@ fn main() -> Result<()> {
                     });
                 }
             />
+
+            <LoginForm/>
         }
     });
 
@@ -157,5 +213,22 @@ async fn list_users() -> Result<Vec<UserResponse>> {
     let response_body = response.bytes().await?;
     let response_body = serde_json::from_slice(&response_body)?;
     debug!("list users response body: {:?}", response_body);
+    Ok(response_body)
+}
+
+// TODO move me?
+async fn log_in(request: &LogInRequest) -> Result<UserResponse> {
+    // TODO deduplicate this stuff with other requests
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{}/login", BASE_URL))
+        .header("Content-Type", "application/json")
+        .body(serde_json::to_string(request)?)
+        .send()
+        .await?;
+    debug!("login response: {:?}", response);
+    let response_body = response.bytes().await?;
+    let response_body = serde_json::from_slice(&response_body)?;
+    debug!("login response body: {:?}", response_body);
     Ok(response_body)
 }
