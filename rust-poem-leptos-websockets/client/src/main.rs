@@ -8,11 +8,10 @@ use chrono::{DateTime, Utc};
 use constants::{BASE_URL, WS_URL};
 use futures::{Sink, SinkExt, StreamExt};
 use leptos::*;
+use leptos_router::{Route, Router, Routes};
 use log::Level;
 use log::*;
-use shared::{
-    LogInRequest, UserResponse, WebsocketClientToServerMessage, WebsocketServerToClientMessage,
-};
+use shared::{LogInRequest, WebsocketClientToServerMessage, WebsocketServerToClientMessage};
 use std::{
     panic,
     sync::{Arc, Mutex},
@@ -166,31 +165,52 @@ fn main() -> Result<()> {
         );
     }
 
-    // TODO login form
-    // TODO create user form
-    // TODO page to see when logged in with logout button
+    // TODO nav menu? or just redirect from not found back to login? redirect from not logged in to login?
 
     mount_to_body(move || {
         view! {
-            <Messages
-                messages=messages
-                on_submit=move |msg| {
-                    info!("submitting outgoing message: {msg}");
-                    let websocket_sink = websocket_sink.clone();
-                    spawn_local(async move {
-                        if let Some(sink) = &mut *websocket_sink.lock().unwrap() {
-                            if let Err(e) = sink
-                                .send(WebsocketClientToServerMessage::Message(msg))
-                                .await
-                            {
-                                error!("error sending to websocket: {e:?}");
+            <Router>
+                <Routes>
+
+                    <Route
+                        path="/messages"
+                        view=move || {
+                            view! {
+                                <Messages
+                                    messages=messages
+                                    on_submit={
+                                        let websocket_sink = websocket_sink.clone();
+                                        move |msg| {
+                                            info!("submitting outgoing message: {msg}");
+                                            let websocket_sink = websocket_sink.clone();
+                                            spawn_local(async move {
+                                                if let Some(sink) = &mut *websocket_sink.lock().unwrap() {
+                                                    if let Err(e) = sink
+                                                        .send(WebsocketClientToServerMessage::Message(msg))
+                                                        .await
+                                                    {
+                                                        error!("error sending to websocket: {e:?}");
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }
+                                />
                             }
                         }
-                    });
-                }
-            />
+                    />
 
-            <LoginForm api_service=api_service.clone()/>
+                    <Route
+                        path="/login"
+                        view=move || view! { <LoginForm api_service=api_service.clone()/> }
+                    />
+
+                    // TODO create user form
+                    // TODO page to see when logged in with logout button
+
+                    <Route path="/*any" view=|| view! { <div>Not found</div> }/>
+                </Routes>
+            </Router>
         }
     });
 
