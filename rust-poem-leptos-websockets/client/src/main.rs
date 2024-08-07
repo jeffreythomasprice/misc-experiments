@@ -1,7 +1,9 @@
+mod api;
 mod constants;
 mod websockets;
 
 use anyhow::{anyhow, Result};
+use api::APIService;
 use chrono::{DateTime, Utc};
 use constants::{BASE_URL, WS_URL};
 use futures::{Sink, SinkExt, StreamExt};
@@ -61,23 +63,26 @@ fn Messages(
 
 #[component]
 #[allow(non_snake_case)]
-fn LoginForm() -> impl IntoView {
+fn LoginForm(api_service: APIService) -> impl IntoView {
     let (username, set_username) = create_signal("".to_owned());
     let (password, set_password) = create_signal("".to_owned());
 
-    let log_in_action = create_action(|request: &LogInRequest| {
+    let log_in_action = create_action(move |request: &LogInRequest| {
         let request = request.clone();
-        async move {
-            match log_in(&request).await {
-                Ok(response) => {
-                    // TODO pass this up the chain
-                    debug!("TODO login response: {response:?}");
-                }
-                Err(e) => {
-                    // TODO put error message on screen
-                    error!("error logging in: {e:?}");
-                }
-            };
+        {
+            let api_service = api_service.clone();
+            async move {
+                match api_service.log_in(&request).await {
+                    Ok(response) => {
+                        // TODO pass this up the chain
+                        debug!("TODO login response: {response:?}");
+                    }
+                    Err(e) => {
+                        // TODO put error message on screen
+                        error!("error logging in: {e:?}");
+                    }
+                };
+            }
         }
     });
 
@@ -115,6 +120,8 @@ fn main() -> Result<()> {
     console_log::init_with_level(Level::Trace).map_err(|e| anyhow!("{e:?}"))?;
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
+    let api_service = APIService::new(BASE_URL);
+
     let (messages, set_messages) = create_signal(Vec::new());
 
     let websocket_sink = Arc::new(Mutex::new(None));
@@ -144,14 +151,20 @@ fn main() -> Result<()> {
     }
 
     // TODO testing
-    create_resource(
-        || (),
-        |_| async move {
-            if let Err(e) = list_users().await {
-                error!("error listing users: {e:?}");
-            }
-        },
-    );
+    {
+        let api_service = api_service.clone();
+        create_resource(
+            || (),
+            move |_| {
+                let api_service = api_service.clone();
+                async move {
+                    if let Err(e) = api_service.list_users().await {
+                        error!("error listing users: {e:?}");
+                    }
+                }
+            },
+        );
+    }
 
     // TODO login form
     // TODO create user form
@@ -177,7 +190,7 @@ fn main() -> Result<()> {
                 }
             />
 
-            <LoginForm/>
+            <LoginForm api_service=api_service.clone()/>
         }
     });
 
@@ -204,31 +217,4 @@ async fn websocket_demo(
     });
 
     Ok(sink)
-}
-
-// TODO move me?
-async fn list_users() -> Result<Vec<UserResponse>> {
-    let response = reqwest::get(format!("{}/users", BASE_URL)).await?;
-    debug!("list users response: {:?}", response);
-    let response_body = response.bytes().await?;
-    let response_body = serde_json::from_slice(&response_body)?;
-    debug!("list users response body: {:?}", response_body);
-    Ok(response_body)
-}
-
-// TODO move me?
-async fn log_in(request: &LogInRequest) -> Result<UserResponse> {
-    // TODO deduplicate this stuff with other requests
-    let client = reqwest::Client::new();
-    let response = client
-        .post(format!("{}/login", BASE_URL))
-        .header("Content-Type", "application/json")
-        .body(serde_json::to_string(request)?)
-        .send()
-        .await?;
-    debug!("login response: {:?}", response);
-    let response_body = response.bytes().await?;
-    let response_body = serde_json::from_slice(&response_body)?;
-    debug!("login response body: {:?}", response_body);
-    Ok(response_body)
 }
