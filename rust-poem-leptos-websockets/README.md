@@ -1,13 +1,12 @@
 ```
 cd client
-npx tailwindcss -i ./index.css -o ./generated/index.css
-trunk serve
+./watch.sh
 ```
 
 ```
 cd server
 docker compose up -d
-cargo watch -x run
+./watch.sh
 ```
 
 ```

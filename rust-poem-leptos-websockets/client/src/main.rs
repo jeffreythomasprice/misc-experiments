@@ -35,28 +35,34 @@ fn Messages(
     let (next_message, set_next_message) = create_signal("".to_owned());
 
     view! {
-        <form on:submit=move |e| {
-            e.prevent_default();
-            on_submit(next_message.get());
-            set_next_message.set("".to_owned());
-        }>
-            <input
-                type="text"
-                placeholder="Message"
-                name="message"
-                prop:value=next_message
-                on:input=move |e| set_next_message.set(event_target_value(&e))
-            />
-        </form>
-        <For
-            each=move || { messages.get() }
-            key=|msg| { msg.id }
-            children=move |msg| {
-                view! {
-                    <div>{format!("{}: {}", msg.received_timestamp.to_rfc3339(), msg.message)}</div>
+        <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+            <form on:submit=move |e| {
+                e.prevent_default();
+                on_submit(next_message.get());
+                set_next_message.set("".to_owned());
+            }>
+                <input
+                    type="text"
+                    placeholder="Message"
+                    name="message"
+                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 sm:text-sm sm:leading-6"
+                    prop:value=next_message
+                    on:input=move |e| set_next_message.set(event_target_value(&e))
+                />
+            </form>
+            <For
+                each=move || { messages.get() }
+                key=|msg| { msg.id }
+                children=move |msg| {
+                    view! {
+                        <div>
+                            {format!("{}: {}", msg.received_timestamp.to_rfc3339(), msg.message)}
+                        </div>
+                    }
                 }
-            }
-        />
+            />
+
+        </div>
     }
 }
 
@@ -86,33 +92,111 @@ fn LoginForm(api_service: APIService) -> impl IntoView {
     });
 
     view! {
-        <form on:submit=move |e| {
-            e.prevent_default();
-            log_in_action
-                .dispatch(LogInRequest {
-                    username: username.get(),
-                    password: password.get(),
-                });
-        }>
-            <label for="username">Username</label>
-            <input
-                name="username"
-                type="text"
-                placeholder="Username"
-                prop:value=username
-                on:input=move |e| set_username.set(event_target_value(&e))
-            />
-            <label for="password">Password</label>
-            <input
-                name="password"
-                type="password"
-                placeholder="Password"
-                prop:value=password
-                on:input=move |e| set_password.set(event_target_value(&e))
-            />
-            <button type="submit">Log In</button>
-        </form>
+        <div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+            <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+                <h2 class="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
+                    Sign in to your account
+                </h2>
+            </div>
+
+            <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+                <form
+                    class="space-y-6"
+                    on:submit=move |e| {
+                        e.prevent_default();
+                        log_in_action
+                            .dispatch(LogInRequest {
+                                username: username.get(),
+                                password: password.get(),
+                            });
+                    }
+                >
+
+                    <div>
+                        <div>
+                            <label
+                                for="email"
+                                class="block text-sm font-medium leading-6 text-gray-900"
+                            >
+                                Email address
+                            </label>
+                            <div class="mt-2">
+                                <input
+                                    name="username"
+                                    type="text"
+                                    placeholder="Username"
+                                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 sm:text-sm sm:leading-6"
+                                    prop:value=username
+                                    on:input=move |e| set_username.set(event_target_value(&e))
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label
+                            for="password"
+                            class="block text-sm font-medium leading-6 text-gray-900"
+                        >
+                            Password
+                        </label>
+                        <div class="mt-2">
+                            <input
+                                name="password"
+                                type="password"
+                                placeholder="Password"
+                                class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 sm:text-sm sm:leading-6"
+                                prop:value=password
+                                on:input=move |e| set_password.set(event_target_value(&e))
+                            />
+                            <div class="flex justify-end text-sm">
+                                <A
+                                    href="/forgotPassword"
+                                    class="font-semibold text-indigo-600 hover:text-indigo-500"
+                                >
+                                    Forgot password?
+                                </A>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button
+                            type="submit"
+                            class="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                        >
+                            Log In
+                        </button>
+                    </div>
+
+                    <div>
+                        <A
+                            href="/signUp"
+                            class="flex w-full justify-center rounded-md bg-gray-200 px-3 py-1.5 text-sm font-semibold leading-6 text-white-800 shadow-sm hover:bg-gray-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300"
+                        >
+                            Sign Up
+                        </A>
+                    </div>
+                </form>
+            </div>
+        </div>
     }
+}
+
+#[component]
+#[allow(non_snake_case)]
+fn ForgotPassword() -> impl IntoView {
+    view! {
+        <div>
+            Placeholder, probably not going to actually implement emailing the user a password reset code and all that nonsense.
+        </div>
+    }
+}
+
+#[component]
+#[allow(non_snake_case)]
+fn SignUp() -> impl IntoView {
+    view! { <div>TODO sign up form</div> }
 }
 
 #[component]
@@ -128,6 +212,16 @@ fn NavItem(href: String, children: Children) -> impl IntoView {
                 {children()}
             </A>
         </li>
+    }
+}
+
+#[component]
+#[allow(non_snake_case)]
+fn Nav(children: Children) -> impl IntoView {
+    view! {
+        <div class="rounded-t-lg overflow-hidden border-t border-l border-r border-gray-400 p-4">
+            <ul class="flex border-b">{children()}</ul>
+        </div>
     }
 }
 
@@ -168,12 +262,10 @@ fn main() -> Result<()> {
     mount_to_body(move || {
         view! {
             <Router>
-                <div class="rounded-t-lg overflow-hidden border-t border-l border-r border-gray-400 p-4">
-                    <ul class="flex border-b">
-                        <NavItem href="/messages".to_string()>Messages</NavItem>
-                        <NavItem href="/login".to_string()>Login</NavItem>
-                    </ul>
-                </div>
+                <Nav>
+                    <NavItem href="/messages".to_string()>Messages</NavItem>
+                    <NavItem href="/login".to_string()>Login</NavItem>
+                </Nav>
                 <Routes>
                     <Route
                         path="/messages"
@@ -208,7 +300,10 @@ fn main() -> Result<()> {
                         view=move || view! { <LoginForm api_service=api_service.clone()/> }
                     />
 
-                    // TODO create user form
+                    <Route path="/forgotPassword" view=|| view! { <ForgotPassword/> }/>
+
+                    <Route path="/signUp" view=|| view! { <SignUp/> }/>
+
                     // TODO page to see when logged in with logout button
 
                     <Route path="/*any" view=|| view! { <Redirect path="/login"/> }/>
