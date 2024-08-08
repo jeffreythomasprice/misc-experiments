@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use constants::{BASE_URL, WS_URL};
 use futures::{Sink, SinkExt, StreamExt};
 use leptos::*;
-use leptos_router::{Route, Router, Routes, A};
+use leptos_router::{Redirect, Route, Router, Routes, A};
 use log::Level;
 use log::*;
 use shared::{LogInRequest, WebsocketClientToServerMessage, WebsocketServerToClientMessage};
@@ -115,6 +115,22 @@ fn LoginForm(api_service: APIService) -> impl IntoView {
     }
 }
 
+#[component]
+#[allow(non_snake_case)]
+fn NavItem(href: String, children: Children) -> impl IntoView {
+    view! {
+        <li class="mb-px mr-1 text-gray-500">
+            <A
+                active_class="text-blue-700 border-l border-t border-r rounded-t"
+                class="bg-white inline-block py-2 px-4 font-semibold"
+                href=href
+            >
+                {children()}
+            </A>
+        </li>
+    }
+}
+
 fn main() -> Result<()> {
     console_log::init_with_level(Level::Trace).map_err(|e| anyhow!("{e:?}"))?;
     panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -149,46 +165,13 @@ fn main() -> Result<()> {
         });
     }
 
-    // TODO testing
-    {
-        let api_service = api_service.clone();
-        create_resource(
-            || (),
-            move |_| {
-                let api_service = api_service.clone();
-                async move {
-                    if let Err(e) = api_service.list_users().await {
-                        error!("error listing users: {e:?}");
-                    }
-                }
-            },
-        );
-    }
-
-    // TODO nav menu? or just redirect from not found back to login? redirect from not logged in to login?
-
     mount_to_body(move || {
         view! {
             <Router>
                 <div class="rounded-t-lg overflow-hidden border-t border-l border-r border-gray-400 p-4">
                     <ul class="flex border-b">
-                        <li class="mb-px mr-1">
-                            <A
-                                // TODO how to get selected vs unselected class? aria-current="page" isn't good enough because I can't make the tailwind plugin work
-                                class="bg-white inline-block py-2 px-4 font-semibold text-blue-700 border-l border-t border-r rounded-t"
-                                href="/messages"
-                            >
-                                Messages
-                            </A>
-                        </li>
-                        <li class="mr-1">
-                            <A
-                                class="bg-white inline-block py-2 px-4 font-semibold text-gray-500"
-                                href="/login"
-                            >
-                                Login
-                            </A>
-                        </li>
+                        <NavItem href="/messages".to_string()>Messages</NavItem>
+                        <NavItem href="/login".to_string()>Login</NavItem>
                     </ul>
                 </div>
                 <Routes>
@@ -228,7 +211,7 @@ fn main() -> Result<()> {
                     // TODO create user form
                     // TODO page to see when logged in with logout button
 
-                    <Route path="/*any" view=|| view! { <div>Not found</div> }/>
+                    <Route path="/*any" view=|| view! { <Redirect path="/login"/> }/>
                 </Routes>
             </Router>
         }
