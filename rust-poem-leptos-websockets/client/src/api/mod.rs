@@ -71,6 +71,7 @@ impl APIService {
             response.status(),
             response.headers()
         );
+        // TODO don't parse response body if it's an error, or parse a special case response body
         let response_body = response.bytes().await?;
         let response_body = serde_json::from_slice(&response_body)?;
         debug!(
