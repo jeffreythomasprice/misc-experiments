@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use constants::{BASE_URL, WS_URL};
 use futures::{Sink, SinkExt, StreamExt};
 use leptos::*;
-use leptos_router::{Route, Router, Routes};
+use leptos_router::{Route, Router, Routes, A};
 use log::Level;
 use log::*;
 use shared::{LogInRequest, WebsocketClientToServerMessage, WebsocketServerToClientMessage};
@@ -170,8 +170,28 @@ fn main() -> Result<()> {
     mount_to_body(move || {
         view! {
             <Router>
+                <div class="rounded-t-lg overflow-hidden border-t border-l border-r border-gray-400 p-4">
+                    <ul class="flex border-b">
+                        <li class="mb-px mr-1">
+                            <A
+                                // TODO how to get selected vs unselected class? aria-current="page" isn't good enough because I can't make the tailwind plugin work
+                                class="bg-white inline-block py-2 px-4 font-semibold text-blue-700 border-l border-t border-r rounded-t"
+                                href="/messages"
+                            >
+                                Messages
+                            </A>
+                        </li>
+                        <li class="mr-1">
+                            <A
+                                class="bg-white inline-block py-2 px-4 font-semibold text-gray-500"
+                                href="/login"
+                            >
+                                Login
+                            </A>
+                        </li>
+                    </ul>
+                </div>
                 <Routes>
-
                     <Route
                         path="/messages"
                         view=move || {

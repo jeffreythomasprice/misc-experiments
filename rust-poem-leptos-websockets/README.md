@@ -1,5 +1,6 @@
 ```
 cd client
+npx tailwindcss -i ./index.css -o ./generated/index.css
 trunk serve
 ```
 
