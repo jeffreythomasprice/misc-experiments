@@ -1,7 +1,7 @@
 use super::APIService;
 
 use anyhow::Result;
-use shared::{CreateUserRequest, LogInRequest, UserResponse};
+use shared::{CreateUserRequest, LogInRequest, LogInResponse, UserResponse};
 
 impl APIService {
     pub async fn list_users(&self) -> Result<Vec<UserResponse>> {
@@ -13,7 +13,7 @@ impl APIService {
             .await
     }
 
-    pub async fn log_in(&self, request: &LogInRequest) -> Result<UserResponse> {
+    pub async fn log_in(&self, request: &LogInRequest) -> Result<LogInResponse> {
         self.post_json_request_json_response("/login", request)
             .await
     }

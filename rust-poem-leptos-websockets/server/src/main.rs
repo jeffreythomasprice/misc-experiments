@@ -1,3 +1,4 @@
+mod auth;
 mod db;
 mod users;
 mod websockets;
@@ -16,14 +17,47 @@ use diesel::{
 use dotenvy::dotenv;
 use poem::{
     get,
+    http::StatusCode,
     listener::TcpListener,
     middleware::{AddData, Cors, Tracing},
-    post, EndpointExt, Route, Server,
+    post,
+    web::Json,
+    EndpointExt, IntoResponse, Route, Server,
 };
-use shared::WebsocketServerToClientMessage;
+use shared::ErrorResponse;
 use users::{create_user, list_users, log_in};
 use uuid::Uuid;
 use websockets::{websocket, ActiveWebsocket};
+
+// TODO move me to a routes module
+#[derive(Debug, Clone)]
+struct StandardErrorResponse {
+    pub status_code: StatusCode,
+    pub body: ErrorResponse,
+}
+
+impl From<StatusCode> for StandardErrorResponse {
+    fn from(value: StatusCode) -> Self {
+        Self {
+            status_code: value,
+            body: ErrorResponse {
+                message: format!("TODO message for status code"),
+            },
+        }
+    }
+}
+
+impl IntoResponse for StandardErrorResponse {
+    fn into_response(self) -> poem::Response {
+        (self.status_code, Json(self.body)).into_response()
+    }
+}
+
+impl Into<poem::error::Error> for StandardErrorResponse {
+    fn into(self) -> poem::error::Error {
+        poem::error::Error::from_response(self.into_response())
+    }
+}
 
 struct AppState {
     db: Pool<ConnectionManager<PgConnection>>,

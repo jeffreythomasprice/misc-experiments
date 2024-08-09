@@ -13,6 +13,11 @@ pub enum WebsocketServerToClientMessage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorResponse {
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserResponse {
     pub id: i32,
     pub username: String,
@@ -46,4 +51,9 @@ impl Debug for LogInRequest {
             .field("password", &"<redacted>")
             .finish()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogInResponse {
+    pub token: String,
 }

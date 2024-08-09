@@ -7,22 +7,22 @@ use poem::{
     web::{Data, Json},
 };
 
-use crate::{db, AppState};
+use crate::{auth::create_token, db, AppState, StandardErrorResponse};
 use tracing::*;
 
 #[handler]
 pub fn list_users(
     Data(state): Data<&Arc<AppState>>,
-) -> Result<Json<Vec<shared::UserResponse>>, StatusCode> {
+) -> Result<Json<Vec<shared::UserResponse>>, StandardErrorResponse> {
     use self::db::schema::users::dsl::*;
 
     let db = &mut state.db.get().unwrap();
     let results = users
         .select(db::models::User::as_select())
         .load(db)
-        .map_err(|e| {
+        .map_err(|e| -> StandardErrorResponse {
             error!("error selecting users: {e:?}");
-            StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::INTERNAL_SERVER_ERROR.into()
         })?
         .into_iter()
         .map(|x| x.into())
@@ -34,7 +34,7 @@ pub fn list_users(
 pub fn create_user(
     Data(state): Data<&Arc<AppState>>,
     Json(request): Json<shared::CreateUserRequest>,
-) -> Result<Json<shared::UserResponse>, StatusCode> {
+) -> Result<Json<shared::UserResponse>, StandardErrorResponse> {
     use crate::db::schema::users;
 
     let request: db::models::UserWithJustUsernameAndPassword = request.into();
@@ -43,9 +43,9 @@ pub fn create_user(
         .values(&request)
         .returning(db::models::User::as_returning())
         .get_result(db)
-        .map_err(|e| {
+        .map_err(|e| -> StandardErrorResponse {
             error!("error inserting new user: {e:?}");
-            StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::INTERNAL_SERVER_ERROR.into()
         })?
         .into();
     Ok(Json(result))
@@ -55,7 +55,7 @@ pub fn create_user(
 pub fn log_in(
     Data(state): Data<&Arc<AppState>>,
     Json(request): Json<shared::LogInRequest>,
-) -> Result<Json<shared::UserResponse>, StatusCode> {
+) -> Result<Json<shared::LogInResponse>, StandardErrorResponse> {
     use self::db::schema::users::dsl::*;
 
     let db = &mut state.db.get().unwrap();
@@ -68,18 +68,23 @@ pub fn log_in(
         .limit(1)
         .select(db::models::User::as_select())
         .load(db)
-        .map_err(|e| {
+        .map_err(|e| -> StandardErrorResponse {
             error!("error checking user credentials: {e:?}");
-            StatusCode::INTERNAL_SERVER_ERROR
+            StatusCode::INTERNAL_SERVER_ERROR.into()
         })?;
     match &results[..] {
         [user] => {
             debug!("found user with correct credentials");
-            Ok(Json((*user).clone().into()))
+            Ok(Json(shared::LogInResponse {
+                token: create_token(user).map_err(|e| -> StandardErrorResponse {
+                    error!("error creating jwt: {e:?}");
+                    StatusCode::INTERNAL_SERVER_ERROR.into()
+                })?,
+            }))
         }
         _ => {
             debug!("incorrect credentials");
-            Err(StatusCode::UNAUTHORIZED)
+            Err(StatusCode::UNAUTHORIZED.into())
         }
     }
 }
