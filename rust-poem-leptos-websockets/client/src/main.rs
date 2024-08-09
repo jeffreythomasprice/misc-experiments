@@ -3,31 +3,20 @@ mod components;
 mod constants;
 
 use anyhow::{anyhow, Result};
-use api::websockets::WebsocketService;
 use api::APIService;
-use chrono::{DateTime, Utc};
 use components::{ForgotPassword, Login, Messages, Nav, NavItem, SignUp};
-use constants::{BASE_URL, WS_URL};
-use futures::{Sink, SinkExt, StreamExt};
+use constants::BASE_URL;
 use leptos::*;
 use leptos_router::{Redirect, Route, Router, Routes};
 use log::Level;
 use log::*;
-use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
-use std::pin::Pin;
-use std::{
-    panic,
-    sync::{Arc, Mutex},
-};
-use uuid::Uuid;
+use std::panic;
 
 fn main() -> Result<()> {
     console_log::init_with_level(Level::Trace).map_err(|e| anyhow!("{e:?}"))?;
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
     let api_service = APIService::new(BASE_URL.to_owned());
-
-    let websocket_service = WebsocketService::new(WS_URL.to_owned());
 
     mount_to_body(move || {
         view! {
@@ -37,15 +26,7 @@ fn main() -> Result<()> {
                     <NavItem href="/login".to_string()>Login</NavItem>
                 </Nav>
                 <Routes>
-                    <Route
-                        path="/messages"
-                        view={
-                            let websocket_service = websocket_service.clone();
-                            move || {
-                                view! { <Messages service=websocket_service.clone()/> }
-                            }
-                        }
-                    />
+                    <Route path="/messages" view=|| view! { <Messages/> }/>
 
                     <Route
                         path="/login"
