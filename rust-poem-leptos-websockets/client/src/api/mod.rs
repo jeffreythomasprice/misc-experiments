@@ -1,4 +1,5 @@
 pub mod users;
+pub mod websockets;
 
 use std::fmt::Debug;
 
@@ -14,10 +15,8 @@ pub struct APIService {
 }
 
 impl APIService {
-    pub fn new(base_url: &str) -> Self {
-        APIService {
-            base_url: base_url.to_owned(),
-        }
+    pub fn new(base_url: String) -> Self {
+        APIService { base_url }
     }
 
     async fn get_json_response<ResponseType>(&self, path: &str) -> Result<ResponseType>

@@ -1,4 +1,8 @@
-use std::{fmt::Debug, pin::Pin};
+use std::{
+    fmt::Debug,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
 use futures::{stream, Sink, SinkExt, Stream, StreamExt};
@@ -6,9 +10,62 @@ use leptos::*;
 use log::*;
 use pharos::{Observable, ObserveConfig};
 use serde::{de::DeserializeOwned, Serialize};
+use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
 use ws_stream_wasm::{WsErr, WsMessage, WsMeta};
 
-pub async fn new_websocket_with_url<OutgoingMessage, IncomingMessage>(
+#[derive(Clone)]
+pub struct WebsocketService {
+    url: String,
+    sink: Arc<
+        Mutex<
+            Option<
+                Pin<Box<dyn Sink<WebsocketClientToServerMessage, Error = ws_stream_wasm::WsErr>>>,
+            >,
+        >,
+    >,
+}
+
+impl WebsocketService {
+    pub fn new(url: String) -> Self {
+        Self {
+            url,
+            sink: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub async fn connect(
+        &mut self,
+        output: impl Fn(WebsocketServerToClientMessage) + 'static,
+    ) -> Result<()> {
+        let (sink, mut stream) = new_websocket_with_url::<
+            WebsocketClientToServerMessage,
+            WebsocketServerToClientMessage,
+        >(&self.url)
+        .await?;
+
+        let mut self_sink = self.sink.lock().unwrap();
+        self_sink.replace(sink);
+
+        spawn_local(async move {
+            while let Some(msg) = stream.next().await {
+                info!("received message from websocket: {msg:?}");
+                output(msg);
+            }
+        });
+
+        Ok(())
+    }
+
+    pub async fn send(&self, msg: WebsocketClientToServerMessage) -> Result<()> {
+        let sink = &mut *self.sink.lock().unwrap();
+        if let Some(sink) = sink {
+            sink.send(msg).await?;
+        }
+        Ok(())
+    }
+}
+
+async fn new_websocket_with_url<OutgoingMessage, IncomingMessage>(
     url: &str,
 ) -> Result<(
     Pin<Box<dyn Sink<OutgoingMessage, Error = WsErr>>>,
