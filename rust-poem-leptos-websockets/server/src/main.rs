@@ -1,7 +1,6 @@
-mod auth;
 mod db;
-mod users;
-mod websockets;
+mod routes;
+mod service;
 
 use std::{
     collections::HashMap,
@@ -24,10 +23,12 @@ use poem::{
     web::Json,
     EndpointExt, IntoResponse, Route, Server,
 };
+use routes::{
+    users::{create_user, list_users, log_in},
+    websockets::{websocket, ActiveWebsocket},
+};
 use shared::ErrorResponse;
-use users::{create_user, list_users, log_in};
 use uuid::Uuid;
-use websockets::{websocket, ActiveWebsocket};
 
 // TODO move me to a routes module
 #[derive(Debug, Clone)]
@@ -41,7 +42,10 @@ impl From<StatusCode> for StandardErrorResponse {
         Self {
             status_code: value,
             body: ErrorResponse {
-                message: format!("TODO message for status code"),
+                message: match value.canonical_reason() {
+                    Some(x) => x.to_owned(),
+                    None => value.to_string(),
+                },
             },
         }
     }

@@ -21,6 +21,8 @@ use std::{
 use uuid::Uuid;
 use websockets::new_websocket_with_url;
 
+// TODO move all the components to new files
+
 #[derive(Debug, Clone)]
 struct DisplayedMessage {
     id: Uuid,
@@ -74,8 +76,11 @@ fn LoginForm(api_service: APIService) -> impl IntoView {
     let (username, set_username) = create_signal("".to_owned());
     let (password, set_password) = create_signal("".to_owned());
 
+    let (error_message, set_error_message) = create_signal::<Option<String>>(None);
+
     let log_in_action = create_action(move |request: &LogInRequest| {
         let request = request.clone();
+        set_error_message.set(None);
         {
             let api_service = api_service.clone();
             async move {
@@ -85,8 +90,7 @@ fn LoginForm(api_service: APIService) -> impl IntoView {
                         debug!("TODO login response: {response:?}");
                     }
                     Err(e) => {
-                        // TODO put error message on screen
-                        error!("error logging in: {e:?}");
+                        set_error_message.set(Some(e.to_string()));
                     }
                 };
             }
@@ -161,6 +165,21 @@ fn LoginForm(api_service: APIService) -> impl IntoView {
                             </div>
                         </div>
                     </div>
+
+                    {move || {
+                        error_message
+                            .get()
+                            .map(|s| {
+                                view! {
+                                    <div
+                                        class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
+                                        role="alert"
+                                    >
+                                        <span class="block sm:inline">{s}</span>
+                                    </div>
+                                }
+                            })
+                    }}
 
                     <div>
                         <button

@@ -6,6 +6,7 @@ use anyhow::Result;
 use log::*;
 use reqwest::Response;
 use serde::{de::DeserializeOwned, Serialize};
+use shared::ErrorResponse;
 
 #[derive(Clone)]
 pub struct APIService {
@@ -66,18 +67,23 @@ impl APIService {
     where
         ResponseType: DeserializeOwned + Debug,
     {
-        let response_str = format!(
-            "status={}, headers={:?}",
-            response.status(),
-            response.headers()
-        );
-        // TODO don't parse response body if it's an error, or parse a special case response body
+        let status = response.status();
+        let response_str = format!("status={}, headers={:?}", status, response.headers());
         let response_body = response.bytes().await?;
-        let response_body = serde_json::from_slice(&response_body)?;
-        debug!(
-            "{} {} response: {}, body={:?}",
-            method, url, response_str, response_body
-        );
-        Ok(response_body)
+        if status.is_success() {
+            let response_body: ResponseType = serde_json::from_slice(&response_body)?;
+            debug!(
+                "{} {} response: {}, body={:?}",
+                method, url, response_str, response_body
+            );
+            Ok(response_body)
+        } else {
+            let response_body: ErrorResponse = serde_json::from_slice(&response_body)?;
+            error!(
+                "{} {} response: {}, body={:?}",
+                method, url, response_str, response_body
+            );
+            Err(anyhow::Error::msg(response_body.message))
+        }
     }
 }
