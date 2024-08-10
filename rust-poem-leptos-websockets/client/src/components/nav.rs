@@ -1,5 +1,7 @@
-use leptos::{component, view, Children, IntoView};
+use leptos::{component, expect_context, view, Children, IntoView, SignalSet};
 use leptos_router::A;
+
+use crate::api::APIService;
 
 #[component]
 #[allow(non_snake_case)]
@@ -22,7 +24,24 @@ pub fn NavItem(href: String, children: Children) -> impl IntoView {
 pub fn Nav(children: Children) -> impl IntoView {
     view! {
         <div class="rounded-t-lg overflow-hidden border-t border-l border-r border-gray-400 p-4">
-            <ul class="flex border-b">{children()}</ul>
+            <ul class="flex border-b">{children()} <LogoutButton/></ul>
         </div>
+    }
+}
+
+#[component]
+#[allow(non_snake_case)]
+pub fn LogoutButton() -> impl IntoView {
+    let api_service = expect_context::<APIService>();
+
+    view! {
+        <li class="ml-auto">
+            <button
+                class="bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-2 px-4 border border-blue-500 hover:border-transparent rounded"
+                on:click=move |_| { api_service.auth_token.set(None) }
+            >
+                Log Out
+            </button>
+        </li>
     }
 }

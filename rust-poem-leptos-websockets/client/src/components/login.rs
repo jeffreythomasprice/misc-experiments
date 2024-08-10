@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use leptos::{
-    component, create_action, create_signal, event_target_value, view, IntoView, SignalGet,
-    SignalSet, WriteSignal,
+    component, create_action, create_signal, event_target_value, expect_context, view, IntoView,
+    RwSignal, SignalGet, SignalSet, WriteSignal,
 };
 use leptos_router::A;
 use shared::{LogInRequest, LogInResponse};
@@ -11,7 +11,9 @@ use crate::api::APIService;
 
 #[component]
 #[allow(non_snake_case)]
-pub fn Login(api_service: Arc<APIService>) -> impl IntoView {
+pub fn Login() -> impl IntoView {
+    let api_service = expect_context::<APIService>();
+
     let (username, set_username) = create_signal("".to_owned());
     let (password, set_password) = create_signal("".to_owned());
 
@@ -69,6 +71,7 @@ pub fn Login(api_service: Arc<APIService>) -> impl IntoView {
                                     placeholder="Username"
                                     class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 sm:text-sm sm:leading-6"
                                     prop:value=username
+                                    autofocus
                                     on:input=move |e| set_username.set(event_target_value(&e))
                                 />
                             </div>

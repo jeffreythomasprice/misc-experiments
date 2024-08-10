@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use leptos::{
-    component, create_action, create_signal, event_target_value, view, IntoView, SignalGet,
-    SignalSet,
+    component, create_action, create_signal, event_target_value, expect_context, view, IntoView,
+    SignalGet, SignalSet,
 };
 use leptos_router::A;
 use log::*;
@@ -12,7 +12,9 @@ use crate::api::APIService;
 
 #[component]
 #[allow(non_snake_case)]
-pub fn SignUp(api_service: Arc<APIService>) -> impl IntoView {
+pub fn SignUp() -> impl IntoView {
+    let api_service = expect_context::<APIService>();
+
     let (username, set_username) = create_signal("".to_owned());
     let (password, set_password) = create_signal("".to_owned());
     let (confirm_password, set_confirm_password) = create_signal("".to_owned());

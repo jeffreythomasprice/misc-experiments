@@ -10,10 +10,10 @@ use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
 use shared::ErrorResponse;
 
+#[derive(Clone)]
 pub struct APIService {
     base_url: String,
-    // TODO clones on every read? make this something that clones easier?
-    auth_token: RwSignal<Option<String>>,
+    pub auth_token: RwSignal<Option<String>>,
 }
 
 impl APIService {
@@ -22,10 +22,6 @@ impl APIService {
             base_url,
             auth_token: create_rw_signal(None),
         }
-    }
-
-    pub fn auth_token(&self) -> leptos::ReadSignal<Option<String>> {
-        self.auth_token.read_only()
     }
 
     async fn get_json_response<ResponseType>(&self, path: &str) -> Result<ResponseType>
