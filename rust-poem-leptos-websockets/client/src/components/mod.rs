@@ -8,3 +8,5 @@ mod nav;
 pub use nav::*;
 mod messages;
 pub use messages::*;
+mod home;
+pub use home::*;

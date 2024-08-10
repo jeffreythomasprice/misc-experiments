@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use leptos::{
     component, create_action, create_signal, event_target_value, view, IntoView, SignalGet,
     SignalSet,
@@ -10,7 +12,7 @@ use crate::api::APIService;
 
 #[component]
 #[allow(non_snake_case)]
-pub fn SignUp(api_service: APIService) -> impl IntoView {
+pub fn SignUp(api_service: Arc<APIService>) -> impl IntoView {
     let (username, set_username) = create_signal("".to_owned());
     let (password, set_password) = create_signal("".to_owned());
     let (confirm_password, set_confirm_password) = create_signal("".to_owned());

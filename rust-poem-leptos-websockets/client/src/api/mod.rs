@@ -4,19 +4,28 @@ pub mod websockets;
 use std::fmt::Debug;
 
 use anyhow::Result;
+use leptos::{create_rw_signal, RwSignal, SignalGet, SignalGetUntracked, SignalSet};
 use log::*;
-use reqwest::Response;
+use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
 use shared::ErrorResponse;
 
-#[derive(Clone)]
 pub struct APIService {
     base_url: String,
+    // TODO clones on every read? make this something that clones easier?
+    auth_token: RwSignal<Option<String>>,
 }
 
 impl APIService {
     pub fn new(base_url: String) -> Self {
-        APIService { base_url }
+        APIService {
+            base_url,
+            auth_token: create_rw_signal(None),
+        }
+    }
+
+    pub fn auth_token(&self) -> leptos::ReadSignal<Option<String>> {
+        self.auth_token.read_only()
     }
 
     async fn get_json_response<ResponseType>(&self, path: &str) -> Result<ResponseType>
@@ -25,8 +34,11 @@ impl APIService {
     {
         let url = self.join_url(path);
         trace!("making GET request to {}", url);
-        let response = reqwest::get(url.clone()).await?;
-        Ok(Self::json_response("GET", &url, response).await?)
+        let response = self
+            .auth_header(reqwest::Client::new().get(url.clone()))
+            .send()
+            .await?;
+        self.json_response("GET", &url, response).await
     }
 
     async fn post_json_request_json_response<RequestType, ResponseType>(
@@ -40,14 +52,13 @@ impl APIService {
     {
         let url = self.join_url(path);
         trace!("making POST request to {}, body={:?}", url, request);
-        let client = reqwest::Client::new();
-        let response = client
-            .post(url.clone())
+        let response = self
+            .auth_header(reqwest::Client::new().post(url.clone()))
             .header("Content-Type", "application/json")
             .body(serde_json::to_string(request)?)
             .send()
             .await?;
-        Ok(Self::json_response("POST", &url, response).await?)
+        self.json_response("POST", &url, response).await
     }
 
     fn join_url(&self, path: &str) -> String {
@@ -59,6 +70,7 @@ impl APIService {
     }
 
     async fn json_response<ResponseType>(
+        &self,
         method: &str,
         url: &str,
         response: Response,
@@ -77,12 +89,23 @@ impl APIService {
             );
             Ok(response_body)
         } else {
+            if status == StatusCode::UNAUTHORIZED {
+                self.auth_token.set(None);
+            }
             let response_body: ErrorResponse = serde_json::from_slice(&response_body)?;
             error!(
                 "{} {} response: {}, body={:?}",
                 method, url, response_str, response_body
             );
             Err(anyhow::Error::msg(response_body.message))
+        }
+    }
+
+    fn auth_header(&self, r: RequestBuilder) -> RequestBuilder {
+        if let Some(auth_token) = self.auth_token.get_untracked() {
+            r.bearer_auth(auth_token)
+        } else {
+            r
         }
     }
 }

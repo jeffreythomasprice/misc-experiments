@@ -1,6 +1,7 @@
 use super::APIService;
 
 use anyhow::Result;
+use leptos::SignalSet;
 use shared::{CreateUserRequest, LogInRequest, LogInResponse, UserResponse};
 
 impl APIService {
@@ -14,7 +15,11 @@ impl APIService {
     }
 
     pub async fn log_in(&self, request: &LogInRequest) -> Result<LogInResponse> {
-        self.post_json_request_json_response("/login", request)
-            .await
+        let result: LogInResponse = self
+            .post_json_request_json_response("/login", request)
+            .await?;
+        self.auth_token.set(Some(result.token.clone()));
+        log::debug!("logged in, token: {}", result.token);
+        Ok(result)
     }
 }

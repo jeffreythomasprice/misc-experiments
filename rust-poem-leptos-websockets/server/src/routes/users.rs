@@ -7,7 +7,7 @@ use poem::{
     web::{Data, Json},
 };
 
-use crate::{db, service::auth::create_token, AppState, StandardErrorResponse};
+use crate::{db, routes::StandardErrorResponse, service::auth::create_token, AppState};
 use tracing::*;
 
 #[handler]

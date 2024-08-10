@@ -1,16 +1,17 @@
+use std::sync::Arc;
+
 use leptos::{
     component, create_action, create_signal, event_target_value, view, IntoView, SignalGet,
-    SignalSet,
+    SignalSet, WriteSignal,
 };
 use leptos_router::A;
-use log::*;
-use shared::LogInRequest;
+use shared::{LogInRequest, LogInResponse};
 
 use crate::api::APIService;
 
 #[component]
 #[allow(non_snake_case)]
-pub fn Login(api_service: APIService) -> impl IntoView {
+pub fn Login(api_service: Arc<APIService>) -> impl IntoView {
     let (username, set_username) = create_signal("".to_owned());
     let (password, set_password) = create_signal("".to_owned());
 
@@ -25,15 +26,9 @@ pub fn Login(api_service: APIService) -> impl IntoView {
         {
             let api_service = api_service.clone();
             async move {
-                match api_service.log_in(&request).await {
-                    Ok(response) => {
-                        // TODO pass this up the chain
-                        debug!("TODO login response: {response:?}");
-                    }
-                    Err(e) => {
-                        set_error_message.set(Some(e.to_string()));
-                    }
-                };
+                if let Err(e) = api_service.log_in(&request).await {
+                    set_error_message.set(Some(e.to_string()));
+                }
             }
         }
     });
