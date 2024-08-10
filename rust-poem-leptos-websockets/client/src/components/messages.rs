@@ -29,7 +29,6 @@ pub fn Messages() -> impl IntoView {
     let (messages, set_messages) = create_signal(Vec::<DisplayedMessage>::new());
     let (next_message, set_next_message) = create_signal("".to_owned());
 
-    // TODO doesn't need Arc?
     let (sink, set_sink) = create_signal(Arc::new(Mutex::new(
         None::<Pin<Box<dyn Sink<WebsocketClientToServerMessage, Error = WsErr>>>>,
     )));

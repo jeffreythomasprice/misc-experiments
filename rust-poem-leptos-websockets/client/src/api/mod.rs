@@ -4,11 +4,15 @@ pub mod websockets;
 use std::fmt::Debug;
 
 use anyhow::Result;
-use leptos::{create_rw_signal, RwSignal, SignalGet, SignalGetUntracked, SignalSet};
+use leptos::{create_effect, create_rw_signal, RwSignal, SignalGet, SignalGetUntracked, SignalSet};
 use log::*;
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::{de::DeserializeOwned, Serialize};
 use shared::ErrorResponse;
+
+use crate::storage::{get_local_storage_string, set_local_storage_string};
+
+const AUTH_TOKEN_STORANGE_NAME: &str = "auth_token";
 
 #[derive(Clone)]
 pub struct APIService {
@@ -18,9 +22,15 @@ pub struct APIService {
 
 impl APIService {
     pub fn new(base_url: String) -> Self {
+        let auth_token = create_rw_signal(get_local_storage_string(AUTH_TOKEN_STORANGE_NAME));
+
+        create_effect(move |_| {
+            set_local_storage_string(AUTH_TOKEN_STORANGE_NAME, auth_token.get())
+        });
+
         APIService {
             base_url,
-            auth_token: create_rw_signal(None),
+            auth_token,
         }
     }
 

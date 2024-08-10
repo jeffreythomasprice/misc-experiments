@@ -1,5 +1,5 @@
 use leptos::{component, expect_context, view, Children, IntoView, SignalSet};
-use leptos_router::A;
+use leptos_router::{NavigateOptions, A};
 
 use crate::api::APIService;
 
@@ -38,8 +38,12 @@ pub fn LogoutButton() -> impl IntoView {
         <li class="ml-auto">
             <button
                 class="bg-transparent hover:bg-blue-500 text-blue-700 font-semibold hover:text-white py-2 px-4 border border-blue-500 hover:border-transparent rounded"
-                on:click=move |_| { api_service.auth_token.set(None) }
+                on:click=move |_| {
+                    api_service.auth_token.set(None);
+                    leptos_router::use_navigate()("/login", NavigateOptions::default());
+                }
             >
+
                 Log Out
             </button>
         </li>

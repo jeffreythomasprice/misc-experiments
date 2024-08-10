@@ -1,8 +1,8 @@
-
 use leptos::{
-    component, create_action, create_signal, event_target_value, expect_context, view, IntoView, SignalGet, SignalSet,
+    component, create_action, create_signal, event_target_value, expect_context, view, IntoView,
+    SignalGet, SignalSet,
 };
-use leptos_router::A;
+use leptos_router::{NavigateOptions, A};
 use shared::LogInRequest;
 
 use crate::api::APIService;
@@ -26,8 +26,13 @@ pub fn Login() -> impl IntoView {
         {
             let api_service = api_service.clone();
             async move {
-                if let Err(e) = api_service.log_in(&request).await {
-                    set_error_message.set(Some(e.to_string()));
+                match api_service.log_in(&request).await {
+                    Ok(_) => {
+                        leptos_router::use_navigate()("/home", NavigateOptions::default());
+                    }
+                    Err(e) => {
+                        set_error_message.set(Some(e.to_string()));
+                    }
                 }
             }
         }

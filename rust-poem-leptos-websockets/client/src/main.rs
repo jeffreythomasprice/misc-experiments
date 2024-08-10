@@ -1,13 +1,14 @@
 mod api;
 mod components;
 mod constants;
+mod storage;
 
 use anyhow::{anyhow, Result};
 use api::APIService;
 use components::{ForgotPassword, Home, Login, Messages, Nav, NavItem, SignUp};
 use constants::BASE_URL;
 use leptos::*;
-use leptos_router::{NavigateOptions, ProtectedRoute, Redirect, Route, Router, Routes};
+use leptos_router::{ProtectedRoute, Redirect, Route, Router, Routes};
 use log::Level;
 use std::panic;
 
@@ -15,22 +16,12 @@ fn main() -> Result<()> {
     console_log::init_with_level(Level::Trace).map_err(|e| anyhow!("{e:?}"))?;
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-    // TODO load and store auth token from local storage
-
     provide_context(APIService::new(BASE_URL.to_owned()));
 
     let is_authenticated = {
         let api_service = expect_context::<APIService>();
         create_memo(move |_| api_service.auth_token.get().is_some())
     };
-
-    create_effect(move |_| {
-        if is_authenticated.get() {
-            leptos_router::use_navigate()("/home", NavigateOptions::default());
-        } else {
-            leptos_router::use_navigate()("/login", NavigateOptions::default());
-        }
-    });
 
     mount_to_body(move || {
         view! {
