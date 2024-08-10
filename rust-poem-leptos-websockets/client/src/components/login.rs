@@ -1,11 +1,9 @@
-use std::sync::Arc;
 
 use leptos::{
-    component, create_action, create_signal, event_target_value, expect_context, view, IntoView,
-    RwSignal, SignalGet, SignalSet, WriteSignal,
+    component, create_action, create_signal, event_target_value, expect_context, view, IntoView, SignalGet, SignalSet,
 };
 use leptos_router::A;
-use shared::{LogInRequest, LogInResponse};
+use shared::LogInRequest;
 
 use crate::api::APIService;
 
