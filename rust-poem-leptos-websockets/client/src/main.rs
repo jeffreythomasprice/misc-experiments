@@ -17,6 +17,7 @@ fn main() -> Result<()> {
 
     // TODO load and store auth token from local storage
     // TODO initial page based on whether we're logged in
+    // TODO logout button
 
     let api_service = Arc::new(APIService::new(BASE_URL.to_owned()));
 
