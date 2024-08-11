@@ -26,6 +26,7 @@ impl APIService {
 
         create_effect(move |_| {
             set_local_storage_string(AUTH_TOKEN_STORANGE_NAME, auth_token.get())
+            // TODO if expired set to None
         });
 
         APIService {

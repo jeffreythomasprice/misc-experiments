@@ -24,7 +24,7 @@ pub fn NavItem(href: String, children: Children) -> impl IntoView {
 pub fn Nav(children: Children) -> impl IntoView {
     view! {
         <div class="rounded-t-lg overflow-hidden border-t border-l border-r border-gray-400 p-4">
-            <ul class="flex border-b">{children()} <LogoutButton/></ul>
+            <ul class="flex border-b">{children()}</ul>
         </div>
     }
 }

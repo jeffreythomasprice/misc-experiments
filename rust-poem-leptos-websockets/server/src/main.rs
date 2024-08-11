@@ -50,8 +50,7 @@ async fn main() -> Result<()> {
         )
         .at("/login", post(log_in))
         .with(Tracing)
-        .with(AddData::new(state))
-        .with(Cors::new());
+        .with(AddData::new(state));
     Server::new(TcpListener::bind(format!(
         "{}:{}",
         std::env::var("ADDRESS")?,
@@ -62,3 +61,5 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
+// TODO auth middleware, see https://github.com/poem-web/poem/blob/master/examples/poem/basic-auth/src/main.rs

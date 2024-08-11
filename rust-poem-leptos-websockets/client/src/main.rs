@@ -5,7 +5,7 @@ mod storage;
 
 use anyhow::{anyhow, Result};
 use api::APIService;
-use components::{ForgotPassword, Home, Login, Messages, Nav, NavItem, SignUp};
+use components::{ForgotPassword, Home, Login, LogoutButton, Messages, Nav, NavItem, SignUp};
 use constants::BASE_URL;
 use leptos::*;
 use leptos_router::{ProtectedRoute, Redirect, Route, Router, Routes};
@@ -30,6 +30,7 @@ fn main() -> Result<()> {
                     <Nav>
                         <NavItem href="/home".to_string()>Home</NavItem>
                         <NavItem href="/messages".to_string()>Messages</NavItem>
+                        <LogoutButton/>
                     </Nav>
                 </Show>
                 <Routes>
