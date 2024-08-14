@@ -24,6 +24,8 @@ struct GraphicsState {
     render_pipeline: wgpu::RenderPipeline,
 }
 
+// TODO next: https://sotrh.github.io/learn-wgpu/beginner/tutorial4-buffer/
+
 impl GraphicsState {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -88,13 +90,13 @@ impl GraphicsState {
         let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders/shader.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                // TODO unneded?
+                // TODO unneeded?
                 label: Some("render pipeline layout"),
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            // TODO unneded?
+            // TODO unneeded?
             label: Some("render pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
@@ -162,13 +164,13 @@ impl GraphicsState {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                // TODO unneded?
+                // TODO unneeded?
                 label: Some("Render Encoder"),
             });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                // TODO unneded?
+                // TODO unneeded?
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
