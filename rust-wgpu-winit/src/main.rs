@@ -5,6 +5,7 @@ use std::{
     env, process,
     sync::{Arc, Mutex},
 };
+use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
@@ -14,6 +15,34 @@ use winit::{
     window::Window,
 };
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+impl Vertex {
+    pub fn layout() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x3,
+                    offset: std::mem::offset_of!(Vertex, position) as u64,
+                    shader_location: 0,
+                },
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x3,
+                    offset: std::mem::offset_of!(Vertex, color) as u64,
+                    shader_location: 1,
+                },
+            ],
+        }
+    }
+}
+
 struct GraphicsState {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
@@ -22,9 +51,11 @@ struct GraphicsState {
     size: PhysicalSize<u32>,
 
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
+    vertex_count: u32,
 }
 
-// TODO next: https://sotrh.github.io/learn-wgpu/beginner/tutorial4-buffer/
+// TODO next: https://sotrh.github.io/learn-wgpu/beginner/tutorial4-buffer/#the-index-buffer
 
 impl GraphicsState {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
@@ -90,20 +121,18 @@ impl GraphicsState {
         let shader = device.create_shader_module(wgpu::include_wgsl!("./shaders/shader.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                // TODO unneeded?
-                label: Some("render pipeline layout"),
+                label: None,
                 bind_group_layouts: &[],
                 push_constant_ranges: &[],
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            // TODO unneeded?
-            label: Some("render pipeline"),
+            label: None,
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[],
+                buffers: &[Vertex::layout()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -134,6 +163,26 @@ impl GraphicsState {
             cache: None,
         });
 
+        let vertex_data = &[
+            Vertex {
+                position: [0.0, 0.5, 0.0],
+                color: [1.0, 0.0, 0.0],
+            },
+            Vertex {
+                position: [-0.5, -0.5, 0.0],
+                color: [0.0, 1.0, 0.0],
+            },
+            Vertex {
+                position: [0.5, -0.5, 0.0],
+                color: [0.0, 0.0, 1.0],
+            },
+        ];
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(vertex_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         Ok(Self {
             surface,
             device,
@@ -142,6 +191,8 @@ impl GraphicsState {
             size,
 
             render_pipeline,
+            vertex_buffer,
+            vertex_count: vertex_data.len() as u32,
         })
     }
 
@@ -163,15 +214,11 @@ impl GraphicsState {
 
         let mut encoder = self
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                // TODO unneeded?
-                label: Some("Render Encoder"),
-            });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                // TODO unneeded?
-                label: Some("Render Pass"),
+                label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -191,7 +238,8 @@ impl GraphicsState {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..self.vertex_count, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
@@ -254,15 +302,10 @@ impl ApplicationHandler for App {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                if let Some(window) = self.window.as_ref() {
-                    // TODO unneeded?
-                    // window.pre_present_notify();
-
-                    if let Some(graphics_state) = self.graphics_state.lock().unwrap().as_ref() {
-                        if let Err(e) = graphics_state.render() {
-                            error!("error rendering: {e:?}");
-                            process::exit(1);
-                        }
+                if let Some(graphics_state) = self.graphics_state.lock().unwrap().as_ref() {
+                    if let Err(e) = graphics_state.render() {
+                        error!("error rendering: {e:?}");
+                        process::exit(1);
                     }
                 }
             }
