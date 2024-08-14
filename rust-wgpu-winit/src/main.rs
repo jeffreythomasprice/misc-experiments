@@ -52,10 +52,11 @@ struct GraphicsState {
 
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    vertex_count: u32,
+    index_buffer: wgpu::Buffer,
+    index_count: u32,
 }
 
-// TODO next: https://sotrh.github.io/learn-wgpu/beginner/tutorial4-buffer/#the-index-buffer
+// TODO next: https://sotrh.github.io/learn-wgpu/beginner/tutorial5-textures/#loading-an-image-from-a-file
 
 impl GraphicsState {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
@@ -165,22 +166,33 @@ impl GraphicsState {
 
         let vertex_data = &[
             Vertex {
-                position: [0.0, 0.5, 0.0],
+                position: [0.5, 0.5, 0.0],
                 color: [1.0, 0.0, 0.0],
             },
             Vertex {
-                position: [-0.5, -0.5, 0.0],
+                position: [-0.5, 0.5, 0.0],
                 color: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [0.5, -0.5, 0.0],
+                position: [-0.5, -0.5, 0.0],
                 color: [0.0, 0.0, 1.0],
+            },
+            Vertex {
+                position: [0.5, -0.5, 0.0],
+                color: [1.0, 0.0, 1.0],
             },
         ];
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::cast_slice(vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_data: &[u16] = &[0, 1, 2, 2, 3, 0];
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None,
+            contents: bytemuck::cast_slice(index_data),
+            usage: wgpu::BufferUsages::INDEX,
         });
 
         Ok(Self {
@@ -192,7 +204,8 @@ impl GraphicsState {
 
             render_pipeline,
             vertex_buffer,
-            vertex_count: vertex_data.len() as u32,
+            index_buffer,
+            index_count: index_data.len() as u32,
         })
     }
 
@@ -239,7 +252,8 @@ impl GraphicsState {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..self.vertex_count, 0..1);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.index_count, 0, 0..1);
         }
 
         // submit will accept anything that implements IntoIter
