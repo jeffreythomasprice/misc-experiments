@@ -1,7 +1,7 @@
 use anyhow::Result;
 use env_logger::DEFAULT_FILTER_ENV;
 use log::*;
-use pixels::{Pixels, SurfaceTexture};
+use pixels::{wgpu::Color, Pixels, ScalingRenderer, SurfaceTexture};
 use std::env;
 use winit::{
     application::ApplicationHandler,
@@ -32,8 +32,14 @@ impl ApplicationHandler for App {
         let height = window.inner_size().height;
         let surface_texture = SurfaceTexture::new(width, height, &window);
         let buffer_size = LogicalSize::new(640, 480);
-        let pixels = Pixels::new(buffer_size.width, buffer_size.height, surface_texture)
+        let mut pixels = Pixels::new(buffer_size.width, buffer_size.height, surface_texture)
             .expect("failed to create pixels");
+        pixels.clear_color(Color {
+            r: 0.1,
+            g: 0.1,
+            b: 0.1,
+            a: 1.0,
+        });
         self.window = Some(AppWindow {
             window,
             pixels,

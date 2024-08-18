@@ -58,6 +58,10 @@ struct GraphicsState {
 
 // TODO next: https://sotrh.github.io/learn-wgpu/beginner/tutorial5-textures/#loading-an-image-from-a-file
 
+// TODO computer shader hello world https://github.com/googlefonts/compute-shader-101/blob/main/compute-shader-hello/src/main.rs
+
+// TODO computer shaders writing to texture https://www.reddit.com/r/wgpu/comments/x5z4tb/writing_to_a_texture_from_a_compute_shader/
+
 impl GraphicsState {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
