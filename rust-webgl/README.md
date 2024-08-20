@@ -2,5 +2,3 @@
 ```
 watchexec trunk serve
 ```
-
-TODO delete old `rust-webgl` and move this to that name

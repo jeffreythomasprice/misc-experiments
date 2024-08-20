@@ -11,7 +11,7 @@ use graphics::{
     shader::{AttributePointer, ShaderProgram},
 };
 use log::*;
-use std::{panic, process, sync::Arc, time::Duration};
+use std::{panic, sync::Arc, time::Duration};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::WebGl2RenderingContext;
 
@@ -67,12 +67,9 @@ impl DemoState {
             offset_of!(Vertex, r) as i32,
         );
 
-        let mut array_buffer = ArrayBuffer::new(
+        let array_buffer = ArrayBuffer::new_with_data(
             context.clone(),
             graphics::array_buffer::Usage::DynamicDraw,
-            3,
-        )?;
-        array_buffer.set(
             &[
                 Vertex {
                     x: -0.5,
@@ -99,7 +96,6 @@ impl DemoState {
                     a: 1.0,
                 },
             ],
-            0,
         )?;
 
         Ok(Self {

@@ -29,7 +29,11 @@ impl<T> ArrayBuffer<T>
 where
     T: Pod,
 {
-    pub fn new(context: Arc<WebGl2RenderingContext>, usage: Usage, len: usize) -> Result<Self> {
+    pub fn new_with_len(
+        context: Arc<WebGl2RenderingContext>,
+        usage: Usage,
+        len: usize,
+    ) -> Result<Self> {
         let buffer = context
             .create_buffer()
             .ok_or(anyhow!("failed to create buffer"))?;
@@ -66,6 +70,16 @@ where
         );
         result.bind_none();
 
+        Ok(result)
+    }
+
+    pub fn new_with_data(
+        context: Arc<WebGl2RenderingContext>,
+        usage: Usage,
+        source: &[T],
+    ) -> Result<Self> {
+        let mut result = Self::new_with_len(context, usage, source.len())?;
+        result.set(source, 0)?;
         Ok(result)
     }
 
