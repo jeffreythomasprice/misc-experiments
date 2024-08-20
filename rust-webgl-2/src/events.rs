@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    mem::forget,
     ops::DerefMut,
     sync::{Arc, Mutex},
     time::Duration,
@@ -21,24 +20,22 @@ use web_sys::{
     HtmlCanvasElement,
 };
 
+pub type EventHandlerFactory =
+    Box<dyn FnOnce(Arc<WebGl2RenderingContext>) -> Result<Box<dyn EventHandler>>>;
+
 pub enum NextEventHandler {
     NoChange,
-    ChangeTo(Box<dyn EventHandler>),
+    ChangeTo(EventHandlerFactory),
 }
 
 pub trait EventHandler {
-    fn activate(&mut self, context: &WebGl2RenderingContext) -> Result<()>;
     fn deactivate(&mut self) -> Result<()>;
-    fn resize(
-        &mut self,
-        context: &WebGl2RenderingContext,
-        size: Size<u32>,
-    ) -> Result<NextEventHandler>;
-    fn render(&mut self, context: &WebGl2RenderingContext) -> Result<NextEventHandler>;
+    fn resize(&mut self, size: Size<u32>) -> Result<NextEventHandler>;
+    fn render(&mut self) -> Result<NextEventHandler>;
     fn update(&mut self, delta: Duration) -> Result<NextEventHandler>;
 }
 
-pub async fn run(initial: Box<dyn EventHandler>) -> Result<()> {
+pub async fn run(initial: EventHandlerFactory) -> Result<()> {
     let canvas = Arc::new(create_canvas()?);
     body()?.replace_children_with_node_1(&canvas);
 
@@ -64,13 +61,10 @@ pub async fn run(initial: Box<dyn EventHandler>) -> Result<()> {
             })?,
     );
 
-    let current_state = Arc::new(Mutex::new(RefCell::new(initial)));
-    {
-        let mut current_state = current_state.lock().unwrap();
-        if let Err(e) = current_state.deref_mut().borrow_mut().activate(&context) {
-            return Err(anyhow!("error activating initial state: {e:?}"));
-        };
-    }
+    let current_state = match initial(context.clone()) {
+        Ok(result) => Arc::new(Mutex::new(RefCell::new(result))),
+        Err(e) => return Err(anyhow!("error creating initial state: {e:?}")),
+    };
 
     let (done_sender, mut done_receiver) = channel(1);
 
@@ -311,7 +305,7 @@ async fn resize(
             canvas.set_width(width);
             canvas.set_height(height);
             let size = Size { width, height };
-            s.resize(&context, size)
+            s.resize(size)
         },
         "resize",
         abort,
@@ -354,7 +348,7 @@ async fn request_animation_frame(
                         update_state(
                             current_state.clone(),
                             context.clone(),
-                            |s| s.render(&context),
+                            |s| s.render(),
                             "render",
                             abort.clone(),
                         )
@@ -401,7 +395,7 @@ async fn update_state<F>(
     let next = f(&mut current_state.deref_mut().borrow_mut());
     match next {
         Ok(NextEventHandler::NoChange) => (),
-        Ok(NextEventHandler::ChangeTo(mut next)) => {
+        Ok(NextEventHandler::ChangeTo(next)) => {
             if let Err(e) = current_state.deref_mut().borrow_mut().deactivate() {
                 if let Err(e) = abort
                     .send(Err(anyhow!(
@@ -413,18 +407,20 @@ async fn update_state<F>(
                 }
                 return;
             }
-            if let Err(e) = next.activate(&context) {
-                if let Err(e) = abort
-                    .send(Err(anyhow!(
-                        "error activating next state, event type: {event_type}, error: {e:?}"
-                    )))
-                    .await
-                {
-                    error!("error sending previous error to abort channel, event type: {event_type}, error: {e:?}");
+            match next(context.clone()) {
+                Ok(next) => current_state.deref_mut().replace(next),
+                Err(e) => {
+                    if let Err(e) = abort
+                        .send(Err(anyhow!(
+                            "error activating next state, event type: {event_type}, error: {e:?}"
+                        )))
+                        .await
+                    {
+                        error!("error sending previous error to abort channel, event type: {event_type}, error: {e:?}");
+                    }
+                    return;
                 }
-                return;
-            }
-            current_state.deref_mut().replace(next);
+            };
         }
         Err(e) => {
             if let Err(e) = abort.send(Err(e)).await {
