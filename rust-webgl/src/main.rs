@@ -8,12 +8,12 @@ use bytemuck::{offset_of, Pod, Zeroable};
 use events::EventHandler;
 use graphics::{
     array_buffer::ArrayBuffer,
-    shader::{AttributePointer, ShaderProgram},
+    shader::{AttributePointer, ShaderProgram, Uniform},
 };
 use log::*;
 use nalgebra::Matrix4;
-use nalgebra_glm::{ortho, Vec2};
-use std::{panic, sync::Arc, time::Duration};
+use nalgebra_glm::{ortho, perspective_fov, rotate_y, translation, Vec2, Vec3};
+use std::{f32::consts::PI, panic, sync::Arc, time::Duration};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::WebGl2RenderingContext;
 
@@ -29,18 +29,24 @@ struct RGBA {
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
 #[repr(C)]
 struct Vertex {
-    position: Vec2,
+    position: Vec3,
     color: RGBA,
 }
 
 struct DemoState {
     context: Arc<WebGl2RenderingContext>,
+
     shader: ShaderProgram,
     position_attribute: AttributePointer,
     color_attribute: AttributePointer,
+    projection_matrix_uniform: Uniform,
+    model_view_matrix_uniform: Uniform,
+
     array_buffer: ArrayBuffer<Vertex>,
 
     projection_matrix: Matrix4<f32>,
+
+    rotation: f32,
 }
 
 impl DemoState {
@@ -75,12 +81,22 @@ impl DemoState {
             offset_of!(Vertex, color) as i32,
         );
 
+        let projection_matrix_uniform = shader
+            .get_uniform_by_name("projection_matrix_uniform")
+            .ok_or(anyhow!("failed to find projection matrix uniform"))?
+            .clone();
+
+        let model_view_matrix_uniform = shader
+            .get_uniform_by_name("model_view_matrix_uniform")
+            .ok_or(anyhow!("failed to find model view matrix uniform"))?
+            .clone();
+
         let array_buffer = ArrayBuffer::new_with_data(
             context.clone(),
             graphics::array_buffer::Usage::DynamicDraw,
             &[
                 Vertex {
-                    position: Vec2::new(50.0, 50.0),
+                    position: Vec3::new(-1.0, -1.0, 0.0),
                     color: RGBA {
                         red: 1.0,
                         green: 0.0,
@@ -89,7 +105,7 @@ impl DemoState {
                     },
                 },
                 Vertex {
-                    position: Vec2::new(300.0, 50.0),
+                    position: Vec3::new(1.0, -1.0, 0.0),
                     color: RGBA {
                         red: 0.0,
                         green: 1.0,
@@ -98,7 +114,7 @@ impl DemoState {
                     },
                 },
                 Vertex {
-                    position: Vec2::new(50.0, 300.0),
+                    position: Vec3::new(0.0, 1.0, 0.0),
                     color: RGBA {
                         red: 0.0,
                         green: 0.0,
@@ -111,12 +127,18 @@ impl DemoState {
 
         Ok(Self {
             context,
+
             shader,
             position_attribute,
             color_attribute,
+            projection_matrix_uniform,
+            model_view_matrix_uniform,
+
             array_buffer,
 
             projection_matrix: Matrix4::identity(),
+
+            rotation: 0.0,
         })
     }
 }
@@ -130,8 +152,13 @@ impl EventHandler for DemoState {
         self.context
             .viewport(0, 0, size.width as i32, size.height as i32);
 
-        self.projection_matrix =
-            ortho::<f32>(0.0, size.width as f32, size.height as f32, 0.0, -1.0, 1.0);
+        self.projection_matrix = perspective_fov(
+            45.0f32.to_radians(),
+            size.width as f32,
+            size.height as f32,
+            1.0f32,
+            1000.0f32,
+        );
 
         Ok(events::NextEventHandler::NoChange)
     }
@@ -142,14 +169,20 @@ impl EventHandler for DemoState {
         self.shader.use_program();
 
         // TODO set projection matrix
-        let projection_matrix_uniform = self
-            .shader
-            .get_uniform_by_name("projection_matrix_uniform")
-            .ok_or(anyhow!("failed to find projection matrix uniform"))?;
         self.context.uniform_matrix4fv_with_f32_array(
-            Some(&projection_matrix_uniform.location),
+            Some(&self.projection_matrix_uniform.location),
             false,
             self.projection_matrix.as_slice(),
+        );
+        self.context.uniform_matrix4fv_with_f32_array(
+            Some(&self.model_view_matrix_uniform.location),
+            false,
+            {
+                let m = Matrix4::new_translation(&Vec3::new(0.0, 0.0, -6.0));
+                let m = rotate_y(&m, self.rotation);
+                m
+            }
+            .as_slice(),
         );
 
         self.array_buffer.bind();
@@ -171,6 +204,9 @@ impl EventHandler for DemoState {
     }
 
     fn update(&mut self, delta: Duration) -> Result<events::NextEventHandler> {
+        self.rotation =
+            (self.rotation + delta.as_secs_f32() * 90.0f32.to_radians()) % 360.0f32.to_radians();
+
         Ok(events::NextEventHandler::NoChange)
     }
 }
