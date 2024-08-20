@@ -2,10 +2,11 @@ mod dom;
 mod events;
 mod geom;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use events::EventHandler;
 use log::*;
-use std::panic;
+use std::{panic, process, time::Duration};
+use wasm_bindgen_futures::spawn_local;
 use web_sys::WebGl2RenderingContext;
 
 struct DemoState {}
@@ -37,14 +38,21 @@ impl EventHandler for DemoState {
         Ok(events::NextEventHandler::NoChange)
     }
 
-    fn update(&mut self, delta: chrono::TimeDelta) -> Result<events::NextEventHandler> {
+    fn update(&mut self, delta: Duration) -> Result<events::NextEventHandler> {
         Ok(events::NextEventHandler::NoChange)
     }
 }
 
-fn main() -> Result<()> {
+fn main() {
     console_log::init_with_level(Level::Trace).unwrap();
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-    events::run(Box::new(DemoState {}))
+    spawn_local(async {
+        match events::run(Box::new(DemoState {})).await {
+            Ok(_) => {
+                warn!("state machine exited without error, but really it should keep going forever so something is probably wrong");
+            }
+            Err(e) => error!("state machine exited with: {e:?}"),
+        };
+    });
 }
