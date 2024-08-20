@@ -137,7 +137,6 @@ impl Camera {
     }
 
     fn update_model_view_matrix(&mut self) -> &Matrix4<f32> {
-        // TODO take look angles into account
         self.model_view_matrix = look_at(
             &self.position,
             &(self.position + self.rotated_look),
