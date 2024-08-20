@@ -6,7 +6,10 @@ mod graphics;
 use anyhow::{anyhow, Result};
 use bytemuck::{offset_of, Pod, Zeroable};
 use events::EventHandler;
-use graphics::{array_buffer::ArrayBuffer, shader::ShaderProgram};
+use graphics::{
+    array_buffer::ArrayBuffer,
+    shader::{AttributePointer, ShaderProgram},
+};
 use log::*;
 use std::{panic, process, sync::Arc, time::Duration};
 use wasm_bindgen_futures::spawn_local;
@@ -27,6 +30,8 @@ struct Vertex {
 struct DemoState {
     context: Arc<WebGl2RenderingContext>,
     shader: ShaderProgram,
+    position_attribute: AttributePointer,
+    color_attribute: AttributePointer,
     array_buffer: ArrayBuffer<Vertex>,
 }
 
@@ -39,6 +44,28 @@ impl DemoState {
             include_str!("./demo/shaders/demo-vertex.glsl"),
             include_str!("./demo/shaders/demo-fragment.glsl"),
         )?;
+
+        let position_attribute = AttributePointer::new::<Vertex>(
+            shader
+                .get_attribute_by_name("position_attribute")
+                .ok_or(anyhow!("failed to find position attribute"))?
+                .clone(),
+            2,
+            graphics::shader::AttributePointerType::Float,
+            false,
+            offset_of!(Vertex, x) as i32,
+        );
+
+        let color_attribute = AttributePointer::new::<Vertex>(
+            shader
+                .get_attribute_by_name("color_attribute")
+                .ok_or(anyhow!("failed to find color attribute"))?
+                .clone(),
+            4,
+            graphics::shader::AttributePointerType::Float,
+            false,
+            offset_of!(Vertex, r) as i32,
+        );
 
         let mut array_buffer = ArrayBuffer::new(
             context.clone(),
@@ -78,6 +105,8 @@ impl DemoState {
         Ok(Self {
             context,
             shader,
+            position_attribute,
+            color_attribute,
             array_buffer,
         })
     }
@@ -101,41 +130,12 @@ impl EventHandler for DemoState {
         self.shader.use_program();
         self.array_buffer.bind();
 
-        // TODO vertex attributes need some helper stuff
-        let position_attribute = self
-            .shader
-            .get_attribute_by_name("position_attribute")
-            .ok_or(anyhow!("missing atribute"))?;
-        let color_attribute = self
-            .shader
-            .get_attribute_by_name("color_attribute")
-            .ok_or(anyhow!("missing atribute"))?;
-        self.context
-            .enable_vertex_attrib_array(position_attribute.index);
-        self.context
-            .enable_vertex_attrib_array(color_attribute.index);
-        self.context.vertex_attrib_pointer_with_i32(
-            position_attribute.index,
-            2,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            size_of::<Vertex>() as i32,
-            offset_of!(Vertex, x) as i32,
-        );
-        self.context.vertex_attrib_pointer_with_i32(
-            color_attribute.index,
-            4,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            size_of::<Vertex>() as i32,
-            offset_of!(Vertex, r) as i32,
-        );
+        self.position_attribute.enable();
+        self.color_attribute.enable();
         self.context
             .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
-        self.context
-            .disable_vertex_attrib_array(position_attribute.index);
-        self.context
-            .disable_vertex_attrib_array(color_attribute.index);
+        self.position_attribute.disable();
+        self.color_attribute.disable();
 
         self.array_buffer.bind_none();
         self.shader.use_none();

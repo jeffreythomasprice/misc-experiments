@@ -60,12 +60,91 @@ impl Info {
 }
 
 #[derive(Debug, Clone)]
-pub struct UniformInfo {
+pub struct Attribute {
+    pub context: Arc<WebGl2RenderingContext>,
+    pub info: Info,
+}
+
+impl Attribute {
+    pub fn new(context: Arc<WebGl2RenderingContext>, index: u32, info: WebGlActiveInfo) -> Self {
+        Self {
+            context,
+            info: Info::new(index, info),
+        }
+    }
+
+    pub fn enable(&self) {
+        self.context.enable_vertex_attrib_array(self.info.index);
+    }
+
+    pub fn disable(&self) {
+        self.context.disable_vertex_attrib_array(self.info.index);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum AttributePointerType {
+    // TODO the rest of the attribute pointer types
+    Float,
+}
+
+#[derive(Debug, Clone)]
+pub struct AttributePointer {
+    attribute: Attribute,
+    size: i32,
+    typ: AttributePointerType,
+    gl_type: u32,
+    normalized: bool,
+    stride: i32,
+    offset: i32,
+}
+
+impl AttributePointer {
+    pub fn new<T>(
+        attribute: Attribute,
+        size: i32,
+        typ: AttributePointerType,
+        normalized: bool,
+        offset: i32,
+    ) -> Self {
+        let gl_type = match typ {
+            AttributePointerType::Float => WebGl2RenderingContext::FLOAT,
+        };
+        Self {
+            attribute,
+            size,
+            typ,
+            gl_type,
+            normalized,
+            stride: size_of::<T>() as i32,
+            offset,
+        }
+    }
+
+    pub fn enable(&self) {
+        self.attribute.enable();
+        self.attribute.context.vertex_attrib_pointer_with_i32(
+            self.attribute.info.index,
+            self.size,
+            self.gl_type,
+            self.normalized,
+            self.stride,
+            self.offset,
+        );
+    }
+
+    pub fn disable(&self) {
+        self.attribute.disable();
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Uniform {
     pub info: Info,
     pub location: WebGlUniformLocation,
 }
 
-impl UniformInfo {
+impl Uniform {
     pub fn new(index: u32, info: WebGlActiveInfo, location: WebGlUniformLocation) -> Self {
         Self {
             info: Info::new(index, info),
@@ -82,8 +161,8 @@ pub struct ShaderProgram {
     #[allow(dead_code)]
     fragment_shader: Shader,
     instance: WebGlProgram,
-    attributes: HashMap<String, Info>,
-    uniforms: HashMap<String, UniformInfo>,
+    attributes: HashMap<String, Attribute>,
+    uniforms: HashMap<String, Uniform>,
 }
 
 impl ShaderProgram {
@@ -119,13 +198,14 @@ impl ShaderProgram {
                 .ok_or(anyhow!("expected a number"))? as u32;
             let mut attributes = HashMap::new();
             for index in 0..active_attribs {
-                let info = Info::new(
+                let attr = Attribute::new(
+                    context.clone(),
                     index,
                     context.get_active_attrib(&result, index).ok_or(anyhow!(
                         "failed to find attribute on shader with index {index}"
                     ))?,
                 );
-                attributes.insert(info.name.clone(), info);
+                attributes.insert(attr.info.name.clone(), attr);
             }
 
             let active_uniforms = context
@@ -144,8 +224,8 @@ impl ShaderProgram {
                             "failed to find uniform location on shader with index {index}, name {}",
                             info.name()
                         ))?;
-                let info = UniformInfo::new(index, info, location);
-                uniforms.insert(info.info.name.clone(), info);
+                let uniform = Uniform::new(index, info, location);
+                uniforms.insert(uniform.info.name.clone(), uniform);
             }
 
             Ok(Self {
@@ -171,11 +251,11 @@ impl ShaderProgram {
         self.context.use_program(None);
     }
 
-    pub fn get_attribute_by_name(&self, name: &str) -> Option<&Info> {
+    pub fn get_attribute_by_name(&self, name: &str) -> Option<&Attribute> {
         self.attributes.get(name)
     }
 
-    pub fn get_uniform_by_name(&self, name: &str) -> Option<&UniformInfo> {
+    pub fn get_uniform_by_name(&self, name: &str) -> Option<&Uniform> {
         self.uniforms.get(name)
     }
 }
