@@ -1,16 +1,17 @@
 [package]
-name = "rust-webgl"
+name = "rust-webgl-2"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.86"
+bytemuck = { version = "1.17.0", features = ["derive"] }
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
-js-sys = "0.3.68"
-log = "0.4.20"
-nalgebra = "0.32.4"
-serde = { version = "1.0.197", features = ["derive"] }
-serde-wasm-bindgen = "0.6.4"
-serde_json = "1.0.114"
-wasm-bindgen = "0.2.91"
-web-sys = { version = "0.3.68", features = ["WebGlProgram", "Window", "Document", "WebGl2RenderingContext", "Element", "WebGlShader", "HtmlElement", "HtmlCanvasElement", "CssStyleDeclaration", "WebGlBuffer", "WebGlVertexArrayObject", "WebGlActiveInfo", "WebGlUniformLocation", "MouseEvent", "KeyboardEvent"] }
+log = "0.4.22"
+serde = { version = "1.0.208", features = ["derive"] }
+serde-wasm-bindgen = "0.6.5"
+serde_json = "1.0.125"
+tokio = { version = "1.39.3", features = ["rt", "sync"] }
+wasm-bindgen-futures = "0.4.43"
+web-sys = { version = "0.3.70", features = ["Window", "Document", "HtmlCanvasElement", "CssStyleDeclaration", "WebGl2RenderingContext", "MouseEvent", "KeyboardEvent", "WebGlShader", "WebGlActiveInfo", "WebGlUniformLocation", "WebGlProgram", "WebGlBuffer"] }
