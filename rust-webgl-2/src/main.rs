@@ -132,8 +132,11 @@ impl EventHandler for DemoState {
 
         self.position_attribute.enable();
         self.color_attribute.enable();
-        self.context
-            .draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+        self.context.draw_arrays(
+            WebGl2RenderingContext::TRIANGLES,
+            0,
+            self.array_buffer.len() as i32,
+        );
         self.position_attribute.disable();
         self.color_attribute.disable();
 

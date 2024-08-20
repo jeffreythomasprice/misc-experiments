@@ -19,7 +19,7 @@ pub struct ArrayBuffer<T> {
     context: Arc<WebGl2RenderingContext>,
     usage: Usage,
     gl_usage: u32,
-    size: usize,
+    len: usize,
     stride: usize,
     buffer: WebGlBuffer,
     phantom: PhantomData<T>,
@@ -29,7 +29,7 @@ impl<T> ArrayBuffer<T>
 where
     T: Pod,
 {
-    pub fn new(context: Arc<WebGl2RenderingContext>, usage: Usage, size: usize) -> Result<Self> {
+    pub fn new(context: Arc<WebGl2RenderingContext>, usage: Usage, len: usize) -> Result<Self> {
         let buffer = context
             .create_buffer()
             .ok_or(anyhow!("failed to create buffer"))?;
@@ -52,7 +52,7 @@ where
             context,
             usage,
             gl_usage,
-            size,
+            len,
             stride,
             buffer,
             phantom: PhantomData,
@@ -61,7 +61,7 @@ where
         result.bind();
         result.context.buffer_data_with_i32(
             WebGl2RenderingContext::ARRAY_BUFFER,
-            (result.size * result.stride) as i32,
+            (result.len * result.stride) as i32,
             result.gl_usage,
         );
         result.bind_none();
@@ -79,10 +79,14 @@ where
             .bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
     }
 
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
     pub fn set(&mut self, source: &[T], index: usize) -> Result<()> {
         let one_past_last = index + source.len();
-        if one_past_last > self.size {
-            return Err(anyhow!("trying to copy out of bounds, size = {}, source length = {}, trying to place at index = {}", self.size, source.len(), index));
+        if one_past_last > self.len {
+            return Err(anyhow!("trying to copy out of bounds, size = {}, source length = {}, trying to place at index = {}", self.len, source.len(), index));
         }
 
         self.bind();
