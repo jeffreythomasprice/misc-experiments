@@ -11,20 +11,26 @@ use graphics::{
     shader::{AttributePointer, ShaderProgram},
 };
 use log::*;
+use nalgebra::Matrix4;
+use nalgebra_glm::{ortho, Vec2};
 use std::{panic, sync::Arc, time::Duration};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::WebGl2RenderingContext;
 
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
 #[repr(C)]
+struct RGBA {
+    pub red: f32,
+    pub green: f32,
+    pub blue: f32,
+    pub alpha: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+#[repr(C)]
 struct Vertex {
-    // TODO points?
-    x: f32,
-    y: f32,
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+    position: Vec2,
+    color: RGBA,
 }
 
 struct DemoState {
@@ -33,6 +39,8 @@ struct DemoState {
     position_attribute: AttributePointer,
     color_attribute: AttributePointer,
     array_buffer: ArrayBuffer<Vertex>,
+
+    projection_matrix: Matrix4<f32>,
 }
 
 impl DemoState {
@@ -53,7 +61,7 @@ impl DemoState {
             2,
             graphics::shader::AttributePointerType::Float,
             false,
-            offset_of!(Vertex, x) as i32,
+            offset_of!(Vertex, position) as i32,
         );
 
         let color_attribute = AttributePointer::new::<Vertex>(
@@ -64,7 +72,7 @@ impl DemoState {
             4,
             graphics::shader::AttributePointerType::Float,
             false,
-            offset_of!(Vertex, r) as i32,
+            offset_of!(Vertex, color) as i32,
         );
 
         let array_buffer = ArrayBuffer::new_with_data(
@@ -72,28 +80,31 @@ impl DemoState {
             graphics::array_buffer::Usage::DynamicDraw,
             &[
                 Vertex {
-                    x: -0.5,
-                    y: -0.5,
-                    r: 1.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 1.0,
+                    position: Vec2::new(50.0, 50.0),
+                    color: RGBA {
+                        red: 1.0,
+                        green: 0.0,
+                        blue: 0.0,
+                        alpha: 1.0,
+                    },
                 },
                 Vertex {
-                    x: 0.5,
-                    y: -0.5,
-                    r: 0.0,
-                    g: 1.0,
-                    b: 0.0,
-                    a: 0.0,
+                    position: Vec2::new(300.0, 50.0),
+                    color: RGBA {
+                        red: 0.0,
+                        green: 1.0,
+                        blue: 0.0,
+                        alpha: 1.0,
+                    },
                 },
                 Vertex {
-                    x: 0.0,
-                    y: 0.5,
-                    r: 0.0,
-                    g: 0.0,
-                    b: 1.0,
-                    a: 1.0,
+                    position: Vec2::new(50.0, 300.0),
+                    color: RGBA {
+                        red: 0.0,
+                        green: 0.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
                 },
             ],
         )?;
@@ -104,6 +115,8 @@ impl DemoState {
             position_attribute,
             color_attribute,
             array_buffer,
+
+            projection_matrix: Matrix4::identity(),
         })
     }
 }
@@ -117,6 +130,9 @@ impl EventHandler for DemoState {
         self.context
             .viewport(0, 0, size.width as i32, size.height as i32);
 
+        self.projection_matrix =
+            ortho::<f32>(0.0, size.width as f32, size.height as f32, 0.0, -1.0, 1.0);
+
         Ok(events::NextEventHandler::NoChange)
     }
 
@@ -124,6 +140,18 @@ impl EventHandler for DemoState {
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
         self.shader.use_program();
+
+        // TODO set projection matrix
+        let projection_matrix_uniform = self
+            .shader
+            .get_uniform_by_name("projection_matrix_uniform")
+            .ok_or(anyhow!("failed to find projection matrix uniform"))?;
+        self.context.uniform_matrix4fv_with_f32_array(
+            Some(&projection_matrix_uniform.location),
+            false,
+            self.projection_matrix.as_slice(),
+        );
+
         self.array_buffer.bind();
 
         self.position_attribute.enable();
