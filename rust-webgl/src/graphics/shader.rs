@@ -155,7 +155,6 @@ impl Uniform {
 
 pub struct ShaderProgram {
     context: Arc<WebGl2RenderingContext>,
-    // TODO needs allow dead code?
     #[allow(dead_code)]
     vertex_shader: Shader,
     #[allow(dead_code)]

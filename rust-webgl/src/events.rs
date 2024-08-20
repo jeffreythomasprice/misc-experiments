@@ -1,16 +1,18 @@
 use std::{
     cell::RefCell,
+    collections::HashMap,
     ops::DerefMut,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use crate::{
-    dom::{body, create_canvas, window},
-    geom::Size,
+    dom::{body, create_canvas, document, window},
+    geometry::size::Size,
 };
 use anyhow::{anyhow, Result};
 use log::*;
+use nalgebra_glm::{I32Vec2, U32Vec2, UVec2};
 use serde::Serialize;
 use tokio::sync::mpsc::{channel, error::TryRecvError, Sender};
 use wasm_bindgen_futures::spawn_local;
@@ -20,19 +22,150 @@ use web_sys::{
     HtmlCanvasElement,
 };
 
-pub type EventHandlerFactory =
-    Box<dyn FnOnce(Arc<WebGl2RenderingContext>) -> Result<Box<dyn EventHandler>>>;
+#[derive(Clone)]
+pub struct State {
+    canvas: Arc<HtmlCanvasElement>,
+    pub context: Arc<WebGl2RenderingContext>,
+    key_state: Arc<Mutex<HashMap<String, bool>>>,
+}
+
+impl State {
+    pub fn new(canvas: Arc<HtmlCanvasElement>, context: Arc<WebGl2RenderingContext>) -> Self {
+        Self {
+            canvas,
+            context,
+            key_state: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn is_pointer_locked(&self) -> Result<bool> {
+        match document()?.pointer_lock_element() {
+            Some(canvas) if canvas == ***self.canvas => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
+    pub fn set_pointer_lock(&self, b: bool) -> Result<()> {
+        if b {
+            self.canvas.request_pointer_lock();
+        } else {
+            document()?.exit_pointer_lock();
+        }
+        Ok(())
+    }
+
+    pub fn is_key_code_pressed(&self, code: &str) -> bool {
+        let key_state = self.key_state.lock().unwrap();
+        match key_state.get(code) {
+            Some(true) => true,
+            _ => false,
+        }
+    }
+
+    fn key_down(&self, event: &KeyPressEvent) {
+        let mut key_state = self.key_state.lock().unwrap();
+        key_state.insert(event.code(), true);
+    }
+
+    fn key_up(&self, event: &KeyPressEvent) {
+        let mut key_state = self.key_state.lock().unwrap();
+        key_state.insert(event.code(), false);
+    }
+}
+
+pub type EventHandlerFactory = Box<dyn FnOnce(State) -> Result<Box<dyn EventHandler>>>;
 
 pub enum NextEventHandler {
     NoChange,
     ChangeTo(EventHandlerFactory),
 }
 
+pub struct MousePressEvent {
+    event: web_sys::MouseEvent,
+}
+
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+    Other(i16),
+}
+
+impl MousePressEvent {
+    pub fn position(&self) -> U32Vec2 {
+        U32Vec2::new(self.event.x() as u32, self.event.y() as u32)
+    }
+
+    pub fn button(&self) -> MouseButton {
+        match self.event.button() {
+            0 => MouseButton::Left,
+            1 => MouseButton::Middle,
+            2 => MouseButton::Right,
+            x => MouseButton::Other(x),
+        }
+    }
+}
+
+pub struct MouseMoveEvent {
+    event: web_sys::MouseEvent,
+}
+
+impl MouseMoveEvent {
+    pub fn position(&self) -> U32Vec2 {
+        U32Vec2::new(self.event.x() as u32, self.event.y() as u32)
+    }
+
+    pub fn delta(&self) -> I32Vec2 {
+        I32Vec2::new(self.event.movement_x(), self.event.movement_y())
+    }
+}
+
+pub struct KeyPressEvent {
+    event: web_sys::KeyboardEvent,
+}
+
+impl KeyPressEvent {
+    pub fn code(&self) -> String {
+        self.event.code()
+    }
+}
+
 pub trait EventHandler {
-    fn deactivate(&mut self) -> Result<()>;
-    fn resize(&mut self, size: Size<u32>) -> Result<NextEventHandler>;
-    fn render(&mut self) -> Result<NextEventHandler>;
-    fn update(&mut self, delta: Duration) -> Result<NextEventHandler>;
+    fn deactivate(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn resize(&mut self, size: Size<u32>) -> Result<NextEventHandler> {
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn render(&mut self) -> Result<NextEventHandler> {
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn update(&mut self, delta: Duration) -> Result<NextEventHandler> {
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn mouse_down(&mut self, e: &MousePressEvent) -> Result<NextEventHandler> {
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn mouse_up(&mut self, e: &MousePressEvent) -> Result<NextEventHandler> {
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn mouse_move(&mut self, e: &MouseMoveEvent) -> Result<NextEventHandler> {
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn key_down(&mut self, e: &KeyPressEvent) -> Result<NextEventHandler> {
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn key_up(&mut self, e: &KeyPressEvent) -> Result<NextEventHandler> {
+        Ok(NextEventHandler::NoChange)
+    }
 }
 
 pub async fn run(initial: EventHandlerFactory) -> Result<()> {
@@ -61,7 +194,9 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
             })?,
     );
 
-    let current_state = match initial(context.clone()) {
+    let state = State::new(canvas.clone(), context.clone());
+
+    let current_event_handler = match initial(state.clone()) {
         Ok(result) => Arc::new(Mutex::new(RefCell::new(result))),
         Err(e) => return Err(anyhow!("error creating initial state: {e:?}")),
     };
@@ -70,9 +205,9 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
 
     // initial resize
     resize(
-        current_state.clone(),
+        current_event_handler.clone(),
         canvas.clone(),
-        context.clone(),
+        state.clone(),
         done_sender.clone(),
     )
     .await;
@@ -91,16 +226,16 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
 
     // resize events
     let resize_event_handler = {
-        let current_state = current_state.clone();
+        let current_event_handler = current_event_handler.clone();
         let canvas = canvas.clone();
-        let context = context.clone();
+        let state = state.clone();
         let done_sender = done_sender.clone();
         let c = Closure::<dyn Fn()>::new(move || {
-            let current_state = current_state.clone();
+            let current_event_handler = current_event_handler.clone();
             let canvas = canvas.clone();
-            let context = context.clone();
+            let state = state.clone();
             let done_sender = done_sender.clone();
-            spawn_local(resize(current_state, canvas, context, done_sender));
+            spawn_local(resize(current_event_handler, canvas, state, done_sender));
         });
         window()?
             .add_event_listener_with_callback("resize", c.as_ref().unchecked_ref())
@@ -110,19 +245,20 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
 
     // mouse down events
     let mouse_down_event_handler = {
-        let current_state = current_state.clone();
-        let canvas = canvas.clone();
+        let current_event_handler = current_event_handler.clone();
+        let state = state.clone();
+        let done_sender = done_sender.clone();
         let c = Closure::<dyn Fn(web_sys::MouseEvent)>::new(move |event: web_sys::MouseEvent| {
-            // TODO mouse down event
-            // let context = state.borrow().context();
-            // if let Err(e) = state
-            //     .borrow_mut()
-            //     .event_handler
-            //     .borrow_mut()
-            //     .handle_event(Event::MouseDown(MouseEvent { context, event }))
-            // {
-            //     error!("error handling mouse move: {e:?}");
-            // }
+            let current_event_handler = current_event_handler.clone();
+            let state = state.clone();
+            let done_sender = done_sender.clone();
+            spawn_local(update_state(
+                current_event_handler,
+                state,
+                |s| s.mouse_down(&MousePressEvent { event }),
+                "mouse_down",
+                done_sender,
+            ));
         });
         canvas
             .add_event_listener_with_callback("mousedown", c.as_ref().unchecked_ref())
@@ -132,19 +268,20 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
 
     // mouse up events
     let mouse_up_event_handler = {
-        let current_state = current_state.clone();
-        let canvas = canvas.clone();
+        let current_event_handler = current_event_handler.clone();
+        let state = state.clone();
+        let done_sender = done_sender.clone();
         let c = Closure::<dyn Fn(web_sys::MouseEvent)>::new(move |event: web_sys::MouseEvent| {
-            // TODO mouse up event
-            // let context = state.borrow().context();
-            // if let Err(e) = state
-            //     .borrow_mut()
-            //     .event_handler
-            //     .borrow_mut()
-            //     .handle_event(Event::MouseUp(MouseEvent { context, event }))
-            // {
-            //     error!("error handling mouse move: {e:?}");
-            // }
+            let current_event_handler = current_event_handler.clone();
+            let state = state.clone();
+            let done_sender = done_sender.clone();
+            spawn_local(update_state(
+                current_event_handler,
+                state,
+                |s| s.mouse_up(&MousePressEvent { event }),
+                "mouse_up",
+                done_sender,
+            ));
         });
         canvas
             .add_event_listener_with_callback("mouseup", c.as_ref().unchecked_ref())
@@ -154,19 +291,20 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
 
     // mouse move events
     let mouse_move_event_handler = {
-        let current_state = current_state.clone();
-        let canvas = canvas.clone();
+        let current_event_handler = current_event_handler.clone();
+        let state = state.clone();
+        let done_sender = done_sender.clone();
         let c = Closure::<dyn Fn(web_sys::MouseEvent)>::new(move |event: web_sys::MouseEvent| {
-            // TODO mouse move event
-            // let context = state.borrow().context();
-            // if let Err(e) = state
-            //     .borrow_mut()
-            //     .event_handler
-            //     .borrow_mut()
-            //     .handle_event(Event::MouseMove(MouseMoveEvent { context, event }))
-            // {
-            //     error!("error handling mouse move: {e:?}");
-            // }
+            let current_event_handler = current_event_handler.clone();
+            let state = state.clone();
+            let done_sender = done_sender.clone();
+            spawn_local(update_state(
+                current_event_handler,
+                state,
+                |s| s.mouse_move(&MouseMoveEvent { event }),
+                "mouse_move",
+                done_sender,
+            ));
         });
         canvas
             .add_event_listener_with_callback("mousemove", c.as_ref().unchecked_ref())
@@ -176,19 +314,23 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
 
     // key down events
     let key_down_event_handler = {
-        let current_state = current_state.clone();
+        let current_event_handler = current_event_handler.clone();
+        let state = state.clone();
+        let done_sender = done_sender.clone();
         let c =
             Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |event: web_sys::KeyboardEvent| {
-                // TODO key down event
-                // let context = state.borrow().context();
-                // if let Err(e) = state
-                //     .borrow_mut()
-                //     .event_handler
-                //     .borrow_mut()
-                //     .handle_event(Event::KeyDown(KeyboardEvent { context, event }))
-                // {
-                //     error!("error handling mouse move: {e:?}");
-                // }
+                let current_event_handler = current_event_handler.clone();
+                let mut state = state.clone();
+                let done_sender = done_sender.clone();
+                let event = KeyPressEvent { event };
+                state.key_down(&event);
+                spawn_local(update_state(
+                    current_event_handler,
+                    state,
+                    move |s| s.key_down(&event),
+                    "key_down",
+                    done_sender,
+                ));
             });
         window()?
             .add_event_listener_with_callback("keydown", c.as_ref().unchecked_ref())
@@ -198,19 +340,23 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
 
     // key up events
     let key_up_event_handler = {
-        let current_state = current_state.clone();
+        let current_event_handler = current_event_handler.clone();
+        let state = state.clone();
+        let done_sender = done_sender.clone();
         let c =
             Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |event: web_sys::KeyboardEvent| {
-                // TODO key up event
-                // let context = state.borrow().context();
-                // if let Err(e) = state
-                //     .borrow_mut()
-                //     .event_handler
-                //     .borrow_mut()
-                //     .handle_event(Event::KeyUp(KeyboardEvent { context, event }))
-                // {
-                //     error!("error handling mouse move: {e:?}");
-                // }
+                let current_event_handler = current_event_handler.clone();
+                let mut state = state.clone();
+                let done_sender = done_sender.clone();
+                let event = KeyPressEvent { event };
+                state.key_up(&event);
+                spawn_local(update_state(
+                    current_event_handler,
+                    state,
+                    move |s| s.key_up(&event),
+                    "key_up",
+                    done_sender,
+                ));
             });
         window()?
             .add_event_listener_with_callback("keyup", c.as_ref().unchecked_ref())
@@ -221,9 +367,9 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
     // keep track of time, and kick off the first frame
     let last_tick = Arc::new(Mutex::new(Duration::ZERO));
     request_animation_frame(
-        current_state.clone(),
+        current_event_handler.clone(),
         last_tick,
-        context.clone(),
+        state.clone(),
         done_sender,
     )
     .await;
@@ -276,14 +422,14 @@ pub async fn run(initial: EventHandlerFactory) -> Result<()> {
 
 // resize event
 async fn resize(
-    current_state: Arc<Mutex<RefCell<Box<dyn EventHandler>>>>,
+    current_event_handler: Arc<Mutex<RefCell<Box<dyn EventHandler>>>>,
     canvas: Arc<HtmlCanvasElement>,
-    context: Arc<WebGl2RenderingContext>,
+    state: State,
     abort: Sender<Result<()>>,
 ) {
     update_state(
-        current_state.clone(),
-        context.clone(),
+        current_event_handler.clone(),
+        state.clone(),
         |s| {
             let window = window()?;
             let width: f64 = window
@@ -315,19 +461,19 @@ async fn resize(
 
 // render and update events
 async fn request_animation_frame(
-    current_state: Arc<Mutex<RefCell<Box<dyn EventHandler>>>>,
+    current_event_handler: Arc<Mutex<RefCell<Box<dyn EventHandler>>>>,
     last_tick: Arc<Mutex<Duration>>,
-    context: Arc<WebGl2RenderingContext>,
+    state: State,
     abort: Sender<Result<()>>,
 ) {
-    let current_state = current_state.clone();
+    let current_event_handler = current_event_handler.clone();
     let last_tick = last_tick.clone();
     if let Err(e) = ({
         let abort = abort.clone();
         move || -> Result<()> {
             {
                 let c = Closure::once_into_js(move |time: f64| {
-                    let current_state = current_state.clone();
+                    let current_event_handler = current_event_handler.clone();
                     let last_tick = last_tick.clone();
                     spawn_local(async move {
                         {
@@ -336,8 +482,8 @@ async fn request_animation_frame(
                             let delta = time - *last_tick;
                             *last_tick = time;
                             update_state(
-                                current_state.clone(),
-                                context.clone(),
+                                current_event_handler.clone(),
+                                state.clone(),
                                 |s| s.update(delta),
                                 "update",
                                 abort.clone(),
@@ -346,8 +492,8 @@ async fn request_animation_frame(
                         }
 
                         update_state(
-                            current_state.clone(),
-                            context.clone(),
+                            current_event_handler.clone(),
+                            state.clone(),
                             |s| s.render(),
                             "render",
                             abort.clone(),
@@ -355,9 +501,9 @@ async fn request_animation_frame(
                         .await;
 
                         request_animation_frame(
-                            current_state.clone(),
+                            current_event_handler.clone(),
                             last_tick.clone(),
-                            context.clone(),
+                            state.clone(),
                             abort.clone(),
                         )
                         .await;
@@ -383,20 +529,20 @@ async fn request_animation_frame(
 }
 
 async fn update_state<F>(
-    current_state: Arc<Mutex<RefCell<Box<dyn EventHandler>>>>,
-    context: Arc<WebGl2RenderingContext>,
+    current_event_handler: Arc<Mutex<RefCell<Box<dyn EventHandler>>>>,
+    state: State,
     f: F,
     event_type: &str,
     abort: Sender<Result<()>>,
 ) where
     F: FnOnce(&mut Box<dyn EventHandler>) -> Result<NextEventHandler>,
 {
-    let mut current_state = current_state.lock().unwrap();
-    let next = f(&mut current_state.deref_mut().borrow_mut());
+    let mut current_event_handler = current_event_handler.lock().unwrap();
+    let next = f(&mut current_event_handler.deref_mut().borrow_mut());
     match next {
         Ok(NextEventHandler::NoChange) => (),
         Ok(NextEventHandler::ChangeTo(next)) => {
-            if let Err(e) = current_state.deref_mut().borrow_mut().deactivate() {
+            if let Err(e) = current_event_handler.deref_mut().borrow_mut().deactivate() {
                 if let Err(e) = abort
                     .send(Err(anyhow!(
                         "error deactivating current state, event type: {event_type}, error: {e:?}"
@@ -407,8 +553,8 @@ async fn update_state<F>(
                 }
                 return;
             }
-            match next(context.clone()) {
-                Ok(next) => current_state.deref_mut().replace(next),
+            match next(state.clone()) {
+                Ok(next) => current_event_handler.deref_mut().replace(next),
                 Err(e) => {
                     if let Err(e) = abort
                         .send(Err(anyhow!(

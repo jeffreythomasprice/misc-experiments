@@ -1,19 +1,19 @@
 mod dom;
 mod events;
-mod geom;
+mod geometry;
 mod graphics;
 
 use anyhow::{anyhow, Result};
 use bytemuck::{offset_of, Pod, Zeroable};
-use events::EventHandler;
+use events::{EventHandler, MouseButton, MouseMoveEvent, MousePressEvent, NextEventHandler, State};
+use geometry::{camera::Camera, size::Size};
 use graphics::{
     array_buffer::ArrayBuffer,
     shader::{AttributePointer, ShaderProgram, Uniform},
 };
 use log::*;
-use nalgebra::Matrix4;
-use nalgebra_glm::{ortho, perspective_fov, rotate_y, translation, Vec2, Vec3};
-use std::{f32::consts::PI, panic, sync::Arc, time::Duration};
+use nalgebra_glm::Vec3;
+use std::{panic, sync::Arc, time::Duration};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::WebGl2RenderingContext;
 
@@ -34,6 +34,7 @@ struct Vertex {
 }
 
 struct DemoState {
+    state: State,
     context: Arc<WebGl2RenderingContext>,
 
     shader: ShaderProgram,
@@ -44,13 +45,15 @@ struct DemoState {
 
     array_buffer: ArrayBuffer<Vertex>,
 
-    projection_matrix: Matrix4<f32>,
+    camera: Camera,
 
     rotation: f32,
 }
 
 impl DemoState {
-    pub fn new(context: Arc<WebGl2RenderingContext>) -> Result<Self> {
+    pub fn new(state: State) -> Result<Self> {
+        let context = state.context.clone();
+
         context.clear_color(0.25, 0.5, 1.0, 1.0);
 
         let shader = ShaderProgram::new(
@@ -126,6 +129,7 @@ impl DemoState {
         )?;
 
         Ok(Self {
+            state,
             context,
 
             shader,
@@ -136,7 +140,18 @@ impl DemoState {
 
             array_buffer,
 
-            projection_matrix: Matrix4::identity(),
+            camera: Camera::new(
+                60.0f32.to_radians(),
+                Size {
+                    width: 0,
+                    height: 0,
+                },
+                1.0,
+                1000.0,
+                Vec3::new(0.0, 0.0, 6.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+            ),
 
             rotation: 0.0,
         })
@@ -144,23 +159,13 @@ impl DemoState {
 }
 
 impl EventHandler for DemoState {
-    fn deactivate(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    fn resize(&mut self, size: geom::Size<u32>) -> Result<events::NextEventHandler> {
+    fn resize(&mut self, size: Size<u32>) -> Result<events::NextEventHandler> {
         self.context
             .viewport(0, 0, size.width as i32, size.height as i32);
 
-        self.projection_matrix = perspective_fov(
-            45.0f32.to_radians(),
-            size.width as f32,
-            size.height as f32,
-            1.0f32,
-            1000.0f32,
-        );
+        self.camera.set_screen_size(size);
 
-        Ok(events::NextEventHandler::NoChange)
+        Ok(NextEventHandler::NoChange)
     }
 
     fn render(&mut self) -> Result<events::NextEventHandler> {
@@ -168,22 +173,17 @@ impl EventHandler for DemoState {
 
         self.shader.use_program();
 
-        // TODO set projection matrix
         self.context.uniform_matrix4fv_with_f32_array(
             Some(&self.projection_matrix_uniform.location),
             false,
-            self.projection_matrix.as_slice(),
+            self.camera.projection_matrix().as_slice(),
         );
         self.context.uniform_matrix4fv_with_f32_array(
             Some(&self.model_view_matrix_uniform.location),
             false,
-            {
-                let m = Matrix4::new_translation(&Vec3::new(0.0, 0.0, -6.0));
-                let m = rotate_y(&m, self.rotation);
-                m
-            }
-            .as_slice(),
+            self.camera.model_view_matrix().as_slice(),
         );
+        // TODO apply rotation too
 
         self.array_buffer.bind();
 
@@ -200,14 +200,71 @@ impl EventHandler for DemoState {
         self.array_buffer.bind_none();
         self.shader.use_none();
 
-        Ok(events::NextEventHandler::NoChange)
+        Ok(NextEventHandler::NoChange)
     }
 
     fn update(&mut self, delta: Duration) -> Result<events::NextEventHandler> {
         self.rotation =
             (self.rotation + delta.as_secs_f32() * 90.0f32.to_radians()) % 360.0f32.to_radians();
 
-        Ok(events::NextEventHandler::NoChange)
+        let forward = if self.state.is_key_code_pressed("ArrowUp")
+            || self.state.is_key_code_pressed("KeyW")
+        {
+            1.0f32
+        } else {
+            0.0f32
+        } - if self.state.is_key_code_pressed("ArrowDown")
+            || self.state.is_key_code_pressed("KeyS")
+        {
+            1.0f32
+        } else {
+            0.0f32
+        };
+        let right = if self.state.is_key_code_pressed("ArrowRight")
+            || self.state.is_key_code_pressed("KeyD")
+        {
+            1.0f32
+        } else {
+            0.0f32
+        } - if self.state.is_key_code_pressed("ArrowLeft")
+            || self.state.is_key_code_pressed("KeyA")
+        {
+            1.0f32
+        } else {
+            0.0f32
+        };
+        let up = if self.state.is_key_code_pressed("Space") {
+            1.0f32
+        } else {
+            0.0f32
+        } - if self.state.is_key_code_pressed("ShiftLeft") {
+            1.0f32
+        } else {
+            0.0f32
+        };
+        self.camera.move_based_on_current_axes(
+            forward * 5.0f32 * delta.as_secs_f32(),
+            up * 5.0f32 * delta.as_secs_f32(),
+            right * 5.0f32 * delta.as_secs_f32(),
+        );
+
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn mouse_up(&mut self, e: &MousePressEvent) -> Result<NextEventHandler> {
+        if let MouseButton::Left = e.button() {
+            self.state
+                .set_pointer_lock(!self.state.is_pointer_locked()?)?;
+        }
+        Ok(NextEventHandler::NoChange)
+    }
+
+    fn mouse_move(&mut self, e: &MouseMoveEvent) -> Result<events::NextEventHandler> {
+        if self.state.is_pointer_locked()? {
+            self.camera.turn_based_on_mouse_delta(e.delta());
+        }
+
+        Ok(NextEventHandler::NoChange)
     }
 }
 
