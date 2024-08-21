@@ -1,24 +1,19 @@
 use anyhow::{anyhow, Result};
-use bytemuck::Pod;
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 use web_sys::{WebGl2RenderingContext, WebGlBuffer};
 
 use super::buffer_usage::BufferUsage;
 
-pub struct ArrayBuffer<T> {
+pub struct ElementArrayBuffer {
     context: Arc<WebGl2RenderingContext>,
     usage: BufferUsage,
     gl_usage: u32,
     len: usize,
     stride: usize,
     buffer: WebGlBuffer,
-    phantom: PhantomData<T>,
 }
 
-impl<T> ArrayBuffer<T>
-where
-    T: Pod,
-{
+impl ElementArrayBuffer {
     pub fn new_with_len(
         context: Arc<WebGl2RenderingContext>,
         usage: BufferUsage,
@@ -30,7 +25,7 @@ where
 
         let gl_usage = usage.gl_usage();
 
-        let stride = size_of::<T>();
+        let stride = size_of::<u16>();
 
         let result = Self {
             context,
@@ -39,12 +34,11 @@ where
             len,
             stride,
             buffer,
-            phantom: PhantomData,
         };
 
         result.bind();
         result.context.buffer_data_with_i32(
-            WebGl2RenderingContext::ARRAY_BUFFER,
+            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
             (result.len * result.stride) as i32,
             result.gl_usage,
         );
@@ -56,7 +50,7 @@ where
     pub fn new_with_data(
         context: Arc<WebGl2RenderingContext>,
         usage: BufferUsage,
-        source: &[T],
+        source: &[u16],
     ) -> Result<Self> {
         let mut result = Self::new_with_len(context, usage, source.len())?;
         result.set(source, 0)?;
@@ -64,20 +58,22 @@ where
     }
 
     pub fn bind(&self) {
-        self.context
-            .bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.buffer));
+        self.context.bind_buffer(
+            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+            Some(&self.buffer),
+        );
     }
 
     pub fn bind_none(&self) {
         self.context
-            .bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
+            .bind_buffer(WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER, None);
     }
 
     pub fn len(&self) -> usize {
         self.len
     }
 
-    pub fn set(&mut self, source: &[T], index: usize) -> Result<()> {
+    pub fn set(&mut self, source: &[u16], index: usize) -> Result<()> {
         let one_past_last = index + source.len();
         if one_past_last > self.len {
             return Err(anyhow!("trying to copy out of bounds, size = {}, source length = {}, trying to place at index = {}", self.len, source.len(), index));
@@ -85,7 +81,7 @@ where
 
         self.bind();
         self.context.buffer_sub_data_with_i32_and_u8_array(
-            WebGl2RenderingContext::ARRAY_BUFFER,
+            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
             (index * self.stride) as i32,
             bytemuck::cast_slice(source),
         );
@@ -95,7 +91,7 @@ where
     }
 }
 
-impl<T> Drop for ArrayBuffer<T> {
+impl Drop for ElementArrayBuffer {
     fn drop(&mut self) {
         self.context.delete_buffer(Some(&self.buffer))
     }
