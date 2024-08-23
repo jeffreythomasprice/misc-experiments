@@ -4,7 +4,8 @@ mod events;
 mod geometry;
 mod graphics;
 
-use demo::DemoState;
+// use demo::camera_spinner_quad::DemoState;
+use demo::ray_tracing::DemoState;
 use log::*;
 use std::panic;
 use wasm_bindgen_futures::spawn_local;

@@ -63,17 +63,25 @@ impl Camera {
         result
     }
 
+    pub fn field_of_view(&self) -> f32 {
+        self.fov
+    }
+
+    pub fn get_screen_size(&self) -> &Size<u32> {
+        &self.screen_size
+    }
+
+    pub fn set_screen_size(&mut self, s: Size<u32>) {
+        self.screen_size = s;
+        self.update_projection_matrix();
+    }
+
     pub fn projection_matrix(&self) -> &Matrix4<f32> {
         &self.projection_matrix
     }
 
     pub fn model_view_matrix(&self) -> &Matrix4<f32> {
         &self.model_view_matrix
-    }
-
-    pub fn set_screen_size(&mut self, s: Size<u32>) {
-        self.screen_size = s;
-        self.update_projection_matrix();
     }
 
     pub fn move_based_on_current_axes(&mut self, forward: f32, up: f32, right: f32) {
