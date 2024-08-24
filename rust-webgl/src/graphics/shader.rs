@@ -5,16 +5,35 @@ use web_sys::{
     WebGl2RenderingContext, WebGlActiveInfo, WebGlProgram, WebGlShader, WebGlUniformLocation,
 };
 
+#[derive(Debug)]
+enum ShaderType {
+    Vertex,
+    Fragment,
+}
+
+impl ShaderType {
+    pub fn gl_type(&self) -> u32 {
+        match self {
+            ShaderType::Vertex => WebGl2RenderingContext::VERTEX_SHADER,
+            ShaderType::Fragment => WebGl2RenderingContext::FRAGMENT_SHADER,
+        }
+    }
+}
+
 struct Shader {
     context: Arc<WebGl2RenderingContext>,
     instance: WebGlShader,
 }
 
 impl Shader {
-    pub fn new(context: Arc<WebGl2RenderingContext>, typ: u32, source: &str) -> Result<Self> {
+    pub fn new(
+        context: Arc<WebGl2RenderingContext>,
+        typ: ShaderType,
+        source: &str,
+    ) -> Result<Self> {
         let result = context
-            .create_shader(typ)
-            .ok_or(anyhow!("failed to create shader of type {typ}"))?;
+            .create_shader(typ.gl_type())
+            .ok_or(anyhow!("failed to create shader of type {typ:?}"))?;
         context.shader_source(&result, source);
         context.compile_shader(&result);
         let compile_status = context
@@ -29,7 +48,9 @@ impl Shader {
         } else {
             let log = context.get_shader_info_log(&result);
             context.delete_shader(Some(&result));
-            Err(anyhow!("shader compile error, type: {typ}, log:\n{log:?}"))
+            Err(anyhow!(
+                "shader compile error, type: {typ:?}, log:\n{log:?}"
+            ))
         }
     }
 }
@@ -170,16 +191,8 @@ impl ShaderProgram {
         vertex_source: &str,
         fragment_source: &str,
     ) -> Result<Self> {
-        let vertex_shader = Shader::new(
-            context.clone(),
-            WebGl2RenderingContext::VERTEX_SHADER,
-            vertex_source,
-        )?;
-        let fragment_shader = Shader::new(
-            context.clone(),
-            WebGl2RenderingContext::FRAGMENT_SHADER,
-            fragment_source,
-        )?;
+        let vertex_shader = Shader::new(context.clone(), ShaderType::Vertex, vertex_source)?;
+        let fragment_shader = Shader::new(context.clone(), ShaderType::Fragment, fragment_source)?;
         let result = context
             .create_program()
             .ok_or_else(|| anyhow!("failed to create shader program"))?;
