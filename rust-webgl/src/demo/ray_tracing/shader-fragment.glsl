@@ -30,22 +30,22 @@ RayIntersection get_best_ray_intersection(RayIntersection a, RayIntersection b) 
 }
 
 bool get_voxel(vec3 point) {
+    // TODO voxel data in texture? some kind of uniform?
+    ivec3 ipoint = ivec3(
+        int(point.x / VOXEL_SIZE) - (point.x < MIN_VOXEL_SPACE_COORD ? 1 : 0),
+        int(point.y / VOXEL_SIZE) - (point.y < MIN_VOXEL_SPACE_COORD ? 1 : 0),
+        int(point.z / VOXEL_SIZE) - (point.z < MIN_VOXEL_SPACE_COORD ? 1 : 0)
+    );
     if (
-        point.x < MIN_VOXEL_SPACE_COORD
-        || point.x >= MAX_VOXEL_SPACE_COORD
-        || point.y <= MIN_VOXEL_SPACE_COORD
-        || point.y >= MAX_VOXEL_SPACE_COORD
-        || point.z <= MIN_VOXEL_SPACE_COORD
-        || point.z >= MAX_VOXEL_SPACE_COORD
+        ipoint.x < 0
+        || ipoint.x >= CHUNK_SIZE
+        || ipoint.y < 0
+        || ipoint.y >= CHUNK_SIZE
+        || ipoint.z < 0
+        || ipoint.z >= CHUNK_SIZE
     ) {
         return false;
     }
-    // TODO voxel data in texture? some kind of uniform?
-    ivec3 ipoint = ivec3(
-        int(point.x / VOXEL_SIZE),
-        int(point.y / VOXEL_SIZE),
-        int(point.z / VOXEL_SIZE)
-    );
     // are we on the min or max of each axis
     bool x = ipoint.x == 0 || ipoint.x == CHUNK_SIZE-1;
     bool y = ipoint.y == 0 || ipoint.y == CHUNK_SIZE-1;
@@ -58,42 +58,6 @@ vec3 get_ray_point(Ray ray, float distance) {
     return ray.origin + ray.delta * distance;
 }
 
-// TODO no?
-// RayIntersection ray_x_axis_plane_intersection(Ray ray, float plane) {
-//     RayIntersection result;
-//     if (ray.origin.x == 0.0) {
-//         result.success = false;
-//     } else {
-//         result.distance = (plane - ray.origin.x) / ray.delta.x;
-//         result.success = result.distance >= 0.0;
-//     }
-//     return result;
-// }
-
-// TODO no?
-// RayIntersection ray_y_axis_plane_intersection(Ray ray, float plane) {
-//     RayIntersection result;
-//     if (ray.origin.y == 0.0) {
-//         result.success = false;
-//     } else {
-//         result.distance = (plane - ray.origin.y) / ray.delta.y;
-//         result.success = result.distance >= 0.0;
-//     }
-//     return result;
-// }
-
-// TODO no?
-// RayIntersection ray_z_axis_plane_intersection(Ray ray, float plane) {
-//     RayIntersection result;
-//     if (ray.origin.z == 0.0) {
-//         result.success = false;
-//     } else {
-//         result.distance = (plane - ray.origin.z) / ray.delta.z;
-//         result.success = result.distance >= 0.0;
-//     }
-//     return result;
-// }
-
 RayIntersection ray_x_axis_chunk_intersection(Ray ray) {
     RayIntersection result;
     result.success = false;
@@ -104,7 +68,7 @@ RayIntersection ray_x_axis_chunk_intersection(Ray ray) {
             if (ray.delta.x < 0.0) {
                 return result;
             }
-            plane = MIN_VOXEL_SPACE_COORD;
+            plane = MIN_VOXEL_SPACE_COORD + WRONG_DIRECTION_OFFSET;
         } else if (ray.origin.x >= MAX_VOXEL_SPACE_COORD) {
             if (ray.delta.x > 0.0) {
                 return result;
@@ -114,7 +78,7 @@ RayIntersection ray_x_axis_chunk_intersection(Ray ray) {
             if (ray.delta.x < 0.0) {
                 plane = floor(ray.origin.x) - WRONG_DIRECTION_OFFSET;
             } else {
-                plane = floor(ray.origin.x) + VOXEL_SIZE;
+                plane = floor(ray.origin.x) + VOXEL_SIZE + WRONG_DIRECTION_OFFSET;
             }
         }
         // start were the next plane to either side is
@@ -143,7 +107,7 @@ RayIntersection ray_y_axis_chunk_intersection(Ray ray) {
             if (ray.delta.y < 0.0) {
                 return result;
             }
-            plane = MIN_VOXEL_SPACE_COORD;
+            plane = MIN_VOXEL_SPACE_COORD + WRONG_DIRECTION_OFFSET;
         } else if (ray.origin.y >= MAX_VOXEL_SPACE_COORD) {
             if (ray.delta.y > 0.0) {
                 return result;
@@ -153,7 +117,7 @@ RayIntersection ray_y_axis_chunk_intersection(Ray ray) {
             if (ray.delta.y < 0.0) {
                 plane = floor(ray.origin.y) - WRONG_DIRECTION_OFFSET;
             } else {
-                plane = floor(ray.origin.y) + VOXEL_SIZE;
+                plane = floor(ray.origin.y) + VOXEL_SIZE + WRONG_DIRECTION_OFFSET;
             }
         }
         // start were the next plane to either side is
@@ -179,20 +143,20 @@ RayIntersection ray_z_axis_chunk_intersection(Ray ray) {
         // find the next plane in the direction we're going
         float plane;
         if (ray.origin.z < MIN_VOXEL_SPACE_COORD) {
-            plane = MIN_VOXEL_SPACE_COORD;
             if (ray.delta.z < 0.0) {
                 return result;
             }
+            plane = MIN_VOXEL_SPACE_COORD + WRONG_DIRECTION_OFFSET;
         } else if (ray.origin.z >= MAX_VOXEL_SPACE_COORD) {
-            plane = MAX_VOXEL_SPACE_COORD - WRONG_DIRECTION_OFFSET;
             if (ray.delta.z > 0.0) {
                 return result;
             }
+            plane = MAX_VOXEL_SPACE_COORD - WRONG_DIRECTION_OFFSET;
         } else {
             if (ray.delta.z < 0.0) {
                 plane = floor(ray.origin.z) - WRONG_DIRECTION_OFFSET;
             } else {
-                plane = floor(ray.origin.z) + VOXEL_SIZE;
+                plane = floor(ray.origin.z) + VOXEL_SIZE + WRONG_DIRECTION_OFFSET;
             }
         }
         // start were the next plane to either side is
