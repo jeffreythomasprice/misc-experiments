@@ -1,5 +1,3 @@
-use std::iter::Zip;
-
 use crate::strings::{Match, PosStr};
 
 use super::Matcher;
