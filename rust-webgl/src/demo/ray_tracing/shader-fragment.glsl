@@ -188,7 +188,7 @@ RayIntersection get_chunk_intersection(Ray ray) {
 void main() {
     Ray ray;
     ray.origin = ray_origin_varying;
-    ray.delta = ray_delta_varying;
+    ray.delta = normalize(ray_delta_varying);
     RayIntersection result = get_chunk_intersection(ray);
     if (result.success) {
         gl_FragColor = vec4(1, 1, 1, 1);
