@@ -14,6 +14,9 @@ impl<'a> StrMatcher<'a> {
 
 impl<'a> Matcher<'a, &'a str> for StrMatcher<'a> {
     fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, &'a str>> {
+        if input.s.len() < self.s.len() {
+            return None;
+        }
         let mut pos = input.pos.clone();
         for (input, check) in input.s.chars().zip(self.s.chars()) {
             if input != check {
@@ -57,5 +60,10 @@ mod tests {
     #[test]
     fn none() {
         assert_eq!(StrMatcher::new("foo").apply("barfoo".into()), None);
+    }
+
+    #[test]
+    fn none_input_is_too_small() {
+        assert_eq!(StrMatcher::new("foo").apply("f".into()), None,);
     }
 }

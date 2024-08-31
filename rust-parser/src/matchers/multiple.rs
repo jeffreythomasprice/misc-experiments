@@ -1,29 +1,42 @@
+use std::marker::PhantomData;
+
 use crate::strings::{Match, PosStr};
 
 use super::Matcher;
 
-pub struct MultipleMatcher<MatchF, SkipF> {
-    mf: MatchF,
-    sf: SkipF,
+pub struct MultipleMatcher<M, S, T, U> {
+    m: M,
+    s: S,
+    phantom1: PhantomData<T>,
+    phantom2: PhantomData<U>,
 }
 
-impl<MatchF, SkipF> MultipleMatcher<MatchF, SkipF> {
-    pub fn new(mf: MatchF, sf: SkipF) -> Self {
-        Self { mf, sf }
+impl<'a, M, S, T, U> MultipleMatcher<M, S, T, U>
+where
+    M: Matcher<'a, T>,
+    S: Matcher<'a, U>,
+{
+    pub fn new(m: M, s: S) -> Self {
+        Self {
+            m,
+            s,
+            phantom1: PhantomData,
+            phantom2: PhantomData,
+        }
     }
 }
 
-impl<'a, T, MatchF, SkipF> Matcher<'a, Vec<T>> for MultipleMatcher<MatchF, SkipF>
+impl<'a, M, S, T, U> Matcher<'a, Vec<T>> for MultipleMatcher<M, S, T, U>
 where
-    MatchF: Fn(PosStr<'a>) -> Option<Match<'a, T>>,
-    SkipF: Fn(PosStr<'a>) -> PosStr<'a>,
+    M: Matcher<'a, T>,
+    S: Matcher<'a, U>,
 {
     fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, Vec<T>>> {
         let mut input = input;
         let mut results = Vec::new();
 
         // first
-        match (self.mf)(input.clone()) {
+        match self.m.apply(input.clone()) {
             // we have at least one
             Some(Match { remainder, value }) => {
                 results.push(value);
@@ -41,7 +54,7 @@ where
 
         // as long as we can keep matching the skip then the actual match function, add to th results
         loop {
-            match (self.mf)((self.sf)(input.clone())) {
+            match self.m.apply(self.s.skip(input.clone())) {
                 Some(Match { remainder, value }) => {
                     results.push(value);
                     input = remainder;
@@ -57,4 +70,25 @@ where
     }
 }
 
-// TODO tests
+#[cfg(test)]
+mod tests {
+    use crate::{
+        matchers::{multiple::MultipleMatcher, str::StrMatcher, Matcher},
+        strings::{Match, PosStr, Position},
+    };
+
+    #[test]
+    fn test() {
+        assert_eq!(
+            MultipleMatcher::new(StrMatcher::new("aa"), StrMatcher::new("b"))
+                .apply("aabaabaa".into()),
+            Some(Match {
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 8 },
+                    s: ""
+                },
+                value: vec!["aa", "aa", "aa"]
+            })
+        );
+    }
+}
