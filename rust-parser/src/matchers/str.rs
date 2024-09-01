@@ -6,6 +6,10 @@ pub struct StrMatcher<'a> {
     s: &'a str,
 }
 
+pub fn str(s: &str) -> StrMatcher {
+    StrMatcher::new(s)
+}
+
 impl<'a> StrMatcher<'a> {
     pub fn new(s: &'a str) -> Self {
         Self { s }
@@ -41,12 +45,10 @@ mod tests {
         strings::{Match, PosStr, Position},
     };
 
-    use super::StrMatcher;
-
     #[test]
     fn some() {
         assert_eq!(
-            StrMatcher::new("foo").apply("foobar".into()),
+            super::str("foo").apply("foobar".into()),
             Some(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
@@ -59,11 +61,11 @@ mod tests {
 
     #[test]
     fn none() {
-        assert_eq!(StrMatcher::new("foo").apply("barfoo".into()), None);
+        assert_eq!(super::str("foo").apply("barfoo".into()), None);
     }
 
     #[test]
     fn none_input_is_too_small() {
-        assert_eq!(StrMatcher::new("foo").apply("f".into()), None,);
+        assert_eq!(super::str("foo").apply("f".into()), None,);
     }
 }

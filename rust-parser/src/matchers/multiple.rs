@@ -11,6 +11,14 @@ pub struct MultipleMatcher<M, S, T, U> {
     phantom2: PhantomData<U>,
 }
 
+pub fn multiple<'a, M, S, T, U>(m: M, s: S) -> MultipleMatcher<M, S, T, U>
+where
+    M: Matcher<'a, T>,
+    S: Matcher<'a, U>,
+{
+    MultipleMatcher::new(m, s)
+}
+
 impl<'a, M, S, T, U> MultipleMatcher<M, S, T, U>
 where
     M: Matcher<'a, T>,
@@ -73,15 +81,14 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        matchers::{multiple::MultipleMatcher, str::StrMatcher, Matcher},
+        matchers::{multiple::multiple, str::StrMatcher, Matcher},
         strings::{Match, PosStr, Position},
     };
 
     #[test]
     fn test() {
         assert_eq!(
-            MultipleMatcher::new(StrMatcher::new("aa"), StrMatcher::new("b"))
-                .apply("aabaabaa".into()),
+            multiple(StrMatcher::new("aa"), StrMatcher::new("b")).apply("aabaabaa".into()),
             Some(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 8 },

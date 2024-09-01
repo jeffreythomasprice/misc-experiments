@@ -9,6 +9,13 @@ where
     f: F,
 }
 
+pub fn take_while<F>(f: F) -> TakeWhileMatcher<F>
+where
+    F: Fn(&Position, &char) -> bool,
+{
+    TakeWhileMatcher::new(f)
+}
+
 impl<F> TakeWhileMatcher<F>
 where
     F: Fn(&Position, &char) -> bool,
@@ -18,11 +25,11 @@ where
     }
 }
 
-impl<'a, F> Matcher<'a, Option<PosStr<'a>>> for TakeWhileMatcher<F>
+impl<'a, F> Matcher<'a, PosStr<'a>> for TakeWhileMatcher<F>
 where
     F: Fn(&Position, &char) -> bool,
 {
-    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, Option<PosStr<'a>>>> {
+    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, PosStr<'a>>> {
         Some(input.take_while_and_remainder(&self.f))
     }
 }
@@ -32,18 +39,16 @@ mod tests {
     use std::{cell::RefCell, rc::Rc};
 
     use crate::{
-        matchers::Matcher,
+        matchers::{take_while::take_while, Matcher},
         strings::{Match, PosStr, Position},
     };
-
-    use super::TakeWhileMatcher;
 
     #[test]
     fn test() {
         let called_with = Rc::new(RefCell::new(Vec::new()));
         let m = {
             let called_with = called_with.clone();
-            TakeWhileMatcher::new(move |pos, c| {
+            take_while(move |pos, c| {
                 called_with.borrow_mut().push((pos.clone(), c.clone()));
                 ('0'..='9').contains(c)
             })
@@ -56,10 +61,10 @@ mod tests {
                     pos: Position { line: 0, column: 3 },
                     s: "abc"
                 },
-                value: Some(PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "123"
-                })
+                }
             })
         );
         assert_eq!(

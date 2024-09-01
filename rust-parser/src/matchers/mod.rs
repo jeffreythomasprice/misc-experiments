@@ -1,22 +1,13 @@
-pub mod multiple;
-pub mod sequence;
-pub mod str;
-pub mod take_while;
+mod map;
+mod matcher;
+mod multiple;
+mod sequence;
+mod str;
+mod take_while;
 
-use crate::strings::{Match, PosStr};
-
-pub trait Matcher<'a, T> {
-    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, T>>;
-
-    fn skip(&self, input: PosStr<'a>) -> PosStr<'a> {
-        match self.apply(input.clone()) {
-            Some(Match {
-                remainder,
-                value: _,
-            }) => remainder,
-            None => input,
-        }
-    }
-}
-
-// TODO tests
+pub use map::*;
+pub use matcher::*;
+pub use multiple::*;
+pub use sequence::*;
+pub use str::*;
+pub use take_while::*;

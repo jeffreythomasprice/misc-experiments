@@ -104,7 +104,7 @@ impl<'a> PosStr<'a> {
         }
     }
 
-    pub fn take_while_and_remainder<F>(self: PosStr<'a>, mut f: F) -> Match<'a, Option<PosStr<'a>>>
+    pub fn take_while_and_remainder<F>(self: PosStr<'a>, mut f: F) -> Match<'a, PosStr<'a>>
     where
         F: FnMut(&Position, &char) -> bool,
     {
@@ -122,14 +122,17 @@ impl<'a> PosStr<'a> {
                     pos,
                     s: &self.s[(i + 1)..],
                 },
-                value: Some(PosStr {
+                value: PosStr {
                     pos: self.pos.clone(),
                     s: &self.s[0..=i],
-                }),
+                },
             },
             None => Match {
                 remainder: self.clone(),
-                value: None,
+                value: PosStr {
+                    pos: self.pos.clone(),
+                    s: "",
+                },
             },
         }
     }
@@ -209,10 +212,10 @@ mod tests {
                     pos: Position { line: 0, column: 3 },
                     s: ""
                 },
-                value: Some(PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "123"
-                })
+                }
             }
         );
         assert_eq!(
@@ -243,10 +246,10 @@ mod tests {
                     pos: Position { line: 0, column: 3 },
                     s: "abc"
                 },
-                value: Some(PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "123"
-                })
+                }
             }
         );
         assert_eq!(
