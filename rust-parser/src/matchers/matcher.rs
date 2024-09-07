@@ -27,13 +27,13 @@ pub trait Matcher<'a, T> {
 //     }
 // }
 
-// impl<'a, T, M> Matcher<'a, T> for Box<M>
-// where
-//     M: Matcher<'a, T>,
-// {
-//     fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, T>> {
-//         self.apply(input)
-//     }
-// }
+impl<'a, T, M> Matcher<'a, T> for Box<M>
+where
+    M: Matcher<'a, T>,
+{
+    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, T>> {
+        self.as_ref().apply(input)
+    }
+}
 
 // TODO tests
