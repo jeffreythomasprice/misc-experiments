@@ -4,26 +4,28 @@ pub mod strings;
 #[cfg(test)]
 pub mod test {
     use crate::{
-        matchers::{multiple, take_while, Mappable, Matcher},
+        matchers::{match2, repeat, take_while, MapError, Mappable, Matcher},
         strings::{Match, PosStr, Position},
     };
 
-    fn match_u32<'a>() -> crate::matchers::MapMatcher<
-        'a,
-        PosStr<'a>,
-        u32,
-        crate::matchers::TakeWhileMatcher<impl Fn(&Position, &char) -> bool>,
-        impl Fn(PosStr<'a>) -> Option<u32>,
-    > {
-        take_while(|_pos, c| ('0'..='9').contains(c)).map(|value| value.s.parse::<u32>().ok())
+    fn match_u32() -> Box<dyn Matcher<'static, u32>> {
+        Box::new(
+            take_while(|_pos, c| ('0'..='9').contains(c))
+                .map(|value| value.s.parse::<u32>().map_err(|e| MapError)),
+        )
     }
 
-    fn match_u32_list() {
-        let result = multiple(
-            match_u32,
-            take_while(|_pos, c| -> bool { c.is_whitespace() }),
-        );
-        todo!()
+    fn tokenize<M, T>(m: M) -> Box<dyn Matcher<'static, T>>
+    where
+        M: Matcher<'static, T> + 'static,
+        T: 'static,
+    {
+        Box::new(match2(m, take_while(|_pos, c| -> bool { c.is_whitespace() })).map(|(a, b)| Ok(a)))
+    }
+
+    fn match_u32_list() -> Box<dyn Matcher<'static, u32>> {
+        let t = tokenize(match_u32().as_ref());
+        Box::new(repeat(t, ..))
     }
 
     #[test]
