@@ -1,6 +1,8 @@
 pub mod matchers;
 pub mod strings;
 
+// TODO replace this with a proper test
+
 #[cfg(test)]
 pub mod test {
     use crate::{
@@ -8,13 +10,7 @@ pub mod test {
         strings::{Match, PosStr, Position},
     };
 
-    fn match_u32<'a>() -> crate::matchers::MapMatcher<
-        'a,
-        PosStr<'a>,
-        u32,
-        crate::matchers::TakeWhileMatcher<impl Fn(&Position, &char) -> bool>,
-        impl Fn(PosStr<'a>) -> Result<u32, MapError>,
-    > {
+    fn match_u32<'a>() -> impl Matcher<'a, u32> {
         take_while(|_pos, c| ('0'..='9').contains(c)).map(|value| {
             value
                 .s
@@ -23,44 +19,14 @@ pub mod test {
         })
     }
 
-    fn tokenize<'a, M, T>(
-        m: M,
-    ) -> crate::matchers::MapMatcher<
-        'a,
-        (T, PosStr<'a>),
-        T,
-        crate::matchers::Match2<
-            M,
-            crate::matchers::TakeWhileMatcher<impl Fn(&Position, &char) -> bool>,
-        >,
-        impl Fn((T, PosStr<'a>)) -> Result<T, MapError>,
-    >
+    fn tokenize<'a, M, T>(m: M) -> impl Matcher<'a, T>
     where
         M: Matcher<'a, T>,
     {
         match2(m, take_while(|_pos, c| -> bool { c.is_whitespace() })).map(|(a, b)| Ok(a))
     }
 
-    fn match_u32_list<'a>() -> crate::matchers::RepeatMatcher<
-        crate::matchers::MapMatcher<
-            'a,
-            (u32, PosStr<'a>),
-            u32,
-            crate::matchers::Match2<
-                crate::matchers::MapMatcher<
-                    'a,
-                    PosStr<'a>,
-                    u32,
-                    crate::matchers::TakeWhileMatcher<impl Fn(&Position, &char) -> bool>,
-                    impl Fn(PosStr<'a>) -> Result<u32, MapError>,
-                >,
-                crate::matchers::TakeWhileMatcher<impl Fn(&Position, &char) -> bool + 'a>,
-            >,
-            impl Fn((u32, PosStr<'a>)) -> Result<u32, MapError>,
-        >,
-        u32,
-        std::ops::RangeFull,
-    > {
+    fn match_u32_list<'a>() -> impl Matcher<'a, Vec<u32>> {
         repeat(tokenize(match_u32()), ..)
     }
 
