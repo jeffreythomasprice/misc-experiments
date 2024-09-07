@@ -2,7 +2,7 @@ use std::{marker::PhantomData, ops::RangeBounds};
 
 use crate::strings::{Match, PosStr};
 
-use super::Matcher;
+use super::{Matcher, MatcherError};
 
 pub struct RepeatMatcher<M, T, R> {
     matcher: M,
@@ -37,10 +37,11 @@ where
     M: Matcher<'a, T>,
     R: RangeBounds<usize>,
 {
-    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, Vec<T>>> {
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, Vec<T>>, MatcherError> {
         let original_input = input;
         let mut remaining_input = original_input.clone();
         let mut results = Vec::new();
+        let mut last_error = None;
 
         loop {
             let good_now = self.range.contains(&results.len());
@@ -50,21 +51,24 @@ where
             }
 
             match self.matcher.apply(remaining_input.clone()) {
-                Some(Match { remainder, value }) => {
+                Ok(Match { remainder, value }) => {
                     results.push(value);
                     remaining_input = remainder;
                 }
-                None => break,
+                Err(e) => {
+                    last_error = Some(e);
+                    break;
+                }
             };
         }
 
         if self.range.contains(&results.len()) {
-            Some(Match {
+            Ok(Match {
                 remainder: remaining_input,
                 value: results,
             })
         } else {
-            None
+            Err(last_error.unwrap_or(MatcherError::NotEnoughRemainingInput))
         }
     }
 }
@@ -72,7 +76,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        matchers::{repeat, str::StrMatcher, Matcher},
+        matchers::{repeat, str::StrMatcher, Matcher, MatcherError},
         strings::{Match, PosStr, Position},
     };
 
@@ -80,7 +84,7 @@ mod tests {
     fn unlimited() {
         assert_eq!(
             repeat(StrMatcher::new("foo"), ..).apply("foofoofoobar".into()),
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "bar"
@@ -94,7 +98,7 @@ mod tests {
     fn at_least_success() {
         assert_eq!(
             repeat(StrMatcher::new("foo"), 2..).apply("foofoofoobar".into()),
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "bar"
@@ -108,7 +112,10 @@ mod tests {
     fn at_least_failure() {
         assert_eq!(
             repeat(StrMatcher::new("foo"), 2..).apply("foobar".into()),
-            None
+            Err(MatcherError::Expected(
+                Position { line: 0, column: 3 },
+                "foo".to_owned()
+            ))
         );
     }
 
@@ -116,7 +123,7 @@ mod tests {
     fn no_more_than_success() {
         assert_eq!(
             repeat(StrMatcher::new("foo"), ..2).apply("foofoofoobar".into()),
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "foofoobar"
@@ -130,7 +137,7 @@ mod tests {
     fn no_more_than_success_empty_result() {
         assert_eq!(
             repeat(StrMatcher::new("foo"), ..2).apply("bar".into()),
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "bar"
@@ -144,7 +151,7 @@ mod tests {
     fn bounded_success() {
         assert_eq!(
             repeat(StrMatcher::new("foo"), 2..=3).apply("foofoofoofoobar".into()),
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "foobar"
@@ -158,7 +165,10 @@ mod tests {
     fn bounded_failure_too_few() {
         assert_eq!(
             repeat(StrMatcher::new("foo"), 2..=3).apply("foobar".into()),
-            None
+            Err(MatcherError::Expected(
+                Position { line: 0, column: 3 },
+                "foo".to_owned()
+            ))
         );
     }
 }

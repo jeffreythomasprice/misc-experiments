@@ -1,6 +1,6 @@
 use crate::strings::{Match, PosStr};
 
-use super::Matcher;
+use super::{Matcher, MatcherError};
 
 pub struct Match2<M1, M2> {
     m1: M1,
@@ -26,16 +26,16 @@ where
     M1: Matcher<'a, T1>,
     M2: Matcher<'a, T2>,
 {
-    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, (T1, T2)>> {
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, (T1, T2)>, MatcherError> {
         let (input, result1) = match self.m1.apply(input) {
-            Some(Match { remainder, value }) => (remainder, value),
-            None => return None,
+            Ok(Match { remainder, value }) => (remainder, value),
+            Err(e) => return Err(e),
         };
         let (input, result2) = match self.m2.apply(input) {
-            Some(Match { remainder, value }) => (remainder, value),
-            None => return None,
+            Ok(Match { remainder, value }) => (remainder, value),
+            Err(e) => return Err(e),
         };
-        Some(Match {
+        Ok(Match {
             remainder: input,
             value: (result1, result2),
         })
@@ -69,20 +69,20 @@ where
     M2: Matcher<'a, T2>,
     M3: Matcher<'a, T3>,
 {
-    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, (T1, T2, T3)>> {
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, (T1, T2, T3)>, MatcherError> {
         let (input, result1) = match self.m1.apply(input) {
-            Some(Match { remainder, value }) => (remainder, value),
-            None => return None,
+            Ok(Match { remainder, value }) => (remainder, value),
+            Err(e) => return Err(e),
         };
         let (input, result2) = match self.m2.apply(input) {
-            Some(Match { remainder, value }) => (remainder, value),
-            None => return None,
+            Ok(Match { remainder, value }) => (remainder, value),
+            Err(e) => return Err(e),
         };
         let (input, result3) = match self.m3.apply(input) {
-            Some(Match { remainder, value }) => (remainder, value),
-            None => return None,
+            Ok(Match { remainder, value }) => (remainder, value),
+            Err(e) => return Err(e),
         };
-        Some(Match {
+        Ok(Match {
             remainder: input,
             value: (result1, result2, result3),
         })

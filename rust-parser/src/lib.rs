@@ -4,7 +4,7 @@ pub mod strings;
 #[cfg(test)]
 pub mod test {
     use crate::{
-        matchers::{match2, repeat, take_while, MapError, Mappable, Matcher},
+        matchers::{match2, repeat, take_while, MapError, Mappable, Matcher, MatcherError},
         strings::{Match, PosStr, Position},
     };
 
@@ -15,8 +15,12 @@ pub mod test {
         crate::matchers::TakeWhileMatcher<impl Fn(&Position, &char) -> bool>,
         impl Fn(PosStr<'a>) -> Result<u32, MapError>,
     > {
-        take_while(|_pos, c| ('0'..='9').contains(c))
-            .map(|value| value.s.parse::<u32>().map_err(|e| MapError))
+        take_while(|_pos, c| ('0'..='9').contains(c)).map(|value| {
+            value
+                .s
+                .parse::<u32>()
+                .map_err(|e| MapError(format!("failed to parse as u32: {e:?}")))
+        })
     }
 
     fn tokenize<'a, M, T>(
@@ -64,7 +68,7 @@ pub mod test {
     pub fn u32_success() {
         assert_eq!(
             match_u32().apply("123".into()),
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: ""
@@ -76,19 +80,31 @@ pub mod test {
 
     #[test]
     pub fn u32_failure() {
-        assert_eq!(match_u32().apply("foobar".into()), None);
+        assert_eq!(
+            match_u32().apply("foobar".into()),
+            Err(MatcherError::Expected(
+                Position { line: 0, column: 0 },
+                "failed to parse as u32: ParseIntError { kind: Empty }".to_owned()
+            ))
+        );
     }
 
     #[test]
     pub fn u32_failure_too_big() {
-        assert_eq!(match_u32().apply("4294967296".into()), None);
+        assert_eq!(
+            match_u32().apply("4294967296".into()),
+            Err(MatcherError::Expected(
+                Position { line: 0, column: 0 },
+                "failed to parse as u32: ParseIntError { kind: PosOverflow }".to_owned()
+            ))
+        );
     }
 
     #[test]
     pub fn u32_list_success() {
         assert_eq!(
             match_u32_list().apply("123 456    789   foobar".into()),
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position {
                         line: 0,
@@ -101,54 +117,3 @@ pub mod test {
         );
     }
 }
-
-// TODO make into tests
-
-// // TODO make this a Matcher, impl with a TakeWhileMatcher
-// fn skip_whitespace<'a>(input: PosStr<'a>) -> PosStr<'a> {
-//     skip_while(input, |_pos, c| c.is_whitespace())
-// }
-
-// // TODO make this a Matcher
-// fn match_u32<'a>(input: PosStr<'a>) -> Option<Match<'a, u32>> {
-//     let Match { remainder, value } =
-//         take_while_and_remainder(input, |_pos, c| ('0'..='9').contains(c));
-//     value
-//         .map(|value| {
-//             value
-//                 .s
-//                 .parse::<u32>()
-//                 .ok()
-//                 .map(|value| Match { remainder, value })
-//         })
-//         .flatten()
-// }
-
-// fn main() {
-//     let input = "123, 456 ,  789 foobar";
-//     let results = match_multiple(input.into(), match_u32, |input| {
-//         match match_3(
-//             input.clone(),
-//             |input| {
-//                 Some(Match {
-//                     remainder: skip_whitespace(input),
-//                     value: (),
-//                 })
-//             },
-//             |input| match_str(input, ","),
-//             |input| {
-//                 Some(Match {
-//                     remainder: skip_whitespace(input),
-//                     value: (),
-//                 })
-//             },
-//         ) {
-//             Some(Match {
-//                 remainder,
-//                 value: _,
-//             }) => remainder,
-//             None => input,
-//         }
-//     });
-//     println!("TODO result = {:?}", results);
-// }

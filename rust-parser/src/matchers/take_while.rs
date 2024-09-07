@@ -1,6 +1,6 @@
 use crate::strings::{Match, PosStr, Position};
 
-use super::Matcher;
+use super::{Matcher, MatcherError};
 
 pub struct TakeWhileMatcher<F>
 where
@@ -29,8 +29,8 @@ impl<'a, F> Matcher<'a, PosStr<'a>> for TakeWhileMatcher<F>
 where
     F: Fn(&Position, &char) -> bool,
 {
-    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, PosStr<'a>>> {
-        Some(input.take_while_and_remainder(&self.f))
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, PosStr<'a>>, MatcherError> {
+        Ok(input.take_while_and_remainder(&self.f))
     }
 }
 
@@ -56,7 +56,7 @@ mod tests {
         let result = m.apply("123abc".into());
         assert_eq!(
             result,
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "abc"

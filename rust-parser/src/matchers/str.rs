@@ -1,6 +1,6 @@
 use crate::strings::{Match, PosStr};
 
-use super::Matcher;
+use super::{Matcher, MatcherError};
 
 pub struct StrMatcher<'a> {
     s: &'a str,
@@ -17,18 +17,19 @@ impl<'a> StrMatcher<'a> {
 }
 
 impl<'a> Matcher<'a, &'a str> for StrMatcher<'a> {
-    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, &'a str>> {
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, &'a str>, MatcherError> {
         if input.s.len() < self.s.len() {
-            return None;
+            return Err(MatcherError::NotEnoughRemainingInput);
         }
+        let original_pos = input.pos.clone();
         let mut pos = input.pos.clone();
         for (input, check) in input.s.chars().zip(self.s.chars()) {
             if input != check {
-                return None;
+                return Err(MatcherError::Expected(original_pos, self.s.to_owned()));
             }
             pos = pos.advance(&check);
         }
-        Some(Match {
+        Ok(Match {
             remainder: PosStr {
                 pos,
                 s: &input.s[self.s.len()..],
@@ -41,7 +42,7 @@ impl<'a> Matcher<'a, &'a str> for StrMatcher<'a> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        matchers::Matcher,
+        matchers::{Matcher, MatcherError},
         strings::{Match, PosStr, Position},
     };
 
@@ -49,7 +50,7 @@ mod tests {
     fn some() {
         assert_eq!(
             super::str("foo").apply("foobar".into()),
-            Some(Match {
+            Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "bar"
@@ -61,11 +62,20 @@ mod tests {
 
     #[test]
     fn none() {
-        assert_eq!(super::str("foo").apply("barfoo".into()), None);
+        assert_eq!(
+            super::str("foo").apply("barfoo".into()),
+            Err(MatcherError::Expected(
+                Position { line: 0, column: 0 },
+                "foo".to_owned()
+            ))
+        );
     }
 
     #[test]
     fn none_input_is_too_small() {
-        assert_eq!(super::str("foo").apply("f".into()), None,);
+        assert_eq!(
+            super::str("foo").apply("f".into()),
+            Err(MatcherError::NotEnoughRemainingInput)
+        );
     }
 }

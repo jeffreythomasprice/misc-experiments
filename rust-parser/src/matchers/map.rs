@@ -2,9 +2,9 @@ use std::marker::PhantomData;
 
 use crate::strings::{Match, PosStr};
 
-use super::Matcher;
+use super::{Matcher, MatcherError};
 
-pub struct MapError;
+pub struct MapError(pub String);
 
 pub struct MapMatcher<'a, T, R, M, F>
 where
@@ -47,13 +47,16 @@ where
     M: Matcher<'a, T>,
     F: Fn(T) -> Result<R, MapError>,
 {
-    fn apply(&self, input: PosStr<'a>) -> Option<Match<'a, R>> {
-        self.m
-            .apply(input)
-            .map(|Match { remainder, value }| match (self.f)(value) {
-                Ok(value) => Some(Match { remainder, value }),
-                Err(_) => None,
-            })
-            .flatten()
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, R>, MatcherError> {
+        match self
+            .m
+            .apply(input.clone())
+            .map(|Match { remainder, value }| {
+                (self.f)(value).map(|value| Match { remainder, value })
+            }) {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(e)) => Err(MatcherError::Expected(input.pos.clone(), e.0)),
+            Err(e) => Err(e),
+        }
     }
 }
