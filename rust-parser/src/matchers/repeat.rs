@@ -29,9 +29,10 @@ where
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, Vec<T>>, MatcherError> {
         let original_input = input;
-        let mut remaining_input = original_input.clone();
+        let mut remaining_input = original_input;
         let mut results = Vec::new();
         let mut last_error = None;
+        let mut total_len = 0;
 
         loop {
             let good_now = self.range.contains(&results.len());
@@ -40,14 +41,16 @@ where
                 break;
             }
 
-            match self.matcher.apply(remaining_input.clone()) {
+            match self.matcher.apply(remaining_input) {
                 Ok(Match {
-                    pos: _,
+                    source: _,
+                    matched,
                     remainder,
                     value,
                 }) => {
                     results.push(value);
                     remaining_input = remainder;
+                    total_len += matched.s.len();
                 }
                 Err(e) => {
                     last_error = Some(e);
@@ -58,7 +61,11 @@ where
 
         if self.range.contains(&results.len()) {
             Ok(Match {
-                pos: original_input.pos.clone(),
+                source: original_input,
+                matched: PosStr {
+                    pos: original_input.pos,
+                    s: &original_input.s[0..total_len],
+                },
                 remainder: remaining_input,
                 value: results,
             })
@@ -80,7 +87,14 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), ..).apply("foofoofoobar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foofoofoobar"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foofoofoo"
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "bar"
@@ -95,7 +109,14 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), 2..).apply("foofoofoobar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foofoofoobar"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foofoofoo"
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "bar"
@@ -121,7 +142,14 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), ..2).apply("foofoofoobar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foofoofoobar"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foo"
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "foofoobar"
@@ -136,7 +164,14 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), ..2).apply("bar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "bar"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: ""
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "bar"
@@ -151,7 +186,14 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), 2..=3).apply("foofoofoofoobar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foofoofoofoobar"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foofoofoo"
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "foobar"

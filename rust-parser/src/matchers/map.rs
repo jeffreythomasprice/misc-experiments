@@ -9,7 +9,7 @@ pub struct MapError(pub String);
 pub struct MapMatcher<'a, T, R, M, F>
 where
     M: Matcher<'a, T>,
-    F: Fn(T) -> Result<R, MapError>,
+    F: Fn(&PosStr<'a>, T) -> Result<R, MapError>,
 {
     m: M,
     f: F,
@@ -21,7 +21,7 @@ where
 pub trait Mappable<'a, T, R, M, F>
 where
     M: Matcher<'a, T>,
-    F: Fn(T) -> Result<R, MapError>,
+    F: Fn(&PosStr<'a>, T) -> Result<R, MapError>,
 {
     fn map(self, f: F) -> MapMatcher<'a, T, R, M, F>;
 }
@@ -29,7 +29,7 @@ where
 impl<'a, T, R, M, F> Mappable<'a, T, R, M, F> for M
 where
     M: Matcher<'a, T>,
-    F: Fn(T) -> Result<R, MapError>,
+    F: Fn(&PosStr<'a>, T) -> Result<R, MapError>,
 {
     fn map(self, f: F) -> MapMatcher<'a, T, R, M, F> {
         MapMatcher {
@@ -42,27 +42,45 @@ where
     }
 }
 
+pub trait StrMappable<'a, T, M>
+where
+    M: Matcher<'a, T>,
+{
+    fn map_to_str(self) -> impl Matcher<'a, &'a str>;
+}
+
+impl<'a, T, M> StrMappable<'a, T, M> for M
+where
+    M: Matcher<'a, T>,
+{
+    fn map_to_str(self) -> impl Matcher<'a, &'a str> {
+        self.map(|s, _| Ok(s.s))
+    }
+}
+
 impl<'a, T, R, M, F> Matcher<'a, R> for MapMatcher<'a, T, R, M, F>
 where
     M: Matcher<'a, T>,
-    F: Fn(T) -> Result<R, MapError>,
+    F: Fn(&PosStr<'a>, T) -> Result<R, MapError>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, R>, MatcherError> {
-        match self.m.apply(input.clone()).map(
+        match self.m.apply(input).map(
             |Match {
-                 pos,
+                 source,
+                 matched,
                  remainder,
                  value,
              }| {
-                (self.f)(value).map(|value| Match {
-                    pos,
+                (self.f)(&matched, value).map(|value| Match {
+                    source,
+                    matched,
                     remainder,
                     value,
                 })
             },
         ) {
             Ok(Ok(result)) => Ok(result),
-            Ok(Err(e)) => Err(MatcherError::Expected(input.pos.clone(), e.0)),
+            Ok(Err(e)) => Err(MatcherError::Expected(input.pos, e.0)),
             Err(e) => Err(e),
         }
     }

@@ -10,9 +10,10 @@ pub trait Matcher<'a, T> {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError>;
 
     fn skip(&self, input: PosStr<'a>) -> Result<PosStr<'a>, MatcherError> {
-        Ok(match self.apply(input.clone()) {
+        Ok(match self.apply(input) {
             Ok(Match {
-                pos: _,
+                source: _,
+                matched: _,
                 remainder,
                 value: _,
             }) => remainder,

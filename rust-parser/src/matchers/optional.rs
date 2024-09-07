@@ -15,18 +15,24 @@ where
     M: Matcher<'a, T>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, Option<T>>, MatcherError> {
-        match self.m.apply(input.clone()) {
+        match self.m.apply(input) {
             Ok(Match {
-                pos,
+                source,
+                matched,
                 remainder,
                 value,
             }) => Ok(Match {
-                pos,
+                source,
+                matched,
                 remainder,
                 value: Some(value),
             }),
             Err(_) => Ok(Match {
-                pos: input.pos.clone(),
+                source: input,
+                matched: PosStr {
+                    pos: input.pos,
+                    s: "",
+                },
                 remainder: input,
                 value: None,
             }),
@@ -48,7 +54,14 @@ pub mod tests {
         assert_eq!(
             optional(str("foo")).apply("foobar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foobar"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foo"
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "bar"
@@ -63,7 +76,14 @@ pub mod tests {
         assert_eq!(
             optional(str("foo")).apply("bar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "bar"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: ""
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "bar"

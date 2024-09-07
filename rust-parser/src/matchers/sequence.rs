@@ -21,25 +21,31 @@ where
     M2: Matcher<'a, T2>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, (T1, T2)>, MatcherError> {
-        let start_pos = input.pos.clone();
-        let (input, result1) = match self.m1.apply(input) {
+        let original_input = input;
+        let (input, s1, result1) = match self.m1.apply(input) {
             Ok(Match {
-                pos: _,
+                source: _,
+                matched,
                 remainder,
                 value,
-            }) => (remainder, value),
+            }) => (remainder, matched, value),
             Err(e) => return Err(e),
         };
-        let (input, result2) = match self.m2.apply(input) {
+        let (input, s2, result2) = match self.m2.apply(input) {
             Ok(Match {
-                pos: _,
+                source: _,
+                matched,
                 remainder,
                 value,
-            }) => (remainder, value),
+            }) => (remainder, matched, value),
             Err(e) => return Err(e),
         };
         Ok(Match {
-            pos: start_pos,
+            source: original_input,
+            matched: PosStr {
+                pos: original_input.pos,
+                s: &original_input.s[0..(s1.s.len() + s2.s.len())],
+            },
             remainder: input,
             value: (result1, result2),
         })
@@ -68,33 +74,40 @@ where
     M3: Matcher<'a, T3>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, (T1, T2, T3)>, MatcherError> {
-        let start_pos = input.pos.clone();
-        let (input, result1) = match self.m1.apply(input) {
+        let original_input = input;
+        let (input, s1, result1) = match self.m1.apply(input) {
             Ok(Match {
-                pos: _,
+                source: _,
+                matched,
                 remainder,
                 value,
-            }) => (remainder, value),
+            }) => (remainder, matched, value),
             Err(e) => return Err(e),
         };
-        let (input, result2) = match self.m2.apply(input) {
+        let (input, s2, result2) = match self.m2.apply(input) {
             Ok(Match {
-                pos: _,
+                source: _,
+                matched,
                 remainder,
                 value,
-            }) => (remainder, value),
+            }) => (remainder, matched, value),
             Err(e) => return Err(e),
         };
-        let (input, result3) = match self.m3.apply(input) {
+        let (input, s3, result3) = match self.m3.apply(input) {
             Ok(Match {
-                pos: _,
+                source: _,
+                matched,
                 remainder,
                 value,
-            }) => (remainder, value),
+            }) => (remainder, matched, value),
             Err(e) => return Err(e),
         };
         Ok(Match {
-            pos: start_pos,
+            source: original_input,
+            matched: PosStr {
+                pos: original_input.pos,
+                s: &original_input.s[0..(s1.s.len() + s2.s.len() + s3.s.len())],
+            },
             remainder: input,
             value: (result1, result2, result3),
         })
@@ -115,7 +128,14 @@ mod tests {
         assert_eq!(
             match2(str("foo"), str("bar")).apply("foobar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foobar",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foobar",
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 6 },
                     s: "",
@@ -152,7 +172,14 @@ mod tests {
         assert_eq!(
             match3(str("foo"), str("bar"), str("baz")).apply("foobarbaz".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foobarbaz",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foobarbaz",
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "",

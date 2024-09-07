@@ -15,8 +15,8 @@ impl<'a> Matcher<'a, &'a str> for StrMatcher<'a> {
         if input.s.len() < self.s.len() {
             return Err(MatcherError::NotEnoughRemainingInput(input.pos));
         }
-        let original_pos = input.pos.clone();
-        let mut pos = input.pos.clone();
+        let original_pos = input.pos;
+        let mut pos = input.pos;
         for (input, check) in input.s.chars().zip(self.s.chars()) {
             if input != check {
                 return Err(MatcherError::Expected(original_pos, self.s.to_owned()));
@@ -24,7 +24,11 @@ impl<'a> Matcher<'a, &'a str> for StrMatcher<'a> {
             pos = pos.advance(&check);
         }
         Ok(Match {
-            pos: input.pos.clone(),
+            source: input,
+            matched: PosStr {
+                pos: input.pos,
+                s: &input.s[0..self.s.len()],
+            },
             remainder: PosStr {
                 pos,
                 s: &input.s[self.s.len()..],
@@ -46,7 +50,14 @@ mod tests {
         assert_eq!(
             str("foo").apply("foobar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foobar"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foo"
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "bar"

@@ -1,6 +1,7 @@
 use crate::{
     matchers::{
-        any2, match2, match3, repeat, str, take_while, MapError, Mappable, Matcher, MatcherError,
+        any2, char, char_range, match2, match3, optional, repeat, specific_char, str, take_while,
+        MapError, Mappable, Matcher, MatcherError, StrMappable,
     },
     strings::{Match, PosStr},
 };
@@ -20,15 +21,6 @@ struct Parser {
 
 impl Parser {
     pub fn new() -> Self {
-        let match_u32 = {
-            take_while(|_pos, c| ('0'..='9').contains(c)).map(|value| {
-                value
-                    .s
-                    .parse::<u32>()
-                    .map_err(|e| MapError(format!("failed to parse as u32: {e:?}")))
-            })
-        };
-
         let match_f64 = {
             /*
             based on the number spec from here https://www.json.org/json-en.html
@@ -42,14 +34,44 @@ impl Parser {
                 [eE][-+]?[0-9]+
             */
 
-            todo!()
+            let zero = str("0");
+            let digit = || char_range('0'..='9');
+            let digit_not_zero = char_range('1'..='9');
+
+            let integer_part = any2(
+                zero.map_to_str(),
+                match2(digit_not_zero, repeat(digit(), ..)).map_to_str(),
+            );
+
+            let fractional_part = optional(match2(str("."), repeat(digit(), 1..))).map_to_str();
+
+            let exponent_part = optional(match3(
+                any2(specific_char('e'), specific_char('E')),
+                optional(any2(specific_char('+'), specific_char('-'))),
+                repeat(digit(), 1..),
+            ))
+            .map_to_str();
+
+            Box::new(
+                match3(integer_part, fractional_part, exponent_part)
+                    .map_to_str()
+                    .map(|_, s| {
+                        println!("TODO JEFF s = {s}");
+                        match s.parse::<f64>() {
+                            Ok(x) => Ok(Box::new(ASTNode::Number(x))),
+                            Err(e) => Err(MapError(format!(
+                                "error parsing as float, input=\"{s}\", error={e:?}"
+                            ))),
+                        }
+                    }),
+            )
         };
 
         // TODO match_f64
 
         // TODO match various operations, parenthesis
 
-        Self { m: todo!() }
+        Self { m: match_f64 }
     }
 
     pub fn apply(
@@ -73,11 +95,18 @@ mod tests {
     fn single_number() {
         let parser = Parser::new();
         assert_eq!(
-            parser.apply(" 1.5 ".into()),
+            parser.apply("1.5".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
-                remainder: PosStr {
+                source: PosStr {
                     pos: Position { line: 0, column: 0 },
+                    s: "1.5",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1.5",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 3 },
                     s: ""
                 },
                 value: Box::new(ASTNode::Number(1.5f64)),

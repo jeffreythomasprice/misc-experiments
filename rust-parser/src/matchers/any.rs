@@ -21,11 +21,11 @@ where
     M2: Matcher<'a, T>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError> {
-        let e1 = match self.m1.apply(input.clone()) {
+        let e1 = match self.m1.apply(input) {
             Ok(result) => return Ok(result),
             Err(e) => e,
         };
-        let e2 = match self.m2.apply(input.clone()) {
+        let e2 = match self.m2.apply(input) {
             Ok(result) => return Ok(result),
             Err(e) => e,
         };
@@ -58,15 +58,15 @@ where
     M3: Matcher<'a, T>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError> {
-        let e1 = match self.m1.apply(input.clone()) {
+        let e1 = match self.m1.apply(input) {
             Ok(result) => return Ok(result),
             Err(e) => e,
         };
-        let e2 = match self.m2.apply(input.clone()) {
+        let e2 = match self.m2.apply(input) {
             Ok(result) => return Ok(result),
             Err(e) => e,
         };
-        let e3 = match self.m3.apply(input.clone()) {
+        let e3 = match self.m3.apply(input) {
             Ok(result) => return Ok(result),
             Err(e) => e,
         };
@@ -89,7 +89,14 @@ mod tests {
         assert_eq!(
             any2(str("foo"), str("bar")).apply("foo".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foo",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "foo",
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "",
@@ -104,7 +111,14 @@ mod tests {
         assert_eq!(
             any2(str("foo"), str("bar")).apply("bar".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "bar",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "bar",
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "",
@@ -130,7 +144,14 @@ mod tests {
         assert_eq!(
             any3(str("a"), str("b"), str("c")).apply("a".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "a",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "a",
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 1 },
                     s: "",
@@ -145,7 +166,14 @@ mod tests {
         assert_eq!(
             any3(str("a"), str("b"), str("c")).apply("b".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "b",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "b",
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 1 },
                     s: "",
@@ -160,7 +188,14 @@ mod tests {
         assert_eq!(
             any3(str("a"), str("b"), str("c")).apply("c".into()),
             Ok(Match {
-                pos: Position { line: 0, column: 0 },
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "c",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "c",
+                },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 1 },
                     s: "",
