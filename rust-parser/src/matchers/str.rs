@@ -24,6 +24,7 @@ impl<'a> Matcher<'a, &'a str> for StrMatcher<'a> {
             pos = pos.advance(&check);
         }
         Ok(Match {
+            pos: input.pos.clone(),
             remainder: PosStr {
                 pos,
                 s: &input.s[self.s.len()..],
@@ -45,6 +46,7 @@ mod tests {
         assert_eq!(
             str("foo").apply("foobar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "bar"

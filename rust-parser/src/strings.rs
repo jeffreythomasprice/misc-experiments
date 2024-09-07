@@ -1,6 +1,9 @@
-use std::str::{CharIndices, Chars};
+use std::{
+    cmp::Ordering,
+    str::{CharIndices, Chars},
+};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Position {
     pub line: usize,
     pub column: usize,
@@ -18,6 +21,18 @@ impl Position {
                 column: self.column + 1,
             },
         }
+    }
+}
+
+impl PartialOrd for Position {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Position {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (self.line, self.column).cmp(&(other.line, other.column))
     }
 }
 
@@ -55,20 +70,22 @@ impl<'a> Iterator for PosStrCharIndices<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Match<'a, T> {
+    pub pos: Position,
     pub remainder: PosStr<'a>,
     pub value: T,
 }
 
-impl<'a, T> PartialEq for Match<'a, T>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.remainder == other.remainder && self.value == other.value
+impl<'a, T> Match<'a, T> {
+    pub fn get_str(&self) -> &'a str {
+        // TODO get the full string matched
+        todo!()
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BadPositionError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PosStr<'a> {
@@ -118,6 +135,7 @@ impl<'a> PosStr<'a> {
         }
         match last_good {
             Some((pos, i)) => Match {
+                pos: self.pos.clone(),
                 remainder: PosStr {
                     pos,
                     s: &self.s[(i + 1)..],
@@ -128,6 +146,7 @@ impl<'a> PosStr<'a> {
                 },
             },
             None => Match {
+                pos: self.pos.clone(),
                 remainder: self.clone(),
                 value: PosStr {
                     pos: self.pos.clone(),
@@ -143,6 +162,19 @@ impl<'a> PosStr<'a> {
     {
         self.take_while_and_remainder(f).remainder
     }
+
+    pub fn take_until_position_and_remainder(
+        self: PosStr<'a>,
+        pos: &Position,
+    ) -> Result<Match<'a, PosStr<'a>>, BadPositionError> {
+        let target_pos = pos;
+        let result = self.take_while_and_remainder(|cur_pos, _| cur_pos < target_pos);
+        if result.remainder.pos == *target_pos {
+            Ok(result)
+        } else {
+            Err(BadPositionError)
+        }
+    }
 }
 
 impl<'a> From<&'a str> for PosStr<'a> {
@@ -155,9 +187,11 @@ impl<'a> From<&'a str> for PosStr<'a> {
 mod tests {
     use std::{cell::RefCell, rc::Rc};
 
-    use crate::strings::{Match, Position};
+    use crate::strings::{BadPositionError, Match, Position};
 
     use super::PosStr;
+
+    // TODO tests for Match::get_str
 
     #[test]
     fn chars() {
@@ -208,6 +242,7 @@ mod tests {
         assert_eq!(
             result,
             Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: ""
@@ -242,6 +277,7 @@ mod tests {
         assert_eq!(
             result,
             Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "abc"
@@ -289,6 +325,81 @@ mod tests {
                 (Position { line: 0, column: 2 }, '3'),
                 (Position { line: 0, column: 3 }, 'a')
             ]
+        );
+    }
+
+    #[test]
+    fn take_to_position() {
+        let s: PosStr = "123\n456\n789".into();
+        assert_eq!(
+            s.clone()
+                .take_until_position_and_remainder(&Position { line: 0, column: 1 }),
+            Ok(Match {
+                pos: Position { line: 0, column: 0 },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 1 },
+                    s: "23\n456\n789"
+                },
+                value: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1"
+                }
+            })
+        );
+        assert_eq!(
+            s.clone()
+                .take_until_position_and_remainder(&Position { line: 0, column: 3 }),
+            Ok(Match {
+                pos: Position { line: 0, column: 0 },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 3 },
+                    s: "\n456\n789"
+                },
+                value: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "123"
+                }
+            })
+        );
+        assert_eq!(
+            s.clone()
+                .take_until_position_and_remainder(&Position { line: 1, column: 0 }),
+            Ok(Match {
+                pos: Position { line: 0, column: 0 },
+                remainder: PosStr {
+                    pos: Position { line: 1, column: 0 },
+                    s: "456\n789"
+                },
+                value: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "123\n"
+                }
+            })
+        );
+        assert_eq!(
+            s.clone()
+                .take_until_position_and_remainder(&Position { line: 2, column: 3 }),
+            Ok(Match {
+                pos: Position { line: 0, column: 0 },
+                remainder: PosStr {
+                    pos: Position { line: 2, column: 3 },
+                    s: ""
+                },
+                value: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "123\n456\n789"
+                }
+            })
+        );
+        assert_eq!(
+            s.clone()
+                .take_until_position_and_remainder(&Position { line: 0, column: 4 }),
+            Err(BadPositionError)
+        );
+        assert_eq!(
+            s.clone()
+                .take_until_position_and_remainder(&Position { line: 3, column: 0 }),
+            Err(BadPositionError)
         );
     }
 }

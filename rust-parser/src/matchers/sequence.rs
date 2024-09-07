@@ -21,15 +21,25 @@ where
     M2: Matcher<'a, T2>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, (T1, T2)>, MatcherError> {
+        let start_pos = input.pos.clone();
         let (input, result1) = match self.m1.apply(input) {
-            Ok(Match { remainder, value }) => (remainder, value),
+            Ok(Match {
+                pos: _,
+                remainder,
+                value,
+            }) => (remainder, value),
             Err(e) => return Err(e),
         };
         let (input, result2) = match self.m2.apply(input) {
-            Ok(Match { remainder, value }) => (remainder, value),
+            Ok(Match {
+                pos: _,
+                remainder,
+                value,
+            }) => (remainder, value),
             Err(e) => return Err(e),
         };
         Ok(Match {
+            pos: start_pos,
             remainder: input,
             value: (result1, result2),
         })
@@ -58,19 +68,33 @@ where
     M3: Matcher<'a, T3>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, (T1, T2, T3)>, MatcherError> {
+        let start_pos = input.pos.clone();
         let (input, result1) = match self.m1.apply(input) {
-            Ok(Match { remainder, value }) => (remainder, value),
+            Ok(Match {
+                pos: _,
+                remainder,
+                value,
+            }) => (remainder, value),
             Err(e) => return Err(e),
         };
         let (input, result2) = match self.m2.apply(input) {
-            Ok(Match { remainder, value }) => (remainder, value),
+            Ok(Match {
+                pos: _,
+                remainder,
+                value,
+            }) => (remainder, value),
             Err(e) => return Err(e),
         };
         let (input, result3) = match self.m3.apply(input) {
-            Ok(Match { remainder, value }) => (remainder, value),
+            Ok(Match {
+                pos: _,
+                remainder,
+                value,
+            }) => (remainder, value),
             Err(e) => return Err(e),
         };
         Ok(Match {
+            pos: start_pos,
             remainder: input,
             value: (result1, result2, result3),
         })
@@ -91,6 +115,7 @@ mod tests {
         assert_eq!(
             match2(str("foo"), str("bar")).apply("foobar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 6 },
                     s: "",
@@ -127,6 +152,7 @@ mod tests {
         assert_eq!(
             match3(str("foo"), str("bar"), str("baz")).apply("foobarbaz".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "",

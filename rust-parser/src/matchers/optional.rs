@@ -16,11 +16,17 @@ where
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, Option<T>>, MatcherError> {
         match self.m.apply(input.clone()) {
-            Ok(Match { remainder, value }) => Ok(Match {
+            Ok(Match {
+                pos,
+                remainder,
+                value,
+            }) => Ok(Match {
+                pos,
                 remainder,
                 value: Some(value),
             }),
-            Err(e) => Ok(Match {
+            Err(_) => Ok(Match {
+                pos: input.pos.clone(),
                 remainder: input,
                 value: None,
             }),
@@ -42,6 +48,7 @@ pub mod tests {
         assert_eq!(
             optional(str("foo")).apply("foobar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "bar"
@@ -56,6 +63,7 @@ pub mod tests {
         assert_eq!(
             optional(str("foo")).apply("bar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "bar"

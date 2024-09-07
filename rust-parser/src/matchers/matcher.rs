@@ -12,6 +12,7 @@ pub trait Matcher<'a, T> {
     fn skip(&self, input: PosStr<'a>) -> Result<PosStr<'a>, MatcherError> {
         Ok(match self.apply(input.clone()) {
             Ok(Match {
+                pos: _,
                 remainder,
                 value: _,
             }) => remainder,

@@ -41,7 +41,11 @@ where
             }
 
             match self.matcher.apply(remaining_input.clone()) {
-                Ok(Match { remainder, value }) => {
+                Ok(Match {
+                    pos: _,
+                    remainder,
+                    value,
+                }) => {
                     results.push(value);
                     remaining_input = remainder;
                 }
@@ -54,6 +58,7 @@ where
 
         if self.range.contains(&results.len()) {
             Ok(Match {
+                pos: original_input.pos.clone(),
                 remainder: remaining_input,
                 value: results,
             })
@@ -75,6 +80,7 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), ..).apply("foofoofoobar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "bar"
@@ -89,6 +95,7 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), 2..).apply("foofoofoobar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "bar"
@@ -114,6 +121,7 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), ..2).apply("foofoofoobar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "foofoobar"
@@ -128,6 +136,7 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), ..2).apply("bar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "bar"
@@ -142,6 +151,7 @@ mod tests {
         assert_eq!(
             repeat(str("foo"), 2..=3).apply("foofoofoofoobar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 9 },
                     s: "foobar"

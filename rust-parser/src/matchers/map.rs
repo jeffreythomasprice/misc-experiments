@@ -48,12 +48,19 @@ where
     F: Fn(T) -> Result<R, MapError>,
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, R>, MatcherError> {
-        match self
-            .m
-            .apply(input.clone())
-            .map(|Match { remainder, value }| {
-                (self.f)(value).map(|value| Match { remainder, value })
-            }) {
+        match self.m.apply(input.clone()).map(
+            |Match {
+                 pos,
+                 remainder,
+                 value,
+             }| {
+                (self.f)(value).map(|value| Match {
+                    pos,
+                    remainder,
+                    value,
+                })
+            },
+        ) {
             Ok(Ok(result)) => Ok(result),
             Ok(Err(e)) => Err(MatcherError::Expected(input.pos.clone(), e.0)),
             Err(e) => Err(e),

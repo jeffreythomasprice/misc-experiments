@@ -75,6 +75,7 @@ mod tests {
         assert_eq!(
             parser.apply(" 1.5 ".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: ""

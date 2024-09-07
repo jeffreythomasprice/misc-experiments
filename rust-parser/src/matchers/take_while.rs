@@ -48,6 +48,7 @@ mod tests {
         assert_eq!(
             result,
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "abc"

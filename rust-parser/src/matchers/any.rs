@@ -89,6 +89,7 @@ mod tests {
         assert_eq!(
             any2(str("foo"), str("bar")).apply("foo".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "",
@@ -103,6 +104,7 @@ mod tests {
         assert_eq!(
             any2(str("foo"), str("bar")).apply("bar".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: "",
@@ -128,6 +130,7 @@ mod tests {
         assert_eq!(
             any3(str("a"), str("b"), str("c")).apply("a".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 1 },
                     s: "",
@@ -142,6 +145,7 @@ mod tests {
         assert_eq!(
             any3(str("a"), str("b"), str("c")).apply("b".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 1 },
                     s: "",
@@ -156,6 +160,7 @@ mod tests {
         assert_eq!(
             any3(str("a"), str("b"), str("c")).apply("c".into()),
             Ok(Match {
+                pos: Position { line: 0, column: 0 },
                 remainder: PosStr {
                     pos: Position { line: 0, column: 1 },
                     s: "",
