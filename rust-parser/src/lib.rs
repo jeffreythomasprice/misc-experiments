@@ -4,7 +4,7 @@ pub mod strings;
 #[cfg(test)]
 pub mod test {
     use crate::{
-        matchers::{take_while, Mappable, Matcher},
+        matchers::{multiple, take_while, Mappable, Matcher},
         strings::{Match, PosStr, Position},
     };
 
@@ -13,9 +13,17 @@ pub mod test {
         PosStr<'a>,
         u32,
         crate::matchers::TakeWhileMatcher<impl Fn(&Position, &char) -> bool>,
-        impl Fn(PosStr<'_>) -> Option<u32>,
+        impl Fn(PosStr<'a>) -> Option<u32>,
     > {
         take_while(|_pos, c| ('0'..='9').contains(c)).map(|value| value.s.parse::<u32>().ok())
+    }
+
+    fn match_u32_list() {
+        let result = multiple(
+            match_u32,
+            take_while(|_pos, c| -> bool { c.is_whitespace() }),
+        );
+        todo!()
     }
 
     #[test]
