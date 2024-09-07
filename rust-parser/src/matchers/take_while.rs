@@ -13,16 +13,7 @@ pub fn take_while<F>(f: F) -> TakeWhileMatcher<F>
 where
     F: Fn(&Position, &char) -> bool,
 {
-    TakeWhileMatcher::new(f)
-}
-
-impl<F> TakeWhileMatcher<F>
-where
-    F: Fn(&Position, &char) -> bool,
-{
-    pub fn new(f: F) -> Self {
-        Self { f }
-    }
+    TakeWhileMatcher { f }
 }
 
 impl<'a, F> Matcher<'a, PosStr<'a>> for TakeWhileMatcher<F>

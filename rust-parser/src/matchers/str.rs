@@ -7,19 +7,13 @@ pub struct StrMatcher<'a> {
 }
 
 pub fn str(s: &str) -> StrMatcher {
-    StrMatcher::new(s)
-}
-
-impl<'a> StrMatcher<'a> {
-    pub fn new(s: &'a str) -> Self {
-        Self { s }
-    }
+    StrMatcher { s }
 }
 
 impl<'a> Matcher<'a, &'a str> for StrMatcher<'a> {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, &'a str>, MatcherError> {
         if input.s.len() < self.s.len() {
-            return Err(MatcherError::NotEnoughRemainingInput);
+            return Err(MatcherError::NotEnoughRemainingInput(input.pos));
         }
         let original_pos = input.pos.clone();
         let mut pos = input.pos.clone();
@@ -42,14 +36,14 @@ impl<'a> Matcher<'a, &'a str> for StrMatcher<'a> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        matchers::{Matcher, MatcherError},
+        matchers::{str, Matcher, MatcherError},
         strings::{Match, PosStr, Position},
     };
 
     #[test]
     fn some() {
         assert_eq!(
-            super::str("foo").apply("foobar".into()),
+            str("foo").apply("foobar".into()),
             Ok(Match {
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
@@ -63,7 +57,7 @@ mod tests {
     #[test]
     fn none() {
         assert_eq!(
-            super::str("foo").apply("barfoo".into()),
+            str("foo").apply("barfoo".into()),
             Err(MatcherError::Expected(
                 Position { line: 0, column: 0 },
                 "foo".to_owned()
@@ -74,8 +68,11 @@ mod tests {
     #[test]
     fn none_input_is_too_small() {
         assert_eq!(
-            super::str("foo").apply("f".into()),
-            Err(MatcherError::NotEnoughRemainingInput)
+            str("foo").apply("f".into()),
+            Err(MatcherError::NotEnoughRemainingInput(Position {
+                line: 0,
+                column: 0
+            }))
         );
     }
 }
