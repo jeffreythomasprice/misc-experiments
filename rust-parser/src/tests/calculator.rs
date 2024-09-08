@@ -55,21 +55,29 @@ impl Parser {
             Box::new(
                 match3(integer_part, fractional_part, exponent_part)
                     .map_to_str()
-                    .map(|_, s| {
-                        println!("TODO JEFF s = {s}");
-                        match s.parse::<f64>() {
-                            Ok(x) => Ok(Box::new(ASTNode::Number(x))),
-                            Err(e) => Err(MapError(format!(
-                                "error parsing as float, input=\"{s}\", error={e:?}"
-                            ))),
-                        }
+                    .map(|_, s| match s.parse::<f64>() {
+                        Ok(x) => Ok(Box::new(ASTNode::Number(x))),
+                        Err(e) => Err(MapError(format!(
+                            "error parsing as float, input=\"{s}\", error={e:?}"
+                        ))),
                     }),
             )
         };
 
-        // TODO match_f64
+        /*
+        TODO more matchers
 
-        // TODO match various operations, parenthesis
+        expression = add_or_subtract_list
+
+        add_or_subtract_list = multiply_or_divide_list (("+" | "-") multiply_or_divide_list)*
+
+        multiply_or_divide_list = term (("*" | "/") term)*
+
+        term =
+            | number
+            | "-" expression
+            | "(" expression ")"
+        */
 
         Self { m: match_f64 }
     }
@@ -80,6 +88,35 @@ impl Parser {
     ) -> Result<Match<'static, Box<ASTNode>>, MatcherError> {
         self.m.apply(input)
     }
+}
+
+/**
+For matchers M1 and M2, matches an alternating list of the form:
+```
+M1 (M2 M1)*
+```
+
+That is, a sequence of the first matcher separated by instances of the second matcher.
+
+As it progresses left to right each pair of elements and the separator between them will be passed to the given function. The resulting element will form the new first element.
+e.g. for the given input sequence
+```
+a b c d e
+a,c,e are instances of T1
+b,d are instances of T2
+```
+The return value will be equivalent to:
+```
+f(f(a, b, c), d, e)
+```
+*/
+fn binary_operator<'a, T1, M1, T2, M2, F>(m1: M1, m2: M2, f: F) -> impl Matcher<'a, T1>
+where
+    M1: Matcher<'a, T1>,
+    M2: Matcher<'a, T2>,
+    F: Fn(T1, T2, T1) -> T1,
+{
+    match2(m1, repeat(match2(m2, m1), ..)).map(|pos, value| todo!())
 }
 
 #[cfg(test)]
