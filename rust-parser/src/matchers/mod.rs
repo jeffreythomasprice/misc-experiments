@@ -1,5 +1,6 @@
 mod any;
 mod char;
+mod defer;
 mod map;
 mod matcher;
 mod optional;
@@ -10,6 +11,7 @@ mod take_while;
 
 pub use any::*;
 pub use char::*;
+pub use defer::*;
 pub use map::*;
 pub use matcher::*;
 pub use optional::*;

@@ -1,3 +1,5 @@
+use std::{rc::Rc, sync::Arc};
+
 use crate::strings::{Match, PosStr, Position};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,6 +21,33 @@ pub trait Matcher<'a, T> {
             }) => remainder,
             Err(_) => input,
         })
+    }
+}
+
+impl<'a, T, M> Matcher<'a, T> for Box<M>
+where
+    M: Matcher<'a, T>,
+{
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError> {
+        self.as_ref().apply(input)
+    }
+}
+
+impl<'a, T, M> Matcher<'a, T> for Rc<M>
+where
+    M: Matcher<'a, T>,
+{
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError> {
+        self.as_ref().apply(input)
+    }
+}
+
+impl<'a, T, M> Matcher<'a, T> for Arc<M>
+where
+    M: Matcher<'a, T>,
+{
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError> {
+        self.as_ref().apply(input)
     }
 }
 

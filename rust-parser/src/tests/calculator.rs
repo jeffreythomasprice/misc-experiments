@@ -1,7 +1,9 @@
+use std::rc::Rc;
+
 use crate::{
     matchers::{
-        any2, char, char_range, match2, match3, optional, repeat, specific_char, str, take_while,
-        MapError, Mappable, Matcher, MatcherError, StrMappable,
+        any2, any3, any4, char, char_range, defer, match2, match3, optional, repeat, specific_char,
+        str, take_while, MapError, Mappable, Matcher, MatcherError, StrMappable,
     },
     strings::{Match, PosStr},
 };
@@ -19,9 +21,21 @@ struct Parser {
     m: Box<dyn Matcher<'static, Box<ASTNode>>>,
 }
 
+enum AddOrSubtract {
+    Add,
+    Subtract,
+}
+
+enum MultiplyOrDivide {
+    Multiply,
+    Divide,
+}
+
 impl Parser {
     pub fn new() -> Self {
-        let match_f64 = {
+        let expression = defer::<Box<ASTNode>, _>();
+
+        let number = {
             /*
             based on the number spec from here https://www.json.org/json-en.html
 
@@ -52,7 +66,7 @@ impl Parser {
             ))
             .map_to_str();
 
-            Box::new(
+            tokenize(
                 match3(integer_part, fractional_part, exponent_part)
                     .map_to_str()
                     .map(|_, s| match s.parse::<f64>() {
@@ -64,22 +78,48 @@ impl Parser {
             )
         };
 
-        /*
-        TODO more matchers
+        let negate = match2(tokenize(str("-")), expression).map(|_, (_, x)| Ok(x));
 
-        expression = add_or_subtract_list
+        let parenthesis =
+            match3(tokenize(str("(")), expression, tokenize(str(")"))).map(|_, (_, x, _)| Ok(x));
 
-        add_or_subtract_list = multiply_or_divide_list (("+" | "-") multiply_or_divide_list)*
+        let term = any3(number, negate, parenthesis);
 
-        multiply_or_divide_list = term (("*" | "/") term)*
+        let multiply_or_divide_operator = any2(
+            tokenize(str("*")).map(|_, _| Ok(MultiplyOrDivide::Multiply)),
+            tokenize(str("/")).map(|_, _| Ok(MultiplyOrDivide::Divide)),
+        );
+        let multiply_or_divide_list = binary_operator(
+            Rc::new(term),
+            multiply_or_divide_operator,
+            |left, op, right| {
+                Box::new(match op {
+                    MultiplyOrDivide::Multiply => ASTNode::Multiply(left, right),
+                    MultiplyOrDivide::Divide => ASTNode::Divide(left, right),
+                })
+            },
+        );
 
-        term =
-            | number
-            | "-" expression
-            | "(" expression ")"
-        */
+        let add_or_subtract_operator = any2(
+            tokenize(str("+")).map(|_, _| Ok(AddOrSubtract::Add)),
+            tokenize(str("-")).map(|_, _| Ok(AddOrSubtract::Subtract)),
+        );
+        let add_or_subtract_list = binary_operator(
+            Rc::new(multiply_or_divide_list),
+            add_or_subtract_operator,
+            |left, op, right| {
+                Box::new(match op {
+                    AddOrSubtract::Add => ASTNode::Add(left, right),
+                    AddOrSubtract::Subtract => ASTNode::Subtract(left, right),
+                })
+            },
+        );
 
-        Self { m: match_f64 }
+        expression.set(add_or_subtract_list);
+
+        Self {
+            m: Box::new(expression),
+        }
     }
 
     pub fn apply(
@@ -88,6 +128,22 @@ impl Parser {
     ) -> Result<Match<'static, Box<ASTNode>>, MatcherError> {
         self.m.apply(input)
     }
+}
+
+fn tokenize<'a, T, M>(m: M) -> impl Matcher<'a, T>
+where
+    M: Matcher<'a, T>,
+{
+    match2(
+        any4(
+            specific_char(' '),
+            specific_char('\t'),
+            specific_char('\n'),
+            specific_char('\r'),
+        ),
+        m,
+    )
+    .map(|_, (_, b)| Ok(b))
 }
 
 /**
@@ -112,11 +168,17 @@ f(f(a, b, c), d, e)
 */
 fn binary_operator<'a, T1, M1, T2, M2, F>(m1: M1, m2: M2, f: F) -> impl Matcher<'a, T1>
 where
-    M1: Matcher<'a, T1>,
+    M1: Matcher<'a, T1> + Clone,
     M2: Matcher<'a, T2>,
-    F: Fn(T1, T2, T1) -> T1,
+    F: Fn(T1, T2, T1) -> T1 + 'a,
 {
-    match2(m1, repeat(match2(m2, m1), ..)).map(|pos, value| todo!())
+    match2(m1.clone(), repeat(match2(m2, m1), ..)).map(move |_pos, (first, remainder)| {
+        let mut result = first;
+        for (op, right) in remainder {
+            result = f(result, op, right);
+        }
+        Ok(result)
+    })
 }
 
 #[cfg(test)]

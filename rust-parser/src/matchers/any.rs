@@ -77,6 +77,54 @@ where
     }
 }
 
+pub struct Any4Matcher<M1, M2, M3, M4> {
+    m1: M1,
+    m2: M2,
+    m3: M3,
+    m4: M4,
+}
+
+pub fn any4<'a, T, M1, M2, M3, M4>(m1: M1, m2: M2, m3: M3, m4: M4) -> Any4Matcher<M1, M2, M3, M4>
+where
+    M1: Matcher<'a, T>,
+    M2: Matcher<'a, T>,
+    M3: Matcher<'a, T>,
+    M4: Matcher<'a, T>,
+{
+    Any4Matcher { m1, m2, m3, m4 }
+}
+
+impl<'a, T, M1, M2, M3, M4> Matcher<'a, T> for Any4Matcher<M1, M2, M3, M4>
+where
+    M1: Matcher<'a, T>,
+    M2: Matcher<'a, T>,
+    M3: Matcher<'a, T>,
+    M4: Matcher<'a, T>,
+{
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError> {
+        let e1 = match self.m1.apply(input) {
+            Ok(result) => return Ok(result),
+            Err(e) => e,
+        };
+        let e2 = match self.m2.apply(input) {
+            Ok(result) => return Ok(result),
+            Err(e) => e,
+        };
+        let e3 = match self.m3.apply(input) {
+            Ok(result) => return Ok(result),
+            Err(e) => e,
+        };
+        let e4 = match self.m4.apply(input) {
+            Ok(result) => return Ok(result),
+            Err(e) => e,
+        };
+        Err(MatcherError::Expected(
+            input.pos,
+            format!("one of [{e1:?}, {e2:?}, {e3:?}, {e4:?}]"),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -215,4 +263,6 @@ mod tests {
             ))
         )
     }
+
+    // TODO tests for any4
 }
