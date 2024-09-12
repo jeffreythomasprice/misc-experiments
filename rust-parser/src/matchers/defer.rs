@@ -1,15 +1,15 @@
 use super::Matcher;
 
-pub struct DeferMatcher<M> {
-    m: Option<M>,
+pub struct DeferMatcher<'a, T> {
+    m: Option<Box<dyn Matcher<'a, T>>>,
 }
 
-pub fn defer<T, M>() -> DeferMatcher<M> {
+pub fn defer<'a, T>() -> DeferMatcher<'a, T> {
     DeferMatcher { m: None }
 }
 
-impl<M> DeferMatcher<M> {
-    pub fn set(&mut self, m: M) {
+impl<'a, T> DeferMatcher<'a, T> {
+    pub fn set(&mut self, m: Box<dyn Matcher<'a, T>>) {
         /*
         TODO if already set, panic?
         */
@@ -17,10 +17,7 @@ impl<M> DeferMatcher<M> {
     }
 }
 
-impl<'a, T, M> Matcher<'a, T> for DeferMatcher<M>
-where
-    M: Matcher<'a, T>,
-{
+impl<'a, T> Matcher<'a, T> for DeferMatcher<'a, T> {
     fn apply(
         &self,
         input: crate::strings::PosStr<'a>,

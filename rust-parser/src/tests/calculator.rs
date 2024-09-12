@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     matchers::{
@@ -33,7 +33,7 @@ enum MultiplyOrDivide {
 
 impl Parser {
     pub fn new() -> Self {
-        let expression = defer::<Box<ASTNode>, _>();
+        let expression = Rc::new(RefCell::new(defer::<Box<ASTNode>>()));
 
         let number = {
             /*
@@ -78,10 +78,10 @@ impl Parser {
             )
         };
 
-        let negate = match2(tokenize(str("-")), expression).map(|_, (_, x)| Ok(x));
+        let negate = match2(tokenize(str("-")), expression.clone()).map(|_, (_, x)| Ok(x));
 
-        let parenthesis =
-            match3(tokenize(str("(")), expression, tokenize(str(")"))).map(|_, (_, x, _)| Ok(x));
+        let parenthesis = match3(tokenize(str("(")), expression.clone(), tokenize(str(")")))
+            .map(|_, (_, x, _)| Ok(x));
 
         let term = any3(number, negate, parenthesis);
 
@@ -115,7 +115,10 @@ impl Parser {
             },
         );
 
-        expression.set(add_or_subtract_list);
+        {
+            let mut expression = expression.borrow_mut();
+            expression.set(Box::new(add_or_subtract_list));
+        }
 
         Self {
             m: Box::new(expression),

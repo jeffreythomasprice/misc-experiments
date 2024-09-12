@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use crate::strings::{Match, PosStr, Position};
 
@@ -48,6 +48,15 @@ where
 {
     fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError> {
         self.as_ref().apply(input)
+    }
+}
+
+impl<'a, T, M> Matcher<'a, T> for RefCell<M>
+where
+    M: Matcher<'a, T>,
+{
+    fn apply(&self, input: PosStr<'a>) -> Result<Match<'a, T>, MatcherError> {
+        self.borrow().apply(input)
     }
 }
 
