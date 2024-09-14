@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    matchers::{any3, char_range, specific_char, MatchError},
+    matchers::{any2, any3, char_range, specific_char, MatchError},
     strings::{Match, PosStr},
 };
 
@@ -133,20 +133,18 @@ fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     let mut remainder = remainder;
 
     loop {
-        let (op, partial_remainder) = match skip_whitespace(remainder).take_single_char() {
-            Some(Match {
-                source: _,
-                matched: _,
-                remainder,
-                value: '*',
-            }) => (MultiplyOrDivide::Multiply, remainder),
-            Some(Match {
-                source: _,
-                matched: _,
-                remainder,
-                value: '/',
-            }) => (MultiplyOrDivide::Divide, remainder),
-            _ => break,
+        let Match {
+            source: _,
+            matched: _,
+            remainder: partial_remainder,
+            value: op,
+        } = match any2(
+            skip_whitespace(remainder),
+            |input| specific_char(input, '*').map(|x| x.map(|_| MultiplyOrDivide::Multiply)),
+            |input| specific_char(input, '/').map(|x| x.map(|_| MultiplyOrDivide::Divide)),
+        ) {
+            Ok(r) => r,
+            Err(_) => break,
         };
 
         let Match {
@@ -187,20 +185,18 @@ fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     let mut remainder = remainder;
 
     loop {
-        let (op, partial_remainder) = match skip_whitespace(remainder).take_single_char() {
-            Some(Match {
-                source: _,
-                matched: _,
-                remainder,
-                value: '+',
-            }) => (AddOrSubtract::Add, remainder),
-            Some(Match {
-                source: _,
-                matched: _,
-                remainder,
-                value: '-',
-            }) => (AddOrSubtract::Subtract, remainder),
-            _ => break,
+        let Match {
+            source: _,
+            matched: _,
+            remainder: partial_remainder,
+            value: op,
+        } = match any2(
+            skip_whitespace(remainder),
+            |input| specific_char(input, '+').map(|x| x.map(|_| AddOrSubtract::Add)),
+            |input| specific_char(input, '-').map(|x| x.map(|_| AddOrSubtract::Subtract)),
+        ) {
+            Ok(r) => r,
+            Err(_) => break,
         };
 
         let Match {
