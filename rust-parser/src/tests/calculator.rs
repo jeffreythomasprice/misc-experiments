@@ -1,12 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{error::Error, fmt::Display};
 
-use crate::{
-    matchers::{
-        any2, any3, any4, char, char_range, defer, match2, match3, optional, repeat, specific_char,
-        str, take_while, MapError, Mappable, Matcher, MatcherError, StrMappable,
-    },
-    strings::{Match, PosStr},
-};
+use crate::strings::{Match, PosStr};
 
 #[derive(Debug, Clone, PartialEq)]
 enum ASTNode {
@@ -17,8 +11,9 @@ enum ASTNode {
     Divide(Box<ASTNode>, Box<ASTNode>),
 }
 
-struct Parser {
-    m: Box<dyn Matcher<'static, Box<ASTNode>>>,
+enum MultiplyOrDivide {
+    Multiply,
+    Divide,
 }
 
 enum AddOrSubtract {
@@ -26,162 +21,222 @@ enum AddOrSubtract {
     Subtract,
 }
 
-enum MultiplyOrDivide {
-    Multiply,
-    Divide,
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParseError(String);
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ParseError({})", self.0)
+    }
 }
 
-impl Parser {
-    pub fn new() -> Self {
-        let expression = Rc::new(RefCell::new(defer::<Box<ASTNode>>()));
+impl Error for ParseError {}
 
-        let number = {
-            /*
-            based on the number spec from here https://www.json.org/json-en.html
+fn skip_whitespace<'a>(input: PosStr<'a>) -> PosStr<'a> {
+    input
+        .take_while_and_remainder(|_, c| c.is_whitespace())
+        .remainder
+}
 
-            integer part is one of:
-                0
-                [1-9][0-9]*
-            then optionally a fractional part which is:
-                .[0-9]+
-            then optionally an expoenent which is:
-                [eE][-+]?[0-9]+
-            */
+fn parse_single_char(input: PosStr, c: char) -> Result<Match<char>, ParseError> {
+    match input.take_single_char() {
+        Some(m) => Ok(m.map(|_| c)),
+        None => Err(ParseError(format!("expected {}", c))),
+    }
+}
 
-            let zero = str("0");
-            let digit = || char_range('0'..='9');
-            let digit_not_zero = char_range('1'..='9');
+fn parse_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+    let input = skip_whitespace(input);
+    let result = input.take_while_and_remainder(|_, c| {
+        c.is_digit(10) || *c == '.' || *c == 'e' || *c == 'E' || *c == '+' || *c == '-'
+    });
+    if result.matched.is_empty() {
+        Err(ParseError("expected number".to_owned()))
+    } else {
+        match result.matched.s.parse() {
+            Ok(value) => Ok(result.map(|_| ASTNode::Number(value))),
+            Err(e) => Err(ParseError(format!(
+                "failed to parse input as number, input={}, error={:?}",
+                result.matched.s, e
+            ))),
+        }
+    }
+}
 
-            let integer_part = any2(
-                zero.map_to_str(),
-                match2(digit_not_zero, repeat(digit(), ..)).map_to_str(),
-            );
+fn parse_negated_expression(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+    let Match {
+        source: _,
+        matched: _,
+        remainder,
+        value: _,
+    } = parse_single_char(skip_whitespace(input), '-')?;
+    parse_expression(remainder)
+}
 
-            let fractional_part = optional(match2(str("."), repeat(digit(), 1..))).map_to_str();
+fn parse_parenthesis(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+    let Match {
+        source: _,
+        matched: _,
+        remainder,
+        value: _,
+    } = parse_single_char(skip_whitespace(input), '(')?;
+    let result = parse_expression(remainder)?;
+    let remainder = parse_single_char(skip_whitespace(result.remainder), ')')?.remainder;
+    Ok(Match {
+        source: input,
+        matched: result.matched,
+        remainder: remainder,
+        value: result.value,
+    })
+}
 
-            let exponent_part = optional(match3(
-                any2(specific_char('e'), specific_char('E')),
-                optional(any2(specific_char('+'), specific_char('-'))),
-                repeat(digit(), 1..),
-            ))
-            .map_to_str();
+fn parse_term(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+    println!("TODO parse_term: {input:?}");
 
-            tokenize(
-                match3(integer_part, fractional_part, exponent_part)
-                    .map_to_str()
-                    .map(|_, s| match s.parse::<f64>() {
-                        Ok(x) => Ok(Box::new(ASTNode::Number(x))),
-                        Err(e) => Err(MapError(format!(
-                            "error parsing as float, input=\"{s}\", error={e:?}"
-                        ))),
-                    }),
-            )
+    let number_result = match parse_number(input) {
+        Ok(result) => {
+            println!("TODO parse_term found number: {result:?}");
+            return Ok(result);
+        }
+        Err(e) => e,
+    };
+
+    let negated_result = match parse_negated_expression(input) {
+        Ok(result) => {
+            println!("TODO parse_term found negation: {result:?}");
+            return Ok(result);
+        }
+        Err(e) => e,
+    };
+
+    let parenthesis_result = match parse_parenthesis(input) {
+        Ok(result) => {
+            println!("TODO parse_term found parens: {result:?}");
+            return Ok(result);
+        }
+        Err(e) => e,
+    };
+
+    Err(ParseError(format!(
+        "no branch matched, {}, {}, {}",
+        negated_result, parenthesis_result, number_result
+    )))
+}
+
+fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+    println!("TODO parse_mulops: {input:?}");
+
+    let Match {
+        source: _,
+        matched: _,
+        remainder,
+        value: first,
+    } = parse_term(input)?;
+    let mut result = first;
+    let mut remainder = remainder;
+
+    loop {
+        let (op, partial_remainder) = match skip_whitespace(remainder).take_single_char() {
+            Some(Match {
+                source: _,
+                matched: _,
+                remainder,
+                value: '*',
+            }) => (MultiplyOrDivide::Multiply, remainder),
+            Some(Match {
+                source: _,
+                matched: _,
+                remainder,
+                value: '/',
+            }) => (MultiplyOrDivide::Divide, remainder),
+            _ => break,
         };
 
-        let negate = match2(tokenize(str("-")), expression.clone()).map(|_, (_, x)| Ok(x));
-
-        let parenthesis = match3(tokenize(str("(")), expression.clone(), tokenize(str(")")))
-            .map(|_, (_, x, _)| Ok(x));
-
-        let term = any3(number, negate, parenthesis);
-
-        let multiply_or_divide_operator = any2(
-            tokenize(str("*")).map(|_, _| Ok(MultiplyOrDivide::Multiply)),
-            tokenize(str("/")).map(|_, _| Ok(MultiplyOrDivide::Divide)),
-        );
-        let multiply_or_divide_list = binary_operator(
-            Rc::new(term),
-            multiply_or_divide_operator,
-            |left, op, right| {
-                Box::new(match op {
-                    MultiplyOrDivide::Multiply => ASTNode::Multiply(left, right),
-                    MultiplyOrDivide::Divide => ASTNode::Divide(left, right),
-                })
-            },
-        );
-
-        let add_or_subtract_operator = any2(
-            tokenize(str("+")).map(|_, _| Ok(AddOrSubtract::Add)),
-            tokenize(str("-")).map(|_, _| Ok(AddOrSubtract::Subtract)),
-        );
-        let add_or_subtract_list = binary_operator(
-            Rc::new(multiply_or_divide_list),
-            add_or_subtract_operator,
-            |left, op, right| {
-                Box::new(match op {
-                    AddOrSubtract::Add => ASTNode::Add(left, right),
-                    AddOrSubtract::Subtract => ASTNode::Subtract(left, right),
-                })
-            },
-        );
-
-        {
-            let mut expression = expression.borrow_mut();
-            expression.set(Box::new(add_or_subtract_list));
-        }
-
-        Self {
-            m: Box::new(expression),
-        }
+        let Match {
+            source: _,
+            matched: _,
+            remainder: partial_remainder,
+            value: next,
+        } = parse_term(partial_remainder)?;
+        result = match op {
+            MultiplyOrDivide::Multiply => ASTNode::Multiply(Box::new(result), Box::new(next)),
+            MultiplyOrDivide::Divide => ASTNode::Divide(Box::new(result), Box::new(next)),
+        };
+        remainder = partial_remainder;
     }
 
-    pub fn apply(
-        &self,
-        input: PosStr<'static>,
-    ) -> Result<Match<'static, Box<ASTNode>>, MatcherError> {
-        self.m.apply(input)
-    }
-}
+    let matched = input
+        .take_until_position_and_remainder(&remainder.pos)
+        .map_err(|e| ParseError(format!("{e:?}")))?
+        .value;
 
-fn tokenize<'a, T, M>(m: M) -> impl Matcher<'a, T>
-where
-    M: Matcher<'a, T>,
-{
-    match2(
-        any4(
-            specific_char(' '),
-            specific_char('\t'),
-            specific_char('\n'),
-            specific_char('\r'),
-        ),
-        m,
-    )
-    .map(|_, (_, b)| Ok(b))
-}
-
-/**
-For matchers M1 and M2, matches an alternating list of the form:
-```
-M1 (M2 M1)*
-```
-
-That is, a sequence of the first matcher separated by instances of the second matcher.
-
-As it progresses left to right each pair of elements and the separator between them will be passed to the given function. The resulting element will form the new first element.
-e.g. for the given input sequence
-```
-a b c d e
-a,c,e are instances of T1
-b,d are instances of T2
-```
-The return value will be equivalent to:
-```
-f(f(a, b, c), d, e)
-```
-*/
-fn binary_operator<'a, T1, M1, T2, M2, F>(m1: M1, m2: M2, f: F) -> impl Matcher<'a, T1>
-where
-    M1: Matcher<'a, T1> + Clone,
-    M2: Matcher<'a, T2>,
-    F: Fn(T1, T2, T1) -> T1 + 'a,
-{
-    match2(m1.clone(), repeat(match2(m2, m1), ..)).map(move |_pos, (first, remainder)| {
-        let mut result = first;
-        for (op, right) in remainder {
-            result = f(result, op, right);
-        }
-        Ok(result)
+    Ok(Match {
+        source: input,
+        matched,
+        remainder,
+        value: result,
     })
+}
+
+fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+    // TODO de-duplicate with parse_mulops? generic binary_op?
+
+    println!("TODO parse_addops: {input:?}");
+
+    let Match {
+        source: _,
+        matched: _,
+        remainder,
+        value: first,
+    } = parse_mulops(input)?;
+    let mut result = first;
+    let mut remainder = remainder;
+
+    loop {
+        let (op, partial_remainder) = match skip_whitespace(remainder).take_single_char() {
+            Some(Match {
+                source: _,
+                matched: _,
+                remainder,
+                value: '+',
+            }) => (AddOrSubtract::Add, remainder),
+            Some(Match {
+                source: _,
+                matched: _,
+                remainder,
+                value: '-',
+            }) => (AddOrSubtract::Subtract, remainder),
+            _ => break,
+        };
+
+        let Match {
+            source: _,
+            matched: _,
+            remainder: partial_remainder,
+            value: next,
+        } = parse_mulops(partial_remainder)?;
+        result = match op {
+            AddOrSubtract::Add => ASTNode::Add(Box::new(result), Box::new(next)),
+            AddOrSubtract::Subtract => ASTNode::Subtract(Box::new(result), Box::new(next)),
+        };
+        remainder = partial_remainder;
+    }
+
+    let matched = input
+        .take_until_position_and_remainder(&remainder.pos)
+        .map_err(|e| ParseError(format!("{e:?}")))?
+        .value;
+
+    Ok(Match {
+        source: input,
+        matched,
+        remainder,
+        value: result,
+    })
+}
+
+fn parse_expression(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+    parse_addops(input)
 }
 
 #[cfg(test)]
@@ -191,27 +246,101 @@ mod tests {
         tests::calculator::ASTNode,
     };
 
-    use super::Parser;
+    use super::*;
 
     #[test]
     fn single_number() {
-        let parser = Parser::new();
         assert_eq!(
-            parser.apply("1.5".into()),
+            parse_expression("  1.5".into()),
             Ok(Match {
                 source: PosStr {
                     pos: Position { line: 0, column: 0 },
-                    s: "1.5",
+                    s: "  1.5",
                 },
                 matched: PosStr {
                     pos: Position { line: 0, column: 0 },
-                    s: "1.5",
+                    s: "  1.5",
                 },
                 remainder: PosStr {
-                    pos: Position { line: 0, column: 3 },
+                    pos: Position { line: 0, column: 5 },
                     s: ""
                 },
-                value: Box::new(ASTNode::Number(1.5f64)),
+                value: ASTNode::Number(1.5f64),
+            })
+        );
+    }
+
+    #[test]
+    fn number_and_remainder() {
+        assert_eq!(
+            parse_expression("1 2".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1 2",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 1 },
+                    s: " 2"
+                },
+                value: ASTNode::Number(1f64),
+            })
+        );
+    }
+
+    #[test]
+    fn addition() {
+        assert_eq!(
+            parse_expression("1 + 2".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1 + 2",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1 + 2",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 5 },
+                    s: ""
+                },
+                value: ASTNode::Add(
+                    Box::new(ASTNode::Number(1f64)),
+                    Box::new(ASTNode::Number(2f64))
+                ),
+            })
+        );
+    }
+
+    #[test]
+    fn parenthesis() {
+        assert_eq!(
+            parse_expression("(1 + 2)*3".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "(1 + 2)*3",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "(1 + 2)*3",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 5 },
+                    s: ""
+                },
+                value: ASTNode::Multiply(
+                    Box::new(ASTNode::Add(
+                        Box::new(ASTNode::Number(1f64)),
+                        Box::new(ASTNode::Number(2f64))
+                    )),
+                    Box::new(ASTNode::Number(3f64))
+                ),
             })
         );
     }
@@ -219,9 +348,6 @@ mod tests {
     /*
     TODO JEFF more test cases
 
-    1 2 -> has remainder
-    1 + 2
-    (1 + 2) * 3
     1.5-2.7
     -1*5/2+4
     -1*5-2*4

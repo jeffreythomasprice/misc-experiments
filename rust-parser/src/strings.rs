@@ -78,6 +78,20 @@ pub struct Match<'a, T> {
     pub value: T,
 }
 
+impl<'a, T> Match<'a, T> {
+    pub fn map<R, F>(self, f: F) -> Match<'a, R>
+    where
+        F: FnOnce(T) -> R,
+    {
+        Match {
+            source: self.source,
+            matched: self.matched,
+            remainder: self.remainder,
+            value: f(self.value),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BadPositionError;
 
@@ -93,6 +107,14 @@ impl<'a> PosStr<'a> {
             pos: Position { line: 0, column: 0 },
             s,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        return self.s.is_empty();
+    }
+
+    pub fn len(&self) -> usize {
+        return self.s.len();
     }
 
     pub fn chars<'b>(&self) -> PosStrChars<'b>
@@ -113,6 +135,21 @@ impl<'a> PosStr<'a> {
             pos: self.pos,
             iterator: self.s.char_indices(),
         }
+    }
+
+    pub fn take_single_char(self: PosStr<'a>) -> Option<Match<'a, char>> {
+        self.s.chars().next().map(|c| Match {
+            source: self,
+            matched: PosStr {
+                pos: self.pos,
+                s: &self.s[0..c.len_utf8()],
+            },
+            remainder: PosStr {
+                pos: self.pos.advance(&c),
+                s: &self.s[c.len_utf8()..],
+            },
+            value: c,
+        })
     }
 
     pub fn take_while_and_remainder<F>(self: PosStr<'a>, mut f: F) -> Match<'a, PosStr<'a>>
@@ -226,6 +263,70 @@ mod tests {
                 (Position { line: 0, column: 3 }, 6, 'c'),
             ]
         );
+    }
+
+    #[test]
+    fn take_single_char() {
+        let s: PosStr = "123".into();
+        let m = s.take_single_char();
+        assert_eq!(
+            m,
+            Some(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "123"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1"
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 1 },
+                    s: "23"
+                },
+                value: '1',
+            })
+        );
+        let m = m.unwrap().remainder.take_single_char();
+        assert_eq!(
+            m,
+            Some(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 1 },
+                    s: "23"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 1 },
+                    s: "2"
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 2 },
+                    s: "3"
+                },
+                value: '2',
+            })
+        );
+        let m = m.unwrap().remainder.take_single_char();
+        assert_eq!(
+            m,
+            Some(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 2 },
+                    s: "3"
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 2 },
+                    s: "3"
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 3 },
+                    s: ""
+                },
+                value: '3',
+            })
+        );
+        let m = m.unwrap().remainder.take_single_char();
+        assert_eq!(m, None);
     }
 
     #[test]
