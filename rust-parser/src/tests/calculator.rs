@@ -15,14 +15,17 @@ enum ASTNode {
     Negate(Box<ASTNode>),
 }
 
-enum MultiplyOrDivide {
-    Multiply,
-    Divide,
-}
-
-enum AddOrSubtract {
-    Add,
-    Subtract,
+impl ASTNode {
+    pub fn eval(&self) -> f64 {
+        match self {
+            ASTNode::Number(value) => *value,
+            ASTNode::Add(left, right) => left.eval() + right.eval(),
+            ASTNode::Subtract(left, right) => left.eval() - right.eval(),
+            ASTNode::Multiply(left, right) => left.eval() * right.eval(),
+            ASTNode::Divide(left, right) => left.eval() / right.eval(),
+            ASTNode::Negate(value) => -value.eval(),
+        }
+    }
 }
 
 fn skip_whitespace<'a>(input: PosStr<'a>) -> PosStr<'a> {
@@ -121,14 +124,18 @@ fn parse_term(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
 }
 
 fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
+    enum Op {
+        Multiply,
+        Divide,
+    }
     Ok(binary_list(
         input,
         parse_term,
         |input| {
             any2(
                 skip_whitespace(input),
-                |input| specific_char(input, '*').map(|x| x.map(|_| MultiplyOrDivide::Multiply)),
-                |input| specific_char(input, '/').map(|x| x.map(|_| MultiplyOrDivide::Divide)),
+                |input| specific_char(input, '*').map(|x| x.map(|_| Op::Multiply)),
+                |input| specific_char(input, '/').map(|x| x.map(|_| Op::Divide)),
             )
             .map_err(|e| MatchError::Expected {
                 expected: "* or /".to_owned(),
@@ -143,21 +150,25 @@ fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
         remainder
             .into_iter()
             .fold(first, |left, (op, right)| match op {
-                MultiplyOrDivide::Multiply => ASTNode::Multiply(Box::new(left), Box::new(right)),
-                MultiplyOrDivide::Divide => ASTNode::Divide(Box::new(left), Box::new(right)),
+                Op::Multiply => ASTNode::Multiply(Box::new(left), Box::new(right)),
+                Op::Divide => ASTNode::Divide(Box::new(left), Box::new(right)),
             })
     }))
 }
 
 fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
+    enum Op {
+        Add,
+        Subtract,
+    }
     Ok(binary_list(
         input,
         parse_mulops,
         |input| {
             any2(
                 skip_whitespace(input),
-                |input| specific_char(input, '+').map(|x| x.map(|_| AddOrSubtract::Add)),
-                |input| specific_char(input, '-').map(|x| x.map(|_| AddOrSubtract::Subtract)),
+                |input| specific_char(input, '+').map(|x| x.map(|_| Op::Add)),
+                |input| specific_char(input, '-').map(|x| x.map(|_| Op::Subtract)),
             )
             .map_err(|e| MatchError::Expected {
                 expected: "+ or -".to_owned(),
@@ -172,8 +183,8 @@ fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
         remainder
             .into_iter()
             .fold(first, |left, (op, right)| match op {
-                AddOrSubtract::Add => ASTNode::Add(Box::new(left), Box::new(right)),
-                AddOrSubtract::Subtract => ASTNode::Subtract(Box::new(left), Box::new(right)),
+                Op::Add => ASTNode::Add(Box::new(left), Box::new(right)),
+                Op::Subtract => ASTNode::Subtract(Box::new(left), Box::new(right)),
             })
     }))
 }
@@ -193,8 +204,9 @@ mod tests {
 
     #[test]
     fn single_number() {
+        let result = parse_expression("  1.5".into());
         assert_eq!(
-            parse_expression("  1.5".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Number(1.5f64),
                 remainder: PosStr {
@@ -203,12 +215,14 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), 1.5f64);
     }
 
     #[test]
     fn negated_number() {
+        let result = parse_expression("-7.1".into());
         assert_eq!(
-            parse_expression("-7.1".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Negate(Box::new(ASTNode::Number(7.1f64))),
                 remainder: PosStr {
@@ -217,12 +231,14 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), -7.1f64);
     }
 
     #[test]
     fn number_and_remainder() {
+        let result = parse_expression("1 2".into());
         assert_eq!(
-            parse_expression("1 2".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Number(1f64),
                 remainder: PosStr {
@@ -231,12 +247,14 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), 1f64);
     }
 
     #[test]
     fn addition() {
+        let result = parse_expression("1 + 2".into());
         assert_eq!(
-            parse_expression("1 + 2".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Add(
                     Box::new(ASTNode::Number(1f64)),
@@ -248,12 +266,14 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), 3f64);
     }
 
     #[test]
     fn parenthesis() {
+        let result = parse_expression("(1 + 2)*3".into());
         assert_eq!(
-            parse_expression("(1 + 2)*3".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Multiply(
                     Box::new(ASTNode::Add(
@@ -268,16 +288,18 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), 9f64);
     }
 
     #[test]
     fn subtraction() {
+        let result = parse_expression("1.5-2.5".into());
         assert_eq!(
-            parse_expression("1.5-2.7".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Subtract(
                     Box::new(ASTNode::Number(1.5f64)),
-                    Box::new(ASTNode::Number(2.7f64))
+                    Box::new(ASTNode::Number(2.5f64))
                 ),
                 remainder: PosStr {
                     pos: Position { line: 0, column: 7 },
@@ -285,12 +307,14 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), -1f64);
     }
 
     #[test]
     fn order_of_operations_1() {
+        let result = parse_expression("-1*5/2+4".into());
         assert_eq!(
-            parse_expression("-1*5/2+4".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Add(
                     Box::new(ASTNode::Divide(
@@ -308,12 +332,14 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), 1.5f64);
     }
 
     #[test]
     fn order_of_operations_2() {
+        let result = parse_expression("-1*5-2*4".into());
         assert_eq!(
-            parse_expression("-1*5-2*4".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Subtract(
                     Box::new(ASTNode::Multiply(
@@ -331,12 +357,14 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), -13f64);
     }
 
     #[test]
     fn many_additions() {
+        let result = parse_expression("1+2+3+4+5".into());
         assert_eq!(
-            parse_expression("1+2+3+4+5".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Add(
                     Box::new(ASTNode::Add(
@@ -357,12 +385,14 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), 15f64);
     }
 
     #[test]
     fn many_multiplications() {
+        let result = parse_expression("1*2*3*4*5".into());
         assert_eq!(
-            parse_expression("1*2*3*4*5".into()),
+            result,
             Ok(Match {
                 value: ASTNode::Multiply(
                     Box::new(ASTNode::Multiply(
@@ -383,5 +413,6 @@ mod tests {
                 },
             })
         );
+        assert_eq!(result.unwrap().value.eval(), 120f64);
     }
 }
