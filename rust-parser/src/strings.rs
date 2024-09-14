@@ -72,10 +72,8 @@ impl<'a> Iterator for PosStrCharIndices<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct Match<'a, T> {
-    pub source: PosStr<'a>,
-    pub matched: PosStr<'a>,
-    pub remainder: PosStr<'a>,
     pub value: T,
+    pub remainder: PosStr<'a>,
 }
 
 impl<'a, T> Match<'a, T> {
@@ -84,10 +82,8 @@ impl<'a, T> Match<'a, T> {
         F: FnOnce(T) -> R,
     {
         Match {
-            source: self.source,
-            matched: self.matched,
-            remainder: self.remainder,
             value: f(self.value),
+            remainder: self.remainder,
         }
     }
 }
@@ -139,16 +135,11 @@ impl<'a> PosStr<'a> {
 
     pub fn take_single_char(self: PosStr<'a>) -> Option<Match<'a, char>> {
         self.s.chars().next().map(|c| Match {
-            source: self,
-            matched: PosStr {
-                pos: self.pos,
-                s: &self.s[0..c.len_utf8()],
-            },
+            value: c,
             remainder: PosStr {
                 pos: self.pos.advance(&c),
                 s: &self.s[c.len_utf8()..],
             },
-            value: c,
         })
     }
 
@@ -166,8 +157,7 @@ impl<'a> PosStr<'a> {
         }
         match last_good {
             Some((pos, i)) => Match {
-                source: self,
-                matched: PosStr {
+                value: PosStr {
                     pos: self.pos,
                     s: &self.s[0..=i],
                 },
@@ -175,22 +165,13 @@ impl<'a> PosStr<'a> {
                     pos,
                     s: &self.s[(i + 1)..],
                 },
-                value: PosStr {
-                    pos: self.pos,
-                    s: &self.s[0..=i],
-                },
             },
             None => Match {
-                source: self,
-                matched: PosStr {
+                value: PosStr {
                     pos: self.pos,
                     s: "",
                 },
                 remainder: self,
-                value: PosStr {
-                    pos: self.pos,
-                    s: "",
-                },
             },
         }
     }
@@ -272,57 +253,33 @@ mod tests {
         assert_eq!(
             m,
             Some(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123"
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1"
-                },
-                remainder: PosStr {
-                    pos: Position { line: 0, column: 1 },
-                    s: "23"
-                },
                 value: '1',
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 1 },
+                    s: "23"
+                },
             })
         );
         let m = m.unwrap().remainder.take_single_char();
         assert_eq!(
             m,
             Some(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 1 },
-                    s: "23"
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 1 },
-                    s: "2"
-                },
+                value: '2',
                 remainder: PosStr {
                     pos: Position { line: 0, column: 2 },
                     s: "3"
                 },
-                value: '2',
             })
         );
         let m = m.unwrap().remainder.take_single_char();
         assert_eq!(
             m,
             Some(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 2 },
-                    s: "3"
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 2 },
-                    s: "3"
-                },
+                value: '3',
                 remainder: PosStr {
                     pos: Position { line: 0, column: 3 },
                     s: ""
                 },
-                value: '3',
             })
         );
         let m = m.unwrap().remainder.take_single_char();
@@ -343,11 +300,7 @@ mod tests {
         assert_eq!(
             result,
             Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123"
-                },
-                matched: PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "123"
                 },
@@ -355,10 +308,6 @@ mod tests {
                     pos: Position { line: 0, column: 3 },
                     s: ""
                 },
-                value: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123"
-                }
             }
         );
         assert_eq!(
@@ -385,11 +334,7 @@ mod tests {
         assert_eq!(
             result,
             Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123abc"
-                },
-                matched: PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "123"
                 },
@@ -397,10 +342,6 @@ mod tests {
                     pos: Position { line: 0, column: 3 },
                     s: "abc"
                 },
-                value: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123"
-                }
             }
         );
         assert_eq!(
@@ -449,11 +390,7 @@ mod tests {
         assert_eq!(
             s.take_until_position_and_remainder(&Position { line: 0, column: 1 }),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123\n456\n789"
-                },
-                matched: PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "1"
                 },
@@ -461,20 +398,12 @@ mod tests {
                     pos: Position { line: 0, column: 1 },
                     s: "23\n456\n789"
                 },
-                value: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1"
-                }
             })
         );
         assert_eq!(
             s.take_until_position_and_remainder(&Position { line: 0, column: 3 }),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123\n456\n789"
-                },
-                matched: PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "123"
                 },
@@ -482,20 +411,12 @@ mod tests {
                     pos: Position { line: 0, column: 3 },
                     s: "\n456\n789"
                 },
-                value: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123"
-                }
             })
         );
         assert_eq!(
             s.take_until_position_and_remainder(&Position { line: 1, column: 0 }),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123\n456\n789"
-                },
-                matched: PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "123\n"
                 },
@@ -503,20 +424,12 @@ mod tests {
                     pos: Position { line: 1, column: 0 },
                     s: "456\n789"
                 },
-                value: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123\n"
-                }
             })
         );
         assert_eq!(
             s.take_until_position_and_remainder(&Position { line: 2, column: 3 }),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123\n456\n789"
-                },
-                matched: PosStr {
+                value: PosStr {
                     pos: Position { line: 0, column: 0 },
                     s: "123\n456\n789"
                 },
@@ -524,10 +437,6 @@ mod tests {
                     pos: Position { line: 2, column: 3 },
                     s: ""
                 },
-                value: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "123\n456\n789"
-                }
             })
         );
         assert_eq!(

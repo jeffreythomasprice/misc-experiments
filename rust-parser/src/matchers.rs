@@ -71,12 +71,8 @@ where
     let r1 = m1(input)?;
     let r2 = m2(r1.remainder)?;
     Ok(Match {
-        source: input,
-        matched: input
-            .take_until_position_and_remainder(&r2.remainder.pos)?
-            .matched,
-        remainder: r2.remainder,
         value: (r1.value, r2.value),
+        remainder: r2.remainder,
     })
 }
 
@@ -95,12 +91,8 @@ where
     let r2 = m2(r1.remainder)?;
     let r3 = m3(r2.remainder)?;
     Ok(Match {
-        source: input,
-        matched: input
-            .take_until_position_and_remainder(&r3.remainder.pos)?
-            .matched,
-        remainder: r3.remainder,
         value: (r1.value, r2.value, r3.value),
+        remainder: r3.remainder,
     })
 }
 
@@ -159,23 +151,16 @@ where
 {
     // match the first element
     let Match {
-        source: _,
-        matched: _,
-        remainder,
         value: first,
+        remainder,
     } = match m1(input) {
         Ok(x) => x,
         Err(e) => {
             // we failed to match even one, but that could still be a succcess if the range constraint allows empty lists
             if r.contains(&0) {
                 return Ok(Match {
-                    source: input,
-                    matched: PosStr {
-                        pos: input.pos,
-                        s: "",
-                    },
-                    remainder: input,
                     value: None,
+                    remainder: input,
                 });
             }
             // nope, fail
@@ -196,10 +181,8 @@ where
 
         // match the separator
         let Match {
-            source: _,
-            matched: _,
-            remainder: partial_remainder,
             value: value2,
+            remainder: partial_remainder,
         } = match m2(remainder) {
             Ok(x) => x,
             // no error, just means we didn't see the next separator, so we're done
@@ -207,10 +190,8 @@ where
         };
         // match the next element after the separator
         let Match {
-            source: _,
-            matched: _,
-            remainder: partial_remainder,
             value: value1,
+            remainder: partial_remainder,
         } = m1(partial_remainder)?;
         results.push((value2, value1));
         remainder = partial_remainder;
@@ -220,12 +201,8 @@ where
     let current_count = results.len() + 1;
     if r.contains(&current_count) {
         Ok(Match {
-            source: input,
-            matched: input
-                .take_until_position_and_remainder(&remainder.pos)?
-                .matched,
-            remainder,
             value: Some((first, results)),
+            remainder,
         })
     } else {
         Err(MatchError::Expected {

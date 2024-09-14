@@ -1,4 +1,4 @@
-use std::{fmt::Debug, string::ParseError};
+use std::fmt::Debug;
 
 use crate::{
     matchers::{any2, any3, binary_list, char_range, specific_char, MatchError},
@@ -86,11 +86,11 @@ fn parse_number(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     };
 
     let full_match = input.take_until_position_and_remainder(&remainder.pos)?;
-    match full_match.matched.s.parse() {
+    match full_match.value.s.parse() {
         Ok(value) => Ok(full_match.map(|_| ASTNode::Number(value))),
         Err(e) => Err(MatchError::Parse {
             expected: "number".to_owned(),
-            got: full_match.matched.s.to_owned(),
+            got: full_match.value.s.to_owned(),
             error: format!("{e:?}"),
         }),
     }
@@ -106,10 +106,8 @@ fn parse_parenthesis(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     let result = parse_expression(remainder)?;
     let remainder = specific_char(skip_whitespace(result.remainder), ')')?.remainder;
     Ok(Match {
-        source: input,
-        matched: result.matched,
-        remainder: remainder,
         value: result.value,
+        remainder: remainder,
     })
 }
 
@@ -198,19 +196,11 @@ mod tests {
         assert_eq!(
             parse_expression("  1.5".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "  1.5",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "  1.5",
-                },
+                value: ASTNode::Number(1.5f64),
                 remainder: PosStr {
                     pos: Position { line: 0, column: 5 },
                     s: ""
                 },
-                value: ASTNode::Number(1.5f64),
             })
         );
     }
@@ -220,19 +210,11 @@ mod tests {
         assert_eq!(
             parse_expression("-7.1".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "-7.1",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "-7.1",
-                },
+                value: ASTNode::Negate(Box::new(ASTNode::Number(7.1f64))),
                 remainder: PosStr {
                     pos: Position { line: 0, column: 4 },
                     s: ""
                 },
-                value: ASTNode::Negate(Box::new(ASTNode::Number(7.1f64))),
             })
         );
     }
@@ -242,19 +224,11 @@ mod tests {
         assert_eq!(
             parse_expression("1 2".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1 2",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1",
-                },
+                value: ASTNode::Number(1f64),
                 remainder: PosStr {
                     pos: Position { line: 0, column: 1 },
                     s: " 2"
                 },
-                value: ASTNode::Number(1f64),
             })
         );
     }
@@ -264,22 +238,14 @@ mod tests {
         assert_eq!(
             parse_expression("1 + 2".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1 + 2",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1 + 2",
-                },
-                remainder: PosStr {
-                    pos: Position { line: 0, column: 5 },
-                    s: ""
-                },
                 value: ASTNode::Add(
                     Box::new(ASTNode::Number(1f64)),
                     Box::new(ASTNode::Number(2f64))
                 ),
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 5 },
+                    s: ""
+                },
             })
         );
     }
@@ -289,18 +255,6 @@ mod tests {
         assert_eq!(
             parse_expression("(1 + 2)*3".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "(1 + 2)*3",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "(1 + 2)*3",
-                },
-                remainder: PosStr {
-                    pos: Position { line: 0, column: 9 },
-                    s: ""
-                },
                 value: ASTNode::Multiply(
                     Box::new(ASTNode::Add(
                         Box::new(ASTNode::Number(1f64)),
@@ -308,6 +262,10 @@ mod tests {
                     )),
                     Box::new(ASTNode::Number(3f64))
                 ),
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 9 },
+                    s: ""
+                },
             })
         );
     }
@@ -317,22 +275,14 @@ mod tests {
         assert_eq!(
             parse_expression("1.5-2.7".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1.5-2.7",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1.5-2.7",
-                },
-                remainder: PosStr {
-                    pos: Position { line: 0, column: 7 },
-                    s: ""
-                },
                 value: ASTNode::Subtract(
                     Box::new(ASTNode::Number(1.5f64)),
                     Box::new(ASTNode::Number(2.7f64))
                 ),
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 7 },
+                    s: ""
+                },
             })
         );
     }
@@ -342,18 +292,6 @@ mod tests {
         assert_eq!(
             parse_expression("-1*5/2+4".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "-1*5/2+4",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "-1*5/2+4",
-                },
-                remainder: PosStr {
-                    pos: Position { line: 0, column: 8 },
-                    s: ""
-                },
                 value: ASTNode::Add(
                     Box::new(ASTNode::Divide(
                         Box::new(ASTNode::Multiply(
@@ -363,7 +301,11 @@ mod tests {
                         Box::new(ASTNode::Number(2f64))
                     )),
                     Box::new(ASTNode::Number(4f64))
-                )
+                ),
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 8 },
+                    s: ""
+                },
             })
         );
     }
@@ -373,18 +315,6 @@ mod tests {
         assert_eq!(
             parse_expression("-1*5-2*4".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "-1*5-2*4",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "-1*5-2*4",
-                },
-                remainder: PosStr {
-                    pos: Position { line: 0, column: 8 },
-                    s: ""
-                },
                 value: ASTNode::Subtract(
                     Box::new(ASTNode::Multiply(
                         Box::new(ASTNode::Negate(Box::new(ASTNode::Number(1f64)))),
@@ -395,6 +325,10 @@ mod tests {
                         Box::new(ASTNode::Number(4f64)),
                     )),
                 ),
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 8 },
+                    s: ""
+                },
             })
         );
     }
@@ -404,18 +338,6 @@ mod tests {
         assert_eq!(
             parse_expression("1+2+3+4+5".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1+2+3+4+5",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1+2+3+4+5",
-                },
-                remainder: PosStr {
-                    pos: Position { line: 0, column: 9 },
-                    s: ""
-                },
                 value: ASTNode::Add(
                     Box::new(ASTNode::Add(
                         Box::new(ASTNode::Add(
@@ -429,6 +351,10 @@ mod tests {
                     )),
                     Box::new(ASTNode::Number(5f64))
                 ),
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 9 },
+                    s: ""
+                },
             })
         );
     }
@@ -438,18 +364,6 @@ mod tests {
         assert_eq!(
             parse_expression("1*2*3*4*5".into()),
             Ok(Match {
-                source: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1*2*3*4*5",
-                },
-                matched: PosStr {
-                    pos: Position { line: 0, column: 0 },
-                    s: "1*2*3*4*5",
-                },
-                remainder: PosStr {
-                    pos: Position { line: 0, column: 9 },
-                    s: ""
-                },
                 value: ASTNode::Multiply(
                     Box::new(ASTNode::Multiply(
                         Box::new(ASTNode::Multiply(
@@ -463,6 +377,10 @@ mod tests {
                     )),
                     Box::new(ASTNode::Number(5f64))
                 ),
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 9 },
+                    s: ""
+                },
             })
         );
     }
