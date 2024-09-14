@@ -1,4 +1,8 @@
-use std::{error::Error, fmt::Display};
+use std::{
+    error::Error,
+    fmt::{Debug, Display},
+    ops::RangeBounds,
+};
 
 use crate::strings::{Match, PosStr};
 
@@ -9,6 +13,7 @@ enum ASTNode {
     Subtract(Box<ASTNode>, Box<ASTNode>),
     Multiply(Box<ASTNode>, Box<ASTNode>),
     Divide(Box<ASTNode>, Box<ASTNode>),
+    Negate(Box<ASTNode>),
 }
 
 enum MultiplyOrDivide {
@@ -40,26 +45,89 @@ fn skip_whitespace<'a>(input: PosStr<'a>) -> PosStr<'a> {
 
 fn parse_single_char(input: PosStr, c: char) -> Result<Match<char>, ParseError> {
     match input.take_single_char() {
-        Some(m) => Ok(m.map(|_| c)),
-        None => Err(ParseError(format!("expected {}", c))),
+        Some(m) if m.value == c => Ok(m),
+        _ => Err(ParseError(format!("expected {}", c))),
+    }
+}
+
+fn prase_char_range<R>(input: PosStr, range: R) -> Result<Match<char>, ParseError>
+where
+    R: RangeBounds<char> + Debug,
+{
+    match input.take_single_char() {
+        Some(m) if range.contains(&m.value) => Ok(m),
+        Some(m) => Err(ParseError(format!("expected {:?}, got {}", range, m.value))),
+        _ => Err(ParseError(format!("expected {:?}", range))),
     }
 }
 
 fn parse_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+    /*
+    https://www.json.org/json-en.html
+    https://stackoverflow.com/a/13340826
+    -?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?
+
+    ignoring the leading negation because we have an AST node for that
+    */
+
     let input = skip_whitespace(input);
-    let result = input.take_while_and_remainder(|_, c| {
-        c.is_digit(10) || *c == '.' || *c == 'e' || *c == 'E' || *c == '+' || *c == '-'
-    });
-    if result.matched.is_empty() {
-        Err(ParseError("expected number".to_owned()))
+
+    // 0|[1-9]\d*
+    let first_integer_digit = prase_char_range(input, '0'..='9')?;
+    let (remaining_integer_digits, remainder) = if ('1'..='9').contains(&first_integer_digit.value)
+    {
+        let r = first_integer_digit
+            .remainder
+            .take_while_and_remainder(|_, c| ('0'..='9').contains(c));
+        (Some(r.value), r.remainder)
     } else {
-        match result.matched.s.parse() {
-            Ok(value) => Ok(result.map(|_| ASTNode::Number(value))),
-            Err(e) => Err(ParseError(format!(
-                "failed to parse input as number, input={}, error={:?}",
-                result.matched.s, e
-            ))),
+        (None, first_integer_digit.remainder)
+    };
+
+    // (\.\d+)?
+    let (fractional_part, remainder) = if let Ok(dot_match) = parse_single_char(remainder, '.') {
+        let digits_match = dot_match
+            .remainder
+            .take_while_and_remainder(|_, c| ('0'..='9').contains(c));
+        if !digits_match.value.is_empty() {
+            (
+                Some((dot_match.value, digits_match.value)),
+                digits_match.remainder,
+            )
+        } else {
+            (None, remainder)
         }
+    } else {
+        (None, remainder)
+    };
+
+    // ([eE][+-]?\d+)?
+    let (exponent_part, remainder) = match remainder.take_single_char() {
+        Some(e) if e.value == 'e' || e.value == 'E' => match e.remainder.take_single_char() {
+            Some(sign) if sign.value == '+' || sign.value == '-' => {
+                let digits = sign
+                    .remainder
+                    .take_while_and_remainder(|_, c| ('0'..='9').contains(c));
+                if digits.value.is_empty() {
+                    (None, remainder)
+                } else {
+                    (Some((e.value, sign.value, digits.value)), digits.remainder)
+                }
+            }
+            _ => (None, e.remainder),
+        },
+        _ => (None, remainder),
+    };
+
+    let full_match = input
+        .take_until_position_and_remainder(&remainder.pos)
+        .map_err(|e| ParseError(format!("{e:?}")))?;
+    match full_match.matched.s.parse() {
+        Ok(value) => Ok(full_match.map(|_| ASTNode::Number(value))),
+        Err(e) => Err(ParseError(format!(
+            "failed to parse input as number, input={}, error={:?}",
+            full_match.matched.s, e
+        ))),
     }
 }
 
@@ -70,7 +138,7 @@ fn parse_negated_expression(input: PosStr) -> Result<Match<ASTNode>, ParseError>
         remainder,
         value: _,
     } = parse_single_char(skip_whitespace(input), '-')?;
-    parse_expression(remainder)
+    Ok(parse_expression(remainder)?.map(|x| ASTNode::Negate(Box::new(x))))
 }
 
 fn parse_parenthesis(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
@@ -331,7 +399,7 @@ mod tests {
                     s: "(1 + 2)*3",
                 },
                 remainder: PosStr {
-                    pos: Position { line: 0, column: 5 },
+                    pos: Position { line: 0, column: 9 },
                     s: ""
                 },
                 value: ASTNode::Multiply(
@@ -345,10 +413,34 @@ mod tests {
         );
     }
 
+    #[test]
+    fn subtraction() {
+        assert_eq!(
+            parse_expression("1.5-2.7".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1.5-2.7",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1.5-2.7",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 7 },
+                    s: ""
+                },
+                value: ASTNode::Subtract(
+                    Box::new(ASTNode::Number(1.5f64)),
+                    Box::new(ASTNode::Number(2.7f64))
+                ),
+            })
+        );
+    }
+
     /*
     TODO JEFF more test cases
 
-    1.5-2.7
     -1*5/2+4
     -1*5-2*4
     */
