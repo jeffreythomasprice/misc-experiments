@@ -1,10 +1,9 @@
-use std::{
-    error::Error,
-    fmt::{Debug, Display},
-    ops::RangeBounds,
-};
+use std::fmt::Debug;
 
-use crate::strings::{Match, PosStr};
+use crate::{
+    matchers::{any3, char_range, specific_char, MatchError},
+    strings::{Match, PosStr},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 enum ASTNode {
@@ -26,42 +25,13 @@ enum AddOrSubtract {
     Subtract,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ParseError(String);
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ParseError({})", self.0)
-    }
-}
-
-impl Error for ParseError {}
-
 fn skip_whitespace<'a>(input: PosStr<'a>) -> PosStr<'a> {
     input
         .take_while_and_remainder(|_, c| c.is_whitespace())
         .remainder
 }
 
-fn parse_single_char(input: PosStr, c: char) -> Result<Match<char>, ParseError> {
-    match input.take_single_char() {
-        Some(m) if m.value == c => Ok(m),
-        _ => Err(ParseError(format!("expected {}", c))),
-    }
-}
-
-fn prase_char_range<R>(input: PosStr, range: R) -> Result<Match<char>, ParseError>
-where
-    R: RangeBounds<char> + Debug,
-{
-    match input.take_single_char() {
-        Some(m) if range.contains(&m.value) => Ok(m),
-        Some(m) => Err(ParseError(format!("expected {:?}, got {}", range, m.value))),
-        _ => Err(ParseError(format!("expected {:?}", range))),
-    }
-}
-
-fn parse_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+fn parse_number(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     /*
     https://www.json.org/json-en.html
     https://stackoverflow.com/a/13340826
@@ -73,19 +43,18 @@ fn parse_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     let input = skip_whitespace(input);
 
     // 0|[1-9]\d*
-    let first_integer_digit = prase_char_range(input, '0'..='9')?;
-    let (remaining_integer_digits, remainder) = if ('1'..='9').contains(&first_integer_digit.value)
-    {
+    let first_integer_digit = char_range(input, '0'..='9')?;
+    let remainder = if ('1'..='9').contains(&first_integer_digit.value) {
         let r = first_integer_digit
             .remainder
             .take_while_and_remainder(|_, c| ('0'..='9').contains(c));
-        (Some(r.value), r.remainder)
+        r.remainder
     } else {
-        (None, first_integer_digit.remainder)
+        first_integer_digit.remainder
     };
 
     // (\.\d+)?
-    let remainder = if let Ok(dot_match) = parse_single_char(remainder, '.') {
+    let remainder = if let Ok(dot_match) = specific_char(remainder, '.') {
         let digits_match = dot_match
             .remainder
             .take_while_and_remainder(|_, c| ('0'..='9').contains(c));
@@ -116,37 +85,26 @@ fn parse_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
         _ => remainder,
     };
 
-    let full_match = input
-        .take_until_position_and_remainder(&remainder.pos)
-        .map_err(|e| ParseError(format!("{e:?}")))?;
+    let full_match = input.take_until_position_and_remainder(&remainder.pos)?;
     match full_match.matched.s.parse() {
         Ok(value) => Ok(full_match.map(|_| ASTNode::Number(value))),
-        Err(e) => Err(ParseError(format!(
-            "failed to parse input as number, input={}, error={:?}",
-            full_match.matched.s, e
-        ))),
+        Err(e) => Err(MatchError::Expected {
+            expected: "number".to_owned(),
+            // TODO add a metadata or source error or something to avoid shoving both input and error in the same field?
+            got: format!("{}, error={}", full_match.matched.s, e),
+        }),
     }
 }
 
-fn parse_negated_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
-    let Match {
-        source: _,
-        matched: _,
-        remainder,
-        value: _,
-    } = parse_single_char(skip_whitespace(input), '-')?;
+fn parse_negated_number(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
+    let remainder = specific_char(skip_whitespace(input), '-')?.remainder;
     Ok(parse_number(remainder)?.map(|x| ASTNode::Negate(Box::new(x))))
 }
 
-fn parse_parenthesis(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
-    let Match {
-        source: _,
-        matched: _,
-        remainder,
-        value: _,
-    } = parse_single_char(skip_whitespace(input), '(')?;
+fn parse_parenthesis(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
+    let remainder = specific_char(skip_whitespace(input), '(')?.remainder;
     let result = parse_expression(remainder)?;
-    let remainder = parse_single_char(skip_whitespace(result.remainder), ')')?.remainder;
+    let remainder = specific_char(skip_whitespace(result.remainder), ')')?.remainder;
     Ok(Match {
         source: input,
         matched: result.matched,
@@ -155,35 +113,16 @@ fn parse_parenthesis(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     })
 }
 
-fn parse_term(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
-    let number_result = match parse_number(input) {
-        Ok(result) => {
-            return Ok(result);
+fn parse_term(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
+    any3(input, parse_number, parse_negated_number, parse_parenthesis).map_err(|e| {
+        MatchError::Expected {
+            expected: "expression".to_owned(),
+            got: format!("{e:?}"),
         }
-        Err(e) => e,
-    };
-
-    let negated_result = match parse_negated_number(input) {
-        Ok(result) => {
-            return Ok(result);
-        }
-        Err(e) => e,
-    };
-
-    let parenthesis_result = match parse_parenthesis(input) {
-        Ok(result) => {
-            return Ok(result);
-        }
-        Err(e) => e,
-    };
-
-    Err(ParseError(format!(
-        "no branch matched, {}, {}, {}",
-        negated_result, parenthesis_result, number_result
-    )))
+    })
 }
 
-fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     let Match {
         source: _,
         matched: _,
@@ -224,8 +163,7 @@ fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     }
 
     let matched = input
-        .take_until_position_and_remainder(&remainder.pos)
-        .map_err(|e| ParseError(format!("{e:?}")))?
+        .take_until_position_and_remainder(&remainder.pos)?
         .value;
 
     Ok(Match {
@@ -236,7 +174,7 @@ fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     })
 }
 
-fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     // TODO de-duplicate with parse_mulops? generic binary_op?
 
     let Match {
@@ -279,8 +217,7 @@ fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     }
 
     let matched = input
-        .take_until_position_and_remainder(&remainder.pos)
-        .map_err(|e| ParseError(format!("{e:?}")))?
+        .take_until_position_and_remainder(&remainder.pos)?
         .value;
 
     Ok(Match {
@@ -291,7 +228,7 @@ fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     })
 }
 
-fn parse_expression(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+fn parse_expression(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     parse_addops(input)
 }
 
