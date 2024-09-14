@@ -104,3 +104,60 @@ where
         (Err(e1), Err(e2), Err(e3)) => Err((e1, e2, e3)),
     }
 }
+
+/// Matches a binary list of the form
+/// ```text
+/// T1 T2 T1 T2 T1 ...
+/// ```
+/// Must start and end with T1, and every pair of T1 is separated by a T2.
+///
+/// Fails if a T2 is found but not followed by a T1.
+///
+/// TODO support range of valid lengths of list
+pub fn binary_list<T1, M1, T2, M2>(
+    input: PosStr,
+    m1: M1,
+    m2: M2,
+) -> Result<Match<(T1, Vec<(T2, T1)>)>, MatchError>
+where
+    M1: Fn(PosStr) -> Result<Match<T1>, MatchError>,
+    M2: Fn(PosStr) -> Result<Match<T2>, MatchError>,
+{
+    let Match {
+        source: _,
+        matched: _,
+        remainder,
+        value: first,
+    } = m1(input)?;
+    let mut remainder = remainder;
+    let mut results = Vec::new();
+
+    loop {
+        let Match {
+            source: _,
+            matched: _,
+            remainder: partial_remainder,
+            value: value2,
+        } = match m2(remainder) {
+            Ok(x) => x,
+            Err(_) => break,
+        };
+        let Match {
+            source: _,
+            matched: _,
+            remainder: partial_remainder,
+            value: value1,
+        } = m1(partial_remainder)?;
+        results.push((value2, value1));
+        remainder = partial_remainder;
+    }
+
+    Ok(Match {
+        source: input,
+        matched: input
+            .take_until_position_and_remainder(&remainder.pos)?
+            .matched,
+        remainder,
+        value: (first, results),
+    })
+}

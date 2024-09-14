@@ -1,7 +1,7 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, string::ParseError};
 
 use crate::{
-    matchers::{any2, any3, char_range, specific_char, MatchError},
+    matchers::{any2, any3, binary_list, char_range, specific_char, MatchError},
     strings::{Match, PosStr},
 };
 
@@ -123,105 +123,47 @@ fn parse_term(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
 }
 
 fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
-    let Match {
-        source: _,
-        matched: _,
-        remainder,
-        value: first,
-    } = parse_term(input)?;
-    let mut result = first;
-    let mut remainder = remainder;
-
-    loop {
-        let Match {
-            source: _,
-            matched: _,
-            remainder: partial_remainder,
-            value: op,
-        } = match any2(
-            skip_whitespace(remainder),
+    Ok(binary_list(input, parse_term, |input| {
+        any2(
+            skip_whitespace(input),
             |input| specific_char(input, '*').map(|x| x.map(|_| MultiplyOrDivide::Multiply)),
             |input| specific_char(input, '/').map(|x| x.map(|_| MultiplyOrDivide::Divide)),
-        ) {
-            Ok(r) => r,
-            Err(_) => break,
-        };
-
-        let Match {
-            source: _,
-            matched: _,
-            remainder: partial_remainder,
-            value: next,
-        } = parse_term(partial_remainder)?;
-        result = match op {
-            MultiplyOrDivide::Multiply => ASTNode::Multiply(Box::new(result), Box::new(next)),
-            MultiplyOrDivide::Divide => ASTNode::Divide(Box::new(result), Box::new(next)),
-        };
-        remainder = partial_remainder;
-    }
-
-    let matched = input
-        .take_until_position_and_remainder(&remainder.pos)?
-        .value;
-
-    Ok(Match {
-        source: input,
-        matched,
-        remainder,
-        value: result,
-    })
+        )
+        .map_err(|e| MatchError::Expected {
+            expected: "* or /".to_owned(),
+            got: format!("{e:?}"),
+        })
+    })?
+    .map(|(first, remainder)| {
+        remainder
+            .into_iter()
+            .fold(first, |left, (op, right)| match op {
+                MultiplyOrDivide::Multiply => ASTNode::Multiply(Box::new(left), Box::new(right)),
+                MultiplyOrDivide::Divide => ASTNode::Divide(Box::new(left), Box::new(right)),
+            })
+    }))
 }
 
 fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
-    // TODO de-duplicate with parse_mulops? generic binary_op?
-
-    let Match {
-        source: _,
-        matched: _,
-        remainder,
-        value: first,
-    } = parse_mulops(input)?;
-    let mut result = first;
-    let mut remainder = remainder;
-
-    loop {
-        let Match {
-            source: _,
-            matched: _,
-            remainder: partial_remainder,
-            value: op,
-        } = match any2(
-            skip_whitespace(remainder),
+    Ok(binary_list(input, parse_mulops, |input| {
+        any2(
+            skip_whitespace(input),
             |input| specific_char(input, '+').map(|x| x.map(|_| AddOrSubtract::Add)),
             |input| specific_char(input, '-').map(|x| x.map(|_| AddOrSubtract::Subtract)),
-        ) {
-            Ok(r) => r,
-            Err(_) => break,
-        };
-
-        let Match {
-            source: _,
-            matched: _,
-            remainder: partial_remainder,
-            value: next,
-        } = parse_mulops(partial_remainder)?;
-        result = match op {
-            AddOrSubtract::Add => ASTNode::Add(Box::new(result), Box::new(next)),
-            AddOrSubtract::Subtract => ASTNode::Subtract(Box::new(result), Box::new(next)),
-        };
-        remainder = partial_remainder;
-    }
-
-    let matched = input
-        .take_until_position_and_remainder(&remainder.pos)?
-        .value;
-
-    Ok(Match {
-        source: input,
-        matched,
-        remainder,
-        value: result,
-    })
+        )
+        .map_err(|e| MatchError::Expected {
+            expected: "+ or -".to_owned(),
+            got: format!("{e:?}"),
+        })
+    })?
+    .map(|(first, remainder)| {
+        remainder
+            .into_iter()
+            .fold(first, |left, (op, right)| match op {
+                AddOrSubtract::Add => ASTNode::Add(Box::new(left), Box::new(right)),
+                AddOrSubtract::Subtract => ASTNode::Subtract(Box::new(left), Box::new(right)),
+            })
+    }))
 }
 
 fn parse_expression(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
