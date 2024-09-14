@@ -4,8 +4,18 @@ use crate::strings::{BadPositionError, Match, PosStr};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchError {
-    Expected { expected: String, got: String },
-    EndOfInput { expected: String },
+    Expected {
+        expected: String,
+        got: String,
+    },
+    Parse {
+        expected: String,
+        got: String,
+        error: String,
+    },
+    EndOfInput {
+        expected: String,
+    },
     BadPositionError,
 }
 
@@ -70,7 +80,29 @@ where
     })
 }
 
-// TODO seq3, ...
+pub fn seq3<T1, M1, T2, M2, T3, M3>(
+    input: PosStr,
+    m1: M1,
+    m2: M2,
+    m3: M3,
+) -> Result<Match<(T1, T2, T3)>, MatchError>
+where
+    M1: Fn(PosStr) -> Result<Match<T1>, MatchError>,
+    M2: Fn(PosStr) -> Result<Match<T2>, MatchError>,
+    M3: Fn(PosStr) -> Result<Match<T3>, MatchError>,
+{
+    let r1 = m1(input)?;
+    let r2 = m2(r1.remainder)?;
+    let r3 = m3(r2.remainder)?;
+    Ok(Match {
+        source: input,
+        matched: input
+            .take_until_position_and_remainder(&r3.remainder.pos)?
+            .matched,
+        remainder: r3.remainder,
+        value: (r1.value, r2.value, r3.value),
+    })
+}
 
 pub fn any2<T, M1, M2>(input: PosStr, m1: M1, m2: M2) -> Result<Match<T>, (MatchError, MatchError)>
 where
@@ -113,26 +145,56 @@ where
 ///
 /// Fails if a T2 is found but not followed by a T1.
 ///
-/// TODO support range of valid lengths of list
-pub fn binary_list<T1, M1, T2, M2>(
+/// Fails if the number of matched T1 doesn't satisfy the range constraint.
+pub fn binary_list<T1, M1, T2, M2, R>(
     input: PosStr,
     m1: M1,
     m2: M2,
-) -> Result<Match<(T1, Vec<(T2, T1)>)>, MatchError>
+    r: R,
+) -> Result<Match<Option<(T1, Vec<(T2, T1)>)>>, MatchError>
 where
     M1: Fn(PosStr) -> Result<Match<T1>, MatchError>,
     M2: Fn(PosStr) -> Result<Match<T2>, MatchError>,
+    R: RangeBounds<usize> + Debug,
 {
+    // match the first element
     let Match {
         source: _,
         matched: _,
         remainder,
         value: first,
-    } = m1(input)?;
+    } = match m1(input) {
+        Ok(x) => x,
+        Err(e) => {
+            // we failed to match even one, but that could still be a succcess if the range constraint allows empty lists
+            if r.contains(&0) {
+                return Ok(Match {
+                    source: input,
+                    matched: PosStr {
+                        pos: input.pos,
+                        s: "",
+                    },
+                    remainder: input,
+                    value: None,
+                });
+            }
+            // nope, fail
+            Err(e)?
+        }
+    };
+
     let mut remainder = remainder;
     let mut results = Vec::new();
 
     loop {
+        // if we have a good set of data now, but adding one more would put us outside the range constraint, then we're done
+        // len+1 becacuse the first element won't be in the results vec
+        let current_count = results.len() + 1;
+        if r.contains(&current_count) && !r.contains(&(current_count + 1)) {
+            break;
+        }
+
+        // match the separator
         let Match {
             source: _,
             matched: _,
@@ -140,8 +202,10 @@ where
             value: value2,
         } = match m2(remainder) {
             Ok(x) => x,
+            // no error, just means we didn't see the next separator, so we're done
             Err(_) => break,
         };
+        // match the next element after the separator
         let Match {
             source: _,
             matched: _,
@@ -152,12 +216,26 @@ where
         remainder = partial_remainder;
     }
 
-    Ok(Match {
-        source: input,
-        matched: input
-            .take_until_position_and_remainder(&remainder.pos)?
-            .matched,
-        remainder,
-        value: (first, results),
-    })
+    // we have out list, no parse errors, so we've either succeeded or failed based on whether the range constraint is satisfied
+    let current_count = results.len() + 1;
+    if r.contains(&current_count) {
+        Ok(Match {
+            source: input,
+            matched: input
+                .take_until_position_and_remainder(&remainder.pos)?
+                .matched,
+            remainder,
+            value: Some((first, results)),
+        })
+    } else {
+        Err(MatchError::Expected {
+            expected: format!("{r:?} results"),
+            got: format!("{current_count}"),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO tests
 }

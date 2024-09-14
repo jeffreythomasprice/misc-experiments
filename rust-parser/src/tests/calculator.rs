@@ -88,10 +88,10 @@ fn parse_number(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
     let full_match = input.take_until_position_and_remainder(&remainder.pos)?;
     match full_match.matched.s.parse() {
         Ok(value) => Ok(full_match.map(|_| ASTNode::Number(value))),
-        Err(e) => Err(MatchError::Expected {
+        Err(e) => Err(MatchError::Parse {
             expected: "number".to_owned(),
-            // TODO add a metadata or source error or something to avoid shoving both input and error in the same field?
-            got: format!("{}, error={}", full_match.matched.s, e),
+            got: full_match.matched.s.to_owned(),
+            error: format!("{e:?}"),
         }),
     }
 }
@@ -123,18 +123,25 @@ fn parse_term(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
 }
 
 fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
-    Ok(binary_list(input, parse_term, |input| {
-        any2(
-            skip_whitespace(input),
-            |input| specific_char(input, '*').map(|x| x.map(|_| MultiplyOrDivide::Multiply)),
-            |input| specific_char(input, '/').map(|x| x.map(|_| MultiplyOrDivide::Divide)),
-        )
-        .map_err(|e| MatchError::Expected {
-            expected: "* or /".to_owned(),
-            got: format!("{e:?}"),
-        })
-    })?
-    .map(|(first, remainder)| {
+    Ok(binary_list(
+        input,
+        parse_term,
+        |input| {
+            any2(
+                skip_whitespace(input),
+                |input| specific_char(input, '*').map(|x| x.map(|_| MultiplyOrDivide::Multiply)),
+                |input| specific_char(input, '/').map(|x| x.map(|_| MultiplyOrDivide::Divide)),
+            )
+            .map_err(|e| MatchError::Expected {
+                expected: "* or /".to_owned(),
+                got: format!("{e:?}"),
+            })
+        },
+        1..,
+    )?
+    .map(|results| {
+        // unwrap is safe because range constraint
+        let (first, remainder) = results.unwrap();
         remainder
             .into_iter()
             .fold(first, |left, (op, right)| match op {
@@ -145,18 +152,25 @@ fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
 }
 
 fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, MatchError> {
-    Ok(binary_list(input, parse_mulops, |input| {
-        any2(
-            skip_whitespace(input),
-            |input| specific_char(input, '+').map(|x| x.map(|_| AddOrSubtract::Add)),
-            |input| specific_char(input, '-').map(|x| x.map(|_| AddOrSubtract::Subtract)),
-        )
-        .map_err(|e| MatchError::Expected {
-            expected: "+ or -".to_owned(),
-            got: format!("{e:?}"),
-        })
-    })?
-    .map(|(first, remainder)| {
+    Ok(binary_list(
+        input,
+        parse_mulops,
+        |input| {
+            any2(
+                skip_whitespace(input),
+                |input| specific_char(input, '+').map(|x| x.map(|_| AddOrSubtract::Add)),
+                |input| specific_char(input, '-').map(|x| x.map(|_| AddOrSubtract::Subtract)),
+            )
+            .map_err(|e| MatchError::Expected {
+                expected: "+ or -".to_owned(),
+                got: format!("{e:?}"),
+            })
+        },
+        1..,
+    )?
+    .map(|results| {
+        // unwrap is safe because range constraint
+        let (first, remainder) = results.unwrap();
         remainder
             .into_iter()
             .fold(first, |left, (op, right)| match op {
@@ -380,6 +394,74 @@ mod tests {
                         Box::new(ASTNode::Number(2f64)),
                         Box::new(ASTNode::Number(4f64)),
                     )),
+                ),
+            })
+        );
+    }
+
+    #[test]
+    fn many_additions() {
+        assert_eq!(
+            parse_expression("1+2+3+4+5".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1+2+3+4+5",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1+2+3+4+5",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 9 },
+                    s: ""
+                },
+                value: ASTNode::Add(
+                    Box::new(ASTNode::Add(
+                        Box::new(ASTNode::Add(
+                            Box::new(ASTNode::Add(
+                                Box::new(ASTNode::Number(1f64)),
+                                Box::new(ASTNode::Number(2f64)),
+                            )),
+                            Box::new(ASTNode::Number(3f64))
+                        )),
+                        Box::new(ASTNode::Number(4f64))
+                    )),
+                    Box::new(ASTNode::Number(5f64))
+                ),
+            })
+        );
+    }
+
+    #[test]
+    fn many_multiplications() {
+        assert_eq!(
+            parse_expression("1*2*3*4*5".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1*2*3*4*5",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "1*2*3*4*5",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 9 },
+                    s: ""
+                },
+                value: ASTNode::Multiply(
+                    Box::new(ASTNode::Multiply(
+                        Box::new(ASTNode::Multiply(
+                            Box::new(ASTNode::Multiply(
+                                Box::new(ASTNode::Number(1f64)),
+                                Box::new(ASTNode::Number(2f64)),
+                            )),
+                            Box::new(ASTNode::Number(3f64))
+                        )),
+                        Box::new(ASTNode::Number(4f64))
+                    )),
+                    Box::new(ASTNode::Number(5f64))
                 ),
             })
         );
