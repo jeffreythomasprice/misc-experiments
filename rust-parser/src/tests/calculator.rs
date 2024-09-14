@@ -85,38 +85,35 @@ fn parse_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     };
 
     // (\.\d+)?
-    let (fractional_part, remainder) = if let Ok(dot_match) = parse_single_char(remainder, '.') {
+    let remainder = if let Ok(dot_match) = parse_single_char(remainder, '.') {
         let digits_match = dot_match
             .remainder
             .take_while_and_remainder(|_, c| ('0'..='9').contains(c));
         if !digits_match.value.is_empty() {
-            (
-                Some((dot_match.value, digits_match.value)),
-                digits_match.remainder,
-            )
+            digits_match.remainder
         } else {
-            (None, remainder)
+            remainder
         }
     } else {
-        (None, remainder)
+        remainder
     };
 
     // ([eE][+-]?\d+)?
-    let (exponent_part, remainder) = match remainder.take_single_char() {
+    let remainder = match remainder.take_single_char() {
         Some(e) if e.value == 'e' || e.value == 'E' => match e.remainder.take_single_char() {
             Some(sign) if sign.value == '+' || sign.value == '-' => {
                 let digits = sign
                     .remainder
                     .take_while_and_remainder(|_, c| ('0'..='9').contains(c));
                 if digits.value.is_empty() {
-                    (None, remainder)
+                    remainder
                 } else {
-                    (Some((e.value, sign.value, digits.value)), digits.remainder)
+                    digits.remainder
                 }
             }
-            _ => (None, e.remainder),
+            _ => e.remainder,
         },
-        _ => (None, remainder),
+        _ => remainder,
     };
 
     let full_match = input
@@ -131,14 +128,14 @@ fn parse_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     }
 }
 
-fn parse_negated_expression(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
+fn parse_negated_number(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     let Match {
         source: _,
         matched: _,
         remainder,
         value: _,
     } = parse_single_char(skip_whitespace(input), '-')?;
-    Ok(parse_expression(remainder)?.map(|x| ASTNode::Negate(Box::new(x))))
+    Ok(parse_number(remainder)?.map(|x| ASTNode::Negate(Box::new(x))))
 }
 
 fn parse_parenthesis(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
@@ -159,19 +156,15 @@ fn parse_parenthesis(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
 }
 
 fn parse_term(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
-    println!("TODO parse_term: {input:?}");
-
     let number_result = match parse_number(input) {
         Ok(result) => {
-            println!("TODO parse_term found number: {result:?}");
             return Ok(result);
         }
         Err(e) => e,
     };
 
-    let negated_result = match parse_negated_expression(input) {
+    let negated_result = match parse_negated_number(input) {
         Ok(result) => {
-            println!("TODO parse_term found negation: {result:?}");
             return Ok(result);
         }
         Err(e) => e,
@@ -179,7 +172,6 @@ fn parse_term(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
 
     let parenthesis_result = match parse_parenthesis(input) {
         Ok(result) => {
-            println!("TODO parse_term found parens: {result:?}");
             return Ok(result);
         }
         Err(e) => e,
@@ -192,8 +184,6 @@ fn parse_term(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
 }
 
 fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
-    println!("TODO parse_mulops: {input:?}");
-
     let Match {
         source: _,
         matched: _,
@@ -248,8 +238,6 @@ fn parse_mulops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
 
 fn parse_addops(input: PosStr) -> Result<Match<ASTNode>, ParseError> {
     // TODO de-duplicate with parse_mulops? generic binary_op?
-
-    println!("TODO parse_addops: {input:?}");
 
     let Match {
         source: _,
@@ -334,6 +322,28 @@ mod tests {
                     s: ""
                 },
                 value: ASTNode::Number(1.5f64),
+            })
+        );
+    }
+
+    #[test]
+    fn negated_number() {
+        assert_eq!(
+            parse_expression("-7.1".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "-7.1",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "-7.1",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 4 },
+                    s: ""
+                },
+                value: ASTNode::Negate(Box::new(ASTNode::Number(7.1f64))),
             })
         );
     }
@@ -438,10 +448,65 @@ mod tests {
         );
     }
 
-    /*
-    TODO JEFF more test cases
+    #[test]
+    fn order_of_operations_1() {
+        assert_eq!(
+            parse_expression("-1*5/2+4".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "-1*5/2+4",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "-1*5/2+4",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 8 },
+                    s: ""
+                },
+                value: ASTNode::Add(
+                    Box::new(ASTNode::Divide(
+                        Box::new(ASTNode::Multiply(
+                            Box::new(ASTNode::Negate(Box::new(ASTNode::Number(1f64)))),
+                            Box::new(ASTNode::Number(5f64))
+                        )),
+                        Box::new(ASTNode::Number(2f64))
+                    )),
+                    Box::new(ASTNode::Number(4f64))
+                )
+            })
+        );
+    }
 
-    -1*5/2+4
-    -1*5-2*4
-    */
+    #[test]
+    fn order_of_operations_2() {
+        assert_eq!(
+            parse_expression("-1*5-2*4".into()),
+            Ok(Match {
+                source: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "-1*5-2*4",
+                },
+                matched: PosStr {
+                    pos: Position { line: 0, column: 0 },
+                    s: "-1*5-2*4",
+                },
+                remainder: PosStr {
+                    pos: Position { line: 0, column: 8 },
+                    s: ""
+                },
+                value: ASTNode::Subtract(
+                    Box::new(ASTNode::Multiply(
+                        Box::new(ASTNode::Negate(Box::new(ASTNode::Number(1f64)))),
+                        Box::new(ASTNode::Number(5f64))
+                    )),
+                    Box::new(ASTNode::Multiply(
+                        Box::new(ASTNode::Number(2f64)),
+                        Box::new(ASTNode::Number(4f64)),
+                    )),
+                ),
+            })
+        );
+    }
 }
