@@ -1,0 +1,12 @@
+[package]
+name = "rust-softbuffer-winit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.89"
+console_error_panic_hook = "0.1.7"
+console_log = "1.0.0"
+log = "0.4.22"
+softbuffer = "0.4.6"
+winit = "0.30.5"
