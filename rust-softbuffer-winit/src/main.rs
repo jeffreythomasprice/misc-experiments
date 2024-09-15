@@ -6,7 +6,7 @@ use log::Level;
 use log::*;
 use softbuffer::{Context, Surface};
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalSize;
+use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
@@ -27,10 +27,15 @@ struct AppWindow {
     surface: Surface<Rc<Window>, Rc<Window>>,
 }
 
+struct Size {
+    physical: PhysicalSize<NonZero<u32>>,
+    logical: LogicalSize<NonZero<u32>>,
+}
+
 struct App {
     window: Option<AppWindow>,
     close_requested: bool,
-    size: Option<PhysicalSize<NonZero<u32>>>,
+    size: Option<Size>,
 }
 
 impl App {
@@ -42,15 +47,36 @@ impl App {
         }
     }
 
-    fn resize(&mut self, size: PhysicalSize<u32>) {
-        info!("TODO resize: {size:?}");
-
-        self.size = match (NonZero::new(size.width), NonZero::new(size.height)) {
-            (Some(width), Some(height)) => Some(PhysicalSize { width, height }),
+    fn resize(&mut self, physical: PhysicalSize<u32>, logical: LogicalSize<u32>) {
+        self.size = match (
+            NonZero::new(physical.width),
+            NonZero::new(physical.height),
+            NonZero::new(logical.width),
+            NonZero::new(logical.height),
+        ) {
+            (
+                Some(physical_width),
+                Some(physical_height),
+                Some(logical_width),
+                Some(logical_height),
+            ) => Some(Size {
+                physical: PhysicalSize {
+                    width: physical_width,
+                    height: physical_height,
+                },
+                logical: LogicalSize {
+                    width: logical_width,
+                    height: logical_height,
+                },
+            }),
             _ => None,
         };
 
-        if let Some(PhysicalSize { width, height }) = self.size {
+        if let Some(Size {
+            logical: LogicalSize { width, height },
+            ..
+        }) = self.size
+        {
             if let Some(AppWindow { surface, .. }) = &mut self.window {
                 if let Err(e) = surface.resize(width, height) {
                     error!("error resizing: {e:?}");
@@ -99,7 +125,11 @@ impl ApplicationHandler for App {
     ) {
         match event {
             winit::event::WindowEvent::RedrawRequested => {
-                if let Some(PhysicalSize { width, height }) = self.size {
+                if let Some(Size {
+                    logical: LogicalSize { width, height },
+                    ..
+                }) = self.size
+                {
                     if let Some(AppWindow { surface, .. }) = &mut self.window {
                         if let Err(e) = move || -> Result<()> {
                             let mut buf = surface
@@ -130,7 +160,13 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::Resized(size) => {
-                self.resize(size);
+                self.resize(
+                    size,
+                    LogicalSize {
+                        width: 640,
+                        height: 480,
+                    },
+                );
             }
             WindowEvent::CloseRequested => {
                 self.close_requested = true;
