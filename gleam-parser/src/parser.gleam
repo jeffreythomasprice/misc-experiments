@@ -225,10 +225,30 @@ pub fn optional(p: Parser(t)) -> Parser(option.Option(t)) {
   }
 }
 
-pub fn skip_prefix(p: Parser(t), skip s: Parser(s)) -> Parser(t) {
-  seq2(s, p)
+pub fn skip_prefix(prefix: Parser(s), p: Parser(t)) -> Parser(t) {
+  seq2(prefix, p)
   |> map(fn(r) {
     let #(_, result) = r
+    result
+  })
+}
+
+pub fn skip_suffix(p: Parser(t), suffix: Parser(s)) -> Parser(t) {
+  seq2(p, suffix)
+  |> map(fn(r) {
+    let #(result, _) = r
+    result
+  })
+}
+
+pub fn skip_prefix_and_suffix(
+  prefix: Parser(s1),
+  p: Parser(t),
+  suffix: Parser(s2),
+) -> Parser(t) {
+  seq3(prefix, p, suffix)
+  |> map(fn(r) {
+    let #(_, result, _) = r
     result
   })
 }

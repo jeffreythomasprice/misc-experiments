@@ -219,7 +219,9 @@ pub fn optional_test() {
 }
 
 pub fn skip_prefix_test() {
-  let p = parser.string("foo") |> parser.skip_prefix(skip: parser.string("bar"))
+  let p = parser.string("foo") |> parser.skip_prefix(parser.string("bar"), _)
   p("barfoo__") |> should.equal(Ok(#("__", "foo")))
   p("foo__") |> should.equal(Error(Nil))
 }
+// TODO skip_suffix_test
+// TODO skip_prefix_and_suffix_test
