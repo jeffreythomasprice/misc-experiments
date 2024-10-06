@@ -1,0 +1,7 @@
+[package]
+name = "rust-sauron"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sauron = "0.61.8"
