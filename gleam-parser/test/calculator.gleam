@@ -126,7 +126,9 @@ fn number_node(input: String) -> Result(#(String, Node), Nil) {
 
 fn negate(input: String) -> Result(#(String, Node), Nil) {
   let parser =
-    parser.skip_prefix(parser.string("-") |> skip_whitespace, number_node)
+    number_node
+    |> parser.skip_prefix(parser.string("-") |> skip_whitespace, _)
+    |> parser.map(fn(result) { Negate(result) })
   parser(input)
 }
 

@@ -30,5 +30,44 @@ pub fn expression_test() {
   )
   let assert Ok(#(_, value)) = value
   calculator.eval(value) |> should.equal(3.0)
-  // TODO more expression tests
+
+  let value = p(" 1 + 2 + 3+4     \t\n\r+5")
+  value
+  |> should.equal(
+    Ok(#(
+      "",
+      calculator.Add(
+        calculator.Add(
+          calculator.Add(
+            calculator.Add(calculator.Number(1.0), calculator.Number(2.0)),
+            calculator.Number(3.0),
+          ),
+          calculator.Number(4.0),
+        ),
+        calculator.Number(5.0),
+      ),
+    )),
+  )
+  let assert Ok(#(_, value)) = value
+  calculator.eval(value) |> should.equal(15.0)
+
+  let value = p("(-1+2)*3/4")
+  value
+  |> should.equal(
+    Ok(#(
+      "",
+      calculator.Divide(
+        calculator.Multiply(
+          calculator.Add(
+            calculator.Negate(calculator.Number(1.0)),
+            calculator.Number(2.0),
+          ),
+          calculator.Number(3.0),
+        ),
+        calculator.Number(4.0),
+      ),
+    )),
+  )
+  let assert Ok(#(_, value)) = value
+  calculator.eval(value) |> should.equal(0.75)
 }
