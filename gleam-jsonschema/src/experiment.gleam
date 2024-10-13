@@ -18,23 +18,22 @@ pub fn main() {
 
   let jsonschema_options =
     jsonschema.Options(fn(ref) {
-      // if it's a url assume we're going to find a similiarly named file locally so just ook at the path
-      let ref_path = case uri.parse(ref) {
-        Ok(ref_uri) -> ref_uri.path
-        Error(_) -> ref
-      }
       // try to find that in the list of possible files we found
       let file_contents = case
         paths
         |> list.filter(fn(path) {
-          string.ends_with(path.to_string(path), ref_path)
+          string.ends_with(
+            path.to_string(path),
+            // if it's a url assume we're going to find a similiarly named file locally so just look at the path
+            ref.path,
+          )
         })
       {
         // there's only one possibility, so use that
         [path] -> simplifile.read(path.to_string(path))
         // no such file
         [] -> {
-          io.println_error("no such file for ref: " <> ref)
+          io.println_error("no such file for ref: " <> uri.to_string(ref))
           Error(simplifile.Enoent)
         }
         // ambiguous, also fail
@@ -65,12 +64,6 @@ pub fn main() {
       False -> Nil
     }
   })
-  // let assert Ok(file_contents) =
-  //   simplifile.read(
-  //     "schemas/json-schema-org-learn-json-schema-examples/location-schema.json",
-  //   )
-  // let assert Ok(schema) = json.decode(file_contents, jsonschema.parse)
-  // io.debug(schema)
 }
 
 pub fn recursive_list_directory(

@@ -1,13 +1,16 @@
 import gleam/dict.{type Dict}
 import gleam/dynamic
 import gleam/int
+import gleam/io
 import gleam/json
 import gleam/list
 import gleam/option.{type Option, Some}
 import gleam/result
+import gleam/string
+import gleam/uri
 
 pub type Options {
-  Options(resolve_ref: fn(String) -> Result(String, Nil))
+  Options(resolve_ref: fn(uri.Uri) -> Result(String, Nil))
 }
 
 pub type Schema {
@@ -26,8 +29,10 @@ pub type Common {
   Common(
     typ: Option(String),
     id: Option(String),
+    anchor: Option(String),
     schema: Option(String),
     ref: Option(String),
+    defs: Option(Dict(String, Schema)),
     title: Option(String),
     description: Option(String),
   )
@@ -39,12 +44,17 @@ pub fn parse(
 ) -> Result(Schema, dynamic.DecodeErrors) {
   use common <- result.try(
     input
-    |> dynamic.decode6(
+    |> dynamic.decode8(
       Common,
       dynamic.optional_field("type", dynamic.string),
       dynamic.optional_field("$id", dynamic.string),
+      dynamic.optional_field("$anchor", dynamic.string),
       dynamic.optional_field("$schema", dynamic.string),
       dynamic.optional_field("$ref", dynamic.string),
+      dynamic.optional_field(
+        "$defs",
+        dynamic.dict(dynamic.string, parse(_, options)),
+      ),
       dynamic.optional_field("title", dynamic.string),
       dynamic.optional_field("description", dynamic.string),
     ),
@@ -73,17 +83,25 @@ fn resolve_ref(
   common: Common,
   options: Options,
 ) -> Result(Schema, dynamic.DecodeErrors) {
-  case
-    options.resolve_ref(ref)
-    |> result.map_error(fn(_) {
-      [dynamic.DecodeError("resolvable ref", ref, [])]
-    })
-    |> result.map(fn(x) { json.decode(x, parse(_, options)) })
-  {
-    Ok(Ok(result)) -> Ok(result)
-    Ok(Error(e)) -> Error(json_decode_error_to_dynamic_decode_errors(e))
-    Error(e) -> Error(e)
-  }
+  use resolved_ref <- result.try(case uri.parse(ref) {
+    Ok(uri_ref) -> {
+      io.println("TODO ref = " <> ref)
+      io.println("TODO fragment = " <> string.inspect(uri_ref.fragment))
+
+      // TODO handle relative refs
+      // - we only have a url with no fragment -> pass on to options
+      // - we only have a fragment with no other parts -> look for a $defs with that id or anchor in this schema
+      // - we have a url with both parts -> resolve via options, then look in that $defs
+
+      options.resolve_ref(uri_ref)
+      |> result.map_error(fn(_) {
+        [dynamic.DecodeError("resolvable ref", ref, [])]
+      })
+    }
+    Error(_) -> Error([dynamic.DecodeError("valid uri in ref", ref, [])])
+  })
+  json.decode(resolved_ref, parse(_, options))
+  |> result.map_error(json_decode_error_to_dynamic_decode_errors)
 }
 
 fn json_decode_error_to_dynamic_decode_errors(
