@@ -2,6 +2,22 @@ import scala.annotation.tailrec
 import scala.util.matching.Regex
 import scala.util.{Failure, Success, Try}
 import parsers.*
+import org.scalatest.funsuite.AnyFunSuite
+import scala.util.Success
+import scala.util.Failure
+import org.scalatest.TryValues._
+import org.scalatest.TryValues
+import org.scalatest.matchers.should.Matchers
+import parsers.*
+
+enum Node {
+  case Number(value: Double) extends Node
+  case Negate(value: Node) extends Node
+  case Add(left: Node, right: Node) extends Node
+  case Subtract(left: Node, right: Node) extends Node
+  case Multiply(left: Node, right: Node) extends Node
+  case Divide(left: Node, right: Node) extends Node
+}
 
 def skipWhitespace[T](p: Parser[T]): Parser[T] =
   skip(
@@ -43,5 +59,8 @@ val addOrSubtract: Parser[Node] = input => ???
 
 val expression: Parser[Node] = input => addOrSubtract(input)
 
-@main def main(): Unit =
-  println(expression("-1.5e2 foobar"))
+class CalculatorTest extends AnyFunSuite with Matchers with TryValues {
+  test("TODO do some real tests") {
+    val result = expression("1")
+  }
+}

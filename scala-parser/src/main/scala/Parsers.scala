@@ -11,15 +11,6 @@ case class ParseResult[T](
 
 type Parser[T] = String => Try[ParseResult[T]]
 
-enum Node {
-  case Number(value: Double) extends Node
-  case Negate(value: Node) extends Node
-  case Add(left: Node, right: Node) extends Node
-  case Subtract(left: Node, right: Node) extends Node
-  case Multiply(left: Node, right: Node) extends Node
-  case Divide(left: Node, right: Node) extends Node
-}
-
 def string(s: String): Parser[String] =
   input =>
     if input.startsWith(s) then
@@ -88,6 +79,21 @@ def bracketed[T1, T2, T3](
     for ParseResult((_, result, _), remainder) <- seq3(p1, p2, p3)(input)
     yield ParseResult(result, remainder)
 
+enum RangeOptions {
+  case Unbounded
+  case Bounded(value: Int)
+}
+
+case class Range(val lower: RangeOptions, val upper: RangeOptions) {
+  def contains(x: Int): Boolean =
+    (lower, upper) match
+      case (RangeOptions.Unbounded, RangeOptions.Unbounded)      => true
+      case (RangeOptions.Bounded(lower), RangeOptions.Unbounded) => x >= lower
+      case (RangeOptions.Unbounded, RangeOptions.Bounded(upper)) => x <= upper
+      case (RangeOptions.Bounded(lower), RangeOptions.Bounded(upper)) =>
+        x >= lower && x <= upper
+}
+
 def repeat[T](p: Parser[T], r: Range): Parser[List[T]] =
   /*
 	recursively match the next element and update the partial results as we go
@@ -100,7 +106,10 @@ def repeat[T](p: Parser[T], r: Range): Parser[List[T]] =
       lastSuccessfulResults: Option[List[T]]
   ): Try[ParseResult[List[T]]] =
     // if adding one more result to total results would put us past the end of the range then we're done
-    if allResultsSoFar.length + 1 > r.inclusive.end then
+    if r.contains(allResultsSoFar.length) && !r.contains(
+        allResultsSoFar.length + 1
+      )
+    then
       lastSuccessfulResults match
         // we had some previous success
         case Some(x) => Success(ParseResult(x, input))
@@ -130,6 +139,15 @@ def repeat[T](p: Parser[T], r: Range): Parser[List[T]] =
             // we had some previous success
             case Some(x) => Success(ParseResult(x, input))
             // we never had a success so just try to be descriptive for what we were looking for
-            case None => Failure(Exception("TODO message"))
+            case None =>
+              Failure(
+                java.lang.IllegalArgumentException(
+                  s"not enough results, was looking for $r, but didn't get enough matches"
+                )
+              )
 
-  input => helper(input, List(), None)
+  // if the range allows for an empty result as a success then we can start with that
+  val initialSuccessResults = if r.contains(0) then Some(List()) else None
+  input => helper(input, List(), initialSuccessResults)
+
+// TODO optional

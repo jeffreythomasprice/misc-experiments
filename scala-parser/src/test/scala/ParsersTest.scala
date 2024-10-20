@@ -163,18 +163,106 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
     result.failure.exception.getMessage() shouldBe "expected ("
   }
 
-  /*
-  TODO test repeat, success, unbounded, no matches
-  TODO test repeat, success, unbounded, some matches
-  TODO test repeat, failure, bounded on low end, not enough matches
-  TODO test repeat, success, bounded on low end
-  TODO test repeat, success, bounded on high end, no matches
-  TODO test repeat, success, bounded on high end, some matches
-  TODO test repeat, failure, bounded on high end, too many matches
-  TODO test repeat, failure, bounded on both ends, not enough matches
-  TODO test repeat, success, bounded on both ends, just enough matches
-  TODO test repeat, failure, bounded on both ends, too many matches
-  TODO test repeat, success, bounded on both ends, step=2, actual number is even
-  TODO test repeat, success, bounded on both ends, step=2, actual number is odd so there's a leftover
-   */
+  test("repeat, success, unbounded, no matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Unbounded, RangeOptions.Unbounded)
+    )
+    var result = parser("bar")
+    result.success.value shouldBe ParseResult(List(), "bar")
+  }
+
+  test("repeat, success, unbounded, some matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Unbounded, RangeOptions.Unbounded)
+    )
+    var result = parser("foofoobar")
+    result.success.value shouldBe ParseResult(List("foo", "foo"), "bar")
+  }
+
+  test("repeat, failure, bounded on low end, not enough matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Bounded(2), RangeOptions.Unbounded)
+    )
+    var result = parser("foobar")
+    result.failure.exception shouldBe a[IllegalArgumentException]
+    result.failure.exception
+      .getMessage() shouldBe "not enough results, was looking for Range(Bounded(2),Unbounded), but didn't get enough matches"
+  }
+
+  test("repeat, success, bounded on low end") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Bounded(2), RangeOptions.Unbounded)
+    )
+    var result = parser("foofoobar")
+    result.success.value shouldBe ParseResult(List("foo", "foo"), "bar")
+  }
+
+  test("repeat, success, bounded on high end, no matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Unbounded, RangeOptions.Bounded(3))
+    )
+    var result = parser("bar")
+    result.success.value shouldBe ParseResult(List(), "bar")
+  }
+
+  test("repeat, success, bounded on high end, some matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Unbounded, RangeOptions.Bounded(3))
+    )
+    var result = parser("foofoobar")
+    result.success.value shouldBe ParseResult(List("foo", "foo"), "bar")
+  }
+
+  test("repeat, success, bounded on high end, too many matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Unbounded, RangeOptions.Bounded(3))
+    )
+    var result = parser("foofoofoofoobar")
+    result.success.value shouldBe ParseResult(
+      List("foo", "foo", "foo"),
+      "foobar"
+    )
+  }
+
+  test("repeat, failure, bounded on both ends, not enough matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Bounded(2), RangeOptions.Bounded(3))
+    )
+    var result = parser("foobar")
+    result.failure.exception shouldBe a[IllegalArgumentException]
+    result.failure.exception
+      .getMessage() shouldBe "not enough results, was looking for Range(Bounded(2),Bounded(3)), but didn't get enough matches"
+  }
+
+  test("repeat, success, bounded on both ends, just enough matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Bounded(2), RangeOptions.Bounded(3))
+    )
+    var result = parser("foofoobar")
+    result.success.value shouldBe ParseResult(
+      List("foo", "foo"),
+      "bar"
+    )
+  }
+
+  test("repeat, failure, bounded on both ends, too many matches") {
+    var parser = repeat(
+      string("foo"),
+      Range(RangeOptions.Bounded(2), RangeOptions.Bounded(3))
+    )
+    var result = parser("foofoofoofoobar")
+    result.success.value shouldBe ParseResult(
+      List("foo", "foo", "foo"),
+      "foobar"
+    )
+  }
 }
