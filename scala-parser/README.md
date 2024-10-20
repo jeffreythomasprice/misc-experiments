@@ -1,4 +1,0 @@
-watch tests
-```
-sbt ~test
-```
