@@ -16,6 +16,14 @@ enum Node {
 	case Subtract(left: Node, right: Node) extends Node
 	case Multiply(left: Node, right: Node) extends Node
 	case Divide(left: Node, right: Node) extends Node
+
+	def eval: Double = this match
+		case Node.Number(value) => value
+		case Node.Negate(value) => -value.eval
+		case Node.Add(left, right) => left.eval + right.eval
+		case Node.Subtract(left, right) => left.eval - right.eval
+		case Node.Multiply(left, right) => left.eval * right.eval
+		case Node.Divide(left, right) => left.eval / right.eval
 }
 
 def skipWhitespace[T](p: Parser[T]): Parser[T] =
@@ -39,19 +47,20 @@ def operator(s: String): Parser[String] =
 	skipWhitespace(string(s))
 
 val term: Parser[Node] =
-	any(
-		bracketed(
-			operator("("),
-			expression,
-			operator(")")
-		),
-		skip(
-			operator("-"),
-			expression
-		)
-			.map(x => Success(Node.Negate(x))),
-		number
-	)
+	input =>
+		any(
+			bracketed(
+				operator("("),
+				expression,
+				operator(")")
+			),
+			skip(
+				operator("-"),
+				expression
+			)
+				.map(x => Success(Node.Negate(x))),
+			number
+		)(input)
 
 val multiplyOrDivide: Parser[Node] = input =>
 	for
@@ -105,5 +114,7 @@ class CalculatorTest extends AnyFunSuite with Matchers with TryValues {
 	test("TODO do some real tests") {
 		val result = expression("-(1 + 2) * 3")
 		println(result)
+		val ParseResult(node, _) = result.get
+		println(node.eval)
 	}
 }

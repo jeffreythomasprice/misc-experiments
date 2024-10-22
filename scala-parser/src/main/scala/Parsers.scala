@@ -57,10 +57,10 @@ def any[T](parsers: Parser[T]*): Parser[T] =
 		val results = parsers.map(_(input))
 		val (successes, failures) = parsers
 			.map(_(input))
-			.partitionMap(_ match
-				case Success(value)     => Left(value)
+			.partitionMap {
+				case Success(value) => Left(value)
 				case Failure(exception) => Right(exception)
-			)
+			}
 		(successes.headOption, failures) match
 			case (Some(result), _) => Success(result)
 			case (_, failures)     => Failure(ExpectedOneOfException(failures.toList))
