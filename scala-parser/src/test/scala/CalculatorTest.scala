@@ -3,9 +3,10 @@ import scala.util.matching.Regex
 import scala.util.{Failure, Success, Try}
 import parsers.*
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.prop.TableDrivenPropertyChecks._
 import scala.util.Success
 import scala.util.Failure
-import org.scalatest.TryValues._
+import org.scalatest.TryValues.*
 import org.scalatest.TryValues
 import org.scalatest.matchers.should.Matchers
 
@@ -111,10 +112,52 @@ val addOrSubtract: Parser[Node] = input =>
 val expression: Parser[Node] = input => addOrSubtract(input)
 
 class CalculatorTest extends AnyFunSuite with Matchers with TryValues {
-	test("TODO do some real tests") {
-		val result = expression("-(1 + 2) * 3")
-		println(result)
-		val ParseResult(node, _) = result.get
-		println(node.eval)
+	forAll(Table(
+		("input", "expectedResult", "expectedValue"),
+		("1", ParseResult(Node.Number(1.0), ""), 1.0),
+		("-1.5e2", ParseResult(Node.Negate(Node.Number(150.0)), ""), -150.0),
+		(
+			"  1 + 2  ",
+			ParseResult(
+				Node.Add(
+					Node.Number(1.0),
+					Node.Number(2.0),
+				),
+				"  "
+			),
+			3.0
+		),
+		(
+			"-(1+2)*3",
+			ParseResult(
+				Node.Negate(
+					Node.Multiply(
+						Node.Add(
+							Node.Number(1.0),
+							Node.Number(2.0),
+						),
+						Node.Number(3.0),
+					),
+				),
+				""
+			),
+			-9.0
+		),
+	)
+	) { (input: String, expectedResult: ParseResult[Node], expectedValue: Double) =>
+		val result = expression(input)
+		result shouldBe Success(expectedResult)
+		result.get.result.eval shouldBe expectedValue
+	}
+
+	// TODO failure tests
+	forAll(Table(
+		("input", "expectedThrowable", "expectedMessage"),
+		("-asdf", classOf[ExpectedOneOfException], ""),
+	)
+	) { (input: String, expectedClass: Class[_], expectedMessage: String) =>
+		val result = expression(input)
+		result.failure.exception.getClass shouldBe expectedClass
+		result.failure.exception.getMessage shouldBe expectedMessage
 	}
 }

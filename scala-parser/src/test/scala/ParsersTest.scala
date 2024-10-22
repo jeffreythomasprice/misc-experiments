@@ -17,7 +17,7 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 		var parser = string("bar")
 		var result = parser("foobar")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected bar"
+		result.failure.exception.getMessage shouldBe "expected bar"
 	}
 
 	test("regex, success") {
@@ -30,7 +30,7 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 		var parser = parsers.regex("""\d+""".r)
 		var result = parser("abc123")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected \\d+"
+		result.failure.exception.getMessage shouldBe "expected \\d+"
 	}
 
 	test("map, success") {
@@ -45,14 +45,14 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 			.map(result => Success(result.length))
 		var result = parser("foobar")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected bar"
+		result.failure.exception.getMessage shouldBe "expected bar"
 	}
 
 	test("map, the map function fails") {
 		var parser = string("foo")
 			.map(result => Failure(Exception("baz")))
 		var result = parser("foobar")
-		result.failure.exception.getMessage() shouldBe "baz"
+		result.failure.exception.getMessage shouldBe "baz"
 	}
 
 	test("seq2, success") {
@@ -65,14 +65,14 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 		var parser = seq2(string("1"), string("22"))
 		var result = parser("*22asdf")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected 1"
+		result.failure.exception.getMessage shouldBe "expected 1"
 	}
 
 	test("seq2, failed on missing second") {
 		var parser = seq2(string("1"), string("22"))
 		var result = parser("1*2asdf")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected 22"
+		result.failure.exception.getMessage shouldBe "expected 22"
 	}
 
 	test("seq3, success") {
@@ -85,21 +85,21 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 		var parser = seq3(string("1"), string("22"), string("333"))
 		var result = parser("*22333asdf")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected 1"
+		result.failure.exception.getMessage shouldBe "expected 1"
 	}
 
 	test("seq3, failed on missing second") {
 		var parser = seq3(string("1"), string("22"), string("333"))
 		var result = parser("1*2333asdf")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected 22"
+		result.failure.exception.getMessage shouldBe "expected 22"
 	}
 
 	test("seq3, failed on missing third") {
 		var parser = seq3(string("1"), string("22"), string("333"))
 		var result = parser("122*33asdf")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected 333"
+		result.failure.exception.getMessage shouldBe "expected 333"
 	}
 
 	test("any, success on first") {
@@ -132,9 +132,9 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 			.exceptions
 		exceptions.length shouldBe 2
 		exceptions(0) shouldBe a[IllegalArgumentException]
-		exceptions(0).getMessage() shouldBe "expected 1"
+		exceptions(0).getMessage shouldBe "expected 1"
 		exceptions(1) shouldBe a[IllegalArgumentException]
-		exceptions(1).getMessage() shouldBe "expected 2"
+		exceptions(1).getMessage shouldBe "expected 2"
 	}
 
 	test("skip, success") {
@@ -147,7 +147,7 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 		var parser = skip(string("foo"), string("bar"))
 		var result = parser("barbaz");
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected foo"
+		result.failure.exception.getMessage shouldBe "expected foo"
 	}
 
 	test("bracketed, success") {
@@ -160,7 +160,7 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 		var parser = bracketed(string("("), string("foo"), string(")"))
 		var result = parser("foo)bar")
 		result.failure.exception shouldBe a[IllegalArgumentException]
-		result.failure.exception.getMessage() shouldBe "expected ("
+		result.failure.exception.getMessage shouldBe "expected ("
 	}
 
 	test("repeat, success, unbounded, no matches") {
@@ -189,7 +189,7 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 		var result = parser("foobar")
 		result.failure.exception shouldBe a[IllegalArgumentException]
 		result.failure.exception
-			.getMessage() shouldBe "not enough results, was looking for Range(Bounded(2),Unbounded), but didn't get enough matches"
+			.getMessage shouldBe "not enough results, was looking for Range(Bounded(2),Unbounded), but didn't get enough matches"
 	}
 
 	test("repeat, success, bounded on low end") {
@@ -239,7 +239,7 @@ class ParsersTest extends AnyFunSuite with Matchers with TryValues {
 		var result = parser("foobar")
 		result.failure.exception shouldBe a[IllegalArgumentException]
 		result.failure.exception
-			.getMessage() shouldBe "not enough results, was looking for Range(Bounded(2),Bounded(3)), but didn't get enough matches"
+			.getMessage shouldBe "not enough results, was looking for Range(Bounded(2),Bounded(3)), but didn't get enough matches"
 	}
 
 	test("repeat, success, bounded on both ends, just enough matches") {
