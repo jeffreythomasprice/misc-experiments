@@ -1,0 +1,22 @@
+{
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:swift-parser}",
+			"name": "Debug experiment",
+			"program": "${workspaceFolder:swift-parser}/.build/debug/experiment",
+			"preLaunchTask": "swift: Build Debug experiment"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:swift-parser}",
+			"name": "Release experiment",
+			"program": "${workspaceFolder:swift-parser}/.build/release/experiment",
+			"preLaunchTask": "swift: Build Release experiment"
+		}
+	]
+}
