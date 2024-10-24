@@ -187,4 +187,217 @@ class ParsersTest: XCTestCase {
 		let result = parser(input: "(foo__")
 		XCTAssertEqual(result, .failure(ParseError()))
 	}
+
+	func testRangePartialRangeFromFailureNotEnough() {
+		let parser = range(string("foo"), 2...)
+		let result = parser(input: "foobar")
+		XCTAssertEqual(result, .failure(ParseError()))
+	}
+
+	func testRangePartialRangeFromSuccess() {
+		let parser = range(string("foo"), 2...)
+		let result = parser(input: "foofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo"],
+					remainder: "bar"
+				))
+		)
+	}
+
+	func testRangePartialRangeThroughSuccessEmpty() {
+		let parser = range(string("foo"), ...3)
+		let result = parser(input: "bar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: [],
+					remainder: "bar"
+				))
+		)
+	}
+
+	func testRangePartialRangeThroughSuccessSome() {
+		let parser = range(string("foo"), ...3)
+		let result = parser(input: "foofoofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo", "foo"],
+					remainder: "bar"
+				))
+		)
+	}
+
+	func testRangePartialRangeThroughSuccessTooMany() {
+		let parser = range(string("foo"), ...3)
+		let result = parser(input: "foofoofoofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo", "foo"],
+					remainder: "foobar"
+				))
+		)
+	}
+
+	func testRangePartialRangeUpToSuccessNone() {
+		let parser = range(string("foo"), ..<3)
+		let result = parser(input: "bar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: [],
+					remainder: "bar"
+				))
+		)
+	}
+
+	func testRangePartialRangeUpToSuccessTooMany() {
+		let parser = range(string("foo"), ..<3)
+		let result = parser(input: "foofoofoofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo"],
+					remainder: "foofoobar"
+				))
+		)
+	}
+
+	func testRangeClosedRangeFailureTooFew() {
+		let parser = range(string("foo"), 1...3)
+		let result = parser(input: "bar")
+		XCTAssertEqual(result, .failure(ParseError()))
+	}
+
+	func testRangeClosedRangeSuccess() {
+		let parser = range(string("foo"), 1...3)
+		let result = parser(input: "foofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo"],
+					remainder: "bar"
+				))
+		)
+	}
+
+	func testRangeClosedRangeSuccessTooMany() {
+		let parser = range(string("foo"), 1...3)
+		let result = parser(input: "foofoofoofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo", "foo"],
+					remainder: "foobar"
+				))
+		)
+	}
+
+	func testRangeRangeFailureTooFew() {
+		let parser = range(string("foo"), 1..<3)
+		let result = parser(input: "bar")
+		XCTAssertEqual(result, .failure(ParseError()))
+	}
+
+	func testRangeRangeSuccess() {
+		let parser = range(string("foo"), 1..<3)
+		let result = parser(input: "foofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo"],
+					remainder: "bar"
+				))
+		)
+	}
+
+	func testRangeRangeSuccessTooMany() {
+		let parser = range(string("foo"), 1..<3)
+		let result = parser(input: "foofoofoofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo"],
+					remainder: "foofoobar"
+				))
+		)
+	}
+
+	func testRangeStrideThroughSuccess() {
+		let parser = range(string("foo"), stride(from: 1, through: 3, by: 2))
+		let result = parser(input: "foofoofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo", "foo", "foo"],
+					remainder: "bar"
+				))
+		)
+	}
+
+	func testRangeStrideThroughSuccessInBetween() {
+		let parser = range(string("foo"), stride(from: 1, through: 3, by: 2))
+		let result = parser(input: "foofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo"],
+					remainder: "foobar"
+				))
+		)
+	}
+
+	func testRangeStrideToSuccessMinimum() {
+		let parser = range(string("foo"), stride(from: 1, to: 3, by: 2))
+		let result = parser(input: "foobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo"],
+					remainder: "bar"
+				))
+		)
+	}
+
+	func testRangeStrideToSuccessTooMany() {
+		let parser = range(string("foo"), stride(from: 1, to: 3, by: 2))
+		let result = parser(input: "foofoofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo"],
+					remainder: "foofoobar"
+				))
+		)
+	}
+
+	func testRangeStrideToSuccessInBetween() {
+		let parser = range(string("foo"), stride(from: 1, to: 3, by: 2))
+		let result = parser(input: "foofoobar")
+		XCTAssertEqual(
+			result,
+			.success(
+				ParseResult(
+					result: ["foo"],
+					remainder: "foobar"
+				))
+		)
+	}
 }

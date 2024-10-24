@@ -178,7 +178,104 @@ public func bracketed<T1, T2, T3>(_ p1: any Parser<T1>, _ p2: any Parser<T2>, _ 
 	seq3(p1, p2, p3).map { result in .success(result.1) }
 }
 
-// TODO repeat
+struct RangeParser<T>: Parser {
+	typealias T = [T]
+
+	let p: any Parser<T>
+	let contains: (Int) -> Bool
+	let upperBound: Int?
+
+	func apply(input: Substring) -> Result<ParseResult<[T]>, ParseError> {
+		// all results matched so far
+		var results: [T] = []
+		var remainder = input
+
+		// the last successful set of results
+		// nil means we have no such results to return, but empty list means zero results counts as a success
+		var validResult: ParseResult<[T]>? =
+			if contains(0) {
+				ParseResult(result: [], remainder: input)
+			} else {
+				nil
+			}
+
+		loop: while true {
+			// if we have enough results and adding one more would put us past our upper bound we can stop here
+			if let upperBound = upperBound {
+				if results.count + 1 > upperBound {
+					break
+				}
+			}
+
+			// try to find a new match
+			switch p(input: remainder) {
+			case .success(let result):
+				// we got a success on no input, so we're not actually making any more progress
+				if result.remainder == remainder {
+					break loop
+				}
+
+				// we have a success, keep it
+				results.append(result.result)
+				remainder = result.remainder
+
+				// if this is a good number of results remember that for later
+				if contains(results.count) {
+					validResult = ParseResult(result: results, remainder: remainder)
+				}
+
+			case .failure(_):
+				// we got a failure, so we're done checking
+				break loop
+			}
+		}
+
+		// if we have a good set of results we can succeed on that, otherwise we failed
+		return switch validResult {
+		case .none:
+			.failure(ParseError())
+
+		case .some(let r):
+			.success(r)
+		}
+	}
+}
+
+// x...
+public func range<T>(_ p: any Parser<T>, _ r: PartialRangeFrom<Int>) -> any Parser<[T]> {
+	RangeParser(p: p, contains: r.contains, upperBound: nil)
+}
+
+// ...x
+public func range<T>(_ p: any Parser<T>, _ r: PartialRangeThrough<Int>) -> any Parser<[T]> {
+	RangeParser(p: p, contains: r.contains, upperBound: r.upperBound + 1)
+}
+
+// ..<x
+public func range<T>(_ p: any Parser<T>, _ r: PartialRangeUpTo<Int>) -> any Parser<[T]> {
+	RangeParser(p: p, contains: r.contains, upperBound: r.upperBound)
+}
+
+// x...y
+public func range<T>(_ p: any Parser<T>, _ r: ClosedRange<Int>) -> any Parser<[T]> {
+	RangeParser(p: p, contains: r.contains, upperBound: r.upperBound + 1)
+}
+
+// x..<y
+public func range<T>(_ p: any Parser<T>, _ r: Range<Int>) -> any Parser<[T]> {
+	RangeParser(p: p, contains: r.contains, upperBound: r.upperBound)
+}
+
+// stride(from: x, through: y, by: z)
+public func range<T>(_ p: any Parser<T>, _ r: StrideThrough<Int>) -> any Parser<[T]> {
+	RangeParser(p: p, contains: r.contains, upperBound: r.suffix(1)[0])
+}
+
+// stride(from: x, to: y, by: z)
+public func range<T>(_ p: any Parser<T>, _ r: StrideTo<Int>) -> any Parser<[T]> {
+	RangeParser(p: p, contains: r.contains, upperBound: r.suffix(1)[0])
+}
+
 // TODO many0
 // TODO many1
 // TODO optional
