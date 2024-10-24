@@ -276,6 +276,21 @@ public func range<T>(_ p: any Parser<T>, _ r: StrideTo<Int>) -> any Parser<[T]> 
 	RangeParser(p: p, contains: r.contains, upperBound: r.suffix(1)[0])
 }
 
-// TODO many0
-// TODO many1
-// TODO optional
+struct MaybeParser<T>: Parser {
+	typealias T = T?
+
+	let p: any Parser<T>
+
+	func apply(input: Substring) -> Result<ParseResult<T?>, ParseError> {
+		switch p(input: input) {
+		case .success(let result):
+			.success(ParseResult(result: result.result, remainder: result.remainder))
+		case .failure(_):
+			.success(ParseResult(result: nil, remainder: input))
+		}
+	}
+}
+
+public func maybe<T>(_ p: any Parser<T>) -> any Parser<T?> {
+	MaybeParser(p: p)
+}

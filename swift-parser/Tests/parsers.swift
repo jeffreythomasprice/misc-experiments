@@ -400,4 +400,16 @@ class ParsersTest: XCTestCase {
 				))
 		)
 	}
+
+	func testMaybeSuccessWithMatch() {
+		let parser = maybe(string("foo"))
+		let result = parser(input: "foobar")
+		XCTAssertEqual(result, .success(ParseResult(result: "foo", remainder: "bar")))
+	}
+
+	func testMaybeSuccessWithoutMatch() {
+		let parser = maybe(string("foo"))
+		let result = parser(input: "bar")
+		XCTAssertEqual(result, .success(ParseResult(result: nil, remainder: "bar")))
+	}
 }
