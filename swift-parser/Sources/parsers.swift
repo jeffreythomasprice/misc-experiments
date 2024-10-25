@@ -294,3 +294,26 @@ struct MaybeParser<T>: Parser {
 public func maybe<T>(_ p: any Parser<T>) -> any Parser<T?> {
 	MaybeParser(p: p)
 }
+
+struct DeferredParser<T>: Parser {
+	private var p: (any Parser<T>)? = nil
+
+	func apply(input: Substring) -> Result<ParseResult<T>, ParseError> {
+		switch p {
+		case .none:
+			.failure(ParseError())
+
+		case .some(let p):
+			p(input: input)
+		}
+	}
+
+	mutating func set(_ p: any Parser<T>) {
+		self.p = p
+	}
+}
+
+public func deferred<T>() -> (any Parser<T>, (any Parser<T>) -> Void) {
+	var result = DeferredParser<T>()
+	return (result, { p in result.set(p) })
+}
