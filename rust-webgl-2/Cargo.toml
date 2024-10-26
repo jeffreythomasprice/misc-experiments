@@ -1,0 +1,18 @@
+[package]
+name = "rust-webgpu"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = { version = "1.19.0", features = ["derive"] }
+console_error_panic_hook = "0.1.7"
+console_log = "1.0.0"
+glam = { version = "0.29.0", features = ["bytemuck"] }
+gloo = "0.11.0"
+js-sys = "0.3.72"
+log = "0.4.22"
+serde = "1.0.213"
+serde-wasm-bindgen = "0.6.5"
+serde_json = "1.0.132"
+wasm-bindgen-futures = "0.4.45"
+web-sys = { version = "0.3.72", features = ["HtmlCanvasElement", "CssStyleDeclaration", "WebGl2RenderingContext", "WebGlBuffer", "WebGlProgram", "WebGlActiveInfo", "WebGlShader", "WebGlUniformLocation"] }
