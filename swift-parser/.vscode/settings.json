@@ -1,4 +1,4 @@
 {
-	"lldb.library": "/home/jeff/swift/swift-6.0.1-RELEASE-debian12/usr/lib/liblldb.so",
+	"lldb.library": "/home/jeff/swift/swift-DEVELOPMENT-SNAPSHOT-2024-10-08-a-ubuntu22.04/usr/lib/liblldb.so",
 	"lldb.launch.expressions": "native"
 }

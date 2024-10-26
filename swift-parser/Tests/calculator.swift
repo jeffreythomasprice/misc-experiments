@@ -55,21 +55,51 @@ func createParser() -> any Parser<Node> {
 			0...
 		)
 	)
-		.map { results in
-			let (first, remainder) = results
+	.map { results in
+		let (first, remainder) = results
+		return .success(
 			remainder.reduce(first) { left, r in
 				let (op, right) = r
-				return op(left,right)
-			}
-			return .success(first)
-		}
+				return op(left, right)
+			})
+	}
 
-	// TODO addOrSubtract
-	// TODO setExpression(addOrSubtract)
+	let addOrSubtract = seq2(
+		multiplyOrDivide,
+		range(
+			seq2(
+				any(
+					op("+").map { _ in .success(Node.Add) },
+					op("-").map { _ in .success(Node.Subtract) }
+				),
+				multiplyOrDivide
+			),
+			0...
+		)
+	)
+	.map { results in
+		let (first, remainder) = results
+		return .success(
+			remainder.reduce(first) { left, r in
+				let (op, right) = r
+				return op(left, right)
+			})
+	}
+
+	setExpression(addOrSubtract)
 
 	return expression
 }
 
 class CalculatorTest: XCTestCase {
-	// TODO tests
+	let parser = createParser()
+
+	func testSuccesses() {
+		for (input, expected) in [
+			("1", Node.Number(1))
+		] {
+			let result = parser(input: input)
+			XCTAssertEqual(result, .success(expected))
+		}
+	}
 }
