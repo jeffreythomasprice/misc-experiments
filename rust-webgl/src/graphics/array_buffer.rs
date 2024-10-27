@@ -1,12 +1,13 @@
-use anyhow::{anyhow, Result};
 use bytemuck::Pod;
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, rc::Rc};
 use web_sys::{WebGl2RenderingContext, WebGlBuffer};
+
+use crate::error::Error;
 
 use super::buffer_usage::BufferUsage;
 
 pub struct ArrayBuffer<T> {
-    context: Arc<WebGl2RenderingContext>,
+    context: Rc<WebGl2RenderingContext>,
     usage: BufferUsage,
     gl_usage: u32,
     len: usize,
@@ -20,13 +21,11 @@ where
     T: Pod,
 {
     pub fn new_with_len(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         usage: BufferUsage,
         len: usize,
-    ) -> Result<Self> {
-        let buffer = context
-            .create_buffer()
-            .ok_or(anyhow!("failed to create buffer"))?;
+    ) -> Result<Self, Error> {
+        let buffer = context.create_buffer().ok_or("failed to create buffer")?;
 
         let gl_usage = usage.gl_usage();
 
@@ -54,10 +53,10 @@ where
     }
 
     pub fn new_with_data(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         usage: BufferUsage,
         source: &[T],
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         let mut result = Self::new_with_len(context, usage, source.len())?;
         result.set(source, 0)?;
         Ok(result)
@@ -77,10 +76,10 @@ where
         self.len
     }
 
-    pub fn set(&mut self, source: &[T], index: usize) -> Result<()> {
+    pub fn set(&mut self, source: &[T], index: usize) -> Result<(), Error> {
         let one_past_last = index + source.len();
         if one_past_last > self.len {
-            return Err(anyhow!("trying to copy out of bounds, size = {}, source length = {}, trying to place at index = {}", self.len, source.len(), index));
+            return Err(format!("trying to copy out of bounds, size = {}, source length = {}, trying to place at index = {}", self.len, source.len(), index))?;
         }
 
         self.bind();

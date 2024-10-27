@@ -1,9 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
-
-use anyhow::{anyhow, Result};
+use std::{collections::HashMap, rc::Rc};
 use web_sys::{
     WebGl2RenderingContext, WebGlActiveInfo, WebGlProgram, WebGlShader, WebGlUniformLocation,
 };
+
+use crate::error::Error;
 
 #[derive(Debug)]
 enum ShaderType {
@@ -21,25 +21,25 @@ impl ShaderType {
 }
 
 struct Shader {
-    context: Arc<WebGl2RenderingContext>,
+    context: Rc<WebGl2RenderingContext>,
     instance: WebGlShader,
 }
 
 impl Shader {
     pub fn new(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         typ: ShaderType,
         source: &str,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         let result = context
             .create_shader(typ.gl_type())
-            .ok_or(anyhow!("failed to create shader of type {typ:?}"))?;
+            .ok_or("failed to create shader of type {typ:?}")?;
         context.shader_source(&result, source);
         context.compile_shader(&result);
         let compile_status = context
             .get_shader_parameter(&result, WebGl2RenderingContext::COMPILE_STATUS)
             .as_bool()
-            .ok_or(anyhow!("expected bool"))?;
+            .ok_or("expected bool")?;
         if compile_status {
             Ok(Self {
                 context: context.clone(),
@@ -48,9 +48,9 @@ impl Shader {
         } else {
             let log = context.get_shader_info_log(&result);
             context.delete_shader(Some(&result));
-            Err(anyhow!(
+            Err(format!(
                 "shader compile error, type: {typ:?}, log:\n{log:?}"
-            ))
+            ))?
         }
     }
 }
@@ -82,12 +82,12 @@ impl Info {
 
 #[derive(Debug, Clone)]
 pub struct Attribute {
-    pub context: Arc<WebGl2RenderingContext>,
+    pub context: Rc<WebGl2RenderingContext>,
     pub info: Info,
 }
 
 impl Attribute {
-    pub fn new(context: Arc<WebGl2RenderingContext>, index: u32, info: WebGlActiveInfo) -> Self {
+    pub fn new(context: Rc<WebGl2RenderingContext>, index: u32, info: WebGlActiveInfo) -> Self {
         Self {
             context,
             info: Info::new(index, info),
@@ -175,7 +175,7 @@ impl Uniform {
 }
 
 pub struct ShaderProgram {
-    context: Arc<WebGl2RenderingContext>,
+    context: Rc<WebGl2RenderingContext>,
     #[allow(dead_code)]
     vertex_shader: Shader,
     #[allow(dead_code)]
@@ -187,33 +187,33 @@ pub struct ShaderProgram {
 
 impl ShaderProgram {
     pub fn new(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         vertex_source: &str,
         fragment_source: &str,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         let vertex_shader = Shader::new(context.clone(), ShaderType::Vertex, vertex_source)?;
         let fragment_shader = Shader::new(context.clone(), ShaderType::Fragment, fragment_source)?;
         let result = context
             .create_program()
-            .ok_or_else(|| anyhow!("failed to create shader program"))?;
+            .ok_or("failed to create shader program")?;
         context.attach_shader(&result, &vertex_shader.instance);
         context.attach_shader(&result, &fragment_shader.instance);
         context.link_program(&result);
         let link_status = context
             .get_program_parameter(&result, WebGl2RenderingContext::LINK_STATUS)
             .as_bool()
-            .ok_or(anyhow!("expected bool"))?;
+            .ok_or("expected bool")?;
         if link_status {
             let active_attribs = context
                 .get_program_parameter(&result, WebGl2RenderingContext::ACTIVE_ATTRIBUTES)
                 .as_f64()
-                .ok_or(anyhow!("expected a number"))? as u32;
+                .ok_or("expected a number")? as u32;
             let mut attributes = HashMap::new();
             for index in 0..active_attribs {
                 let attr = Attribute::new(
                     context.clone(),
                     index,
-                    context.get_active_attrib(&result, index).ok_or(anyhow!(
+                    context.get_active_attrib(&result, index).ok_or(format!(
                         "failed to find attribute on shader with index {index}"
                     ))?,
                 );
@@ -223,16 +223,16 @@ impl ShaderProgram {
             let active_uniforms = context
                 .get_program_parameter(&result, WebGl2RenderingContext::ACTIVE_UNIFORMS)
                 .as_f64()
-                .ok_or(anyhow!("expected a number"))? as u32;
+                .ok_or("expected a number")? as u32;
             let mut uniforms = HashMap::new();
             for index in 0..active_uniforms {
-                let info = context.get_active_uniform(&result, index).ok_or(anyhow!(
+                let info = context.get_active_uniform(&result, index).ok_or(format!(
                     "failed to find uniform on shader with index {index}"
                 ))?;
                 let location =
                     context
                         .get_uniform_location(&result, &info.name())
-                        .ok_or(anyhow!(
+                        .ok_or(format!(
                             "failed to find uniform location on shader with index {index}, name {}",
                             info.name()
                         ))?;
@@ -251,7 +251,7 @@ impl ShaderProgram {
         } else {
             let log = context.get_program_info_log(&result);
             context.delete_program(Some(&result));
-            Err(anyhow!("shader link error, log:\n{log:?}"))
+            Err(format!("shader link error, log:\n{log:?}"))?
         }
     }
 
