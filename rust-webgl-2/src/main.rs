@@ -1,9 +1,9 @@
 mod error;
 mod graphics;
+mod math;
 
 use bytemuck::{Pod, Zeroable};
 use error::Error;
-use glam::{Vec2, Vec4};
 use gloo::{
     events::EventListener,
     render::{request_animation_frame, AnimationFrame},
@@ -13,10 +13,13 @@ use graphics::{
     array_buffer::ArrayBuffer,
     buffer_usage::BufferUsage,
     element_array_buffer::ElementArrayBuffer,
-    shader::{AttributePointer, ShaderProgram},
+    shader::{AttributePointer, ShaderProgram, Uniform},
 };
 use js_sys::wasm_bindgen::JsCast;
 use log::*;
+use math::camera::Camera;
+use nalgebra::Vector2;
+use nalgebra_glm::{rotate_y, Vec2, Vec3};
 use serde::Serialize;
 use std::{
     mem::offset_of,
@@ -27,18 +30,35 @@ use std::{
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+#[repr(C)]
+struct RGBA {
+    pub red: f32,
+    pub green: f32,
+    pub blue: f32,
+    pub alpha: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
 #[repr(C)]
 struct Vertex {
-    position: Vec2,
+    position: Vec3,
+    color: RGBA,
 }
 
 struct State {
     context: Arc<WebGl2RenderingContext>,
+
     shader: ShaderProgram,
     position_attribute: AttributePointer,
+    color_attribute: AttributePointer,
+    projection_matrix_uniform: Uniform,
+    model_view_matrix_uniform: Uniform,
+
     array_buffer: ArrayBuffer<Vertex>,
     element_aray_buffer: ElementArrayBuffer,
+
+    camera: Camera,
 }
 
 impl State {
@@ -54,27 +74,72 @@ impl State {
                 .get_attribute_by_name("position_attribute")
                 .ok_or("failed to find position attribute")?
                 .clone(),
-            2,
+            3,
             graphics::shader::AttributePointerType::Float,
             false,
             offset_of!(Vertex, position) as i32,
         );
+
+        let color_attribute = AttributePointer::new::<Vertex>(
+            shader
+                .get_attribute_by_name("color_attribute")
+                .ok_or("failed to find color attribute")?
+                .clone(),
+            4,
+            graphics::shader::AttributePointerType::Float,
+            false,
+            offset_of!(Vertex, color) as i32,
+        );
+
+        let projection_matrix_uniform = shader
+            .get_uniform_by_name("projection_matrix_uniform")
+            .ok_or("failed to find projection matrix uniform")?
+            .clone();
+
+        let model_view_matrix_uniform = shader
+            .get_uniform_by_name("model_view_matrix_uniform")
+            .ok_or("failed to find model view matrix uniform")?
+            .clone();
 
         let array_buffer = ArrayBuffer::new_with_data(
             context.clone(),
             BufferUsage::StaticDraw,
             &[
                 Vertex {
-                    position: Vec2 { x: -0.5, y: -0.5 },
+                    position: Vec3::new(-1.0, -1.0, 0.0),
+                    color: RGBA {
+                        red: 1.0,
+                        green: 0.0,
+                        blue: 0.0,
+                        alpha: 1.0,
+                    },
                 },
                 Vertex {
-                    position: Vec2 { x: 0.5, y: -0.5 },
+                    position: Vec3::new(1.0, -1.0, 0.0),
+                    color: RGBA {
+                        red: 0.0,
+                        green: 1.0,
+                        blue: 0.0,
+                        alpha: 1.0,
+                    },
                 },
                 Vertex {
-                    position: Vec2 { x: 0.5, y: 0.5 },
+                    position: Vec3::new(1.0, 1.0, 0.0),
+                    color: RGBA {
+                        red: 0.0,
+                        green: 0.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
                 },
                 Vertex {
-                    position: Vec2 { x: -0.5, y: 0.5 },
+                    position: Vec3::new(-1.0, 1.0, 0.0),
+                    color: RGBA {
+                        red: 1.0,
+                        green: 0.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
                 },
             ],
         )?;
@@ -87,16 +152,33 @@ impl State {
 
         Ok(State {
             context,
+
             shader,
             position_attribute,
+            color_attribute,
+            projection_matrix_uniform,
+            model_view_matrix_uniform,
+
             array_buffer,
             element_aray_buffer,
+
+            camera: Camera::new(
+                60.0f32.to_radians(),
+                Vector2::new(0, 0),
+                1.0,
+                1000.0,
+                Vec3::new(0.0, 0.0, 6.0),
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+            ),
         })
     }
 
     pub fn resize(&mut self, width: f64, height: f64) -> Result<(), Error> {
-        self.context
-            .viewport(0, 0, width.floor() as i32, height.floor() as i32);
+        let width = width.floor() as u32;
+        let height = height.floor() as u32;
+        self.context.viewport(0, 0, width as i32, height as i32);
+        self.camera.set_screen_size(Vector2::new(width, height));
         Ok(())
     }
 
@@ -107,10 +189,23 @@ impl State {
 
         self.shader.use_program();
 
+        self.context.uniform_matrix4fv_with_f32_array(
+            Some(&self.projection_matrix_uniform.location),
+            false,
+            self.camera.projection_matrix().as_slice(),
+        );
+        self.context.uniform_matrix4fv_with_f32_array(
+            Some(&self.model_view_matrix_uniform.location),
+            false,
+            self.camera.model_view_matrix().as_slice(),
+            // rotate_y(self.camera.model_view_matrix(), self.rotation).as_slice(),
+        );
+
         self.array_buffer.bind();
         self.element_aray_buffer.bind();
 
         self.position_attribute.enable();
+        self.color_attribute.enable();
 
         self.context.draw_elements_with_i32(
             WebGl2RenderingContext::TRIANGLES,
@@ -120,6 +215,7 @@ impl State {
         );
 
         self.position_attribute.disable();
+        self.color_attribute.disable();
 
         self.array_buffer.bind_none();
         self.element_aray_buffer.bind_none();
