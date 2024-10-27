@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::rc::Rc;
+
 use web_sys::{WebGl2RenderingContext, WebGlBuffer};
 
 use crate::error::Error;
@@ -6,7 +7,7 @@ use crate::error::Error;
 use super::buffer_usage::BufferUsage;
 
 pub struct ElementArrayBuffer {
-    context: Arc<WebGl2RenderingContext>,
+    context: Rc<WebGl2RenderingContext>,
     usage: BufferUsage,
     gl_usage: u32,
     len: usize,
@@ -16,7 +17,7 @@ pub struct ElementArrayBuffer {
 
 impl ElementArrayBuffer {
     pub fn new_with_len(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         usage: BufferUsage,
         len: usize,
     ) -> Result<Self, Error> {
@@ -47,7 +48,7 @@ impl ElementArrayBuffer {
     }
 
     pub fn new_with_data(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         usage: BufferUsage,
         source: &[u16],
     ) -> Result<Self, Error> {

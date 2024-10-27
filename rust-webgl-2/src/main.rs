@@ -5,7 +5,7 @@ mod math;
 
 use bytemuck::{Pod, Zeroable};
 use error::Error;
-use events::{KeyPressEvent, MouseMoveEvent, MousePressEvent};
+use events::{KeyPressEvent, MouseButton, MouseMoveEvent, MousePressEvent};
 use gloo::{
     events::EventListener,
     render::{request_animation_frame, AnimationFrame},
@@ -23,12 +23,7 @@ use math::camera::Camera;
 use nalgebra::Vector2;
 use nalgebra_glm::Vec3;
 use serde::Serialize;
-use std::{
-    mem::offset_of,
-    panic,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, mem::offset_of, panic, rc::Rc, sync::Mutex, time::Duration};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
@@ -49,7 +44,10 @@ struct Vertex {
 }
 
 struct State {
-    context: Arc<WebGl2RenderingContext>,
+    canvas: Rc<HtmlCanvasElement>,
+    context: Rc<WebGl2RenderingContext>,
+
+    key_state: Rc<Mutex<HashMap<String, bool>>>,
 
     shader: ShaderProgram,
     position_attribute: AttributePointer,
@@ -64,7 +62,10 @@ struct State {
 }
 
 impl State {
-    pub async fn new(context: Arc<WebGl2RenderingContext>) -> Result<State, Error> {
+    pub async fn new(
+        canvas: Rc<HtmlCanvasElement>,
+        context: Rc<WebGl2RenderingContext>,
+    ) -> Result<State, Error> {
         let shader = ShaderProgram::new(
             context.clone(),
             include_str!("shaders/shader.vertex.glsl"),
@@ -153,7 +154,10 @@ impl State {
         )?;
 
         Ok(State {
+            canvas,
             context,
+
+            key_state: Rc::new(Mutex::new(HashMap::new())),
 
             shader,
             position_attribute,
@@ -184,7 +188,7 @@ impl State {
         Ok(())
     }
 
-    pub fn anim(&mut self, time: f64) -> Result<(), Error> {
+    pub fn render(&mut self) -> Result<(), Error> {
         self.context
             .clear_color(100.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
@@ -227,29 +231,96 @@ impl State {
         Ok(())
     }
 
+    pub fn update(&mut self, delta: Duration) -> Result<(), Error> {
+        let forward =
+            if self.is_key_code_pressed("ArrowUp") || self.is_key_code_pressed("KeyW") {
+                1.0f32
+            } else {
+                0.0f32
+            } - if self.is_key_code_pressed("ArrowDown") || self.is_key_code_pressed("KeyS") {
+                1.0f32
+            } else {
+                0.0f32
+            };
+        let right = if self.is_key_code_pressed("ArrowRight") || self.is_key_code_pressed("KeyD") {
+            1.0f32
+        } else {
+            0.0f32
+        } - if self.is_key_code_pressed("ArrowLeft") || self.is_key_code_pressed("KeyA")
+        {
+            1.0f32
+        } else {
+            0.0f32
+        };
+        let up = if self.is_key_code_pressed("Space") {
+            1.0f32
+        } else {
+            0.0f32
+        } - if self.is_key_code_pressed("ShiftLeft") {
+            1.0f32
+        } else {
+            0.0f32
+        };
+        self.camera.move_based_on_current_axes(
+            forward * 5.0f32 * delta.as_secs_f32(),
+            up * 5.0f32 * delta.as_secs_f32(),
+            right * 5.0f32 * delta.as_secs_f32(),
+        );
+
+        Ok(())
+    }
+
     pub fn mouse_down(&mut self, e: &MousePressEvent) -> Result<(), Error> {
-        debug!("TODO mouse_down: {}", e);
         Ok(())
     }
 
     pub fn mouse_up(&mut self, e: &MousePressEvent) -> Result<(), Error> {
-        debug!("TODO mouse_up: {}", e);
+        if let MouseButton::Left = e.button() {
+            self.set_pointer_lock(!self.is_pointer_locked());
+        }
         Ok(())
     }
 
     pub fn mouse_move(&mut self, e: &MouseMoveEvent) -> Result<(), Error> {
-        // debug!("TODO mouse_move: {}", e);
+        if self.is_pointer_locked() {
+            self.camera.turn_based_on_mouse_delta(e.delta());
+        }
         Ok(())
     }
 
     pub fn key_down(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
-        debug!("TODO key_down: {}", e);
+        let mut key_state = self.key_state.lock().unwrap();
+        key_state.insert(e.code(), true);
         Ok(())
     }
 
     pub fn key_up(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
-        debug!("TODO key_up: {}", e);
+        let mut key_state = self.key_state.lock().unwrap();
+        key_state.insert(e.code(), false);
         Ok(())
+    }
+
+    fn is_pointer_locked(&self) -> bool {
+        match document().pointer_lock_element() {
+            Some(canvas) if canvas == ***self.canvas => true,
+            _ => false,
+        }
+    }
+
+    fn set_pointer_lock(&self, b: bool) {
+        if b {
+            self.canvas.request_pointer_lock();
+        } else {
+            document().exit_pointer_lock();
+        }
+    }
+
+    fn is_key_code_pressed(&self, code: &str) -> bool {
+        let key_state = self.key_state.lock().unwrap();
+        match key_state.get(code) {
+            Some(true) => true,
+            _ => false,
+        }
     }
 }
 
@@ -294,7 +365,7 @@ fn main() -> Result<(), Error> {
         let canvas = canvas.clone();
         let state = state.clone();
         spawn_local(async move {
-            match State::new(Arc::new(context)).await {
+            match State::new(canvas.clone(), Rc::new(context)).await {
                 Ok(mut s) => {
                     if let Err(e) = resize(&canvas, &mut s) {
                         panic!("initial resize error: {e:?}");
@@ -410,13 +481,15 @@ fn main() -> Result<(), Error> {
     }
 
     {
-        let canvas = canvas.clone();
         let state = state.clone();
-        anim_loop(move |time| {
+        anim_loop(move |delta| {
             let state = &mut *state.lock().unwrap();
             if let Some(state) = state {
-                if let Err(e) = state.anim(time) {
-                    error!("error running animation loop: {e:?}");
+                if let Err(e) = state.render() {
+                    error!("error rendering: {e:?}");
+                }
+                if let Err(e) = state.update(delta) {
+                    error!("error updating: {e:?}");
                 }
             }
         });
@@ -433,13 +506,20 @@ fn resize(canvas: &HtmlCanvasElement, state: &mut State) -> Result<(), Error> {
     state.resize(width, height)
 }
 
-fn anim_loop<F: Fn(f64) + 'static>(f: F) {
-    fn inner<F: Fn(f64) + 'static>(last_anim: Rc<Mutex<Option<AnimationFrame>>>, f: F) {
+fn anim_loop<F: Fn(Duration) + 'static>(f: F) {
+    fn inner<F: Fn(Duration) + 'static>(
+        last_anim: Rc<Mutex<Option<AnimationFrame>>>,
+        last_time: Duration,
+        f: F,
+    ) {
         let callback = {
             let last_anim = last_anim.clone();
-            move |time| {
-                f(time);
-                inner(last_anim, f);
+            let last_time = last_time.clone();
+            move |time: f64| {
+                let time = Duration::from_millis(time.floor() as u64);
+                let delta = time - last_time;
+                f(delta);
+                inner(last_anim, time, f);
             }
         };
 
@@ -449,5 +529,5 @@ fn anim_loop<F: Fn(f64) + 'static>(f: F) {
         }
     }
 
-    inner(Rc::new(Mutex::new(None)), f);
+    inner(Rc::new(Mutex::new(None)), Duration::ZERO, f);
 }

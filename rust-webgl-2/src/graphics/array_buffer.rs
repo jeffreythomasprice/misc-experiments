@@ -1,5 +1,5 @@
 use bytemuck::Pod;
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, rc::Rc};
 use web_sys::{WebGl2RenderingContext, WebGlBuffer};
 
 use crate::error::Error;
@@ -7,7 +7,7 @@ use crate::error::Error;
 use super::buffer_usage::BufferUsage;
 
 pub struct ArrayBuffer<T> {
-    context: Arc<WebGl2RenderingContext>,
+    context: Rc<WebGl2RenderingContext>,
     usage: BufferUsage,
     gl_usage: u32,
     len: usize,
@@ -21,7 +21,7 @@ where
     T: Pod,
 {
     pub fn new_with_len(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         usage: BufferUsage,
         len: usize,
     ) -> Result<Self, Error> {
@@ -53,7 +53,7 @@ where
     }
 
     pub fn new_with_data(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         usage: BufferUsage,
         source: &[T],
     ) -> Result<Self, Error> {

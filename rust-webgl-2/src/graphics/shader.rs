@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, rc::Rc};
 use web_sys::{
     WebGl2RenderingContext, WebGlActiveInfo, WebGlProgram, WebGlShader, WebGlUniformLocation,
 };
@@ -21,13 +21,13 @@ impl ShaderType {
 }
 
 struct Shader {
-    context: Arc<WebGl2RenderingContext>,
+    context: Rc<WebGl2RenderingContext>,
     instance: WebGlShader,
 }
 
 impl Shader {
     pub fn new(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         typ: ShaderType,
         source: &str,
     ) -> Result<Self, Error> {
@@ -82,12 +82,12 @@ impl Info {
 
 #[derive(Debug, Clone)]
 pub struct Attribute {
-    pub context: Arc<WebGl2RenderingContext>,
+    pub context: Rc<WebGl2RenderingContext>,
     pub info: Info,
 }
 
 impl Attribute {
-    pub fn new(context: Arc<WebGl2RenderingContext>, index: u32, info: WebGlActiveInfo) -> Self {
+    pub fn new(context: Rc<WebGl2RenderingContext>, index: u32, info: WebGlActiveInfo) -> Self {
         Self {
             context,
             info: Info::new(index, info),
@@ -175,7 +175,7 @@ impl Uniform {
 }
 
 pub struct ShaderProgram {
-    context: Arc<WebGl2RenderingContext>,
+    context: Rc<WebGl2RenderingContext>,
     #[allow(dead_code)]
     vertex_shader: Shader,
     #[allow(dead_code)]
@@ -187,7 +187,7 @@ pub struct ShaderProgram {
 
 impl ShaderProgram {
     pub fn new(
-        context: Arc<WebGl2RenderingContext>,
+        context: Rc<WebGl2RenderingContext>,
         vertex_source: &str,
         fragment_source: &str,
     ) -> Result<Self, Error> {
