@@ -1,9 +1,11 @@
 mod error;
+mod events;
 mod graphics;
 mod math;
 
 use bytemuck::{Pod, Zeroable};
 use error::Error;
+use events::{KeyPressEvent, MouseMoveEvent, MousePressEvent};
 use gloo::{
     events::EventListener,
     render::{request_animation_frame, AnimationFrame},
@@ -19,7 +21,7 @@ use js_sys::wasm_bindgen::JsCast;
 use log::*;
 use math::camera::Camera;
 use nalgebra::Vector2;
-use nalgebra_glm::{rotate_y, Vec2, Vec3};
+use nalgebra_glm::Vec3;
 use serde::Serialize;
 use std::{
     mem::offset_of,
@@ -224,6 +226,31 @@ impl State {
 
         Ok(())
     }
+
+    pub fn mouse_down(&mut self, e: &MousePressEvent) -> Result<(), Error> {
+        debug!("TODO mouse_down: {}", e);
+        Ok(())
+    }
+
+    pub fn mouse_up(&mut self, e: &MousePressEvent) -> Result<(), Error> {
+        debug!("TODO mouse_up: {}", e);
+        Ok(())
+    }
+
+    pub fn mouse_move(&mut self, e: &MouseMoveEvent) -> Result<(), Error> {
+        // debug!("TODO mouse_move: {}", e);
+        Ok(())
+    }
+
+    pub fn key_down(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
+        debug!("TODO key_down: {}", e);
+        Ok(())
+    }
+
+    pub fn key_up(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
+        debug!("TODO key_up: {}", e);
+        Ok(())
+    }
 }
 
 fn main() -> Result<(), Error> {
@@ -295,6 +322,95 @@ fn main() -> Result<(), Error> {
     }
 
     {
+        let canvas = canvas.clone();
+        let state = state.clone();
+        EventListener::new(&canvas, "mousedown", move |event| {
+            let state = &mut *state.lock().unwrap();
+            if let Some(state) = state {
+                if let Ok(event) = event.clone().dyn_into() {
+                    if let Err(e) = state.mouse_down(&MousePressEvent { event }) {
+                        error!("error handling mousedown event: {e:?}");
+                    }
+                } else {
+                    error!("error converting event types for mousedown event");
+                }
+            }
+        })
+        .forget();
+    }
+
+    {
+        let canvas = canvas.clone();
+        let state = state.clone();
+        EventListener::new(&canvas, "mouseup", move |event| {
+            let state = &mut *state.lock().unwrap();
+            if let Some(state) = state {
+                if let Ok(event) = event.clone().dyn_into() {
+                    if let Err(e) = state.mouse_up(&MousePressEvent { event }) {
+                        error!("error handling mouseup event: {e:?}");
+                    }
+                } else {
+                    error!("error converting event types for mouseup event");
+                }
+            }
+        })
+        .forget();
+    }
+
+    {
+        let canvas = canvas.clone();
+        let state = state.clone();
+        EventListener::new(&canvas, "mousemove", move |event| {
+            let state = &mut *state.lock().unwrap();
+            if let Some(state) = state {
+                if let Ok(event) = event.clone().dyn_into() {
+                    if let Err(e) = state.mouse_move(&MouseMoveEvent { event }) {
+                        error!("error handling mousemove event: {e:?}");
+                    }
+                } else {
+                    error!("error converting event types for mousemove event");
+                }
+            }
+        })
+        .forget();
+    }
+
+    {
+        let state = state.clone();
+        EventListener::new(&window(), "keydown", move |event| {
+            let state = &mut *state.lock().unwrap();
+            if let Some(state) = state {
+                if let Ok(event) = event.clone().dyn_into() {
+                    if let Err(e) = state.key_down(&KeyPressEvent { event }) {
+                        error!("error handling keydown event: {e:?}");
+                    }
+                } else {
+                    error!("error converting event types for keydown event");
+                }
+            }
+        })
+        .forget();
+    }
+
+    {
+        let state = state.clone();
+        EventListener::new(&window(), "keyup", move |event| {
+            let state = &mut *state.lock().unwrap();
+            if let Some(state) = state {
+                if let Ok(event) = event.clone().dyn_into() {
+                    if let Err(e) = state.key_up(&KeyPressEvent { event }) {
+                        error!("error handling keyup event: {e:?}");
+                    }
+                } else {
+                    error!("error converting event types for keyup event");
+                }
+            }
+        })
+        .forget();
+    }
+
+    {
+        let canvas = canvas.clone();
         let state = state.clone();
         anim_loop(move |time| {
             let state = &mut *state.lock().unwrap();

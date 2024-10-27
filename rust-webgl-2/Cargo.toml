@@ -16,13 +16,4 @@ serde = "1.0.213"
 serde-wasm-bindgen = "0.6.5"
 serde_json = "1.0.132"
 wasm-bindgen-futures = "0.4.45"
-web-sys = { version = "0.3.72", features = [
-	"HtmlCanvasElement",
-	"CssStyleDeclaration",
-	"WebGl2RenderingContext",
-	"WebGlBuffer",
-	"WebGlProgram",
-	"WebGlActiveInfo",
-	"WebGlShader",
-	"WebGlUniformLocation",
-] }
+web-sys = { version = "0.3.72", features = ["HtmlCanvasElement", "CssStyleDeclaration", "WebGl2RenderingContext", "WebGlBuffer", "WebGlProgram", "WebGlActiveInfo", "WebGlShader", "WebGlUniformLocation", "KeyboardEvent", "MouseEvent"] }
