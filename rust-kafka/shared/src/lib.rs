@@ -1,14 +1,40 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+mod id;
+mod timestamp;
+
+use std::{str::FromStr, time::SystemTime};
+
+use chrono::Utc;
+use id::Id;
+use serde::{de::Visitor, Deserialize, Serialize};
+use timestamp::Timestamp;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Message {
+    pub id: Id,
+    pub timestamp: Timestamp,
+    pub sender: String,
+    pub payload: String,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+impl Message {
+    pub fn new(sender: String, payload: String) -> Self {
+        Self {
+            id: Id::new(),
+            timestamp: Timestamp::now(),
+            sender,
+            payload,
+        }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WebsocketClientToServerMessage {
+    Hello { name: String },
+    Message(Message),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WebsocketServerToClientMessage {
+    Welcome { id: String },
+    Message(Message),
 }

@@ -11,11 +11,8 @@ docker exec -it broker /opt/kafka/bin/kafka-topics.sh --bootstrap-server localho
 ```
 
 ```
-cargo run --bin server -- --bootstrap-servers localhost:9092  consumer -t foo -t bar
-```
-
-```
-cargo run --bin server -- --bootstrap-servers localhost:9092 producer -t foo -m "Hello, World!"
+cd server
+cargo watch -x run
 ```
 
 ```

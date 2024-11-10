@@ -15,6 +15,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::{
     spawn,
     sync::mpsc::{channel, Receiver, Sender},
+    task::spawn_local,
 };
 use tracing::*;
 
@@ -90,7 +91,7 @@ impl ConsumerContext for KafkaContext {
 
 pub async fn consume<T>(config: ConsumerConfig) -> Result<Receiver<Message<T>>>
 where
-    T: DeserializeOwned + Debug + Send + 'static,
+    T: DeserializeOwned + Debug + 'static,
 {
     if config.topics.is_empty() {
         Err(anyhow!("must provide at least one topic"))?;
@@ -120,7 +121,7 @@ where
 
     let (sender, receiver) = channel(1);
 
-    spawn(async move {
+    spawn_local(async move {
         loop {
             let message = match consumer.recv().await {
                 Ok(message) => message,
@@ -232,7 +233,7 @@ where
 
 pub async fn produce<T>(config: ProducerConfig) -> Result<Sender<Message<T>>>
 where
-    T: Serialize + Debug + Send + 'static,
+    T: Serialize + Debug + 'static,
 {
     debug!("creating producer: {:?}", config);
 
@@ -242,7 +243,7 @@ where
 
     let (sender, mut receiver) = channel::<Message<T>>(1);
 
-    spawn(async move {
+    spawn_local(async move {
         while let Some(message) = receiver.recv().await {
             info!("sending message: {:?}", message);
 

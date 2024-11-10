@@ -1,17 +1,25 @@
 mod kafka;
+mod websockets;
 
-use std::env;
+use std::{env, net::SocketAddr};
 
 use anyhow::Result;
-use axum::{http::StatusCode, routing::get, serve, Router};
+use axum::{
+    extract::{ws::WebSocket, ConnectInfo, FromRef, WebSocketUpgrade},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{any, get},
+    serve, Router,
+};
+use axum_extra::{headers::UserAgent, TypedHeader};
 use clap::{command, Parser, Subcommand};
 use kafka::{consume, produce, ConsumerConfig, Message, ProducerConfig};
 use rdkafka::util::get_rdkafka_version;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::*;
-use tracing_subscriber::EnvFilter;
-use uuid::{ContextV7, Timestamp, Uuid};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 // #[derive(Parser)]
 // #[command(version, about, long_about = None)]
@@ -43,22 +51,38 @@ use uuid::{ContextV7, Timestamp, Uuid};
 //     message: String,
 // }
 
+#[derive(Clone)]
+struct AppState {
+    websockets: websockets::ConnectedClients,
+}
+
+impl FromRef<AppState> for websockets::ConnectedClients {
+    fn from_ref(input: &AppState) -> Self {
+        input.websockets.clone()
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    match env::var(EnvFilter::DEFAULT_ENV).as_deref() {
-        Ok("") | Err(_) => {
-            // TODO find the name of this project dynamically, don't just hard-code "server"
-            env::set_var(EnvFilter::DEFAULT_ENV, "server=TRACE,DEBUG");
-        }
-        _ => (),
-    };
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| format!("{}=trace,tower_http=debug", env!("CARGO_CRATE_NAME")).into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
         .init();
 
     info!("rdkafka version = {:?}", get_rdkafka_version());
 
-    let app = Router::new().route("/", get(hello_world));
+    let state = AppState {
+        websockets: websockets::ConnectedClients::new(),
+    };
+
+    let app = Router::new()
+        .route("/", get(hello_world))
+        .route("/ws", any(websockets::handler))
+        .with_state(state)
+        .layer(TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)));
     let listener = TcpListener::bind("127.0.0.1:8001").await?;
     serve(listener, app).await?;
 
