@@ -1,17 +1,12 @@
 mod kafka;
 
-use std::{
-    env,
-    time::{Duration, SystemTime},
-};
+use std::env;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::{command, Parser, Subcommand};
 use kafka::{consume, produce, ConsumerConfig, CustomMessage, ProducerConfig};
 use rdkafka::{
-    consumer::{Consumer, StreamConsumer},
-    message::{Header, Headers, OwnedHeaders},
-    producer::{FutureProducer, FutureRecord},
+    message::Headers,
     util::get_rdkafka_version,
 };
 use serde::{Deserialize, Serialize};

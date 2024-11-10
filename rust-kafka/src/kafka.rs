@@ -1,7 +1,6 @@
-use std::{collections::HashMap, env, fmt::Debug, time::Duration};
+use std::{collections::HashMap, fmt::Debug, time::Duration};
 
 use anyhow::{anyhow, Result};
-use clap::{command, Parser, Subcommand};
 use rdkafka::{
     admin::{AdminClient, AdminOptions, NewTopic, TopicReplication},
     client::DefaultClientContext,
@@ -10,7 +9,6 @@ use rdkafka::{
     message::{Header, Headers, OwnedHeaders},
     producer::{FutureProducer, FutureRecord},
     types::RDKafkaErrorCode,
-    util::get_rdkafka_version,
     ClientConfig, ClientContext, Message,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -19,8 +17,6 @@ use tokio::{
     sync::mpsc::{channel, Receiver},
 };
 use tracing::*;
-use tracing_subscriber::EnvFilter;
-use uuid::{ContextV7, Timestamp, Uuid};
 
 #[derive(Debug)]
 pub struct ConsumerConfig {
@@ -77,11 +73,11 @@ impl ClientContext for KafkaContext {
 }
 
 impl ConsumerContext for KafkaContext {
-    fn pre_rebalance<'a>(&self, rebalance: &rdkafka::consumer::Rebalance<'a>) {
+    fn pre_rebalance(&self, rebalance: &rdkafka::consumer::Rebalance<'_>) {
         info!("pre_rebalance: {:?}", rebalance);
     }
 
-    fn post_rebalance<'a>(&self, rebalance: &rdkafka::consumer::Rebalance<'a>) {
+    fn post_rebalance(&self, rebalance: &rdkafka::consumer::Rebalance<'_>) {
         info!("post_rebalance: {:?}", rebalance);
     }
 
@@ -98,7 +94,7 @@ pub async fn consume<T>(config: ConsumerConfig) -> Result<Receiver<CustomMessage
 where
     T: DeserializeOwned + Debug + Send + 'static,
 {
-    if config.topics.len() == 0 {
+    if config.topics.is_empty() {
         Err(anyhow!("must provide at least one topic"))?;
     }
 
@@ -256,7 +252,7 @@ where
     let mut headers = OwnedHeaders::new();
     for (key, value) in config.message.headers.iter() {
         headers = headers.insert(Header {
-            key: &key,
+            key,
             value: Some(&value),
         });
     }
