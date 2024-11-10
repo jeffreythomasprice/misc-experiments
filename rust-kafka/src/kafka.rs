@@ -14,7 +14,7 @@ use rdkafka::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::{
     spawn,
-    sync::mpsc::{channel, Receiver},
+    sync::mpsc::{channel, Receiver, Sender},
 };
 use tracing::*;
 
@@ -26,9 +26,8 @@ pub struct ConsumerConfig {
 }
 
 #[derive(Debug)]
-pub struct ProducerConfig<T> {
+pub struct ProducerConfig {
     pub bootstrap_servers: String,
-    pub message: CustomMessage<T>,
 }
 
 // TODO rename me
@@ -232,46 +231,58 @@ where
     Ok(receiver)
 }
 
-pub async fn produce<T>(config: ProducerConfig<T>) -> Result<()>
+pub async fn produce<T>(config: ProducerConfig) -> Result<Sender<CustomMessage<T>>>
 where
-    T: Serialize + Debug,
+    T: Serialize + Debug + Send + 'static,
 {
-    info!("sending message: {:?}", config);
+    debug!("creating producer: {:?}", config);
 
-    create_topics(
-        &config.bootstrap_servers,
-        &vec![config.message.topic.clone()],
-    )
-    .await?;
-
-    // TODO make a reusable producer handle we can send messages to via a channel
     let producer: FutureProducer = client_config(&config.bootstrap_servers)
         .create()
         .map_err(|e| anyhow!("error creating producer: {e:?}"))?;
 
-    let mut headers = OwnedHeaders::new();
-    for (key, value) in config.message.headers.iter() {
-        headers = headers.insert(Header {
-            key,
-            value: Some(&value),
-        });
-    }
+    let (sender, mut receiver) = channel::<CustomMessage<T>>(1);
 
-    let payload = serde_json::to_string(&config.message.payload)?;
+    spawn(async move {
+        while let Some(message) = receiver.recv().await {
+            info!("sending message: {:?}", message);
 
-    let result = producer
-        .send(
-            FutureRecord::to(&config.message.topic)
-                .payload(&payload)
-                .key(config.message.key.as_bytes())
-                .headers(headers),
-            Duration::from_secs(0),
-        )
-        .await
-        .map_err(|e| anyhow!("error sending message: {e:?}"))?;
-    debug!("message sent, message: {:?}, result: {:?}", config, result);
+            let mut headers = OwnedHeaders::new();
+            for (key, value) in message.headers.iter() {
+                headers = headers.insert(Header {
+                    key,
+                    value: Some(&value),
+                });
+            }
 
-    Ok(())
+            let payload = match serde_json::to_string(&message.payload) {
+                Ok(payload) => payload,
+                Err(e) => {
+                    error!(
+                        "error converting message to json, message: {:?}, error: {:?}",
+                        message, e
+                    );
+                    continue;
+                }
+            };
+
+            match producer
+                .send(
+                    FutureRecord::to(&message.topic)
+                        .payload(&payload)
+                        .key(message.key.as_bytes())
+                        .headers(headers),
+                    Duration::from_secs(0),
+                )
+                .await
+            {
+                Ok(result) => debug!("message sent, message: {:?}, result: {:?}", message, result),
+                Err(e) => error!("error sending message: {e:?}"),
+            };
+        }
+    });
+
+    Ok(sender)
 }
 
 async fn create_topics(bootstrap_servers: &str, topics: &Vec<String>) -> Result<()> {

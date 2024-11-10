@@ -5,10 +5,7 @@ use std::env;
 use anyhow::Result;
 use clap::{command, Parser, Subcommand};
 use kafka::{consume, produce, ConsumerConfig, CustomMessage, ProducerConfig};
-use rdkafka::{
-    message::Headers,
-    util::get_rdkafka_version,
-};
+use rdkafka::{message::Headers, util::get_rdkafka_version};
 use serde::{Deserialize, Serialize};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
@@ -74,9 +71,12 @@ async fn main() -> Result<()> {
         }
 
         Commands::Producer { topic, message } => {
-            produce(ProducerConfig {
+            let sender = produce(ProducerConfig {
                 bootstrap_servers: cli.bootstrap_servers,
-                message: CustomMessage {
+            })
+            .await?;
+            sender
+                .send(CustomMessage {
                     topic,
                     key: Uuid::new_v7(Timestamp::now(ContextV7::new())).to_string(),
                     headers: [(
@@ -86,9 +86,9 @@ async fn main() -> Result<()> {
                     .into_iter()
                     .collect(),
                     payload: Message { message },
-                },
-            })
-            .await
+                })
+                .await?;
+            Ok(())
         }
     }
 }
