@@ -56,7 +56,35 @@ struct ProducerConfig {
 
 struct KafkaContext;
 
-impl ClientContext for KafkaContext {}
+impl ClientContext for KafkaContext {
+    fn log(&self, level: RDKafkaLogLevel, fac: &str, log_message: &str) {
+        match level {
+            RDKafkaLogLevel::Emerg
+            | RDKafkaLogLevel::Alert
+            | RDKafkaLogLevel::Critical
+            | RDKafkaLogLevel::Error => error!(
+                "kafka log, level: {:?}, fac: {}, message: {}",
+                level, fac, log_message
+            ),
+            RDKafkaLogLevel::Warning => warn!(
+                "kafka log, level: {:?}, fac: {}, message: {}",
+                level, fac, log_message
+            ),
+            RDKafkaLogLevel::Notice | RDKafkaLogLevel::Info => info!(
+                "kafka log, level: {:?}, fac: {}, message: {}",
+                level, fac, log_message
+            ),
+            RDKafkaLogLevel::Debug => debug!(
+                "kafka log, level: {:?}, fac: {}, message: {}",
+                level, fac, log_message
+            ),
+        }
+    }
+
+    fn error(&self, error: rdkafka::error::KafkaError, reason: &str) {
+        error!("kafka error, err: {:?}, reason: {}", error, reason);
+    }
+}
 
 impl ConsumerContext for KafkaContext {
     fn pre_rebalance<'a>(&self, rebalance: &rdkafka::consumer::Rebalance<'a>) {
@@ -115,9 +143,6 @@ fn client_config(bootstrap_servers: &str) -> ClientConfig {
     // https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
     let mut result = ClientConfig::new();
     result
-        .set("enable.partition.eof", "false")
-        .set("session.timeout.ms", "6000")
-        .set("enable.auto.commit", "true")
         .set("security.protocol", "plaintext")
         .set("bootstrap.servers", bootstrap_servers)
         .set_log_level(RDKafkaLogLevel::Debug);
@@ -166,10 +191,13 @@ async fn consumer(config: ConsumerConfig) -> Result<()> {
 
     let context = KafkaContext;
 
-    let consumer: StreamConsumer<KafkaContext> =
-        { client_config(&config.bootstrap_servers).set("group.id", config.group_id) }
-            .create_with_context(context)
-            .map_err(|e| anyhow!("error creating consumer: {e:?}"))?;
+    let consumer: StreamConsumer<KafkaContext> = client_config(&config.bootstrap_servers)
+        .set("group.id", config.group_id)
+        .set("enable.partition.eof", "false")
+        .set("session.timeout.ms", "6000")
+        .set("enable.auto.commit", "true")
+        .create_with_context(context)
+        .map_err(|e| anyhow!("error creating consumer: {e:?}"))?;
 
     consumer.subscribe(
         config
