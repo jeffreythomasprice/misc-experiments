@@ -1,10 +1,15 @@
-use std::{str::FromStr, time::SystemTime};
+use std::str::FromStr;
 
-use chrono::Utc;
 use serde::{de::Visitor, Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
 pub struct Id(uuid::Uuid);
+
+impl Default for Id {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Id {
     pub fn new() -> Id {
@@ -23,7 +28,7 @@ impl Serialize for Id {
 
 struct IdVisitor {}
 
-impl<'de> Visitor<'de> for IdVisitor {
+impl Visitor<'_> for IdVisitor {
     type Value = Id;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

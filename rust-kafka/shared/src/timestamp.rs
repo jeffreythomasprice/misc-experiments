@@ -1,4 +1,3 @@
-use std::{str::FromStr, time::SystemTime};
 
 use chrono::{DateTime, Utc};
 use serde::{de::Visitor, Deserialize, Serialize};
@@ -23,7 +22,7 @@ impl Serialize for Timestamp {
 
 struct TimestampVisitor {}
 
-impl<'de> Visitor<'de> for TimestampVisitor {
+impl Visitor<'_> for TimestampVisitor {
     type Value = Timestamp;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

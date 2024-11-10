@@ -12,7 +12,6 @@ use axum::{
 };
 use axum_extra::{headers::UserAgent, TypedHeader};
 use futures::{SinkExt, StreamExt};
-use serde::{de::DeserializeOwned, Serialize};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::spawn_local,

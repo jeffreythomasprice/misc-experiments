@@ -1,11 +1,9 @@
 mod id;
 mod timestamp;
 
-use std::{str::FromStr, time::SystemTime};
 
-use chrono::Utc;
 use id::Id;
-use serde::{de::Visitor, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use timestamp::Timestamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

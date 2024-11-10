@@ -1,25 +1,20 @@
 mod kafka;
 mod websockets;
 
-use std::{env, net::SocketAddr};
+use std::env;
 
 use anyhow::Result;
 use axum::{
-    extract::{ws::WebSocket, ConnectInfo, FromRef, WebSocketUpgrade},
+    extract::FromRef,
     http::StatusCode,
-    response::IntoResponse,
     routing::{any, get},
     serve, Router,
 };
-use axum_extra::{headers::UserAgent, TypedHeader};
-use clap::{command, Parser, Subcommand};
-use kafka::{consume, produce, ConsumerConfig, Message, ProducerConfig};
 use rdkafka::util::get_rdkafka_version;
-use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::*;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 // #[derive(Parser)]
 // #[command(version, about, long_about = None)]

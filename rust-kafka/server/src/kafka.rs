@@ -13,7 +13,6 @@ use rdkafka::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::{
-    spawn,
     sync::mpsc::{channel, Receiver, Sender},
     task::spawn_local,
 };
