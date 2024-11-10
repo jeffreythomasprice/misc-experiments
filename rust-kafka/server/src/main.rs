@@ -45,7 +45,8 @@ struct MessagePayload {
 async fn main() -> Result<()> {
     match env::var(EnvFilter::DEFAULT_ENV).as_deref() {
         Ok("") | Err(_) => {
-            env::set_var(EnvFilter::DEFAULT_ENV, "rust_kafka=TRACE");
+            // TODO find the name of this project dynamically, don't just hard-code "server"
+            env::set_var(EnvFilter::DEFAULT_ENV, "server=TRACE");
         }
         _ => (),
     };

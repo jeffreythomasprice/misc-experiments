@@ -11,13 +11,17 @@ docker exec -it broker /opt/kafka/bin/kafka-topics.sh --bootstrap-server localho
 ```
 
 ```
-cargo run -- --bootstrap-servers localhost:9092  consumer -t foo -t bar
+cargo run --bin server -- --bootstrap-servers localhost:9092  consumer -t foo -t bar
 ```
 
 ```
-cargo run -- --bootstrap-servers localhost:9092 producer -t foo -m "Hello, World!"
+cargo run --bin server -- --bootstrap-servers localhost:9092 producer -t foo -m "Hello, World!"
 ```
 
+```
+cd client
+trunk serve
+```
 
 
 TODO chat app
