@@ -9,7 +9,7 @@ use rdkafka::{
     message::{Header, Headers, OwnedHeaders},
     producer::{FutureProducer, FutureRecord},
     types::RDKafkaErrorCode,
-    ClientConfig, ClientContext, Message,
+    ClientConfig, ClientContext, Message as _,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::{
@@ -30,9 +30,8 @@ pub struct ProducerConfig {
     pub bootstrap_servers: String,
 }
 
-// TODO rename me
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CustomMessage<T> {
+pub struct Message<T> {
     pub topic: String,
     pub key: String,
     pub headers: HashMap<String, String>,
@@ -89,7 +88,7 @@ impl ConsumerContext for KafkaContext {
     }
 }
 
-pub async fn consume<T>(config: ConsumerConfig) -> Result<Receiver<CustomMessage<T>>>
+pub async fn consume<T>(config: ConsumerConfig) -> Result<Receiver<Message<T>>>
 where
     T: DeserializeOwned + Debug + Send + 'static,
 {
@@ -204,7 +203,7 @@ where
                 }
             };
 
-            let parsed_message = CustomMessage {
+            let parsed_message = Message {
                 topic: message.topic().to_owned(),
                 key,
                 headers,
@@ -231,7 +230,7 @@ where
     Ok(receiver)
 }
 
-pub async fn produce<T>(config: ProducerConfig) -> Result<Sender<CustomMessage<T>>>
+pub async fn produce<T>(config: ProducerConfig) -> Result<Sender<Message<T>>>
 where
     T: Serialize + Debug + Send + 'static,
 {
@@ -241,7 +240,7 @@ where
         .create()
         .map_err(|e| anyhow!("error creating producer: {e:?}"))?;
 
-    let (sender, mut receiver) = channel::<CustomMessage<T>>(1);
+    let (sender, mut receiver) = channel::<Message<T>>(1);
 
     spawn(async move {
         while let Some(message) = receiver.recv().await {

@@ -4,8 +4,8 @@ use std::env;
 
 use anyhow::Result;
 use clap::{command, Parser, Subcommand};
-use kafka::{consume, produce, ConsumerConfig, CustomMessage, ProducerConfig};
-use rdkafka::{message::Headers, util::get_rdkafka_version};
+use kafka::{consume, produce, ConsumerConfig, Message, ProducerConfig};
+use rdkafka::util::get_rdkafka_version;
 use serde::{Deserialize, Serialize};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
@@ -37,7 +37,7 @@ enum Commands {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct Message {
+struct MessagePayload {
     message: String,
 }
 
@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Consumer { topics } => {
-            let mut receiver = consume::<Message>(ConsumerConfig {
+            let mut receiver = consume::<MessagePayload>(ConsumerConfig {
                 bootstrap_servers: cli.bootstrap_servers,
                 group_id: "group id".to_owned(),
                 topics,
@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
             })
             .await?;
             sender
-                .send(CustomMessage {
+                .send(Message {
                     topic,
                     key: Uuid::new_v7(Timestamp::now(ContextV7::new())).to_string(),
                     headers: [(
@@ -85,7 +85,7 @@ async fn main() -> Result<()> {
                     )]
                     .into_iter()
                     .collect(),
-                    payload: Message { message },
+                    payload: MessagePayload { message },
                 })
                 .await?;
             Ok(())
