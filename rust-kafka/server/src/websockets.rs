@@ -22,9 +22,7 @@ use tokio::{
 };
 use tracing::*;
 
-use crate::{
-    AppState, Kafka, Message,
-};
+use crate::{AppState, Kafka, Message};
 
 #[derive(Clone)]
 pub struct ConnectedClients {
@@ -80,12 +78,12 @@ pub async fn handler(
     ws.on_upgrade(move |socket| handle_socket(connected_clients, kafka, socket, client))
 }
 
-async fn handle_socket(state: ConnectedClients, kafka: Kafka, socket: WebSocket, client_description: ClientDescription) {
+async fn handle_socket(connected_clients: ConnectedClients, kafka: Kafka, socket: WebSocket, client_description: ClientDescription) {
     let (sender, mut receiver) =
         websocket_to_json_channels::<WebsocketServerToClientMessage, WebsocketClientToServerMessage>(socket, &client_description).await;
 
     {
-        let state = state.clone();
+        let state = connected_clients.clone();
         let client_description = client_description.clone();
         let sender = sender.clone();
         spawn(async move {
@@ -145,7 +143,7 @@ async fn handle_socket(state: ConnectedClients, kafka: Kafka, socket: WebSocket,
         });
     }
 
-    let mut clients = state.clients.lock().unwrap();
+    let mut clients = connected_clients.clients.lock().unwrap();
     clients.insert(
         client_description.id.clone(),
         Client {
