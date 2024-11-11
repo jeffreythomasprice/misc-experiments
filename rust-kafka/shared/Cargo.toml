@@ -7,3 +7,4 @@ edition = "2021"
 chrono = "0.4.38"
 serde = { version = "1.0.214", features = ["derive"] }
 uuid = { version = "1.11.0", features = ["v7"] }
+web-time = "1.1.0"

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use serde::{de::Visitor, Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Id(uuid::Uuid);
 
 impl Default for Id {

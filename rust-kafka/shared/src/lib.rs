@@ -1,38 +1,35 @@
 mod id;
 mod timestamp;
 
-
-use id::Id;
+pub use id::Id;
 use serde::{Deserialize, Serialize};
 use timestamp::Timestamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub id: Id,
-    pub timestamp: Timestamp,
-    pub sender: String,
-    pub payload: String,
+pub enum WebsocketClientToServerMessage {
+    Hello { name: String },
+    Message { id: Id, timestamp: Timestamp, payload: String },
 }
 
-impl Message {
-    pub fn new(sender: String, payload: String) -> Self {
-        Self {
+impl WebsocketClientToServerMessage {
+    pub fn new_message(message: String) -> Self {
+        Self::Message {
             id: Id::new(),
             timestamp: Timestamp::now(),
-            sender,
-            payload,
+            payload: message,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum WebsocketClientToServerMessage {
-    Hello { name: String },
-    Message(Message),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WebsocketServerToClientMessage {
-    Welcome { id: String },
-    Message(Message),
+    Welcome {
+        id: Id,
+    },
+    Message {
+        id: Id,
+        timestamp: Timestamp,
+        sender: String,
+        payload: String,
+    },
 }

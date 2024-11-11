@@ -1,7 +1,7 @@
 mod kafka;
 mod websockets;
 
-use std::env;
+use std::{env, net::SocketAddr};
 
 use anyhow::Result;
 use axum::{
@@ -79,7 +79,7 @@ async fn main() -> Result<()> {
         .with_state(state)
         .layer(TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)));
     let listener = TcpListener::bind("127.0.0.1:8001").await?;
-    serve(listener, app).await?;
+    serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
 
     Ok(())
 

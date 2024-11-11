@@ -14,7 +14,7 @@ use rdkafka::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
-    task::spawn_local,
+    task::spawn,
 };
 use tracing::*;
 
@@ -43,25 +43,14 @@ struct KafkaContext;
 impl ClientContext for KafkaContext {
     fn log(&self, level: RDKafkaLogLevel, fac: &str, log_message: &str) {
         match level {
-            RDKafkaLogLevel::Emerg
-            | RDKafkaLogLevel::Alert
-            | RDKafkaLogLevel::Critical
-            | RDKafkaLogLevel::Error => error!(
-                "kafka log, level: {:?}, fac: {}, message: {}",
-                level, fac, log_message
-            ),
-            RDKafkaLogLevel::Warning => warn!(
-                "kafka log, level: {:?}, fac: {}, message: {}",
-                level, fac, log_message
-            ),
-            RDKafkaLogLevel::Notice | RDKafkaLogLevel::Info => info!(
-                "kafka log, level: {:?}, fac: {}, message: {}",
-                level, fac, log_message
-            ),
-            RDKafkaLogLevel::Debug => debug!(
-                "kafka log, level: {:?}, fac: {}, message: {}",
-                level, fac, log_message
-            ),
+            RDKafkaLogLevel::Emerg | RDKafkaLogLevel::Alert | RDKafkaLogLevel::Critical | RDKafkaLogLevel::Error => {
+                error!("kafka log, level: {:?}, fac: {}, message: {}", level, fac, log_message)
+            }
+            RDKafkaLogLevel::Warning => warn!("kafka log, level: {:?}, fac: {}, message: {}", level, fac, log_message),
+            RDKafkaLogLevel::Notice | RDKafkaLogLevel::Info => {
+                info!("kafka log, level: {:?}, fac: {}, message: {}", level, fac, log_message)
+            }
+            RDKafkaLogLevel::Debug => debug!("kafka log, level: {:?}, fac: {}, message: {}", level, fac, log_message),
         }
     }
 
@@ -79,18 +68,14 @@ impl ConsumerContext for KafkaContext {
         info!("post_rebalance: {:?}", rebalance);
     }
 
-    fn commit_callback(
-        &self,
-        result: rdkafka::error::KafkaResult<()>,
-        offsets: &rdkafka::TopicPartitionList,
-    ) {
+    fn commit_callback(&self, result: rdkafka::error::KafkaResult<()>, offsets: &rdkafka::TopicPartitionList) {
         info!("commit_callbackcommit_: {:?}, {:?}", result, offsets);
     }
 }
 
 pub async fn consume<T>(config: ConsumerConfig) -> Result<Receiver<Message<T>>>
 where
-    T: DeserializeOwned + Debug + 'static,
+    T: DeserializeOwned + Debug + Send + 'static,
 {
     if config.topics.is_empty() {
         Err(anyhow!("must provide at least one topic"))?;
@@ -108,19 +93,12 @@ where
         .create_with_context(context)
         .map_err(|e| anyhow!("error creating consumer: {e:?}"))?;
 
-    consumer.subscribe(
-        config
-            .topics
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>()
-            .as_slice(),
-    )?;
+    consumer.subscribe(config.topics.iter().map(|s| s.as_str()).collect::<Vec<_>>().as_slice())?;
     trace!("consumer subscribed to topics: {:?}", config.topics);
 
     let (sender, receiver) = channel(1);
 
-    spawn_local(async move {
+    spawn(async move {
         loop {
             let message = match consumer.recv().await {
                 Ok(message) => message,
@@ -133,11 +111,7 @@ where
             let key = match message.key().map(|s| std::str::from_utf8(s)) {
                 Some(Ok(key)) => key.to_owned(),
                 Some(Err(e)) => {
-                    warn!(
-                        "message key isn't utf8, topic: {}, error: {:?}",
-                        message.topic(),
-                        e
-                    );
+                    warn!("message key isn't utf8, topic: {}, error: {:?}", message.topic(), e);
                     continue;
                 }
                 None => {
@@ -154,7 +128,13 @@ where
                         let value = match header.value.map(|value| std::str::from_utf8(value)) {
                             Some(Ok(value)) => value,
                             Some(Err(e)) => {
-                                warn!("header value failed to parse as utf8, topic: {}, key: {}, header: {}, error: {:?}", message.topic(), key, header.key, e);
+                                warn!(
+                                    "header value failed to parse as utf8, topic: {}, key: {}, header: {}, error: {:?}",
+                                    message.topic(),
+                                    key,
+                                    header.key,
+                                    e
+                                );
                                 continue;
                             }
                             None => {
@@ -186,11 +166,7 @@ where
                     continue;
                 }
                 None => {
-                    warn!(
-                        "message missing payload, topic: {}, key: {}",
-                        message.topic(),
-                        key
-                    );
+                    warn!("message missing payload, topic: {}, key: {}", message.topic(), key);
                     continue;
                 }
             };
@@ -198,7 +174,13 @@ where
             let payload = match serde_json::from_str::<T>(payload) {
                 Ok(payload) => payload,
                 Err(e) => {
-                    warn!("error deserializing message payload as expected type, topic: {}, key: {}, payload: {}, error: {:?}", message.topic(), key, payload, e);
+                    warn!(
+                        "error deserializing message payload as expected type, topic: {}, key: {}, payload: {}, error: {:?}",
+                        message.topic(),
+                        key,
+                        payload,
+                        e
+                    );
                     continue;
                 }
             };
@@ -220,8 +202,7 @@ where
                 );
             }
 
-            if let Err(e) = consumer.commit_message(&message, rdkafka::consumer::CommitMode::Async)
-            {
+            if let Err(e) = consumer.commit_message(&message, rdkafka::consumer::CommitMode::Async) {
                 error!("error committing message to kafka: {e:?}");
             }
         }
@@ -232,7 +213,7 @@ where
 
 pub async fn produce<T>(config: ProducerConfig) -> Result<Sender<Message<T>>>
 where
-    T: Serialize + Debug + 'static,
+    T: Serialize + Debug + Send + 'static,
 {
     debug!("creating producer: {:?}", config);
 
@@ -242,25 +223,19 @@ where
 
     let (sender, mut receiver) = channel::<Message<T>>(1);
 
-    spawn_local(async move {
+    spawn(async move {
         while let Some(message) = receiver.recv().await {
             info!("sending message: {:?}", message);
 
             let mut headers = OwnedHeaders::new();
             for (key, value) in message.headers.iter() {
-                headers = headers.insert(Header {
-                    key,
-                    value: Some(&value),
-                });
+                headers = headers.insert(Header { key, value: Some(&value) });
             }
 
             let payload = match serde_json::to_string(&message.payload) {
                 Ok(payload) => payload,
                 Err(e) => {
-                    error!(
-                        "error converting message to json, message: {:?}, error: {:?}",
-                        message, e
-                    );
+                    error!("error converting message to json, message: {:?}, error: {:?}", message, e);
                     continue;
                 }
             };
