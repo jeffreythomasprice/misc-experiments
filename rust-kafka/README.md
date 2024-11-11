@@ -1,3 +1,8 @@
+leptosfmt isn't working right, trigger manually
+```
+leptosfmt --max-width 140 client server shared
+```
+
 ```
 docker compose up -d
 ```

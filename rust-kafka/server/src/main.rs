@@ -4,11 +4,7 @@ mod websockets;
 use std::{env, net::SocketAddr};
 
 use anyhow::Result;
-use axum::{
-    extract::FromRef,
-    routing::any,
-    serve, Router,
-};
+use axum::{extract::FromRef, routing::any, serve, Router};
 use kafka::{consume, produce, ConsumerConfig, ProducerConfig};
 use rdkafka::util::get_rdkafka_version;
 use serde::{Deserialize, Serialize};
@@ -79,6 +75,12 @@ impl Kafka {
 
         Ok(())
     }
+
+    /*
+    TODO more server functionality
+    all topic consumer should re-write to destination-specific topics
+    websockets should request lists of topics they care about and the websoccket handlers should update a list of topics to listen to
+    */
 }
 
 #[derive(Clone)]

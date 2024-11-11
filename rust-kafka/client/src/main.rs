@@ -11,6 +11,7 @@ fn main() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init_with_level(Level::Trace).unwrap();
 
+    // TODO move into the post-name stuff, and use the actual name they enter as the hello
     let websocket_sender = create_local_resource(
         || (),
         |_| async {
@@ -42,29 +43,86 @@ fn main() {
         },
     );
 
-    let send_message = create_action(move |message: &String| send_message_to_websocket(websocket_sender().flatten(), message.to_string()));
-
     mount_to_body(move || {
         view! {
-            <Counter callback=move |message| {
-                send_message.dispatch(message)
+            <App send_message=move |message| {
+                spawn_local(async move {
+                    send_message_to_websocket(websocket_sender().flatten(), message).await;
+                });
             } />
         }
     })
 }
 
 #[component]
-fn Counter(callback: impl Fn(String) + 'static) -> impl IntoView {
-    let (count, set_count) = create_signal(0);
+fn App(#[prop(into)] send_message: Callback<String, ()>) -> impl IntoView {
+    let (name, set_name) = create_signal(None);
 
     view! {
-        <div>Clicks: {count}</div>
-        <button on:click=move |_| {
-            let new_count = count() + 1;
-            set_count(new_count);
-            info!("count is now {}", new_count);
-            callback(format!("count is now {}", new_count));
-        }>Click Me</button>
+        {move || match name() {
+            Some(name) => {
+                view! { <Messages name=name send_message=send_message /> }
+            }
+            None => view! { <Name done=set_name /> },
+        }}
+    }
+}
+
+#[component]
+fn Name(done: WriteSignal<Option<String>>) -> impl IntoView {
+    let (name, set_name) = create_signal("".to_owned());
+
+    view! {
+        <form on:submit=move |e| {
+            e.prevent_default();
+            let result = name();
+            let result = result.trim();
+            if !result.is_empty() {
+                done(Some(result.to_owned()));
+            }
+        }>
+            <input
+                type="text"
+                placeholder="Name"
+                autofocus
+                prop:value=name
+                on:input=move |e| {
+                    set_name(event_target_value(&e));
+                }
+            />
+            <button type="submit">OK</button>
+        </form>
+    }
+}
+
+#[component]
+fn Messages(name: String, #[prop(into)] send_message: Callback<String, ()>) -> impl IntoView {
+    let (message, set_message) = create_signal("".to_owned());
+
+    // TODO show a list of received messages
+
+    view! {
+        <div>Name: {name}</div>
+        <form on:submit=move |e| {
+            e.prevent_default();
+            let result = message();
+            let result = result.trim();
+            if !result.is_empty() {
+                send_message(result.to_owned());
+                set_message("".to_owned());
+            }
+        }>
+            <input
+                type="text"
+                placeholder="Message"
+                autofocus
+                prop:value=message
+                on:input=move |e| {
+                    set_message(event_target_value(&e));
+                }
+            />
+            <button type="submit">Send</button>
+        </form>
     }
 }
 
