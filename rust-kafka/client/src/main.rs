@@ -11,57 +11,21 @@ fn main() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init_with_level(Level::Trace).unwrap();
 
-    // TODO move into the post-name stuff, and use the actual name they enter as the hello
-    let websocket_sender = create_local_resource(
-        || (),
-        |_| async {
-            match websockets::connect::<WebsocketClientToServerMessage, WebsocketServerToClientMessage>("http://localhost:8001/ws").await {
-                Ok((mut sender, mut receiver)) => {
-                    spawn_local(async move {
-                        while let Some(message) = receiver.next().await {
-                            trace!("received message from websocket: {:?}", message);
-                        }
-                        // TODO put message on screen
-                    });
-
-                    if let Err(e) = sender
-                        .send(WebsocketClientToServerMessage::Hello {
-                            name: "TODO name here".to_owned(),
-                        })
-                        .await
-                    {
-                        error!("error sending hello: {:?}", e);
-                    }
-
-                    Some(sender)
-                }
-                Err(e) => {
-                    error!("error opening websocket, error: {:?}", e);
-                    None
-                }
-            }
-        },
-    );
-
     mount_to_body(move || {
         view! {
-            <App send_message=move |message| {
-                spawn_local(async move {
-                    send_message_to_websocket(websocket_sender().flatten(), message).await;
-                });
-            } />
+            <App  />
         }
     })
 }
 
 #[component]
-fn App(#[prop(into)] send_message: Callback<String, ()>) -> impl IntoView {
+fn App() -> impl IntoView {
     let (name, set_name) = create_signal(None);
 
     view! {
         {move || match name() {
             Some(name) => {
-                view! { <Messages name=name send_message=send_message /> }
+                view! { <Messages name=name /> }
             }
             None => view! { <Name done=set_name /> },
         }}
@@ -96,19 +60,66 @@ fn Name(done: WriteSignal<Option<String>>) -> impl IntoView {
 }
 
 #[component]
-fn Messages(name: String, #[prop(into)] send_message: Callback<String, ()>) -> impl IntoView {
+fn Messages(name: String) -> impl IntoView {
+    let (id, set_id) = create_signal(None);
     let (message, set_message) = create_signal("".to_owned());
 
-    // TODO show a list of received messages
+    let websocket_sender = {
+        let name = name.clone();
+        let set_id = set_id.clone();
+        create_local_resource(
+            move || (name.clone(), set_id),
+            |(name, set_id)| async move {
+                match websockets::connect::<WebsocketClientToServerMessage, WebsocketServerToClientMessage>("http://localhost:8001/ws")
+                    .await
+                {
+                    Ok((mut sender, mut receiver)) => {
+                        // TODO spawn_local isn't supposed to access signals, use an action?
+                        spawn_local(async move {
+                            while let Some(message) = receiver.next().await {
+                                trace!("received message from websocket: {:?}", message);
+                                match message {
+                                    WebsocketServerToClientMessage::Welcome { id } => set_id(Some(id.to_string())),
+                                    WebsocketServerToClientMessage::Message {
+                                        id,
+                                        timestamp,
+                                        sender,
+                                        payload,
+                                    } => {
+                                        // TODO put message on screen
+                                    }
+                                };
+                            }
+                        });
+
+                        if let Err(e) = sender.send(WebsocketClientToServerMessage::Hello { name: name.clone() }).await {
+                            error!("error sending hello: {:?}", e);
+                        }
+
+                        Some(sender)
+                    }
+                    Err(e) => {
+                        error!("error opening websocket, error: {:?}", e);
+                        None
+                    }
+                }
+            },
+        )
+    };
 
     view! {
         <div>Name: {name}</div>
+        <Show when=move || id().is_some()>
+            <div>ID: {id}</div>
+        </Show>
         <form on:submit=move |e| {
             e.prevent_default();
             let result = message();
-            let result = result.trim();
+            let result = result.trim().to_owned();
             if !result.is_empty() {
-                send_message(result.to_owned());
+                spawn_local(async move {
+                    send_message_to_websocket(websocket_sender().flatten(), result).await;
+                });
                 set_message("".to_owned());
             }
         }>
