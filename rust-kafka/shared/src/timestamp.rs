@@ -24,7 +24,7 @@ impl Serialize for Timestamp {
     }
 }
 
-struct TimestampVisitor {}
+struct TimestampVisitor;
 
 impl Visitor<'_> for TimestampVisitor {
     type Value = Timestamp;
@@ -49,6 +49,6 @@ impl<'de> Deserialize<'de> for Timestamp {
     where
         D: serde::Deserializer<'de>,
     {
-        deserializer.deserialize_str(TimestampVisitor {})
+        deserializer.deserialize_str(TimestampVisitor)
     }
 }

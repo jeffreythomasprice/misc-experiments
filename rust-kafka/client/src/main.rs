@@ -5,11 +5,14 @@ use std::panic;
 use futures::{channel::mpsc::Sender, SinkExt, StreamExt};
 use leptos::*;
 use log::*;
-use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
+use shared::{Timestamp, WebsocketClientToServerMessage, WebsocketServerToClientMessage};
 
 fn main() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init_with_level(Level::Trace).unwrap();
+
+    info!("about to do time stuff");
+    info!("{:?}", shared::Timestamp::now());
 
     let websocket_sender = create_local_resource(
         || (),

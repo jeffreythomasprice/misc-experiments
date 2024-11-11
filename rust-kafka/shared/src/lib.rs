@@ -3,7 +3,7 @@ mod timestamp;
 
 pub use id::Id;
 use serde::{Deserialize, Serialize};
-use timestamp::Timestamp;
+pub use timestamp::Timestamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WebsocketClientToServerMessage {

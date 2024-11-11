@@ -12,8 +12,8 @@ impl Default for Id {
 }
 
 impl Id {
-    pub fn new() -> Id {
-        Id(uuid::Uuid::new_v7(uuid::Timestamp::now(uuid::ContextV7::new())))
+    pub fn new() -> Self {
+        Self(uuid::Uuid::new_v7(uuid::Timestamp::now(uuid::ContextV7::new())))
     }
 }
 
