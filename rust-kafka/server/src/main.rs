@@ -1,7 +1,7 @@
 mod kafka;
 mod websockets;
 
-use std::{env, net::SocketAddr};
+use std::{collections::HashMap, env, net::SocketAddr};
 
 use anyhow::Result;
 use axum::{
@@ -10,50 +10,87 @@ use axum::{
     routing::{any, get},
     serve, Router,
 };
+use kafka::{consume, produce, ConsumerConfig, ProducerConfig};
 use rdkafka::util::get_rdkafka_version;
-use tokio::net::TcpListener;
+use serde::{Deserialize, Serialize};
+use shared::{Id, Timestamp};
+use tokio::{net::TcpListener, spawn};
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-// #[derive(Parser)]
-// #[command(version, about, long_about = None)]
-// struct Cli {
-//     #[arg(long)]
-//     bootstrap_servers: String,
+// TODO use a config file
+const BOOTSTRAP_SERVERS: &str = "localhost:9092";
+const ALL_MESSAGES_TOPIC_NAME: &str = "all-messages";
+const ALL_MESSAGES_CONSUMER_GROUP_ID: &str = "all-messages";
 
-//     #[command(subcommand)]
-//     command: Commands,
-// }
+#[derive(Debug, Serialize, Deserialize)]
+struct Message {
+    id: Id,
+    timestamp: Timestamp,
+    sender: Id,
+    payload: String,
+}
 
-// #[derive(Subcommand)]
-// enum Commands {
-//     Consumer {
-//         #[arg(short, long)]
-//         topics: Vec<String>,
-//     },
-//     Producer {
-//         #[arg(short, long)]
-//         topic: String,
+#[derive(Clone)]
+struct Kafka {
+    bootstrap_servers: String,
+}
 
-//         #[arg(short, long)]
-//         message: String,
-//     },
-// }
+impl Kafka {
+    pub fn new(bootstrap_servers: String) -> Self {
+        spawn(async move {
+            if let Err(e) = Self::consume_all_messages(BOOTSTRAP_SERVERS.to_string()).await {
+                error!("all messages consumer error: {:?}", e);
+            }
+        });
 
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// struct MessagePayload {
-//     message: String,
-// }
+        Self { bootstrap_servers }
+    }
+
+    pub async fn send_message(&self, message: Message) -> Result<()> {
+        let sender = produce(ProducerConfig {
+            bootstrap_servers: self.bootstrap_servers.clone(),
+        })
+        .await?;
+
+        sender
+            .send(kafka::Message {
+                topic: ALL_MESSAGES_TOPIC_NAME.to_owned(),
+                key: message.id.to_string(),
+                headers: None,
+                payload: message,
+            })
+            .await?;
+
+        Ok(())
+    }
+
+    async fn consume_all_messages(bootstrap_servers: String) -> Result<()> {
+        let mut receiver = consume::<Message>(ConsumerConfig {
+            bootstrap_servers,
+            group_id: ALL_MESSAGES_CONSUMER_GROUP_ID.to_owned(),
+            topics: vec![ALL_MESSAGES_TOPIC_NAME.to_owned()],
+        })
+        .await?;
+
+        while let Some(message) = receiver.recv().await {
+            info!("TODO received message over kafka all messages topic: {:?}", message);
+        }
+
+        Ok(())
+    }
+}
 
 #[derive(Clone)]
 struct AppState {
     websockets: websockets::ConnectedClients,
+    kafka: Kafka,
 }
 
-impl FromRef<AppState> for websockets::ConnectedClients {
+impl FromRef<AppState> for Kafka {
     fn from_ref(input: &AppState) -> Self {
-        input.websockets.clone()
+        input.kafka.clone()
     }
 }
 
@@ -71,10 +108,10 @@ async fn main() -> Result<()> {
 
     let state = AppState {
         websockets: websockets::ConnectedClients::new(),
+        kafka: Kafka::new(BOOTSTRAP_SERVERS.to_string()),
     };
 
     let app = Router::new()
-        .route("/", get(hello_world))
         .route("/ws", any(websockets::handler))
         .with_state(state)
         .layer(TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)));
@@ -121,8 +158,4 @@ async fn main() -> Result<()> {
     //         Ok(())
     //     }
     // }
-}
-
-async fn hello_world() -> (StatusCode, String) {
-    (StatusCode::IM_A_TEAPOT, "I'm a teapot!".to_owned())
 }

@@ -34,7 +34,7 @@ pub struct ProducerConfig {
 pub struct Message<T> {
     pub topic: String,
     pub key: String,
-    pub headers: HashMap<String, String>,
+    pub headers: Option<HashMap<String, String>>,
     pub payload: T,
 }
 
@@ -120,39 +120,36 @@ where
                 }
             };
 
-            let headers = match message.headers() {
-                Some(headers) => {
-                    let mut results = HashMap::new();
-                    results.reserve(headers.count());
-                    for header in headers.iter() {
-                        let value = match header.value.map(|value| std::str::from_utf8(value)) {
-                            Some(Ok(value)) => value,
-                            Some(Err(e)) => {
-                                warn!(
-                                    "header value failed to parse as utf8, topic: {}, key: {}, header: {}, error: {:?}",
-                                    message.topic(),
-                                    key,
-                                    header.key,
-                                    e
-                                );
-                                continue;
-                            }
-                            None => {
-                                warn!(
-                                    "header value missing, topic: {}, key: {}, header: {}",
-                                    message.topic(),
-                                    key,
-                                    header.key
-                                );
-                                continue;
-                            }
-                        };
-                        results.insert(header.key.to_owned(), value.to_owned());
-                    }
-                    results
+            let headers = message.headers().map(|headers| {
+                let mut results = HashMap::new();
+                results.reserve(headers.count());
+                for header in headers.iter() {
+                    let value = match header.value.map(|value| std::str::from_utf8(value)) {
+                        Some(Ok(value)) => value,
+                        Some(Err(e)) => {
+                            warn!(
+                                "header value failed to parse as utf8, topic: {}, key: {}, header: {}, error: {:?}",
+                                message.topic(),
+                                key,
+                                header.key,
+                                e
+                            );
+                            continue;
+                        }
+                        None => {
+                            warn!(
+                                "header value missing, topic: {}, key: {}, header: {}",
+                                message.topic(),
+                                key,
+                                header.key
+                            );
+                            continue;
+                        }
+                    };
+                    results.insert(header.key.to_owned(), value.to_owned());
                 }
-                None => HashMap::new(),
-            };
+                results
+            });
 
             let payload = match message.payload().map(|s| std::str::from_utf8(s)) {
                 Some(Ok(payload)) => payload,
@@ -227,11 +224,6 @@ where
         while let Some(message) = receiver.recv().await {
             info!("sending message: {:?}", message);
 
-            let mut headers = OwnedHeaders::new();
-            for (key, value) in message.headers.iter() {
-                headers = headers.insert(Header { key, value: Some(&value) });
-            }
-
             let payload = match serde_json::to_string(&message.payload) {
                 Ok(payload) => payload,
                 Err(e) => {
@@ -240,16 +232,19 @@ where
                 }
             };
 
-            match producer
-                .send(
-                    FutureRecord::to(&message.topic)
-                        .payload(&payload)
-                        .key(message.key.as_bytes())
-                        .headers(headers),
-                    Duration::from_secs(0),
-                )
-                .await
-            {
+            let future_record = FutureRecord::to(&message.topic).payload(&payload).key(message.key.as_bytes());
+
+            let future_record = if let Some(ref headers) = message.headers {
+                let mut result = OwnedHeaders::new();
+                for (key, value) in headers.iter() {
+                    result = result.insert(Header { key, value: Some(&value) });
+                }
+                future_record.headers(result)
+            } else {
+                future_record
+            };
+
+            match producer.send(future_record, Duration::from_secs(0)).await {
                 Ok(result) => debug!("message sent, message: {:?}, result: {:?}", message, result),
                 Err(e) => error!("error sending message: {e:?}"),
             };

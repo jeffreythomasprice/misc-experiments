@@ -54,3 +54,9 @@ impl<'de> Deserialize<'de> for Id {
         deserializer.deserialize_str(IdVisitor {})
     }
 }
+
+impl ToString for Id {
+    fn to_string(&self) -> String {
+        self.0.to_string()
+    }
+}

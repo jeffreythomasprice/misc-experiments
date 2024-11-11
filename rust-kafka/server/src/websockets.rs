@@ -8,7 +8,7 @@ use anyhow::Result;
 use axum::{
     extract::{
         ws::{self, WebSocket},
-        ConnectInfo, State, WebSocketUpgrade,
+        ConnectInfo, FromRef, State, WebSocketUpgrade,
     },
     response::IntoResponse,
 };
@@ -23,6 +23,11 @@ use tokio::{
 };
 use tracing::*;
 
+use crate::{
+    kafka::{produce, ProducerConfig},
+    AppState, Kafka, Message, BOOTSTRAP_SERVERS,
+};
+
 #[derive(Clone)]
 pub struct ConnectedClients {
     clients: Arc<Mutex<HashMap<Id, Client>>>,
@@ -33,6 +38,12 @@ impl ConnectedClients {
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+}
+
+impl FromRef<AppState> for ConnectedClients {
+    fn from_ref(input: &AppState) -> Self {
+        input.websockets.clone()
     }
 }
 
@@ -53,7 +64,8 @@ pub async fn handler(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(state): State<ConnectedClients>,
+    State(connected_clients): State<ConnectedClients>,
+    State(kafka): State<Kafka>,
 ) -> impl IntoResponse {
     let client = ClientDescription {
         addr,
@@ -67,10 +79,10 @@ pub async fn handler(
     };
     info!("ws client connected: {:?}", client);
 
-    ws.on_upgrade(move |socket| handle_socket(state, socket, client))
+    ws.on_upgrade(move |socket| handle_socket(connected_clients, kafka, socket, client))
 }
 
-async fn handle_socket(state: ConnectedClients, socket: WebSocket, client_description: ClientDescription) {
+async fn handle_socket(state: ConnectedClients, kafka: Kafka, socket: WebSocket, client_description: ClientDescription) {
     let (sender, mut receiver) =
         websocket_to_json_channels::<WebsocketServerToClientMessage, WebsocketClientToServerMessage>(socket, &client_description).await;
 
@@ -85,6 +97,7 @@ async fn handle_socket(state: ConnectedClients, socket: WebSocket, client_descri
                     client_description,
                     message
                 );
+
                 match message {
                     WebsocketClientToServerMessage::Hello { name } => {
                         debug!("client updated name, client: {:?}, new name: {}", client_description, name);
@@ -114,8 +127,19 @@ async fn handle_socket(state: ConnectedClients, socket: WebSocket, client_descri
                             );
                         }
                     }
+
                     WebsocketClientToServerMessage::Message { id, timestamp, payload } => {
-                        // TODO send to kafka
+                        if let Err(e) = kafka
+                            .send_message(Message {
+                                id,
+                                timestamp,
+                                sender: client_description.id.clone(),
+                                payload,
+                            })
+                            .await
+                        {
+                            error!("error sending message to kafka, error: {:?}", e);
+                        }
                     }
                 };
             }

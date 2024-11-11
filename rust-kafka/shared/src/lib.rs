@@ -30,7 +30,7 @@ pub enum WebsocketServerToClientMessage {
     Message {
         id: Id,
         timestamp: Timestamp,
-        sender: String,
+        sender: Id,
         payload: String,
     },
 }
