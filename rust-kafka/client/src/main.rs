@@ -12,9 +12,7 @@ fn main() {
     console_log::init_with_level(Level::Trace).unwrap();
 
     mount_to_body(move || {
-        view! {
-            <App  />
-        }
+        view! { <App /> }
     })
 }
 
@@ -61,34 +59,43 @@ fn Name(done: WriteSignal<Option<String>>) -> impl IntoView {
 
 #[component]
 fn Messages(name: String) -> impl IntoView {
-    let (id, set_id) = create_signal(None);
+    let (id, set_id) = create_signal::<Option<String>>(None);
     let (message, set_message) = create_signal("".to_owned());
+
+    let received_message = {
+        let set_id = set_id.clone();
+        create_action(move |message: &WebsocketServerToClientMessage| {
+            let message = message.clone();
+            async move {
+                trace!("received message from websocket: {:?}", message);
+                match message {
+                    WebsocketServerToClientMessage::Welcome { id } => set_id(Some(id.to_string())),
+                    WebsocketServerToClientMessage::Message {
+                        id,
+                        timestamp,
+                        sender,
+                        payload,
+                    } => {
+                        // TODO put message on screen
+                    }
+                };
+            }
+        })
+    };
 
     let websocket_sender = {
         let name = name.clone();
-        let set_id = set_id.clone();
+        let received_message = received_message.clone();
         create_local_resource(
-            move || (name.clone(), set_id),
-            |(name, set_id)| async move {
+            move || name.clone(),
+            move |name| async move {
                 match websockets::connect::<WebsocketClientToServerMessage, WebsocketServerToClientMessage>("http://localhost:8001/ws")
                     .await
                 {
                     Ok((mut sender, mut receiver)) => {
-                        // TODO spawn_local isn't supposed to access signals, use an action?
                         spawn_local(async move {
                             while let Some(message) = receiver.next().await {
-                                trace!("received message from websocket: {:?}", message);
-                                match message {
-                                    WebsocketServerToClientMessage::Welcome { id } => set_id(Some(id.to_string())),
-                                    WebsocketServerToClientMessage::Message {
-                                        id,
-                                        timestamp,
-                                        sender,
-                                        payload,
-                                    } => {
-                                        // TODO put message on screen
-                                    }
-                                };
+                                received_message.dispatch(message);
                             }
                         });
 
@@ -117,8 +124,9 @@ fn Messages(name: String) -> impl IntoView {
             let result = message();
             let result = result.trim().to_owned();
             if !result.is_empty() {
+                let sender = websocket_sender().flatten();
                 spawn_local(async move {
-                    send_message_to_websocket(websocket_sender().flatten(), result).await;
+                    send_message_to_websocket(sender, result).await;
                 });
                 set_message("".to_owned());
             }
