@@ -1,12 +1,9 @@
-use std::pin::Pin;
 
 use anyhow::{anyhow, Result};
 use futures::{
-    channel::mpsc::{channel, unbounded, Receiver, Sender, UnboundedReceiver},
-    stream::SplitStream,
-    SinkExt, Stream, StreamExt,
+    channel::mpsc::{channel, Receiver, Sender},
+    SinkExt, StreamExt,
 };
-use gloo::events::EventListener;
 use leptos::spawn_local;
 use log::*;
 use serde::{de::DeserializeOwned, Serialize};

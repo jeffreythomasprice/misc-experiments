@@ -1,13 +1,12 @@
 mod kafka;
 mod websockets;
 
-use std::{collections::HashMap, env, net::SocketAddr};
+use std::{env, net::SocketAddr};
 
 use anyhow::Result;
 use axum::{
     extract::FromRef,
-    http::StatusCode,
-    routing::{any, get},
+    routing::any,
     serve, Router,
 };
 use kafka::{consume, produce, ConsumerConfig, ProducerConfig};

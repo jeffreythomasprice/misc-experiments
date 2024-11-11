@@ -4,7 +4,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::Result;
 use axum::{
     extract::{
         ws::{self, WebSocket},
@@ -14,7 +13,7 @@ use axum::{
 };
 use axum_extra::{headers::UserAgent, TypedHeader};
 use futures::{SinkExt, StreamExt};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use shared::Id;
 use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
 use tokio::{
@@ -24,8 +23,7 @@ use tokio::{
 use tracing::*;
 
 use crate::{
-    kafka::{produce, ProducerConfig},
-    AppState, Kafka, Message, BOOTSTRAP_SERVERS,
+    AppState, Kafka, Message,
 };
 
 #[derive(Clone)]
@@ -129,6 +127,7 @@ async fn handle_socket(state: ConnectedClients, kafka: Kafka, socket: WebSocket,
                     }
 
                     WebsocketClientToServerMessage::Message { id, timestamp, payload } => {
+                        // send to kafka
                         if let Err(e) = kafka
                             .send_message(Message {
                                 id,
