@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use serde::{de::Visitor, Deserialize, Serialize};
 
@@ -5,13 +6,13 @@ use serde::{de::Visitor, Deserialize, Serialize};
 pub struct Timestamp(DateTime<Utc>);
 
 impl Timestamp {
-    pub fn now() -> Timestamp {
+    pub fn now() -> Result<Timestamp> {
         let now = web_time::SystemTime::now();
-        // TODO no unwrap
-        let millis = now.duration_since(web_time::UNIX_EPOCH).unwrap().as_millis();
-        // TODO no unwrap
-        // TODO cast could fail
-        Timestamp(DateTime::from_timestamp_millis(millis as i64).unwrap())
+        let unix_timestamp = now.duration_since(web_time::UNIX_EPOCH)?.as_millis();
+        let unix_timestamp: i64 = unix_timestamp.try_into()?;
+        Ok(Timestamp(
+            DateTime::from_timestamp_millis(unix_timestamp).ok_or(anyhow!("error converting unix timestamp to chrono datetime"))?,
+        ))
     }
 }
 

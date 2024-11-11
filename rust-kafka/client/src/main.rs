@@ -5,14 +5,11 @@ use std::panic;
 use futures::{channel::mpsc::Sender, SinkExt, StreamExt};
 use leptos::*;
 use log::*;
-use shared::{Timestamp, WebsocketClientToServerMessage, WebsocketServerToClientMessage};
+use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
 
 fn main() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init_with_level(Level::Trace).unwrap();
-
-    info!("about to do time stuff");
-    info!("{:?}", shared::Timestamp::now());
 
     let websocket_sender = create_local_resource(
         || (),
@@ -73,10 +70,14 @@ fn Counter(callback: impl Fn(String) + 'static) -> impl IntoView {
 
 async fn send_message_to_websocket(sender: Option<Sender<WebsocketClientToServerMessage>>, message: String) {
     if let Some(mut sender) = sender {
-        let message = WebsocketClientToServerMessage::new_message(message.to_string());
-        trace!("sending websocket message: {:?}", message);
-        if let Err(e) = sender.send(message).await {
-            error!("error sending message to websocket, error: {:?}", e);
+        match WebsocketClientToServerMessage::new_message(message.to_string()) {
+            Ok(message) => {
+                trace!("sending websocket message: {:?}", message);
+                if let Err(e) = sender.send(message).await {
+                    error!("error sending message to websocket, error: {:?}", e);
+                }
+            }
+            Err(e) => error!("error creating message object, error: {:?}", e),
         }
     } else {
         warn!("websocket sender isn't available");

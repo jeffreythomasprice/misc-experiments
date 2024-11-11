@@ -1,6 +1,7 @@
 mod id;
 mod timestamp;
 
+use anyhow::Result;
 pub use id::Id;
 use serde::{Deserialize, Serialize};
 pub use timestamp::Timestamp;
@@ -12,12 +13,12 @@ pub enum WebsocketClientToServerMessage {
 }
 
 impl WebsocketClientToServerMessage {
-    pub fn new_message(message: String) -> Self {
-        Self::Message {
+    pub fn new_message(message: String) -> Result<Self> {
+        Ok(Self::Message {
             id: Id::new(),
-            timestamp: Timestamp::now(),
+            timestamp: Timestamp::now()?,
             payload: message,
-        }
+        })
     }
 }
 
