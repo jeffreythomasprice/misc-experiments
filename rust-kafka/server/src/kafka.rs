@@ -208,6 +208,7 @@ where
     Ok(receiver)
 }
 
+// TODO produce should be a thing that takes config and gives you back a channel to write to
 pub async fn produce<T>(config: ProducerConfig) -> Result<Sender<Message<T>>>
 where
     T: Serialize + Debug + Send + 'static,

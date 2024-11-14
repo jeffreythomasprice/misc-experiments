@@ -18,7 +18,7 @@ docker exec -it broker /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-serve
 
 ```
 cd server
-cargo watch -x run
+cargo watch -s "cargo run -- --config-file config.json"
 ```
 
 ```

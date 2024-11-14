@@ -1,0 +1,5 @@
+{
+	"bootstrap_servers": "localhost:9092",
+	"all_messages_topic_name": "all-messages",
+	"all_messages_consumer_group_id": "all-messages"
+}

@@ -1,10 +1,11 @@
 mod kafka;
 mod websockets;
 
-use std::{env, net::SocketAddr};
+use std::{env, fs::File, net::SocketAddr};
 
 use anyhow::Result;
 use axum::{extract::FromRef, routing::any, serve, Router};
+use clap::Parser;
 use kafka::{consume, produce, ConsumerConfig, ProducerConfig};
 use rdkafka::util::get_rdkafka_version;
 use serde::{Deserialize, Serialize};
@@ -14,10 +15,19 @@ use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-// TODO use a config file
-const BOOTSTRAP_SERVERS: &str = "localhost:9092";
-const ALL_MESSAGES_TOPIC_NAME: &str = "all-messages";
-const ALL_MESSAGES_CONSUMER_GROUP_ID: &str = "all-messages";
+#[derive(Debug, Parser)]
+#[command(version, about, long_about = None)]
+struct Arguments {
+    #[arg(short = 'c', long)]
+    config_file: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    bootstrap_servers: String,
+    all_messages_topic_name: String,
+    all_messages_consumer_group_id: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Message {
@@ -30,17 +40,30 @@ struct Message {
 #[derive(Clone)]
 struct Kafka {
     bootstrap_servers: String,
+    all_messages_topic_name: String,
 }
 
 impl Kafka {
-    pub fn new(bootstrap_servers: String) -> Self {
+    pub async fn new(config: &Config) -> Result<Self> {
+        let result = Self {
+            bootstrap_servers: config.bootstrap_servers.clone(),
+            all_messages_topic_name: config.all_messages_topic_name.clone(),
+        };
+
+        let mut receiver = consume::<Message>(ConsumerConfig {
+            bootstrap_servers: config.bootstrap_servers.clone(),
+            group_id: config.all_messages_consumer_group_id.clone(),
+            topics: vec![config.all_messages_topic_name.clone()],
+        })
+        .await?;
+
         spawn(async move {
-            if let Err(e) = Self::consume_all_messages(BOOTSTRAP_SERVERS.to_string()).await {
-                error!("all messages consumer error: {:?}", e);
+            while let Some(message) = receiver.recv().await {
+                info!("TODO received message over kafka all messages topic: {:?}", message);
             }
         });
 
-        Self { bootstrap_servers }
+        Ok(result)
     }
 
     pub async fn send_message(&self, message: Message) -> Result<()> {
@@ -51,27 +74,12 @@ impl Kafka {
 
         sender
             .send(kafka::Message {
-                topic: ALL_MESSAGES_TOPIC_NAME.to_owned(),
+                topic: self.all_messages_topic_name.clone(),
                 key: message.id.to_string(),
                 headers: None,
                 payload: message,
             })
             .await?;
-
-        Ok(())
-    }
-
-    async fn consume_all_messages(bootstrap_servers: String) -> Result<()> {
-        let mut receiver = consume::<Message>(ConsumerConfig {
-            bootstrap_servers,
-            group_id: ALL_MESSAGES_CONSUMER_GROUP_ID.to_owned(),
-            topics: vec![ALL_MESSAGES_TOPIC_NAME.to_owned()],
-        })
-        .await?;
-
-        while let Some(message) = receiver.recv().await {
-            info!("TODO received message over kafka all messages topic: {:?}", message);
-        }
 
         Ok(())
     }
@@ -105,11 +113,16 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let args = Arguments::parse();
+    trace!("args = {:?}", args);
+    let config: Config = serde_json::from_reader(File::open(args.config_file)?)?;
+    trace!("config = {:?}", config);
+
     info!("rdkafka version = {:?}", get_rdkafka_version());
 
     let state = AppState {
         websockets: websockets::ConnectedClients::new(),
-        kafka: Kafka::new(BOOTSTRAP_SERVERS.to_string()),
+        kafka: Kafka::new(&config).await?,
     };
 
     let app = Router::new()
