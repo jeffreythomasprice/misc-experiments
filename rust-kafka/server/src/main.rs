@@ -6,7 +6,7 @@ use std::{env, fs::File, net::SocketAddr};
 use anyhow::Result;
 use axum::{extract::FromRef, routing::any, serve, Router};
 use clap::Parser;
-use kafka::{consume, produce, ConsumerConfig, ProducerConfig};
+use kafka::{consume, list_topics, produce, ConsumerConfig, ProducerConfig};
 use rdkafka::util::get_rdkafka_version;
 use serde::{Deserialize, Serialize};
 use shared::{Id, Timestamp};
@@ -124,6 +124,8 @@ async fn main() -> Result<()> {
         websockets: websockets::ConnectedClients::new(),
         kafka: Kafka::new(&config).await?,
     };
+
+    info!("all kafka topics: {:?}", list_topics(&config.bootstrap_servers).await?);
 
     let app = Router::new()
         .route("/ws", any(websockets::handler))

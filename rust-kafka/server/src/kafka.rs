@@ -5,7 +5,7 @@ use rdkafka::{
     admin::{AdminClient, AdminOptions, NewTopic, TopicReplication},
     client::DefaultClientContext,
     config::RDKafkaLogLevel,
-    consumer::{Consumer, ConsumerContext, StreamConsumer},
+    consumer::{BaseConsumer, Consumer, ConsumerContext, StreamConsumer},
     message::{Header, Headers, OwnedHeaders},
     producer::{FutureProducer, FutureRecord},
     types::RDKafkaErrorCode,
@@ -71,6 +71,25 @@ impl ConsumerContext for KafkaContext {
     fn commit_callback(&self, result: rdkafka::error::KafkaResult<()>, offsets: &rdkafka::TopicPartitionList) {
         info!("commit_callbackcommit_: {:?}, {:?}", result, offsets);
     }
+}
+
+pub async fn list_topics(bootstrap_servers: &str) -> Result<Vec<String>> {
+    trace!("listing topics");
+
+    let consumer: BaseConsumer = client_config(bootstrap_servers)
+        .create()
+        .map_err(|e| anyhow!("error creating consumer: {e:?}"))?;
+
+    let metadata = consumer
+        .fetch_metadata(None, Duration::from_secs(5))
+        .map_err(|e| anyhow!("error fetching metadata: {e:?}"))?;
+
+    let mut results = Vec::with_capacity(metadata.topics().len());
+    for topic in metadata.topics() {
+        info!("topic: {}, partitions: {}", topic.name(), topic.partitions().len());
+        results.push(topic.name().to_string());
+    }
+    Ok(results)
 }
 
 pub async fn consume<T>(config: ConsumerConfig) -> Result<Receiver<Message<T>>>
