@@ -1,16 +1,16 @@
-mod kafka;
-mod websockets;
+mod controllers;
+mod services;
 
 use std::{env, fs::File, net::SocketAddr};
 
 use anyhow::Result;
-use axum::{extract::FromRef, routing::any, serve, Router};
+use axum::{routing::any, serve, Router};
 use clap::Parser;
-use kafka::{consume, list_topics, produce, ConsumerConfig, ProducerConfig};
+use controllers::{app::AppState, kafka::Kafka, websockets::ConnectedClients};
 use rdkafka::util::get_rdkafka_version;
-use serde::{Deserialize, Serialize};
-use shared::{Id, Timestamp};
-use tokio::{net::TcpListener, spawn};
+use serde::Deserialize;
+use services::kafka::list_topics;
+use tokio::net::TcpListener;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -27,80 +27,6 @@ struct Config {
     bootstrap_servers: String,
     all_messages_topic_name: String,
     all_messages_consumer_group_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Message {
-    id: Id,
-    timestamp: Timestamp,
-    sender: Id,
-    payload: String,
-}
-
-#[derive(Clone)]
-struct Kafka {
-    bootstrap_servers: String,
-    all_messages_topic_name: String,
-}
-
-impl Kafka {
-    pub async fn new(config: &Config) -> Result<Self> {
-        let result = Self {
-            bootstrap_servers: config.bootstrap_servers.clone(),
-            all_messages_topic_name: config.all_messages_topic_name.clone(),
-        };
-
-        let mut receiver = consume::<Message>(ConsumerConfig {
-            bootstrap_servers: config.bootstrap_servers.clone(),
-            group_id: config.all_messages_consumer_group_id.clone(),
-            topics: vec![config.all_messages_topic_name.clone()],
-        })
-        .await?;
-
-        spawn(async move {
-            while let Some(message) = receiver.recv().await {
-                info!("TODO received message over kafka all messages topic: {:?}", message);
-            }
-        });
-
-        Ok(result)
-    }
-
-    pub async fn send_message(&self, message: Message) -> Result<()> {
-        let sender = produce(ProducerConfig {
-            bootstrap_servers: self.bootstrap_servers.clone(),
-        })
-        .await?;
-
-        sender
-            .send(kafka::Message {
-                topic: self.all_messages_topic_name.clone(),
-                key: message.id.to_string(),
-                headers: None,
-                payload: message,
-            })
-            .await?;
-
-        Ok(())
-    }
-
-    /*
-    TODO more server functionality
-    all topic consumer should re-write to destination-specific topics
-    websockets should request lists of topics they care about and the websoccket handlers should update a list of topics to listen to
-    */
-}
-
-#[derive(Clone)]
-struct AppState {
-    websockets: websockets::ConnectedClients,
-    kafka: Kafka,
-}
-
-impl FromRef<AppState> for Kafka {
-    fn from_ref(input: &AppState) -> Self {
-        input.kafka.clone()
-    }
 }
 
 #[tokio::main]
@@ -121,14 +47,14 @@ async fn main() -> Result<()> {
     info!("rdkafka version = {:?}", get_rdkafka_version());
 
     let state = AppState {
-        websockets: websockets::ConnectedClients::new(),
+        websockets: ConnectedClients::new(),
         kafka: Kafka::new(&config).await?,
     };
 
     info!("all kafka topics: {:?}", list_topics(&config.bootstrap_servers).await?);
 
     let app = Router::new()
-        .route("/ws", any(websockets::handler))
+        .route("/ws", any(controllers::websockets::handler))
         .with_state(state)
         .layer(TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)));
     let listener = TcpListener::bind("127.0.0.1:8001").await?;

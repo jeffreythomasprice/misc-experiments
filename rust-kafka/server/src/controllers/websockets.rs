@@ -5,24 +5,21 @@ use std::{
 };
 
 use axum::{
-    extract::{
-        ws::{self, WebSocket},
-        ConnectInfo, FromRef, State, WebSocketUpgrade,
-    },
+    extract::{ws::WebSocket, ConnectInfo, State, WebSocketUpgrade},
     response::IntoResponse,
 };
 use axum_extra::{headers::UserAgent, TypedHeader};
-use futures::{SinkExt, StreamExt};
-use serde::{de::DeserializeOwned, Serialize};
 use shared::Id;
 use shared::{WebsocketClientToServerMessage, WebsocketServerToClientMessage};
-use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
-    task::spawn,
-};
+use tokio::{sync::mpsc::Sender, task::spawn};
 use tracing::*;
 
-use crate::{AppState, Kafka, Message};
+use crate::{
+    controllers::kafka::Message,
+    services::websocket::{websocket_to_json_channels, ClientDescription},
+};
+
+use super::kafka::Kafka;
 
 #[derive(Clone)]
 pub struct ConnectedClients {
@@ -37,20 +34,6 @@ impl ConnectedClients {
     }
 }
 
-impl FromRef<AppState> for ConnectedClients {
-    fn from_ref(input: &AppState) -> Self {
-        input.websockets.clone()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ClientDescription {
-    addr: SocketAddr,
-    user_agent: Option<String>,
-    id: Id,
-    name: Option<String>,
-}
-
 struct Client {
     description: ClientDescription,
     sender: Sender<WebsocketServerToClientMessage>,
@@ -63,19 +46,10 @@ pub async fn handler(
     State(connected_clients): State<ConnectedClients>,
     State(kafka): State<Kafka>,
 ) -> impl IntoResponse {
-    let client = ClientDescription {
-        addr,
-        user_agent: if let Some(TypedHeader(user_agent)) = user_agent {
-            Some(user_agent.to_string())
-        } else {
-            None
-        },
-        id: Id::new(),
-        name: None,
-    };
-    info!("ws client connected: {:?}", client);
+    let client_description = ClientDescription::new(addr, user_agent);
+    info!("ws client connected: {:?}", client_description);
 
-    ws.on_upgrade(move |socket| handle_socket(connected_clients, kafka, socket, client))
+    ws.on_upgrade(move |socket| handle_socket(connected_clients, kafka, socket, client_description))
 }
 
 async fn handle_socket(connected_clients: ConnectedClients, kafka: Kafka, socket: WebSocket, client_description: ClientDescription) {
@@ -151,69 +125,4 @@ async fn handle_socket(connected_clients: ConnectedClients, kafka: Kafka, socket
             sender,
         },
     );
-}
-
-async fn websocket_to_json_channels<S, R>(socket: WebSocket, client_description: &ClientDescription) -> (Sender<S>, Receiver<R>)
-where
-    S: Serialize + Send + 'static,
-    R: DeserializeOwned + Send + 'static,
-{
-    let (mut sender, mut receiver) = socket.split();
-
-    let (output_sender, mut output_receiver) = channel::<S>(1);
-    {
-        let client_description = client_description.clone();
-        spawn(async move {
-            while let Some(message) = output_receiver.recv().await {
-                match serde_json::to_string(&message) {
-                    Ok(message) => {
-                        if let Err(e) = sender.send(ws::Message::Text(message)).await {
-                            error!(
-                                "error sending outgoing message to websocket, client: {:?}, error: {:?}",
-                                client_description, e
-                            );
-                        }
-                    }
-                    Err(e) => error!(
-                        "error serializing outgoing message, client {:?}, error: {:?}",
-                        client_description, e
-                    ),
-                };
-            }
-        });
-    }
-
-    let (input_sender, input_receiver) = channel::<R>(1);
-    {
-        let client_description = client_description.clone();
-        spawn(async move {
-            while let Some(message) = receiver.next().await {
-                match message {
-                    Ok(ws::Message::Text(message)) => {
-                        match serde_json::from_str(&message) {
-                            Ok(message) => {
-                                if let Err(e) = input_sender.send(message).await {
-                                    error!(
-                                        "error sending incoming message to channel for websocket, client: {:?}, error: {:?}",
-                                        client_description, e
-                                    );
-                                }
-                            }
-                            Err(e) => error!(
-                                "error deserializing incoming websocket message, client: {:?}, error: {:?}",
-                                client_description, e
-                            ),
-                        };
-                    }
-                    Ok(ws::Message::Binary(_)) => {
-                        todo!("handle binary messages")
-                    }
-                    Err(e) => error!("error receiving from websocket {:?}, error: {:?}", client_description, e),
-                    _ => (),
-                };
-            }
-        });
-    }
-
-    (output_sender, input_receiver)
 }
