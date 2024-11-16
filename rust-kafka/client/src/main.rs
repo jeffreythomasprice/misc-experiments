@@ -20,24 +20,20 @@ fn main() {
 
 #[component]
 fn App() -> impl IntoView {
-    create_resource(
-        || (),
-        |_| async {
-            match get_channels().await {
-                Ok(result) => debug!("TODO channels: {:?}", result),
-                Err(e) => error!("error getting channels: {e:?}"),
-            }
-        },
-    );
-
     let (name, set_name) = create_signal(None);
 
     view! {
         {move || match name() {
             Some(name) => {
-                view! { <Messages name=name /> }
+                view! {
+                    <div>
+                        <Channels />
+                        <Messages name=name />
+                    </div>
+                }
+                    .into_view()
             }
-            None => view! { <Name done=set_name /> },
+            None => view! { <Name done=set_name /> }.into_view(),
         }}
     }
 }
@@ -66,6 +62,53 @@ fn Name(done: WriteSignal<Option<String>>) -> impl IntoView {
             />
             <button type="submit">OK</button>
         </form>
+    }
+}
+
+#[component]
+fn Channels() -> impl IntoView {
+    let (new_channel_name, set_new_channel_name) = create_signal("".to_string());
+
+    let channels = create_resource(
+        || (),
+        |_| async {
+            match get_channels().await {
+                Ok(result) => result,
+                Err(e) => {
+                    error!("error getting channels: {e:?}");
+                    // TODO show an error on the page, toaster?
+                    Vec::new()
+                }
+            }
+        },
+    );
+
+    view! {
+        <form on:submit=move |e| {
+            e.prevent_default();
+            let result = new_channel_name();
+            let result = result.trim().to_owned();
+            if !result.is_empty() {
+                set_new_channel_name("".to_owned());
+                debug!("TODO create channel: {}", result);
+            }
+        }>
+            <input
+                type="text"
+                placeholder="New Channel"
+                autofocus
+                prop:value=new_channel_name
+                on:input=move |e| {
+                    set_new_channel_name(event_target_value(&e));
+                }
+            />
+            <button type="submit">Add Channel</button>
+        </form>
+        <For
+            each=move || channels.get()
+            key=|channel| channel.clone()
+            children=|channel| view! { <div>{channel}</div> }
+        />
     }
 }
 
