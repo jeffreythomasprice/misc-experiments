@@ -1,17 +1,23 @@
-mod controllers;
+mod app;
 mod services;
 
 use std::{env, fs::File, net::SocketAddr};
 
 use anyhow::Result;
-use axum::{routing::any, serve, Router};
+use app::{app::AppState, kafka::Kafka, websockets::ConnectedClients};
+use axum::{
+    routing::{any, get},
+    serve, Router,
+};
 use clap::Parser;
-use controllers::{app::AppState, kafka::Kafka, websockets::ConnectedClients};
 use rdkafka::util::get_rdkafka_version;
 use serde::Deserialize;
 use services::kafka::list_topics;
 use tokio::net::TcpListener;
-use tower_http::trace::{DefaultMakeSpan, TraceLayer};
+use tower_http::{
+    cors::CorsLayer,
+    trace::{DefaultMakeSpan, TraceLayer},
+};
 use tracing::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -27,6 +33,7 @@ struct Config {
     bootstrap_servers: String,
     all_messages_topic_name: String,
     all_messages_consumer_group_id: String,
+    channel_topic_name_prefix: String,
 }
 
 #[tokio::main]
@@ -51,11 +58,15 @@ async fn main() -> Result<()> {
         kafka: Kafka::new(&config).await?,
     };
 
-    info!("all kafka topics: {:?}", list_topics(&config.bootstrap_servers).await?);
-
     let app = Router::new()
-        .route("/ws", any(controllers::websockets::handler))
+        .route("/channels", get(app::kafka::get_channels))
+        .route("/ws", any(app::websockets::handler))
         .with_state(state)
+        .layer(
+            CorsLayer::new()
+                .allow_methods(tower_http::cors::Any)
+                .allow_origin(tower_http::cors::Any),
+        )
         .layer(TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)));
     let listener = TcpListener::bind("127.0.0.1:8001").await?;
     serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;

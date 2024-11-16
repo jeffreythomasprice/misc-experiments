@@ -1,7 +1,9 @@
+mod api;
 mod websockets;
 
 use std::panic;
 
+use api::get_channels;
 use futures::{channel::mpsc::Sender, SinkExt, StreamExt};
 use leptos::*;
 use log::*;
@@ -18,6 +20,16 @@ fn main() {
 
 #[component]
 fn App() -> impl IntoView {
+    create_resource(
+        || (),
+        |_| async {
+            match get_channels().await {
+                Ok(result) => debug!("TODO channels: {:?}", result),
+                Err(e) => error!("error getting channels: {e:?}"),
+            }
+        },
+    );
+
     let (name, set_name) = create_signal(None);
 
     view! {

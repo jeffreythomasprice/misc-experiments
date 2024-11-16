@@ -1,4 +1,6 @@
 use anyhow::Result;
+use axum::{extract::State, http::StatusCode, Json};
+use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 use shared::{Id, Timestamp};
 use tokio::spawn;
@@ -7,7 +9,7 @@ use tracing::*;
 use crate::{
     services::{
         self,
-        kafka::{consume, produce, ConsumerConfig, ProducerConfig},
+        kafka::{consume, list_topics, produce, ConsumerConfig, ProducerConfig},
     },
     Config,
 };
@@ -24,6 +26,7 @@ pub struct Message {
 pub struct Kafka {
     bootstrap_servers: String,
     all_messages_topic_name: String,
+    channel_topic_name_prefix: String,
 }
 
 impl Kafka {
@@ -31,6 +34,7 @@ impl Kafka {
         let result = Self {
             bootstrap_servers: config.bootstrap_servers.clone(),
             all_messages_topic_name: config.all_messages_topic_name.clone(),
+            channel_topic_name_prefix: config.channel_topic_name_prefix.clone(),
         };
 
         let mut receiver = consume::<Message>(ConsumerConfig {
@@ -47,6 +51,14 @@ impl Kafka {
         });
 
         Ok(result)
+    }
+
+    pub async fn get_channels(&self) -> Result<Vec<String>> {
+        let topics = list_topics(&self.bootstrap_servers).await?;
+        Ok(topics
+            .into_iter()
+            .filter(|topic| topic.starts_with(&self.channel_topic_name_prefix))
+            .collect())
     }
 
     pub async fn send_message(&self, message: Message) -> Result<()> {
@@ -72,4 +84,14 @@ impl Kafka {
     all topic consumer should re-write to destination-specific topics
     websockets should request lists of topics they care about and the websoccket handlers should update a list of topics to listen to
     */
+}
+
+pub async fn get_channels(State(kafka): State<Kafka>) -> Result<Json<Vec<String>>, StatusCode> {
+    match kafka.get_channels().await {
+        Ok(result) => Ok(Json(result)),
+        Err(e) => {
+            error!("error getting channels: {e:?}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }

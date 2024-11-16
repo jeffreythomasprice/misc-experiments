@@ -15,7 +15,7 @@ use tokio::{sync::mpsc::Sender, task::spawn};
 use tracing::*;
 
 use crate::{
-    controllers::kafka::Message,
+    app::kafka::Message,
     services::websocket::{websocket_to_json_channels, ClientDescription},
 };
 
