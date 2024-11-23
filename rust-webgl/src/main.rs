@@ -23,7 +23,10 @@ use math::camera::Camera;
 use nalgebra::Vector2;
 use nalgebra_glm::Vec3;
 use serde::Serialize;
-use std::{collections::HashMap, mem::offset_of, panic, rc::Rc, sync::Mutex, time::Duration};
+use std::{
+    collections::HashMap, future::Future, mem::offset_of, panic, rc::Rc, sync::Mutex,
+    time::Duration,
+};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
@@ -43,6 +46,40 @@ struct Vertex {
     color: RGBA,
 }
 
+// TODO move to new file
+trait UIState {
+    fn resize(&mut self, width: f64, height: f64) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn render(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn update(&mut self, delta: Duration) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn mouse_down(&mut self, e: &MousePressEvent) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn mouse_up(&mut self, e: &MousePressEvent) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn mouse_move(&mut self, e: &MouseMoveEvent) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn key_down(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn key_up(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
+        Ok(())
+    }
+}
 struct State {
     canvas: Rc<HtmlCanvasElement>,
     context: Rc<WebGl2RenderingContext>,
@@ -180,7 +217,32 @@ impl State {
         })
     }
 
-    pub fn resize(&mut self, width: f64, height: f64) -> Result<(), Error> {
+    fn is_pointer_locked(&self) -> bool {
+        match document().pointer_lock_element() {
+            Some(canvas) if canvas == ***self.canvas => true,
+            _ => false,
+        }
+    }
+
+    fn set_pointer_lock(&self, b: bool) {
+        if b {
+            self.canvas.request_pointer_lock();
+        } else {
+            document().exit_pointer_lock();
+        }
+    }
+
+    fn is_key_code_pressed(&self, code: &str) -> bool {
+        let key_state = self.key_state.lock().unwrap();
+        match key_state.get(code) {
+            Some(true) => true,
+            _ => false,
+        }
+    }
+}
+
+impl UIState for State {
+    fn resize(&mut self, width: f64, height: f64) -> Result<(), Error> {
         let width = width.floor() as u32;
         let height = height.floor() as u32;
         self.context.viewport(0, 0, width as i32, height as i32);
@@ -188,7 +250,7 @@ impl State {
         Ok(())
     }
 
-    pub fn render(&mut self) -> Result<(), Error> {
+    fn render(&mut self) -> Result<(), Error> {
         self.context
             .clear_color(100.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
@@ -231,7 +293,7 @@ impl State {
         Ok(())
     }
 
-    pub fn update(&mut self, delta: Duration) -> Result<(), Error> {
+    fn update(&mut self, delta: Duration) -> Result<(), Error> {
         let forward =
             if self.is_key_code_pressed("ArrowUp") || self.is_key_code_pressed("KeyW") {
                 1.0f32
@@ -270,64 +332,39 @@ impl State {
         Ok(())
     }
 
-    pub fn mouse_down(&mut self, e: &MousePressEvent) -> Result<(), Error> {
-        Ok(())
-    }
-
-    pub fn mouse_up(&mut self, e: &MousePressEvent) -> Result<(), Error> {
+    fn mouse_up(&mut self, e: &MousePressEvent) -> Result<(), Error> {
         if let MouseButton::Left = e.button() {
             self.set_pointer_lock(!self.is_pointer_locked());
         }
         Ok(())
     }
 
-    pub fn mouse_move(&mut self, e: &MouseMoveEvent) -> Result<(), Error> {
+    fn mouse_move(&mut self, e: &MouseMoveEvent) -> Result<(), Error> {
         if self.is_pointer_locked() {
             self.camera.turn_based_on_mouse_delta(e.delta());
         }
         Ok(())
     }
 
-    pub fn key_down(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
+    fn key_down(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
         let mut key_state = self.key_state.lock().unwrap();
         key_state.insert(e.code(), true);
         Ok(())
     }
 
-    pub fn key_up(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
+    fn key_up(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
         let mut key_state = self.key_state.lock().unwrap();
         key_state.insert(e.code(), false);
         Ok(())
     }
-
-    fn is_pointer_locked(&self) -> bool {
-        match document().pointer_lock_element() {
-            Some(canvas) if canvas == ***self.canvas => true,
-            _ => false,
-        }
-    }
-
-    fn set_pointer_lock(&self, b: bool) {
-        if b {
-            self.canvas.request_pointer_lock();
-        } else {
-            document().exit_pointer_lock();
-        }
-    }
-
-    fn is_key_code_pressed(&self, code: &str) -> bool {
-        let key_state = self.key_state.lock().unwrap();
-        match key_state.get(code) {
-            Some(true) => true,
-            _ => false,
-        }
-    }
 }
 
-fn main() -> Result<(), Error> {
-    panic::set_hook(Box::new(console_error_panic_hook::hook));
-    console_log::init_with_level(Level::Trace).map_err(|e| e.to_string())?;
-
+// TODO move to new file
+fn run<R, F>(initial_state_factory: F) -> Result<(), Error>
+where
+    R: Future<Output = Result<Box<dyn UIState>, Error>>,
+    F: FnOnce(Rc<HtmlCanvasElement>, Rc<WebGl2RenderingContext>) -> R + 'static,
+{
     let canvas: HtmlCanvasElement = document()
         .create_element("canvas")?
         .dyn_into()
@@ -359,13 +396,13 @@ fn main() -> Result<(), Error> {
         })?;
 
     let canvas = Rc::new(canvas);
-    let state: Rc<Mutex<Option<State>>> = Rc::new(Mutex::new(None));
+    let state: Rc<Mutex<Option<Box<dyn UIState>>>> = Rc::new(Mutex::new(None));
 
     {
         let canvas = canvas.clone();
         let state = state.clone();
         spawn_local(async move {
-            match State::new(canvas.clone(), Rc::new(context)).await {
+            match initial_state_factory(canvas.clone(), Rc::new(context)).await {
                 Ok(mut s) => {
                     if let Err(e) = resize(&canvas, &mut s) {
                         panic!("initial resize error: {e:?}");
@@ -498,7 +535,19 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn resize(canvas: &HtmlCanvasElement, state: &mut State) -> Result<(), Error> {
+fn main() -> Result<(), Error> {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+    console_log::init_with_level(Level::Trace).map_err(|e| e.to_string())?;
+
+    run(|canvas, context| async {
+        State::new(canvas, context).await.map(|state| {
+            let result: Box<dyn UIState> = Box::new(state);
+            result
+        })
+    })
+}
+
+fn resize(canvas: &HtmlCanvasElement, state: &mut Box<dyn UIState>) -> Result<(), Error> {
     let width = window().inner_width()?.as_f64().ok_or("expected float")?;
     let height = window().inner_height()?.as_f64().ok_or("expected float")?;
     canvas.set_width(width.floor() as u32);
