@@ -164,21 +164,24 @@ impl State {
         )?;
 
         let texture = {
-            let size = U32Vec2::new(256, 256);
-            let mut pixels = Vec::with_capacity((size.x as usize) * (size.y as usize));
-            for y in 0..size.y {
-                let b = ((y as f64) * 255.0 / ((size.y - 1) as f64)) as u8;
-                for x in 0..size.x {
-                    let a = ((x as f64) * 255.0 / ((size.x - 1) as f64)) as u8;
-                    pixels.push(U8RGBA {
-                        red: a,
-                        green: b,
-                        blue: a,
-                        alpha: 255,
-                    });
-                }
-            }
-            Texture::new_with_pixels(context.clone(), size, &pixels)?
+            let image_bytes = include_bytes!("../assets/vader.jpg");
+            Texture::new_with_image_data(context, Some("vader.jpg"), Cursor::new(image_bytes))?
+
+            // let size = U32Vec2::new(256, 256);
+            // let mut pixels = Vec::with_capacity((size.x as usize) * (size.y as usize));
+            // for y in 0..size.y {
+            //     let b = ((y as f64) * 255.0 / ((size.y - 1) as f64)) as u8;
+            //     for x in 0..size.x {
+            //         let a = ((x as f64) * 255.0 / ((size.x - 1) as f64)) as u8;
+            //         pixels.push(U8RGBA {
+            //             red: a,
+            //             green: b,
+            //             blue: 255 - a,
+            //             alpha: 255,
+            //         });
+            //     }
+            // }
+            // Texture::new_with_pixels(context.clone(), size, &pixels)?
         };
 
         Ok(State {

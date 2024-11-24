@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 bytemuck = { version = "1.20.0", features = ["derive"] }
 gloo = "0.11.0"
+image = "0.25.5"
 js-sys = "0.3.72"
 log = "0.4.22"
 nalgebra = { version = "0.33.1", features = ["bytemuck"] }

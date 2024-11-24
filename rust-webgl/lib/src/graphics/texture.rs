@@ -1,11 +1,15 @@
-use std::rc::Rc;
-
-use nalgebra_glm::U32Vec2;
-use web_sys::{WebGl2RenderingContext, WebGlTexture};
-
-use crate::error::Error;
-
 use super::colors::U8RGBA;
+use crate::error::Error;
+use image::{EncodableLayout, ImageFormat};
+use log::*;
+use nalgebra_glm::U32Vec2;
+use std::{
+    fmt::Debug,
+    io::{BufRead, Seek},
+    path::Path,
+    rc::Rc,
+};
+use web_sys::{WebGl2RenderingContext, WebGlTexture};
 
 pub struct Texture {
     context: Rc<WebGl2RenderingContext>,
@@ -72,7 +76,50 @@ impl Texture {
         })
     }
 
+    pub fn new_with_image_data<P, R>(
+        context: Rc<WebGl2RenderingContext>,
+        path: Option<P>,
+        r: R,
+    ) -> Result<Self, Error>
+    where
+        P: Debug + AsRef<Path>,
+        R: BufRead + Seek,
+    {
+        let mut image_reader = image::ImageReader::new(r);
+        image_reader = match path {
+            Some(path) => {
+                image_reader = match ImageFormat::from_path(&path) {
+                    Ok(format) => {
+                        image_reader.set_format(format);
+                        image_reader
+                    }
+                    Err(from_path_error) => {
+                        image_reader.with_guessed_format().map_err(|from_guessed_format_error| {
+                            format!("unable to determine image format, error checking path = {:?}, error guessing from bytes = {:?}", from_path_error,from_guessed_format_error)
+                        })?
+                    }
+                }
+            }
+            None => image_reader.with_guessed_format().map_err(|e| {
+                format!(
+                    "unable to determine image format, error guessing from bytes = {:?}",
+                    e
+                )
+            })?,
+        };
+        let image = image_reader
+            .decode()
+            .map_err(|e| format!("error decoding image, path={:?}, error={:?}", path, e))?
+            .into_rgba8();
+        Self::new_with_pixels(
+            context,
+            U32Vec2::new(image.width(), image.height()),
+            bytemuck::cast_slice(image.as_bytes()),
+        )
+    }
+
     // TODO init from various html image types
+
     // TODO init from url
 
     pub fn bind(&self) {
