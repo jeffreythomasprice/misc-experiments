@@ -1,4 +1,4 @@
 ```
 cd client
-trunk serve
+watchexec -w . -w ../lib -r trunk serve
 ```
