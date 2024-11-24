@@ -22,6 +22,7 @@ use std::{
     array,
     collections::HashMap,
     f32::consts::{PI, TAU},
+    io::Cursor,
     mem::offset_of,
     panic,
     rc::Rc,
@@ -62,10 +63,7 @@ struct State {
 }
 
 impl State {
-    pub async fn new(
-        canvas: Rc<HtmlCanvasElement>,
-        context: Rc<WebGl2RenderingContext>,
-    ) -> Result<State, Error> {
+    pub async fn new(canvas: Rc<HtmlCanvasElement>, context: Rc<WebGl2RenderingContext>) -> Result<State, Error> {
         let shader = ShaderProgram::new(
             context.clone(),
             include_str!("shaders/shader.vertex.glsl"),
@@ -73,9 +71,7 @@ impl State {
         )?;
 
         let position_attribute = AttributePointer::new::<Vertex>(
-            shader
-                .assert_attribute_by_name("position_attribute")?
-                .clone(),
+            shader.assert_attribute_by_name("position_attribute")?.clone(),
             3,
             AttributePointerType::Float,
             false,
@@ -83,9 +79,7 @@ impl State {
         );
 
         let texture_coordinate_attribute = AttributePointer::new::<Vertex>(
-            shader
-                .assert_attribute_by_name("texture_coordinate_attribute")?
-                .clone(),
+            shader.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
             2,
             graphics::shader::AttributePointerType::Float,
             false,
@@ -102,70 +96,13 @@ impl State {
 
         let sampler_uniform = shader.assert_uniform_by_name("sampler_uniform")?.clone();
 
-        let projection_matrix_uniform = shader
-            .assert_uniform_by_name("projection_matrix_uniform")?
-            .clone();
+        let projection_matrix_uniform = shader.assert_uniform_by_name("projection_matrix_uniform")?.clone();
 
-        let model_view_matrix_uniform = shader
-            .assert_uniform_by_name("model_view_matrix_uniform")?
-            .clone();
-
-        let array_buffer = ArrayBuffer::new_with_data(
-            context.clone(),
-            BufferUsage::StaticDraw,
-            &[
-                Vertex {
-                    position: Vec3::new(-1.0, -1.0, 0.0),
-                    texture_coordinate: Vec2::new(0.0, 0.0),
-                    color: F32RGBA {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
-                },
-                Vertex {
-                    position: Vec3::new(1.0, -1.0, 0.0),
-                    texture_coordinate: Vec2::new(1.0, 0.0),
-                    color: F32RGBA {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
-                },
-                Vertex {
-                    position: Vec3::new(1.0, 1.0, 0.0),
-                    texture_coordinate: Vec2::new(1.0, 1.0),
-                    color: F32RGBA {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
-                },
-                Vertex {
-                    position: Vec3::new(-1.0, 1.0, 0.0),
-                    texture_coordinate: Vec2::new(0.0, 1.0),
-                    color: F32RGBA {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
-                },
-            ],
-        )?;
-
-        let element_aray_buffer = ElementArrayBuffer::new_with_data(
-            context.clone(),
-            BufferUsage::StaticDraw,
-            &[0, 1, 2, 2, 3, 0],
-        )?;
+        let model_view_matrix_uniform = shader.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
 
         let texture = {
             let image_bytes = include_bytes!("../assets/vader.jpg");
-            Texture::new_with_image_data(context, Some("vader.jpg"), Cursor::new(image_bytes))?
+            Texture::new_with_image_data(context.clone(), Some("vader.jpg"), Cursor::new(image_bytes))?
 
             // let size = U32Vec2::new(256, 256);
             // let mut pixels = Vec::with_capacity((size.x as usize) * (size.y as usize));
@@ -183,6 +120,57 @@ impl State {
             // }
             // Texture::new_with_pixels(context.clone(), size, &pixels)?
         };
+
+        let texture_aspect_ratio = (texture.size().y as f32) / (texture.size().x as f32);
+
+        let array_buffer = ArrayBuffer::new_with_data(
+            context.clone(),
+            BufferUsage::StaticDraw,
+            &[
+                Vertex {
+                    position: Vec3::new(-1.0, -texture_aspect_ratio, 0.0),
+                    texture_coordinate: Vec2::new(0.0, 1.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                },
+                Vertex {
+                    position: Vec3::new(1.0, -texture_aspect_ratio, 0.0),
+                    texture_coordinate: Vec2::new(1.0, 1.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                },
+                Vertex {
+                    position: Vec3::new(1.0, texture_aspect_ratio, 0.0),
+                    texture_coordinate: Vec2::new(1.0, 0.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                },
+                Vertex {
+                    position: Vec3::new(-1.0, texture_aspect_ratio, 0.0),
+                    texture_coordinate: Vec2::new(0.0, 0.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                },
+            ],
+        )?;
+
+        let element_aray_buffer = ElementArrayBuffer::new_with_data(context.clone(), BufferUsage::StaticDraw, &[0, 1, 2, 2, 3, 0])?;
 
         Ok(State {
             canvas,
@@ -250,8 +238,7 @@ impl UIState for State {
     }
 
     fn render(&mut self) -> Result<(), Error> {
-        self.context
-            .clear_color(100.0 / 255.0, 149.0 / 255.0, 237.0 / 255.0, 1.0);
+        self.context.clear_color(149.0 / 255.0, 154.0 / 255.0, 163.0 / 255.0, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
         self.shader.use_program();
@@ -267,10 +254,8 @@ impl UIState for State {
             rotate_y(self.camera.model_view_matrix(), self.rotation).as_slice(),
         );
 
-        self.context
-            .uniform1i(Some(&self.sampler_uniform.location), 0);
-        self.context
-            .active_texture(WebGl2RenderingContext::TEXTURE0);
+        self.context.uniform1i(Some(&self.sampler_uniform.location), 0);
+        self.context.active_texture(WebGl2RenderingContext::TEXTURE0);
         self.texture.bind();
 
         self.array_buffer.bind();
@@ -302,35 +287,26 @@ impl UIState for State {
     }
 
     fn update(&mut self, delta: Duration) -> Result<(), Error> {
-        let forward =
-            if self.is_key_code_pressed("ArrowUp") || self.is_key_code_pressed("KeyW") {
-                1.0f32
-            } else {
-                0.0f32
-            } - if self.is_key_code_pressed("ArrowDown") || self.is_key_code_pressed("KeyS") {
-                1.0f32
-            } else {
-                0.0f32
-            };
+        let forward = if self.is_key_code_pressed("ArrowUp") || self.is_key_code_pressed("KeyW") {
+            1.0f32
+        } else {
+            0.0f32
+        } - if self.is_key_code_pressed("ArrowDown") || self.is_key_code_pressed("KeyS") {
+            1.0f32
+        } else {
+            0.0f32
+        };
         let right = if self.is_key_code_pressed("ArrowRight") || self.is_key_code_pressed("KeyD") {
             1.0f32
         } else {
             0.0f32
-        } - if self.is_key_code_pressed("ArrowLeft") || self.is_key_code_pressed("KeyA")
-        {
+        } - if self.is_key_code_pressed("ArrowLeft") || self.is_key_code_pressed("KeyA") {
             1.0f32
         } else {
             0.0f32
         };
-        let up = if self.is_key_code_pressed("Space") {
-            1.0f32
-        } else {
-            0.0f32
-        } - if self.is_key_code_pressed("ShiftLeft") {
-            1.0f32
-        } else {
-            0.0f32
-        };
+        let up = if self.is_key_code_pressed("Space") { 1.0f32 } else { 0.0f32 }
+            - if self.is_key_code_pressed("ShiftLeft") { 1.0f32 } else { 0.0f32 };
         self.camera.move_based_on_current_axes(
             forward * 5.0f32 * delta.as_secs_f32(),
             up * 5.0f32 * delta.as_secs_f32(),

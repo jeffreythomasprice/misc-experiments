@@ -14,32 +14,26 @@ use web_sys::{WebGl2RenderingContext, WebGlTexture};
 pub struct Texture {
     context: Rc<WebGl2RenderingContext>,
     texture: WebGlTexture,
+    size: U32Vec2,
 }
 
 impl Texture {
-    pub fn new_with_pixels(
-        context: Rc<WebGl2RenderingContext>,
-        size: U32Vec2,
-        data: &[U8RGBA],
-    ) -> Result<Self, Error> {
-        let result = context
-            .create_texture()
-            .ok_or(format!("failed to create texture"))?;
+    pub fn new_with_pixels(context: Rc<WebGl2RenderingContext>, size: U32Vec2, data: &[U8RGBA]) -> Result<Self, Error> {
+        let result = context.create_texture().ok_or(format!("failed to create texture"))?;
         context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&result));
 
-        context
-            .tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_u8_array_and_src_offset(
-                WebGl2RenderingContext::TEXTURE_2D,
-                0,
-                WebGl2RenderingContext::RGBA as i32,
-                size.x as i32,
-                size.y as i32,
-                0,
-                WebGl2RenderingContext::RGBA,
-                WebGl2RenderingContext::UNSIGNED_BYTE,
-                bytemuck::cast_slice(data),
-                0,
-            )?;
+        context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_u8_array_and_src_offset(
+            WebGl2RenderingContext::TEXTURE_2D,
+            0,
+            WebGl2RenderingContext::RGBA as i32,
+            size.x as i32,
+            size.y as i32,
+            0,
+            WebGl2RenderingContext::RGBA,
+            WebGl2RenderingContext::UNSIGNED_BYTE,
+            bytemuck::cast_slice(data),
+            0,
+        )?;
 
         // TODO only if if power of 2 do mipmaps
         context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
@@ -73,39 +67,33 @@ impl Texture {
         Ok(Self {
             context,
             texture: result,
+            size,
         })
     }
 
-    pub fn new_with_image_data<P, R>(
-        context: Rc<WebGl2RenderingContext>,
-        path: Option<P>,
-        r: R,
-    ) -> Result<Self, Error>
+    /// Try to load the image from a file. Optionally give a path to the file so the format can be guessed from the file extension.
+    pub fn new_with_image_data<P, R>(context: Rc<WebGl2RenderingContext>, path: Option<P>, r: R) -> Result<Self, Error>
     where
         P: Debug + AsRef<Path>,
         R: BufRead + Seek,
     {
         let mut image_reader = image::ImageReader::new(r);
-        image_reader = match path {
-            Some(path) => {
-                image_reader = match ImageFormat::from_path(&path) {
-                    Ok(format) => {
-                        image_reader.set_format(format);
-                        image_reader
-                    }
-                    Err(from_path_error) => {
-                        image_reader.with_guessed_format().map_err(|from_guessed_format_error| {
-                            format!("unable to determine image format, error checking path = {:?}, error guessing from bytes = {:?}", from_path_error,from_guessed_format_error)
-                        })?
-                    }
+        image_reader = match &path {
+            Some(path) => match ImageFormat::from_path(path) {
+                Ok(format) => {
+                    image_reader.set_format(format);
+                    image_reader
                 }
-            }
-            None => image_reader.with_guessed_format().map_err(|e| {
-                format!(
-                    "unable to determine image format, error guessing from bytes = {:?}",
-                    e
-                )
-            })?,
+                Err(from_path_error) => image_reader.with_guessed_format().map_err(|from_guessed_format_error| {
+                    format!(
+                        "unable to determine image format, error checking path = {:?}, error guessing from bytes = {:?}",
+                        from_path_error, from_guessed_format_error
+                    )
+                })?,
+            },
+            None => image_reader
+                .with_guessed_format()
+                .map_err(|e| format!("unable to determine image format, error guessing from bytes = {:?}", e))?,
         };
         let image = image_reader
             .decode()
@@ -120,16 +108,16 @@ impl Texture {
 
     // TODO init from various html image types
 
-    // TODO init from url
-
     pub fn bind(&self) {
-        self.context
-            .bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&self.texture));
+        self.context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&self.texture));
     }
 
     pub fn bind_none(&self) {
-        self.context
-            .bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+        self.context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    }
+
+    pub fn size(&self) -> &U32Vec2 {
+        &self.size
     }
 }
 
