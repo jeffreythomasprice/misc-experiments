@@ -15,8 +15,16 @@ use lib::{
 };
 use log::*;
 use nalgebra::Vector2;
-use nalgebra_glm::{DVec2, Vec3};
-use std::{collections::HashMap, mem::offset_of, panic, rc::Rc, sync::Mutex, time::Duration};
+use nalgebra_glm::{rotate_y, DVec2, Vec3};
+use std::{
+    collections::HashMap,
+    f32::consts::{PI, TAU},
+    mem::offset_of,
+    panic,
+    rc::Rc,
+    sync::Mutex,
+    time::Duration,
+};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
@@ -51,6 +59,8 @@ struct State {
     element_aray_buffer: ElementArrayBuffer,
 
     camera: Camera,
+
+    rotation: f32,
 }
 
 impl State {
@@ -169,6 +179,8 @@ impl State {
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(0.0, 1.0, 0.0),
             ),
+
+            rotation: 0.0f32,
         })
     }
 
@@ -220,8 +232,8 @@ impl UIState for State {
         self.context.uniform_matrix4fv_with_f32_array(
             Some(&self.model_view_matrix_uniform.location),
             false,
-            self.camera.model_view_matrix().as_slice(),
-            // rotate_y(self.camera.model_view_matrix(), self.rotation).as_slice(),
+            // self.camera.model_view_matrix().as_slice(),
+            rotate_y(self.camera.model_view_matrix(), self.rotation).as_slice(),
         );
 
         self.array_buffer.bind();
@@ -283,6 +295,8 @@ impl UIState for State {
             up * 5.0f32 * delta.as_secs_f32(),
             right * 5.0f32 * delta.as_secs_f32(),
         );
+
+        self.rotation = (self.rotation + delta.as_secs_f32() * 90.0f32.to_radians()) % TAU;
 
         Ok(())
     }
