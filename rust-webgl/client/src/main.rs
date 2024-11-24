@@ -7,16 +7,19 @@ use lib::{
         self,
         array_buffer::ArrayBuffer,
         buffer_usage::BufferUsage,
+        colors::{F32RGBA, U8RGBA},
         element_array_buffer::ElementArrayBuffer,
         shader::{AttributePointer, AttributePointerType, ShaderProgram, Uniform},
+        texture::Texture,
     },
     math::camera::Camera,
     uistate::{run, UIState},
 };
 use log::*;
 use nalgebra::Vector2;
-use nalgebra_glm::{rotate_y, DVec2, Vec3};
+use nalgebra_glm::{rotate_y, DVec2, U32Vec2, Vec2, Vec3};
 use std::{
+    array,
     collections::HashMap,
     f32::consts::{PI, TAU},
     mem::offset_of,
@@ -29,18 +32,10 @@ use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
 #[repr(C)]
-struct RGBA {
-    pub red: f32,
-    pub green: f32,
-    pub blue: f32,
-    pub alpha: f32,
-}
-
-#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
-#[repr(C)]
 struct Vertex {
     position: Vec3,
-    color: RGBA,
+    texture_coordinate: Vec2,
+    color: F32RGBA,
 }
 
 struct State {
@@ -51,12 +46,15 @@ struct State {
 
     shader: ShaderProgram,
     position_attribute: AttributePointer,
+    texture_coordinate_attribute: AttributePointer,
     color_attribute: AttributePointer,
+    sampler_uniform: Uniform,
     projection_matrix_uniform: Uniform,
     model_view_matrix_uniform: Uniform,
 
     array_buffer: ArrayBuffer<Vertex>,
     element_aray_buffer: ElementArrayBuffer,
+    texture: Texture,
 
     camera: Camera,
 
@@ -76,8 +74,7 @@ impl State {
 
         let position_attribute = AttributePointer::new::<Vertex>(
             shader
-                .get_attribute_by_name("position_attribute")
-                .ok_or("failed to find position attribute")?
+                .assert_attribute_by_name("position_attribute")?
                 .clone(),
             3,
             AttributePointerType::Float,
@@ -85,25 +82,32 @@ impl State {
             offset_of!(Vertex, position) as i32,
         );
 
-        let color_attribute = AttributePointer::new::<Vertex>(
+        let texture_coordinate_attribute = AttributePointer::new::<Vertex>(
             shader
-                .get_attribute_by_name("color_attribute")
-                .ok_or("failed to find color attribute")?
+                .assert_attribute_by_name("texture_coordinate_attribute")?
                 .clone(),
+            2,
+            graphics::shader::AttributePointerType::Float,
+            false,
+            offset_of!(Vertex, texture_coordinate) as i32,
+        );
+
+        let color_attribute = AttributePointer::new::<Vertex>(
+            shader.assert_attribute_by_name("color_attribute")?.clone(),
             4,
             graphics::shader::AttributePointerType::Float,
             false,
             offset_of!(Vertex, color) as i32,
         );
 
+        let sampler_uniform = shader.assert_uniform_by_name("sampler_uniform")?.clone();
+
         let projection_matrix_uniform = shader
-            .get_uniform_by_name("projection_matrix_uniform")
-            .ok_or("failed to find projection matrix uniform")?
+            .assert_uniform_by_name("projection_matrix_uniform")?
             .clone();
 
         let model_view_matrix_uniform = shader
-            .get_uniform_by_name("model_view_matrix_uniform")
-            .ok_or("failed to find model view matrix uniform")?
+            .assert_uniform_by_name("model_view_matrix_uniform")?
             .clone();
 
         let array_buffer = ArrayBuffer::new_with_data(
@@ -112,36 +116,40 @@ impl State {
             &[
                 Vertex {
                     position: Vec3::new(-1.0, -1.0, 0.0),
-                    color: RGBA {
+                    texture_coordinate: Vec2::new(0.0, 0.0),
+                    color: F32RGBA {
                         red: 1.0,
-                        green: 0.0,
-                        blue: 0.0,
+                        green: 1.0,
+                        blue: 1.0,
                         alpha: 1.0,
                     },
                 },
                 Vertex {
                     position: Vec3::new(1.0, -1.0, 0.0),
-                    color: RGBA {
-                        red: 0.0,
+                    texture_coordinate: Vec2::new(1.0, 0.0),
+                    color: F32RGBA {
+                        red: 1.0,
                         green: 1.0,
-                        blue: 0.0,
+                        blue: 1.0,
                         alpha: 1.0,
                     },
                 },
                 Vertex {
                     position: Vec3::new(1.0, 1.0, 0.0),
-                    color: RGBA {
-                        red: 0.0,
-                        green: 0.0,
+                    texture_coordinate: Vec2::new(1.0, 1.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
                         blue: 1.0,
                         alpha: 1.0,
                     },
                 },
                 Vertex {
                     position: Vec3::new(-1.0, 1.0, 0.0),
-                    color: RGBA {
+                    texture_coordinate: Vec2::new(0.0, 1.0),
+                    color: F32RGBA {
                         red: 1.0,
-                        green: 0.0,
+                        green: 1.0,
                         blue: 1.0,
                         alpha: 1.0,
                     },
@@ -155,6 +163,24 @@ impl State {
             &[0, 1, 2, 2, 3, 0],
         )?;
 
+        let texture = {
+            let size = U32Vec2::new(256, 256);
+            let mut pixels = Vec::with_capacity((size.x as usize) * (size.y as usize));
+            for y in 0..size.y {
+                let b = ((y as f64) * 255.0 / ((size.y - 1) as f64)) as u8;
+                for x in 0..size.x {
+                    let a = ((x as f64) * 255.0 / ((size.x - 1) as f64)) as u8;
+                    pixels.push(U8RGBA {
+                        red: a,
+                        green: b,
+                        blue: a,
+                        alpha: 255,
+                    });
+                }
+            }
+            Texture::new_with_pixels(context.clone(), size, &pixels)?
+        };
+
         Ok(State {
             canvas,
             context,
@@ -163,12 +189,15 @@ impl State {
 
             shader,
             position_attribute,
+            texture_coordinate_attribute,
             color_attribute,
+            sampler_uniform,
             projection_matrix_uniform,
             model_view_matrix_uniform,
 
             array_buffer,
             element_aray_buffer,
+            texture,
 
             camera: Camera::new(
                 60.0f32.to_radians(),
@@ -232,14 +261,20 @@ impl UIState for State {
         self.context.uniform_matrix4fv_with_f32_array(
             Some(&self.model_view_matrix_uniform.location),
             false,
-            // self.camera.model_view_matrix().as_slice(),
             rotate_y(self.camera.model_view_matrix(), self.rotation).as_slice(),
         );
+
+        self.context
+            .uniform1i(Some(&self.sampler_uniform.location), 0);
+        self.context
+            .active_texture(WebGl2RenderingContext::TEXTURE0);
+        self.texture.bind();
 
         self.array_buffer.bind();
         self.element_aray_buffer.bind();
 
         self.position_attribute.enable();
+        self.texture_coordinate_attribute.enable();
         self.color_attribute.enable();
 
         self.context.draw_elements_with_i32(
@@ -250,10 +285,13 @@ impl UIState for State {
         );
 
         self.position_attribute.disable();
+        self.texture_coordinate_attribute.disable();
         self.color_attribute.disable();
 
         self.array_buffer.bind_none();
         self.element_aray_buffer.bind_none();
+
+        self.texture.bind_none();
 
         self.shader.use_none();
 

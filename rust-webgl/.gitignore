@@ -1,2 +1,6 @@
 /target
 /dist
+/client/target
+/client/dist
+/lib/target
+/lib/dist

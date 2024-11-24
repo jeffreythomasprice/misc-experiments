@@ -267,8 +267,20 @@ impl ShaderProgram {
         self.attributes.get(name)
     }
 
+    pub fn assert_attribute_by_name(&self, name: &str) -> Result<&Attribute, Error> {
+        Ok(self
+            .get_attribute_by_name(name)
+            .ok_or_else(|| format!("failed to find attribute named: {name}"))?)
+    }
+
     pub fn get_uniform_by_name(&self, name: &str) -> Option<&Uniform> {
         self.uniforms.get(name)
+    }
+
+    pub fn assert_uniform_by_name(&self, name: &str) -> Result<&Uniform, Error> {
+        Ok(self
+            .get_uniform_by_name(name)
+            .ok_or_else(|| format!("failed to find uniform named: {name}"))?)
     }
 }
 
