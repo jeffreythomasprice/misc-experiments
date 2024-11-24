@@ -15,7 +15,7 @@ use lib::{
 };
 use log::*;
 use nalgebra::Vector2;
-use nalgebra_glm::Vec3;
+use nalgebra_glm::{DVec2, Vec3};
 use std::{collections::HashMap, mem::offset_of, panic, rc::Rc, sync::Mutex, time::Duration};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
@@ -197,9 +197,9 @@ impl State {
 }
 
 impl UIState for State {
-    fn resize(&mut self, width: f64, height: f64) -> Result<(), Error> {
-        let width = width.floor() as u32;
-        let height = height.floor() as u32;
+    fn resize(&mut self, size: DVec2) -> Result<(), Error> {
+        let width = size.x.floor() as u32;
+        let height = size.y.floor() as u32;
         self.context.viewport(0, 0, width as i32, height as i32);
         self.camera.set_screen_size(Vector2::new(width, height));
         Ok(())

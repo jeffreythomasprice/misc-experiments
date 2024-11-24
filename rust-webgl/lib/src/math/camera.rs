@@ -1,9 +1,9 @@
-use nalgebra::{clamp, wrap, Matrix4, Vector2};
-use nalgebra_glm::{look_at, perspective_fov, rotate_vec3, I32Vec2, Vec3};
+use nalgebra::{clamp, wrap, Matrix4};
+use nalgebra_glm::{look_at, perspective_fov, rotate_vec3, I32Vec2, U32Vec2, Vec3};
 
 pub struct Camera {
     fov: f32,
-    screen_size: Vector2<u32>,
+    screen_size: U32Vec2,
     near: f32,
     far: f32,
     position: Vec3,
@@ -24,7 +24,7 @@ pub struct Camera {
 impl Camera {
     pub fn new(
         fov: f32,
-        screen_size: Vector2<u32>,
+        screen_size: U32Vec2,
         near: f32,
         far: f32,
         position: Vec3,
@@ -65,11 +65,11 @@ impl Camera {
         self.fov
     }
 
-    pub fn get_screen_size(&self) -> &Vector2<u32> {
+    pub fn get_screen_size(&self) -> &U32Vec2 {
         &self.screen_size
     }
 
-    pub fn set_screen_size(&mut self, s: Vector2<u32>) {
+    pub fn set_screen_size(&mut self, s: U32Vec2) {
         self.screen_size = s;
         self.update_projection_matrix();
     }
