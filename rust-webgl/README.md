@@ -1,3 +1,4 @@
 ```
+cd client
 trunk serve
 ```

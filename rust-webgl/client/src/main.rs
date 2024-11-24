@@ -1,28 +1,22 @@
-mod error;
-mod events;
-mod graphics;
-mod math;
-mod uistate;
-
 use bytemuck::{Pod, Zeroable};
-use error::Error;
-use events::{KeyPressEvent, MouseButton, MouseMoveEvent, MousePressEvent};
 use gloo::utils::document;
-use graphics::{
-    array_buffer::ArrayBuffer,
-    buffer_usage::BufferUsage,
-    element_array_buffer::ElementArrayBuffer,
-    shader::{AttributePointer, ShaderProgram, Uniform},
+use lib::{
+    error::Error,
+    events::{KeyPressEvent, MouseButton, MouseMoveEvent, MousePressEvent},
+    graphics::{
+        self,
+        array_buffer::ArrayBuffer,
+        buffer_usage::BufferUsage,
+        element_array_buffer::ElementArrayBuffer,
+        shader::{AttributePointer, AttributePointerType, ShaderProgram, Uniform},
+    },
+    math::camera::Camera,
+    uistate::{run, UIState},
 };
 use log::*;
-use math::camera::Camera;
 use nalgebra::Vector2;
 use nalgebra_glm::Vec3;
-use std::{
-    collections::HashMap, mem::offset_of, panic, rc::Rc, sync::Mutex,
-    time::Duration,
-};
-use uistate::{run, UIState};
+use std::{collections::HashMap, mem::offset_of, panic, rc::Rc, sync::Mutex, time::Duration};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
@@ -76,7 +70,7 @@ impl State {
                 .ok_or("failed to find position attribute")?
                 .clone(),
             3,
-            graphics::shader::AttributePointerType::Float,
+            AttributePointerType::Float,
             false,
             offset_of!(Vertex, position) as i32,
         );
