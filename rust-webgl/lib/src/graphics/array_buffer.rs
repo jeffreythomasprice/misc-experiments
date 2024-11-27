@@ -20,11 +20,7 @@ impl<T> ArrayBuffer<T>
 where
     T: Pod,
 {
-    pub fn new_with_len(
-        context: Rc<WebGl2RenderingContext>,
-        usage: BufferUsage,
-        len: usize,
-    ) -> Result<Self, Error> {
+    pub fn new_with_len(context: Rc<WebGl2RenderingContext>, usage: BufferUsage, len: usize) -> Result<Self, Error> {
         let buffer = context.create_buffer().ok_or("failed to create buffer")?;
 
         let gl_usage = usage.gl_usage();
@@ -52,34 +48,37 @@ where
         Ok(result)
     }
 
-    pub fn new_with_data(
-        context: Rc<WebGl2RenderingContext>,
-        usage: BufferUsage,
-        source: &[T],
-    ) -> Result<Self, Error> {
+    pub fn new_with_data(context: Rc<WebGl2RenderingContext>, usage: BufferUsage, source: &[T]) -> Result<Self, Error> {
         let mut result = Self::new_with_len(context, usage, source.len())?;
         result.set(source, 0)?;
         Ok(result)
     }
 
     pub fn bind(&self) {
-        self.context
-            .bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.buffer));
+        self.context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.buffer));
     }
 
     pub fn bind_none(&self) {
-        self.context
-            .bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
+        self.context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, None);
     }
 
     pub fn len(&self) -> usize {
         self.len
     }
 
+    pub fn set_len(&self, len: usize) -> Result<(), Error> {
+        todo!()
+    }
+
     pub fn set(&mut self, source: &[T], index: usize) -> Result<(), Error> {
         let one_past_last = index + source.len();
         if one_past_last > self.len {
-            return Err(format!("trying to copy out of bounds, size = {}, source length = {}, trying to place at index = {}", self.len, source.len(), index))?;
+            return Err(format!(
+                "trying to copy out of bounds, size = {}, source length = {}, trying to place at index = {}",
+                self.len,
+                source.len(),
+                index
+            ))?;
         }
 
         self.bind();

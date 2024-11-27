@@ -1,9 +1,11 @@
 use nalgebra::{clamp, wrap, Matrix4};
-use nalgebra_glm::{look_at, perspective_fov, rotate_vec3, I32Vec2, U32Vec2, Vec3};
+use nalgebra_glm::{look_at, perspective_fov, rotate_vec3, Vec3};
+
+use super::{size::Size, vec2::Vec2};
 
 pub struct Camera {
     fov: f32,
-    screen_size: U32Vec2,
+    screen_size: Size<u32>,
     near: f32,
     far: f32,
     position: Vec3,
@@ -22,15 +24,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(
-        fov: f32,
-        screen_size: U32Vec2,
-        near: f32,
-        far: f32,
-        position: Vec3,
-        target: Vec3,
-        up: Vec3,
-    ) -> Self {
+    pub fn new(fov: f32, screen_size: Size<u32>, near: f32, far: f32, position: Vec3, target: Vec3, up: Vec3) -> Self {
         let look = (target - position).normalize();
         let up = up.normalize();
         let right = look.cross(&up);
@@ -65,11 +59,11 @@ impl Camera {
         self.fov
     }
 
-    pub fn get_screen_size(&self) -> &U32Vec2 {
+    pub fn get_screen_size(&self) -> &Size<u32> {
         &self.screen_size
     }
 
-    pub fn set_screen_size(&mut self, s: U32Vec2) {
+    pub fn set_screen_size(&mut self, s: Size<u32>) {
         self.screen_size = s;
         self.update_projection_matrix();
     }
@@ -101,7 +95,7 @@ impl Camera {
         }
     }
 
-    pub fn turn_based_on_mouse_delta(&mut self, delta: I32Vec2) {
+    pub fn turn_based_on_mouse_delta(&mut self, delta: Vec2<i32>) {
         self.angle_right = wrap(
             self.angle_right - (delta.x as f32) * 0.1f32.to_radians(),
             0.0f32.to_radians(),
@@ -119,20 +113,16 @@ impl Camera {
     fn update_rotated_look(&mut self) {
         let look_with_only_right_angle = rotate_vec3(&self.look, self.angle_right, &self.up);
         let right_right_only_right_angle = look_with_only_right_angle.cross(&self.up);
-        self.rotated_look = rotate_vec3(
-            &look_with_only_right_angle,
-            self.angle_up,
-            &right_right_only_right_angle,
-        );
+        self.rotated_look = rotate_vec3(&look_with_only_right_angle, self.angle_up, &right_right_only_right_angle);
         self.rotated_right = self.rotated_look.cross(&self.up);
     }
 
     fn update_projection_matrix(&mut self) -> &Matrix4<f32> {
-        self.projection_matrix = if self.screen_size.x >= 1 && self.screen_size.y >= 1 {
+        self.projection_matrix = if self.screen_size.width >= 1 && self.screen_size.height >= 1 {
             perspective_fov(
                 self.fov,
-                self.screen_size.x as f32,
-                self.screen_size.y as f32,
+                self.screen_size.width as f32,
+                self.screen_size.height as f32,
                 self.near,
                 self.far,
             )
@@ -143,11 +133,7 @@ impl Camera {
     }
 
     fn update_model_view_matrix(&mut self) -> &Matrix4<f32> {
-        self.model_view_matrix = look_at(
-            &self.position,
-            &(self.position + self.rotated_look),
-            &self.up,
-        );
+        self.model_view_matrix = look_at(&self.position, &(self.position + self.rotated_look), &self.up);
         &self.model_view_matrix
     }
 }

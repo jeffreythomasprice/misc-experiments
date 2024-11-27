@@ -1,8 +1,9 @@
 use super::colors::U8RGBA;
-use crate::error::Error;
+use crate::{
+    error::Error,
+    math::{rect::Rect, size::Size},
+};
 use image::{EncodableLayout, ImageFormat};
-use log::*;
-use nalgebra_glm::U32Vec2;
 use std::{
     fmt::Debug,
     io::{BufRead, Seek},
@@ -14,55 +15,49 @@ use web_sys::{WebGl2RenderingContext, WebGlTexture};
 pub struct Texture {
     context: Rc<WebGl2RenderingContext>,
     texture: WebGlTexture,
-    size: U32Vec2,
+    size: Size<u32>,
 }
 
 impl Texture {
-    pub fn new_with_pixels(context: Rc<WebGl2RenderingContext>, size: U32Vec2, data: &[U8RGBA]) -> Result<Self, Error> {
-        let result = context.create_texture().ok_or(format!("failed to create texture"))?;
-        context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&result));
+    pub fn new_with_size(context: Rc<WebGl2RenderingContext>, size: Size<u32>) -> Result<Self, Error> {
+        let result = Self::common_init(&context, |context| {
+            context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0,
+                WebGl2RenderingContext::RGBA as i32,
+                size.width as i32,
+                size.height as i32,
+                0,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                None,
+            )?;
+            Ok(())
+        })?;
 
-        context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_u8_array_and_src_offset(
-            WebGl2RenderingContext::TEXTURE_2D,
-            0,
-            WebGl2RenderingContext::RGBA as i32,
-            size.x as i32,
-            size.y as i32,
-            0,
-            WebGl2RenderingContext::RGBA,
-            WebGl2RenderingContext::UNSIGNED_BYTE,
-            bytemuck::cast_slice(data),
-            0,
-        )?;
+        Ok(Self {
+            context,
+            texture: result,
+            size,
+        })
+    }
 
-        // TODO only if if power of 2 do mipmaps
-        context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
-
-        // TODO if not a power of 2 texture to clamp, although this shouldn't be required in webgl2
-        context.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_WRAP_S,
-            WebGl2RenderingContext::REPEAT as i32,
-        );
-        context.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_WRAP_T,
-            WebGl2RenderingContext::REPEAT as i32,
-        );
-
-        // TODO should be nearest if not power of 2
-        context.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-            WebGl2RenderingContext::NEAREST_MIPMAP_LINEAR as i32,
-        );
-        context.tex_parameteri(
-            WebGl2RenderingContext::TEXTURE_2D,
-            WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-            WebGl2RenderingContext::LINEAR as i32,
-        );
-
-        context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+    pub fn new_with_pixels(context: Rc<WebGl2RenderingContext>, size: Size<u32>, data: &[U8RGBA]) -> Result<Self, Error> {
+        let result = Self::common_init(&context, |context| {
+            context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_u8_array_and_src_offset(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0,
+                WebGl2RenderingContext::RGBA as i32,
+                size.width as i32,
+                size.height as i32,
+                0,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                bytemuck::cast_slice(data),
+                0,
+            )?;
+            Ok(())
+        })?;
 
         Ok(Self {
             context,
@@ -101,7 +96,10 @@ impl Texture {
             .into_rgba8();
         Self::new_with_pixels(
             context,
-            U32Vec2::new(image.width(), image.height()),
+            Size {
+                width: image.width(),
+                height: image.height(),
+            },
             bytemuck::cast_slice(image.as_bytes()),
         )
     }
@@ -116,8 +114,99 @@ impl Texture {
         self.context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
     }
 
-    pub fn size(&self) -> &U32Vec2 {
+    pub fn size(&self) -> &Size<u32> {
         &self.size
+    }
+
+    /// Draws the given pixel array to the texture.
+    ///
+    /// Pixels aren't scaled.
+    pub fn copy_pixels(
+        &mut self,
+        destination: &Rect<u32>,
+        source: &Rect<u32>,
+        source_size: Size<u32>,
+        pixels: &[U8RGBA],
+    ) -> Result<(), Error> {
+        log::debug!(
+            "TODO copy_pixels, destination = {}, source = {}, len(pixels) = {}",
+            destination,
+            source,
+            pixels.len()
+        );
+
+        /*
+        TODO actually copy sub images
+
+        clip destination to (0,0) x this.size
+        clip source to (0,0) x source_size
+
+        min_size = min(destination.size, source.size)
+        destination.size = min_size
+        source.size = min_size
+        */
+
+        self.bind();
+        self.context
+            .tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_u8_array_and_src_offset(
+                WebGl2RenderingContext::TEXTURE_2D,
+                0,
+                destination.min.x as i32,
+                destination.min.y as i32,
+                source_size.width as i32,
+                source_size.height as i32,
+                WebGl2RenderingContext::RGBA,
+                WebGl2RenderingContext::UNSIGNED_BYTE,
+                bytemuck::cast_slice(pixels),
+                0,
+            )
+            .map_err(|e| format!("error copying pixels to texture region: {e:?}"))?;
+        self.bind_none();
+        Ok(())
+    }
+
+    fn common_init<F>(context: &WebGl2RenderingContext, f: F) -> Result<web_sys::WebGlTexture, Error>
+    where
+        F: FnOnce(&WebGl2RenderingContext) -> Result<(), Error>,
+    {
+        let result = context.create_texture().ok_or(format!("failed to create texture"))?;
+        context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&result));
+
+        if let Err(e) = f(context) {
+            // TODO delete texture
+            Err(e)?;
+        }
+
+        // TODO only if if power of 2 do mipmaps
+        context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
+
+        // TODO if not a power of 2 texture to clamp, although this shouldn't be required in webgl2
+        context.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_WRAP_S,
+            WebGl2RenderingContext::REPEAT as i32,
+        );
+        context.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_WRAP_T,
+            WebGl2RenderingContext::REPEAT as i32,
+        );
+
+        // TODO should be nearest if not power of 2
+        context.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_MIN_FILTER,
+            WebGl2RenderingContext::NEAREST_MIPMAP_LINEAR as i32,
+        );
+        context.tex_parameteri(
+            WebGl2RenderingContext::TEXTURE_2D,
+            WebGl2RenderingContext::TEXTURE_MAG_FILTER,
+            WebGl2RenderingContext::LINEAR as i32,
+        );
+
+        context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
+
+        Ok(result)
     }
 }
 

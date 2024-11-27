@@ -4,3 +4,4 @@ pub mod colors;
 pub mod element_array_buffer;
 pub mod shader;
 pub mod texture;
+pub mod texture_font;

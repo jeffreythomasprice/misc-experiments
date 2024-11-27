@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use nalgebra_glm::{I32Vec2, U32Vec2};
 
+use crate::math::vec2::Vec2;
+
 #[derive(Debug, Clone)]
 pub struct MousePressEvent {
     pub event: web_sys::MouseEvent,
@@ -48,12 +50,18 @@ pub struct MouseMoveEvent {
 }
 
 impl MouseMoveEvent {
-    pub fn position(&self) -> U32Vec2 {
-        U32Vec2::new(self.event.x() as u32, self.event.y() as u32)
+    pub fn position(&self) -> Vec2<u32> {
+        Vec2 {
+            x: self.event.x() as u32,
+            y: self.event.y() as u32,
+        }
     }
 
-    pub fn delta(&self) -> I32Vec2 {
-        I32Vec2::new(self.event.movement_x(), self.event.movement_y())
+    pub fn delta(&self) -> Vec2<i32> {
+        Vec2 {
+            x: self.event.movement_x(),
+            y: self.event.movement_y(),
+        }
     }
 }
 

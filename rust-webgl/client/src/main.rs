@@ -11,13 +11,15 @@ use lib::{
         element_array_buffer::ElementArrayBuffer,
         shader::{AttributePointer, AttributePointerType, ShaderProgram, Uniform},
         texture::Texture,
+        texture_font::TextureFont,
     },
-    math::camera::Camera,
+    math::{camera::Camera, rect::Rect, size::Size},
     uistate::{run, UIState},
 };
 use log::*;
-use nalgebra::Vector2;
+use nalgebra::{Matrix4, Vector2};
 use nalgebra_glm::{rotate_y, DVec2, U32Vec2, Vec2, Vec3};
+use rusttype::{gpu_cache::Cache, Font};
 use std::{
     array,
     collections::HashMap,
@@ -33,7 +35,15 @@ use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 #[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
 #[repr(C)]
-struct Vertex {
+struct Vertex2 {
+    position: Vec2,
+    texture_coordinate: Vec2,
+    color: F32RGBA,
+}
+
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+#[repr(C)]
+struct Vertex3 {
     position: Vec3,
     texture_coordinate: Vec2,
     color: F32RGBA,
@@ -45,60 +55,109 @@ struct State {
 
     key_state: Rc<Mutex<HashMap<String, bool>>>,
 
-    shader: ShaderProgram,
-    position_attribute: AttributePointer,
-    texture_coordinate_attribute: AttributePointer,
-    color_attribute: AttributePointer,
-    sampler_uniform: Uniform,
-    projection_matrix_uniform: Uniform,
-    model_view_matrix_uniform: Uniform,
+    shader_3d: ShaderProgram,
+    position_attribute_3d: AttributePointer,
+    texture_coordinate_attribute_3d: AttributePointer,
+    color_attribute_3d: AttributePointer,
+    sampler_uniform_3d: Uniform,
+    projection_matrix_uniform_3d: Uniform,
+    model_view_matrix_uniform_3d: Uniform,
 
-    array_buffer: ArrayBuffer<Vertex>,
-    element_aray_buffer: ElementArrayBuffer,
+    shader_2d: ShaderProgram,
+    position_attribute_2d: AttributePointer,
+    texture_coordinate_attribute_2d: AttributePointer,
+    color_attribute_2d: AttributePointer,
+    sampler_uniform_2d: Uniform,
+    projection_matrix_uniform_2d: Uniform,
+    model_view_matrix_uniform_2d: Uniform,
+
+    static_texture_array_buffer: ArrayBuffer<Vertex3>,
+    static_texture_element_aray_buffer: ElementArrayBuffer,
     texture: Texture,
 
+    font_array_buffer: ArrayBuffer<Vertex2>,
+    font_element_array_buffer: ElementArrayBuffer,
+    font: TextureFont<'static>,
+
     camera: Camera,
+    ortho_matrix: Matrix4<f32>,
 
     rotation: f32,
 }
 
 impl State {
     pub async fn new(canvas: Rc<HtmlCanvasElement>, context: Rc<WebGl2RenderingContext>) -> Result<State, Error> {
-        let shader = ShaderProgram::new(
+        let shader_3d = ShaderProgram::new(
             context.clone(),
-            include_str!("shaders/shader.vertex.glsl"),
-            include_str!("shaders/shader.fragment.glsl"),
+            include_str!("shaders/shader_3d.vertex.glsl"),
+            include_str!("shaders/shader_3d.fragment.glsl"),
         )?;
 
-        let position_attribute = AttributePointer::new::<Vertex>(
-            shader.assert_attribute_by_name("position_attribute")?.clone(),
+        let position_attribute_3d = AttributePointer::new::<Vertex3>(
+            shader_3d.assert_attribute_by_name("position_attribute")?.clone(),
             3,
             AttributePointerType::Float,
             false,
-            offset_of!(Vertex, position) as i32,
+            offset_of!(Vertex3, position) as i32,
         );
 
-        let texture_coordinate_attribute = AttributePointer::new::<Vertex>(
-            shader.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
+        let texture_coordinate_attribute_3d = AttributePointer::new::<Vertex3>(
+            shader_3d.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
             2,
             graphics::shader::AttributePointerType::Float,
             false,
-            offset_of!(Vertex, texture_coordinate) as i32,
+            offset_of!(Vertex3, texture_coordinate) as i32,
         );
 
-        let color_attribute = AttributePointer::new::<Vertex>(
-            shader.assert_attribute_by_name("color_attribute")?.clone(),
+        let color_attribute_3d = AttributePointer::new::<Vertex3>(
+            shader_3d.assert_attribute_by_name("color_attribute")?.clone(),
             4,
             graphics::shader::AttributePointerType::Float,
             false,
-            offset_of!(Vertex, color) as i32,
+            offset_of!(Vertex3, color) as i32,
         );
 
-        let sampler_uniform = shader.assert_uniform_by_name("sampler_uniform")?.clone();
+        let sampler_uniform_3d = shader_3d.assert_uniform_by_name("sampler_uniform")?.clone();
 
-        let projection_matrix_uniform = shader.assert_uniform_by_name("projection_matrix_uniform")?.clone();
+        let projection_matrix_uniform_3d = shader_3d.assert_uniform_by_name("projection_matrix_uniform")?.clone();
 
-        let model_view_matrix_uniform = shader.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
+        let model_view_matrix_uniform_3d = shader_3d.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
+
+        let shader_2d = ShaderProgram::new(
+            context.clone(),
+            include_str!("shaders/shader_2d.vertex.glsl"),
+            include_str!("shaders/shader_2d.fragment.glsl"),
+        )?;
+
+        let position_attribute_2d = AttributePointer::new::<Vertex2>(
+            shader_2d.assert_attribute_by_name("position_attribute")?.clone(),
+            2,
+            AttributePointerType::Float,
+            false,
+            offset_of!(Vertex3, position) as i32,
+        );
+
+        let texture_coordinate_attribute_2d = AttributePointer::new::<Vertex2>(
+            shader_2d.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
+            2,
+            graphics::shader::AttributePointerType::Float,
+            false,
+            offset_of!(Vertex3, texture_coordinate) as i32,
+        );
+
+        let color_attribute_2d = AttributePointer::new::<Vertex2>(
+            shader_2d.assert_attribute_by_name("color_attribute")?.clone(),
+            4,
+            graphics::shader::AttributePointerType::Float,
+            false,
+            offset_of!(Vertex3, color) as i32,
+        );
+
+        let sampler_uniform_2d = shader_2d.assert_uniform_by_name("sampler_uniform")?.clone();
+
+        let projection_matrix_uniform_2d = shader_2d.assert_uniform_by_name("projection_matrix_uniform")?.clone();
+
+        let model_view_matrix_uniform_2d = shader_2d.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
 
         let texture = {
             let image_bytes = include_bytes!("../assets/vader.jpg");
@@ -121,13 +180,13 @@ impl State {
             // Texture::new_with_pixels(context.clone(), size, &pixels)?
         };
 
-        let texture_aspect_ratio = (texture.size().y as f32) / (texture.size().x as f32);
+        let texture_aspect_ratio = (texture.size().height as f32) / (texture.size().width as f32);
 
-        let array_buffer = ArrayBuffer::new_with_data(
+        let static_texture_array_buffer = ArrayBuffer::new_with_data(
             context.clone(),
             BufferUsage::StaticDraw,
             &[
-                Vertex {
+                Vertex3 {
                     position: Vec3::new(-1.0, -texture_aspect_ratio, 0.0),
                     texture_coordinate: Vec2::new(0.0, 1.0),
                     color: F32RGBA {
@@ -137,7 +196,7 @@ impl State {
                         alpha: 1.0,
                     },
                 },
-                Vertex {
+                Vertex3 {
                     position: Vec3::new(1.0, -texture_aspect_ratio, 0.0),
                     texture_coordinate: Vec2::new(1.0, 1.0),
                     color: F32RGBA {
@@ -147,7 +206,7 @@ impl State {
                         alpha: 1.0,
                     },
                 },
-                Vertex {
+                Vertex3 {
                     position: Vec3::new(1.0, texture_aspect_ratio, 0.0),
                     texture_coordinate: Vec2::new(1.0, 0.0),
                     color: F32RGBA {
@@ -157,7 +216,7 @@ impl State {
                         alpha: 1.0,
                     },
                 },
-                Vertex {
+                Vertex3 {
                     position: Vec3::new(-1.0, texture_aspect_ratio, 0.0),
                     texture_coordinate: Vec2::new(0.0, 0.0),
                     color: F32RGBA {
@@ -170,7 +229,13 @@ impl State {
             ],
         )?;
 
-        let element_aray_buffer = ElementArrayBuffer::new_with_data(context.clone(), BufferUsage::StaticDraw, &[0, 1, 2, 2, 3, 0])?;
+        let static_texture_element_aray_buffer =
+            ElementArrayBuffer::new_with_data(context.clone(), BufferUsage::StaticDraw, &[0, 1, 2, 2, 3, 0])?;
+
+        let font = TextureFont::new_with_bytes_and_scale(context.clone(), include_bytes!("../assets/Ubuntu/Ubuntu-Regular.ttf"), 30.0)?;
+
+        let font_array_buffer = ArrayBuffer::new_with_len(context.clone(), BufferUsage::DynamicDraw, 0)?;
+        let font_element_array_buffer = ElementArrayBuffer::new_with_len(context.clone(), BufferUsage::DynamicDraw, 0)?;
 
         Ok(State {
             canvas,
@@ -178,27 +243,40 @@ impl State {
 
             key_state: Rc::new(Mutex::new(HashMap::new())),
 
-            shader,
-            position_attribute,
-            texture_coordinate_attribute,
-            color_attribute,
-            sampler_uniform,
-            projection_matrix_uniform,
-            model_view_matrix_uniform,
+            shader_3d,
+            position_attribute_3d,
+            texture_coordinate_attribute_3d,
+            color_attribute_3d,
+            sampler_uniform_3d,
+            projection_matrix_uniform_3d,
+            model_view_matrix_uniform_3d,
 
-            array_buffer,
-            element_aray_buffer,
+            shader_2d,
+            position_attribute_2d,
+            texture_coordinate_attribute_2d,
+            color_attribute_2d,
+            sampler_uniform_2d,
+            projection_matrix_uniform_2d,
+            model_view_matrix_uniform_2d,
+
+            static_texture_array_buffer,
+            static_texture_element_aray_buffer,
             texture,
+
+            font,
+            font_array_buffer,
+            font_element_array_buffer,
 
             camera: Camera::new(
                 60.0f32.to_radians(),
-                Vector2::new(0, 0),
+                Size { width: 0, height: 0 },
                 1.0,
                 1000.0,
                 Vec3::new(0.0, 0.0, 6.0),
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(0.0, 1.0, 0.0),
             ),
+            ortho_matrix: Matrix4::identity(),
 
             rotation: 0.0f32,
         })
@@ -232,8 +310,13 @@ impl UIState for State {
     fn resize(&mut self, size: DVec2) -> Result<(), Error> {
         let width = size.x.floor() as u32;
         let height = size.y.floor() as u32;
+
         self.context.viewport(0, 0, width as i32, height as i32);
-        self.camera.set_screen_size(Vector2::new(width, height));
+
+        self.camera.set_screen_size(Size { width, height });
+
+        self.ortho_matrix = Matrix4::new_orthographic(0.0, width as f32, height as f32, 0.0, -1.0, 1.0);
+
         Ok(())
     }
 
@@ -241,47 +324,103 @@ impl UIState for State {
         self.context.clear_color(149.0 / 255.0, 154.0 / 255.0, 163.0 / 255.0, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-        self.shader.use_program();
+        {
+            self.shader_3d.use_program();
 
-        self.context.uniform_matrix4fv_with_f32_array(
-            Some(&self.projection_matrix_uniform.location),
-            false,
-            self.camera.projection_matrix().as_slice(),
-        );
-        self.context.uniform_matrix4fv_with_f32_array(
-            Some(&self.model_view_matrix_uniform.location),
-            false,
-            rotate_y(self.camera.model_view_matrix(), self.rotation).as_slice(),
-        );
+            self.context.uniform_matrix4fv_with_f32_array(
+                Some(&self.projection_matrix_uniform_3d.location),
+                false,
+                self.camera.projection_matrix().as_slice(),
+            );
+            self.context.uniform_matrix4fv_with_f32_array(
+                Some(&self.model_view_matrix_uniform_3d.location),
+                false,
+                rotate_y(self.camera.model_view_matrix(), self.rotation).as_slice(),
+            );
 
-        self.context.uniform1i(Some(&self.sampler_uniform.location), 0);
-        self.context.active_texture(WebGl2RenderingContext::TEXTURE0);
-        self.texture.bind();
+            self.context.uniform1i(Some(&self.sampler_uniform_3d.location), 0);
+            self.context.active_texture(WebGl2RenderingContext::TEXTURE0);
+            self.texture.bind();
 
-        self.array_buffer.bind();
-        self.element_aray_buffer.bind();
+            self.static_texture_array_buffer.bind();
+            self.static_texture_element_aray_buffer.bind();
 
-        self.position_attribute.enable();
-        self.texture_coordinate_attribute.enable();
-        self.color_attribute.enable();
+            self.position_attribute_3d.enable();
+            self.texture_coordinate_attribute_3d.enable();
+            self.color_attribute_3d.enable();
 
-        self.context.draw_elements_with_i32(
-            WebGl2RenderingContext::TRIANGLES,
-            self.element_aray_buffer.len() as i32,
-            WebGl2RenderingContext::UNSIGNED_SHORT,
-            0,
-        );
+            self.context.draw_elements_with_i32(
+                WebGl2RenderingContext::TRIANGLES,
+                self.static_texture_element_aray_buffer.len() as i32,
+                WebGl2RenderingContext::UNSIGNED_SHORT,
+                0,
+            );
 
-        self.position_attribute.disable();
-        self.texture_coordinate_attribute.disable();
-        self.color_attribute.disable();
+            self.position_attribute_3d.disable();
+            self.texture_coordinate_attribute_3d.disable();
+            self.color_attribute_3d.disable();
 
-        self.array_buffer.bind_none();
-        self.element_aray_buffer.bind_none();
+            self.static_texture_array_buffer.bind_none();
+            self.static_texture_element_aray_buffer.bind_none();
 
-        self.texture.bind_none();
+            self.texture.bind_none();
 
-        self.shader.use_none();
+            self.shader_3d.use_none();
+        }
+
+        if let Some(layout) = self.font.layout("Hello, World!") {
+            self.font.update_cache(layout.glyphs.iter())?;
+
+            // TODO convenience methods for resizing and setting data all at once?
+            self.font_array_buffer.set_len(layout.glyphs.len() * 4)?;
+            self.font_element_array_buffer.set_len(layout.glyphs.len() * 6)?;
+            for glyph in layout.glyphs.iter() {
+                let rect: Option<Rect<i32>> = glyph.pixel_bounding_box().map(|r| r.into());
+                // TODO draw rect in array buffer and element array buffer
+            }
+
+            self.shader_2d.use_program();
+
+            self.context.uniform_matrix4fv_with_f32_array(
+                Some(&self.projection_matrix_uniform_2d.location),
+                false,
+                self.ortho_matrix.as_slice(),
+            );
+            self.context.uniform_matrix4fv_with_f32_array(
+                Some(&self.model_view_matrix_uniform_2d.location),
+                false,
+                Matrix4::identity().as_slice(),
+            );
+
+            self.context.uniform1i(Some(&self.sampler_uniform_2d.location), 0);
+            self.context.active_texture(WebGl2RenderingContext::TEXTURE0);
+            self.font.bind();
+
+            self.font_array_buffer.bind();
+            self.font_element_array_buffer.bind();
+
+            self.position_attribute_2d.enable();
+            self.texture_coordinate_attribute_2d.enable();
+            self.color_attribute_2d.enable();
+
+            self.context.draw_elements_with_i32(
+                WebGl2RenderingContext::TRIANGLES,
+                self.font_element_array_buffer.len() as i32,
+                WebGl2RenderingContext::UNSIGNED_SHORT,
+                0,
+            );
+
+            self.position_attribute_2d.disable();
+            self.texture_coordinate_attribute_2d.disable();
+            self.color_attribute_2d.disable();
+
+            self.font_array_buffer.bind_none();
+            self.font_element_array_buffer.bind_none();
+
+            self.font.bind_none();
+
+            self.shader_2d.use_none();
+        }
 
         Ok(())
     }
