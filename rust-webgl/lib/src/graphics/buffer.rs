@@ -20,11 +20,11 @@ impl<T> Buffer<T>
 where
     T: Pod,
 {
-    pub fn new_with_len(context: Rc<WebGl2RenderingContext>, target: BufferTarget, usage: BufferUsage, len: usize) -> Result<Self, Error> {
+    pub fn new_array_buffer_with_len(context: Rc<WebGl2RenderingContext>, usage: BufferUsage, len: usize) -> Result<Self, Error> {
         let buffer = context.create_buffer().ok_or("failed to create buffer")?;
         let mut result = Self {
             context,
-            gl_target: target.gl_usage(),
+            gl_target: BufferTarget::ArrayBuffer.gl_usage(),
             gl_usage: usage.gl_usage(),
             len: 0,
             stride: size_of::<T>(),
@@ -35,13 +35,8 @@ where
         Ok(result)
     }
 
-    pub fn new_with_data(
-        context: Rc<WebGl2RenderingContext>,
-        target: BufferTarget,
-        usage: BufferUsage,
-        source: &[T],
-    ) -> Result<Self, Error> {
-        let mut result = Self::new_with_len(context, target, usage, source.len())?;
+    pub fn new_array_buffer_with_data(context: Rc<WebGl2RenderingContext>, usage: BufferUsage, source: &[T]) -> Result<Self, Error> {
+        let mut result = Self::new_array_buffer_with_len(context, usage, source.len())?;
         result.set(source, 0)?;
         Ok(result)
     }
@@ -85,6 +80,33 @@ where
         self.bind_none();
 
         Ok(())
+    }
+}
+
+impl Buffer<u16> {
+    pub fn new_element_array_buffer_with_len(context: Rc<WebGl2RenderingContext>, usage: BufferUsage, len: usize) -> Result<Self, Error> {
+        let buffer = context.create_buffer().ok_or("failed to create buffer")?;
+        let mut result = Self {
+            context,
+            gl_target: BufferTarget::ElementArrayBuffer.gl_usage(),
+            gl_usage: usage.gl_usage(),
+            len: 0,
+            stride: size_of::<u16>(),
+            buffer,
+            phantom: PhantomData,
+        };
+        result.set_len(len);
+        Ok(result)
+    }
+
+    pub fn new_element_array_buffer_with_data(
+        context: Rc<WebGl2RenderingContext>,
+        usage: BufferUsage,
+        source: &[u16],
+    ) -> Result<Self, Error> {
+        let mut result = Self::new_element_array_buffer_with_len(context, usage, source.len())?;
+        result.set(source, 0)?;
+        Ok(result)
     }
 }
 

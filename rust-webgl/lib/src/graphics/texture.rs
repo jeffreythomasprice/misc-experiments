@@ -19,8 +19,15 @@ pub struct Texture {
 }
 
 impl Texture {
+    pub fn max_size(context: &WebGl2RenderingContext) -> Result<usize, Error> {
+        Ok(context
+            .get_parameter(WebGl2RenderingContext::MAX_TEXTURE_SIZE)?
+            .as_f64()
+            .ok_or(format!("expected max texture size to be a number"))? as usize)
+    }
+
     pub fn new_with_size(context: Rc<WebGl2RenderingContext>, size: Size<u32>) -> Result<Self, Error> {
-        let result = Self::common_init(&context, |context| {
+        let result = Self::common_init(&context, size, |context| {
             /*
             If you don't provide any initial data you get this warning tryin to invoke texSubImage
             Texture has not been initialized prior to a partial upload, forcing the browser to clear it. This may be slow.
@@ -51,7 +58,7 @@ impl Texture {
     }
 
     pub fn new_with_pixels(context: Rc<WebGl2RenderingContext>, size: Size<u32>, data: &[U8RGBA]) -> Result<Self, Error> {
-        let result = Self::common_init(&context, |context| {
+        let result = Self::common_init(&context, size, |context| {
             context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_u8_array_and_src_offset(
                 WebGl2RenderingContext::TEXTURE_2D,
                 0,
@@ -170,7 +177,7 @@ impl Texture {
         Ok(())
     }
 
-    fn common_init<F>(context: &WebGl2RenderingContext, f: F) -> Result<web_sys::WebGlTexture, Error>
+    fn common_init<F>(context: &WebGl2RenderingContext, size: Size<u32>, f: F) -> Result<web_sys::WebGlTexture, Error>
     where
         F: FnOnce(&WebGl2RenderingContext) -> Result<(), Error>,
     {
@@ -182,7 +189,9 @@ impl Texture {
             Err(e)?;
         }
 
-        context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
+        if size.width >= 1 && size.height >= 1 {
+            context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
+        }
 
         context.tex_parameteri(
             WebGl2RenderingContext::TEXTURE_2D,

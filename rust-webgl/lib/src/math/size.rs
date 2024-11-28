@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Size<T> {
     pub width: T,
     pub height: T,
@@ -26,5 +26,11 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({} x {})", self.width, self.height)
+    }
+}
+
+impl<T> From<(T, T)> for Size<T> {
+    fn from((width, height): (T, T)) -> Self {
+        Self { width, height }
     }
 }

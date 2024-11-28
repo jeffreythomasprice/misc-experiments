@@ -6,7 +6,6 @@ use lib::{
     graphics::{
         self,
         buffer::Buffer,
-        buffer_target::BufferTarget,
         buffer_usage::BufferUsage,
         colors::F32RGBA,
         shader::{AttributePointer, AttributePointerType, ShaderProgram, Uniform},
@@ -155,9 +154,8 @@ impl State {
 
         let texture_aspect_ratio = (texture.size().height as f32) / (texture.size().width as f32);
 
-        let static_texture_array_buffer = Buffer::new_with_data(
+        let static_texture_array_buffer = Buffer::new_array_buffer_with_data(
             context.clone(),
-            BufferTarget::ArrayBuffer,
             BufferUsage::StaticDraw,
             &[
                 Vertex3 {
@@ -203,18 +201,13 @@ impl State {
             ],
         )?;
 
-        let static_texture_element_aray_buffer = Buffer::new_with_data(
-            context.clone(),
-            BufferTarget::ElementArrayBuffer,
-            BufferUsage::StaticDraw,
-            &[0, 1, 2, 2, 3, 0],
-        )?;
+        let static_texture_element_aray_buffer =
+            Buffer::new_element_array_buffer_with_data(context.clone(), BufferUsage::StaticDraw, &[0, 1, 2, 2, 3, 0])?;
 
         let font = TextureFont::new_with_bytes_and_scale(context.clone(), include_bytes!("../assets/Ubuntu/Ubuntu-Regular.ttf"), 30.0)?;
 
-        let font_array_buffer = Buffer::new_with_len(context.clone(), BufferTarget::ArrayBuffer, BufferUsage::DynamicDraw, 0)?;
-        let font_element_array_buffer =
-            Buffer::new_with_len(context.clone(), BufferTarget::ElementArrayBuffer, BufferUsage::DynamicDraw, 0)?;
+        let font_array_buffer = Buffer::new_array_buffer_with_len(context.clone(), BufferUsage::DynamicDraw, 0)?;
+        let font_element_array_buffer = Buffer::new_element_array_buffer_with_len(context.clone(), BufferUsage::DynamicDraw, 0)?;
 
         Ok(State {
             canvas,

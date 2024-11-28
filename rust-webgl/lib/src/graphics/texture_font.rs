@@ -1,16 +1,15 @@
-use std::rc::Rc;
-
-use rusttype::{gpu_cache::Cache, Font, PositionedGlyph, Scale};
-use web_sys::WebGl2RenderingContext;
-
+use super::{colors::U8RGBA, texture::Texture};
 use crate::{
     error::Error,
     math::{rect::Rect, size::Size, vec2::Vec2},
 };
-
-use super::{colors::U8RGBA, texture::Texture};
+use log::*;
+use rusttype::{gpu_cache::Cache, Font, PositionedGlyph, Scale};
+use std::rc::Rc;
+use web_sys::WebGl2RenderingContext;
 
 pub struct TextureFont<'a> {
+    context: Rc<WebGl2RenderingContext>,
     scale: Scale,
     font: Font<'a>,
     cache: Cache<'a>,
@@ -26,15 +25,13 @@ pub struct LayoutResult<'a> {
 impl<'a> TextureFont<'a> {
     pub fn new_with_bytes_and_scale(context: Rc<WebGl2RenderingContext>, bytes: &'a [u8], scale: f32) -> Result<Self, Error> {
         let font = Font::try_from_bytes(bytes).ok_or("error loading font")?;
-
-        // TODO how to figure out texture size?
-        let size = Size { width: 1024, height: 1024 };
-
-        let cache = Cache::builder().dimensions(size.width, size.height).build();
-
-        let texture = Texture::new_with_size(context, size).map_err(|e| format!("error making texture for font cache: {e:?}"))?;
-
+        let (texture, cache) = Self::create_texture_and_cache(
+            context.clone(),
+            // just guess as to a sensible initial size so we do less re-sizing of the underlying texture later
+            Size { width: 256, height: 256 },
+        )?;
         Ok(Self {
+            context,
             scale: Scale::uniform(scale),
             font,
             cache,
@@ -103,12 +100,14 @@ impl<'a> TextureFont<'a> {
         'a: 'b,
         I: Iterator<Item = &'b PositionedGlyph<'a>>,
     {
-        for glyph in glyphs {
-            self.cache.queue_glyph(0, glyph.clone());
-        }
-        let mut abort_error = None;
-        self.cache
-            .cache_queued(|rect, data| {
+        // TODO can we avoid making a clone of the input glyphs?
+        let glyphs = glyphs.map(|x| x.clone()).collect::<Vec<_>>();
+        loop {
+            for glyph in glyphs.iter() {
+                self.cache.queue_glyph(0, glyph.clone());
+            }
+            let mut abort_error = None;
+            let cache_error = self.cache.cache_queued(|rect, data| {
                 if abort_error.is_some() {
                     return;
                 }
@@ -135,13 +134,33 @@ impl<'a> TextureFont<'a> {
                 ) {
                     abort_error = Some(e);
                 }
-            })
-            .map_err(|e| format!("error updating font cache: {e:?}"))?;
-
-        if let Some(e) = abort_error {
-            Err(e)
-        } else {
-            Ok(())
+            });
+            return match (abort_error, cache_error) {
+                (Some(e), _) => Err(format!("failed to render glyph into texture cache: {e:?}"))?,
+                (_, Err(e)) => {
+                    let current_texture_size = self.texture.size();
+                    let current_cache_size: Size<u32> = self.cache.dimensions().into();
+                    let max_texture_size = Texture::max_size(&self.context)?;
+                    let next_size = Size {
+                        width: (current_texture_size.width.max(current_cache_size.width) * 2)
+                            .max(1)
+                            .min(max_texture_size as u32),
+                        height: (current_texture_size.height.max(current_cache_size.height) * 2)
+                            .max(1)
+                            .min(max_texture_size as u32),
+                    };
+                    trace!("current cache size is too small, current texture size = {}, current cache size = {}, max texture size = {}, error = {:?}, next size = {}", current_texture_size, current_cache_size, max_texture_size, e, next_size);
+                    if next_size == *current_texture_size || next_size == current_cache_size {
+                        Err(format!("failed to cache glyphs, but also can't make texture any bigger, current texture size = {}, current cache size = {}, max texture size = {}", current_texture_size, current_cache_size, max_texture_size))?;
+                    }
+                    let (texture, cache) = Self::create_texture_and_cache(self.context.clone(), next_size)
+                        .map_err(|e| format!("error resizing texture font cache: {e:?}"))?;
+                    self.texture = texture;
+                    self.cache = cache;
+                    continue;
+                }
+                (_, _) => Ok(()),
+            };
         }
     }
 
@@ -159,5 +178,11 @@ impl<'a> TextureFont<'a> {
 
     pub fn bind_none(&self) {
         self.texture.bind_none();
+    }
+
+    fn create_texture_and_cache(context: Rc<WebGl2RenderingContext>, size: Size<u32>) -> Result<(Texture, Cache<'a>), Error> {
+        let cache = Cache::builder().dimensions(size.width, size.height).build();
+        let texture = Texture::new_with_size(context, size).map_err(|e| format!("error making texture for font cache: {e:?}"))?;
+        Ok((texture, cache))
     }
 }

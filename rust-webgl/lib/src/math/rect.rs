@@ -5,7 +5,7 @@ use std::{
 
 use super::{size::Size, vec2::Vec2};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Rect<T> {
     pub min: Vec2<T>,
     pub max: Vec2<T>,
