@@ -357,74 +357,122 @@ impl UIState for State {
             self.font.update_cache(layout.glyphs.iter())?;
 
             // TODO convenience methods for resizing and setting data all at once?
-            self.font_array_buffer.set_len(layout.glyphs.len() * 4);
-            self.font_element_array_buffer.set_len(layout.glyphs.len() * 6);
-            {
-                let mut next_vertex: u16 = 0;
-                let mut next_index: u16 = 0;
-                for glyph in layout.glyphs.iter() {
-                    if let Some((uv_rect, screen_rect)) = self.font.rect_for(glyph)? {
-                        self.font_array_buffer.set(
-                            &[
-                                Vertex2 {
-                                    position: Vec2::new(screen_rect.min.x as f32, screen_rect.min.y as f32),
-                                    texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.min.y),
-                                    color: F32RGBA {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0,
-                                        alpha: 1.0,
-                                    },
-                                },
-                                Vertex2 {
-                                    position: Vec2::new(screen_rect.max.x as f32, screen_rect.min.y as f32),
-                                    texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.min.y),
-                                    color: F32RGBA {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0,
-                                        alpha: 1.0,
-                                    },
-                                },
-                                Vertex2 {
-                                    position: Vec2::new(screen_rect.max.x as f32, screen_rect.max.y as f32),
-                                    texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.max.y),
-                                    color: F32RGBA {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0,
-                                        alpha: 1.0,
-                                    },
-                                },
-                                Vertex2 {
-                                    position: Vec2::new(screen_rect.min.x as f32, screen_rect.max.y as f32),
-                                    texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.max.y),
-                                    color: F32RGBA {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0,
-                                        alpha: 1.0,
-                                    },
-                                },
-                            ],
-                            next_vertex as usize,
-                        )?;
-                        self.font_element_array_buffer.set(
-                            &[
-                                next_vertex,
-                                next_vertex + 1,
-                                next_vertex + 2,
-                                next_vertex + 2,
-                                next_vertex + 3,
-                                next_vertex,
-                            ],
-                            next_index as usize,
-                        )?;
-                        next_vertex += 4;
-                        next_index += 6;
-                    };
-                }
-            }
+            // self.font_array_buffer.set_len(layout.glyphs.len() * 4);
+            // self.font_element_array_buffer.set_len(layout.glyphs.len() * 6);
+            // {
+            //     let mut next_vertex: u16 = 0;
+            //     let mut next_index: u16 = 0;
+            //     for glyph in layout.glyphs.iter() {
+            //         if let Some((uv_rect, screen_rect)) = self.font.rect_for(glyph)? {
+            //             self.font_array_buffer.set(
+            //                 &[
+            //                     Vertex2 {
+            //                         position: Vec2::new(screen_rect.min.x as f32, screen_rect.min.y as f32),
+            //                         texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.min.y),
+            //                         color: F32RGBA {
+            //                             red: 1.0,
+            //                             green: 1.0,
+            //                             blue: 1.0,
+            //                             alpha: 1.0,
+            //                         },
+            //                     },
+            //                     Vertex2 {
+            //                         position: Vec2::new(screen_rect.max.x as f32, screen_rect.min.y as f32),
+            //                         texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.min.y),
+            //                         color: F32RGBA {
+            //                             red: 1.0,
+            //                             green: 1.0,
+            //                             blue: 1.0,
+            //                             alpha: 1.0,
+            //                         },
+            //                     },
+            //                     Vertex2 {
+            //                         position: Vec2::new(screen_rect.max.x as f32, screen_rect.max.y as f32),
+            //                         texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.max.y),
+            //                         color: F32RGBA {
+            //                             red: 1.0,
+            //                             green: 1.0,
+            //                             blue: 1.0,
+            //                             alpha: 1.0,
+            //                         },
+            //                     },
+            //                     Vertex2 {
+            //                         position: Vec2::new(screen_rect.min.x as f32, screen_rect.max.y as f32),
+            //                         texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.max.y),
+            //                         color: F32RGBA {
+            //                             red: 1.0,
+            //                             green: 1.0,
+            //                             blue: 1.0,
+            //                             alpha: 1.0,
+            //                         },
+            //                     },
+            //                 ],
+            //                 next_vertex as usize,
+            //             )?;
+            //             self.font_element_array_buffer.set(
+            //                 &[
+            //                     next_vertex,
+            //                     next_vertex + 1,
+            //                     next_vertex + 2,
+            //                     next_vertex + 2,
+            //                     next_vertex + 3,
+            //                     next_vertex,
+            //                 ],
+            //                 next_index as usize,
+            //             )?;
+            //             next_vertex += 4;
+            //             next_index += 6;
+            //         };
+            //     }
+            // }
+            self.font_array_buffer.set_len(4);
+            self.font_element_array_buffer.set_len(6);
+            self.font_array_buffer.set(
+                &[
+                    Vertex2 {
+                        position: Vec2::new(0.0, 0.0),
+                        texture_coordinate: Vec2::new(0.0, 0.0),
+                        color: F32RGBA {
+                            red: 1.0,
+                            green: 1.0,
+                            blue: 1.0,
+                            alpha: 1.0,
+                        },
+                    },
+                    Vertex2 {
+                        position: Vec2::new(256.0, 0.0),
+                        texture_coordinate: Vec2::new(1.0, 0.0),
+                        color: F32RGBA {
+                            red: 1.0,
+                            green: 1.0,
+                            blue: 1.0,
+                            alpha: 1.0,
+                        },
+                    },
+                    Vertex2 {
+                        position: Vec2::new(256.0, 256.0),
+                        texture_coordinate: Vec2::new(1.0, 1.0),
+                        color: F32RGBA {
+                            red: 1.0,
+                            green: 1.0,
+                            blue: 1.0,
+                            alpha: 1.0,
+                        },
+                    },
+                    Vertex2 {
+                        position: Vec2::new(0.0, 256.0),
+                        texture_coordinate: Vec2::new(0.0, 1.0),
+                        color: F32RGBA {
+                            red: 1.0,
+                            green: 1.0,
+                            blue: 1.0,
+                            alpha: 1.0,
+                        },
+                    },
+                ],
+                0,
+            )?;
+            self.font_element_array_buffer.set(&[0, 1, 2, 2, 3, 0], 0)?;
 
             // TODO blending
 

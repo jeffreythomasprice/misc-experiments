@@ -21,7 +21,21 @@ pub struct Texture {
 impl Texture {
     pub fn new_with_size(context: Rc<WebGl2RenderingContext>, size: Size<u32>) -> Result<Self, Error> {
         let result = Self::common_init(&context, |context| {
-            context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+            // TODO have to give it a blank image or we get warnings?
+
+            // context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+            //     WebGl2RenderingContext::TEXTURE_2D,
+            //     0,
+            //     WebGl2RenderingContext::RGBA as i32,
+            //     size.width as i32,
+            //     size.height as i32,
+            //     0,
+            //     WebGl2RenderingContext::RGBA,
+            //     WebGl2RenderingContext::UNSIGNED_BYTE,
+            //     None,
+            // )?;
+
+            context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_u8_array_and_src_offset(
                 WebGl2RenderingContext::TEXTURE_2D,
                 0,
                 WebGl2RenderingContext::RGBA as i32,
@@ -30,8 +44,10 @@ impl Texture {
                 0,
                 WebGl2RenderingContext::RGBA,
                 WebGl2RenderingContext::UNSIGNED_BYTE,
-                None,
+                &vec![0u8; (size.width * size.height * 4) as usize],
+                0,
             )?;
+
             Ok(())
         })?;
 
@@ -146,7 +162,7 @@ impl Texture {
         source.size = min_size
         */
 
-        log::debug!("TODO pixels: {:?}", pixels);
+        log::debug!("TODO size: {}, pixels: {:?}, len = {}", source_size, pixels, pixels.len());
         self.bind();
         self.context
             .tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_u8_array_and_src_offset(

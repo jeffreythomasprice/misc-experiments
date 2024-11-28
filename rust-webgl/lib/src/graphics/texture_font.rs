@@ -122,6 +122,10 @@ impl<'a> TextureFont<'a> {
                         green: *greyscale,
                         blue: *greyscale,
                         alpha: 255,
+                        // red: 255,
+                        // green: 255,
+                        // blue: 255,
+                        // alpha: *greyscale,
                     })
                     .collect::<Vec<_>>();
                 let size = Size {
