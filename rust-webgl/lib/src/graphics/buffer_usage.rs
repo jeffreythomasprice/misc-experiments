@@ -1,5 +1,6 @@
 use web_sys::WebGl2RenderingContext;
 
+#[derive(Debug)]
 pub enum BufferUsage {
     StaticDraw,
     DynamicDraw,
