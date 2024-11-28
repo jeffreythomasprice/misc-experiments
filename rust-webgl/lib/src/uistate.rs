@@ -14,7 +14,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 pub trait UIState {
-    fn resize(&mut self, size: DVec2) -> Result<(), Error> {
+    fn resize(&mut self, #[allow(unused)] size: DVec2) -> Result<(), Error> {
         Ok(())
     }
 
@@ -22,27 +22,27 @@ pub trait UIState {
         Ok(())
     }
 
-    fn update(&mut self, delta: Duration) -> Result<(), Error> {
+    fn update(&mut self, #[allow(unused)] delta: Duration) -> Result<(), Error> {
         Ok(())
     }
 
-    fn mouse_down(&mut self, e: &MousePressEvent) -> Result<(), Error> {
+    fn mouse_down(&mut self, #[allow(unused)] e: &MousePressEvent) -> Result<(), Error> {
         Ok(())
     }
 
-    fn mouse_up(&mut self, e: &MousePressEvent) -> Result<(), Error> {
+    fn mouse_up(&mut self, #[allow(unused)] e: &MousePressEvent) -> Result<(), Error> {
         Ok(())
     }
 
-    fn mouse_move(&mut self, e: &MouseMoveEvent) -> Result<(), Error> {
+    fn mouse_move(&mut self, #[allow(unused)] e: &MouseMoveEvent) -> Result<(), Error> {
         Ok(())
     }
 
-    fn key_down(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
+    fn key_down(&mut self, #[allow(unused)] e: &KeyPressEvent) -> Result<(), Error> {
         Ok(())
     }
 
-    fn key_up(&mut self, e: &KeyPressEvent) -> Result<(), Error> {
+    fn key_up(&mut self, #[allow(unused)] e: &KeyPressEvent) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -78,9 +78,7 @@ where
         )?
         .ok_or("failed to create webgl context")?
         .dyn_into()
-        .map_err(|e| {
-            format!("created a canvas graphics context, but it wasn't the expected type: {e:?}")
-        })?;
+        .map_err(|e| format!("created a canvas graphics context, but it wasn't the expected type: {e:?}"))?;
 
     let canvas = Rc::new(canvas);
     let state: Rc<Mutex<Option<Box<dyn UIState>>>> = Rc::new(Mutex::new(None));
@@ -231,11 +229,7 @@ fn resize(canvas: &HtmlCanvasElement, state: &mut Box<dyn UIState>) -> Result<()
 }
 
 fn anim_loop<F: Fn(Duration) + 'static>(f: F) {
-    fn inner<F: Fn(Duration) + 'static>(
-        last_anim: Rc<Mutex<Option<AnimationFrame>>>,
-        last_time: Duration,
-        f: F,
-    ) {
+    fn inner<F: Fn(Duration) + 'static>(last_anim: Rc<Mutex<Option<AnimationFrame>>>, last_time: Duration, f: F) {
         let callback = {
             let last_anim = last_anim.clone();
             let last_time = last_time;

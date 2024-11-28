@@ -1,7 +1,5 @@
 use std::{collections::HashMap, rc::Rc};
-use web_sys::{
-    WebGl2RenderingContext, WebGlActiveInfo, WebGlProgram, WebGlShader, WebGlUniformLocation,
-};
+use web_sys::{WebGl2RenderingContext, WebGlActiveInfo, WebGlProgram, WebGlShader, WebGlUniformLocation};
 
 use crate::error::Error;
 
@@ -26,11 +24,7 @@ struct Shader {
 }
 
 impl Shader {
-    pub fn new(
-        context: Rc<WebGl2RenderingContext>,
-        typ: ShaderType,
-        source: &str,
-    ) -> Result<Self, Error> {
+    pub fn new(context: Rc<WebGl2RenderingContext>, typ: ShaderType, source: &str) -> Result<Self, Error> {
         let result = context
             .create_shader(typ.gl_type())
             .ok_or("failed to create shader of type {typ:?}")?;
@@ -48,9 +42,7 @@ impl Shader {
         } else {
             let log = context.get_shader_info_log(&result);
             context.delete_shader(Some(&result));
-            Err(format!(
-                "shader compile error, type: {typ:?}, log:\n{log:?}"
-            ))?
+            Err(format!("shader compile error, type: {typ:?}, log:\n{log:?}"))?
         }
     }
 }
@@ -113,7 +105,6 @@ pub enum AttributePointerType {
 pub struct AttributePointer {
     attribute: Attribute,
     size: i32,
-    typ: AttributePointerType,
     gl_type: u32,
     normalized: bool,
     stride: i32,
@@ -121,20 +112,13 @@ pub struct AttributePointer {
 }
 
 impl AttributePointer {
-    pub fn new<T>(
-        attribute: Attribute,
-        size: i32,
-        typ: AttributePointerType,
-        normalized: bool,
-        offset: i32,
-    ) -> Self {
+    pub fn new<T>(attribute: Attribute, size: i32, typ: AttributePointerType, normalized: bool, offset: i32) -> Self {
         let gl_type = match typ {
             AttributePointerType::Float => WebGl2RenderingContext::FLOAT,
         };
         Self {
             attribute,
             size,
-            typ,
             gl_type,
             normalized,
             stride: size_of::<T>() as i32,
@@ -186,16 +170,10 @@ pub struct ShaderProgram {
 }
 
 impl ShaderProgram {
-    pub fn new(
-        context: Rc<WebGl2RenderingContext>,
-        vertex_source: &str,
-        fragment_source: &str,
-    ) -> Result<Self, Error> {
+    pub fn new(context: Rc<WebGl2RenderingContext>, vertex_source: &str, fragment_source: &str) -> Result<Self, Error> {
         let vertex_shader = Shader::new(context.clone(), ShaderType::Vertex, vertex_source)?;
         let fragment_shader = Shader::new(context.clone(), ShaderType::Fragment, fragment_source)?;
-        let result = context
-            .create_program()
-            .ok_or("failed to create shader program")?;
+        let result = context.create_program().ok_or("failed to create shader program")?;
         context.attach_shader(&result, &vertex_shader.instance);
         context.attach_shader(&result, &fragment_shader.instance);
         context.link_program(&result);
@@ -213,9 +191,9 @@ impl ShaderProgram {
                 let attr = Attribute::new(
                     context.clone(),
                     index,
-                    context.get_active_attrib(&result, index).ok_or(format!(
-                        "failed to find attribute on shader with index {index}"
-                    ))?,
+                    context
+                        .get_active_attrib(&result, index)
+                        .ok_or(format!("failed to find attribute on shader with index {index}"))?,
                 );
                 attributes.insert(attr.info.name.clone(), attr);
             }
@@ -226,16 +204,13 @@ impl ShaderProgram {
                 .ok_or("expected a number")? as u32;
             let mut uniforms = HashMap::new();
             for index in 0..active_uniforms {
-                let info = context.get_active_uniform(&result, index).ok_or(format!(
-                    "failed to find uniform on shader with index {index}"
+                let info = context
+                    .get_active_uniform(&result, index)
+                    .ok_or(format!("failed to find uniform on shader with index {index}"))?;
+                let location = context.get_uniform_location(&result, &info.name()).ok_or(format!(
+                    "failed to find uniform location on shader with index {index}, name {}",
+                    info.name()
                 ))?;
-                let location =
-                    context
-                        .get_uniform_location(&result, &info.name())
-                        .ok_or(format!(
-                            "failed to find uniform location on shader with index {index}, name {}",
-                            info.name()
-                        ))?;
                 let uniform = Uniform::new(index, info, location);
                 uniforms.insert(uniform.info.name.clone(), uniform);
             }

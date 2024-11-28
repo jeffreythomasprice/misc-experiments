@@ -8,7 +8,6 @@ use super::buffer_usage::BufferUsage;
 
 pub struct ArrayBuffer<T> {
     context: Rc<WebGl2RenderingContext>,
-    usage: BufferUsage,
     gl_usage: u32,
     len: usize,
     stride: usize,
@@ -29,7 +28,6 @@ where
 
         let mut result = Self {
             context,
-            usage,
             gl_usage,
             len,
             stride,

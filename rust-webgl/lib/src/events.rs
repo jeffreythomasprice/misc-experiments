@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use nalgebra_glm::{I32Vec2, U32Vec2};
+use nalgebra_glm::U32Vec2;
 
 use crate::math::vec2::Vec2;
 

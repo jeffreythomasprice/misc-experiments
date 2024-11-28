@@ -10,7 +10,6 @@ pub struct Camera {
     far: f32,
     position: Vec3,
     look: Vec3,
-    right: Vec3,
     up: Vec3,
 
     angle_right: f32,
@@ -27,7 +26,6 @@ impl Camera {
     pub fn new(fov: f32, screen_size: Size<u32>, near: f32, far: f32, position: Vec3, target: Vec3, up: Vec3) -> Self {
         let look = (target - position).normalize();
         let up = up.normalize();
-        let right = look.cross(&up);
         let mut result = Self {
             fov,
             screen_size,
@@ -35,7 +33,6 @@ impl Camera {
             far,
             position,
             look,
-            right,
             up,
 
             angle_right: 0.0,

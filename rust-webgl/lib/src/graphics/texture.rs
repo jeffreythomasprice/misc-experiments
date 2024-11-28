@@ -21,20 +21,10 @@ pub struct Texture {
 impl Texture {
     pub fn new_with_size(context: Rc<WebGl2RenderingContext>, size: Size<u32>) -> Result<Self, Error> {
         let result = Self::common_init(&context, |context| {
-            // TODO have to give it a blank image or we get warnings?
-
-            // context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
-            //     WebGl2RenderingContext::TEXTURE_2D,
-            //     0,
-            //     WebGl2RenderingContext::RGBA as i32,
-            //     size.width as i32,
-            //     size.height as i32,
-            //     0,
-            //     WebGl2RenderingContext::RGBA,
-            //     WebGl2RenderingContext::UNSIGNED_BYTE,
-            //     None,
-            // )?;
-
+            /*
+            If you don't provide any initial data you get this warning tryin to invoke texSubImage
+            Texture has not been initialized prior to a partial upload, forcing the browser to clear it. This may be slow.
+            */
             context.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_u8_array_and_src_offset(
                 WebGl2RenderingContext::TEXTURE_2D,
                 0,
@@ -144,13 +134,6 @@ impl Texture {
         source_size: Size<u32>,
         pixels: &[U8RGBA],
     ) -> Result<(), Error> {
-        log::debug!(
-            "TODO copy_pixels, destination = {}, source = {}, len(pixels) = {}",
-            destination,
-            source,
-            pixels.len()
-        );
-
         /*
         TODO actually copy sub images
 
@@ -162,7 +145,6 @@ impl Texture {
         source.size = min_size
         */
 
-        log::debug!("TODO size: {}, pixels: {:?}, len = {}", source_size, pixels, pixels.len());
         self.bind();
         self.context
             .tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_u8_array_and_src_offset(
@@ -189,7 +171,7 @@ impl Texture {
     where
         F: FnOnce(&WebGl2RenderingContext) -> Result<(), Error>,
     {
-        let result = context.create_texture().ok_or(format!("failed to create texture"))?;
+        let result = context.create_texture().ok_or("failed to create texture".to_string())?;
         context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&result));
 
         if let Err(e) = f(context) {

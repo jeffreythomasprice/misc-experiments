@@ -93,7 +93,7 @@ impl<'a> TextureFont<'a> {
             // we have some results
             (_, Some(bounds)) => Some(LayoutResult {
                 glyphs: result_glyphs,
-                bounds: bounds,
+                bounds,
             }),
         }
     }
@@ -113,19 +113,13 @@ impl<'a> TextureFont<'a> {
                     return;
                 }
 
-                log::debug!("TODO data: {:?}", data);
                 let rgba_data = data
                     .iter()
                     .map(|greyscale| U8RGBA {
-                        // TODO put the value in the alpha channel instead
-                        red: *greyscale,
-                        green: *greyscale,
-                        blue: *greyscale,
-                        alpha: 255,
-                        // red: 255,
-                        // green: 255,
-                        // blue: 255,
-                        // alpha: *greyscale,
+                        red: 255,
+                        green: 255,
+                        blue: 255,
+                        alpha: *greyscale,
                     })
                     .collect::<Vec<_>>();
                 let size = Size {
@@ -151,7 +145,7 @@ impl<'a> TextureFont<'a> {
         }
     }
 
-    pub fn rect_for<'b>(&mut self, glyph: &PositionedGlyph<'b>) -> Result<Option<(Rect<f32>, Rect<i32>)>, Error> {
+    pub fn rect_for(&mut self, glyph: &PositionedGlyph<'_>) -> Result<Option<(Rect<f32>, Rect<i32>)>, Error> {
         match self.cache.rect_for(0, glyph) {
             Ok(Some((uv_rect, screen_rect))) => Ok(Some((uv_rect.into(), screen_rect.into()))),
             Ok(None) => Ok(None),

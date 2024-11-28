@@ -8,7 +8,6 @@ use super::buffer_usage::BufferUsage;
 
 pub struct ElementArrayBuffer {
     context: Rc<WebGl2RenderingContext>,
-    usage: BufferUsage,
     gl_usage: u32,
     len: usize,
     stride: usize,
@@ -25,7 +24,6 @@ impl ElementArrayBuffer {
 
         let mut result = Self {
             context,
-            usage,
             gl_usage,
             len,
             stride,
