@@ -23,7 +23,7 @@ impl ElementArrayBuffer {
 
         let stride = size_of::<u16>();
 
-        let result = Self {
+        let mut result = Self {
             context,
             usage,
             gl_usage,
@@ -32,13 +32,7 @@ impl ElementArrayBuffer {
             buffer,
         };
 
-        result.bind();
-        result.context.buffer_data_with_i32(
-            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
-            (result.len * result.stride) as i32,
-            result.gl_usage,
-        );
-        result.bind_none();
+        result.set_len(len);
 
         Ok(result)
     }
@@ -62,8 +56,15 @@ impl ElementArrayBuffer {
         self.len
     }
 
-    pub fn set_len(&self, len: usize) -> Result<(), Error> {
-        todo!()
+    pub fn set_len(&mut self, len: usize) {
+        self.len = len;
+        self.bind();
+        self.context.buffer_data_with_i32(
+            WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+            (self.len * self.stride) as i32,
+            self.gl_usage,
+        );
+        self.bind_none();
     }
 
     pub fn set(&mut self, source: &[u16], index: usize) -> Result<(), Error> {

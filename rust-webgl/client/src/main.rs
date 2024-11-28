@@ -162,22 +162,6 @@ impl State {
         let texture = {
             let image_bytes = include_bytes!("../assets/vader.jpg");
             Texture::new_with_image_data(context.clone(), Some("vader.jpg"), Cursor::new(image_bytes))?
-
-            // let size = U32Vec2::new(256, 256);
-            // let mut pixels = Vec::with_capacity((size.x as usize) * (size.y as usize));
-            // for y in 0..size.y {
-            //     let b = ((y as f64) * 255.0 / ((size.y - 1) as f64)) as u8;
-            //     for x in 0..size.x {
-            //         let a = ((x as f64) * 255.0 / ((size.x - 1) as f64)) as u8;
-            //         pixels.push(U8RGBA {
-            //             red: a,
-            //             green: b,
-            //             blue: 255 - a,
-            //             alpha: 255,
-            //         });
-            //     }
-            // }
-            // Texture::new_with_pixels(context.clone(), size, &pixels)?
         };
 
         let texture_aspect_ratio = (texture.size().height as f32) / (texture.size().width as f32);
@@ -368,16 +352,81 @@ impl UIState for State {
             self.shader_3d.use_none();
         }
 
+        // TODO simplify font api? combine layout, update_cache, and rect_for all in one?
         if let Some(layout) = self.font.layout("Hello, World!") {
             self.font.update_cache(layout.glyphs.iter())?;
 
             // TODO convenience methods for resizing and setting data all at once?
-            self.font_array_buffer.set_len(layout.glyphs.len() * 4)?;
-            self.font_element_array_buffer.set_len(layout.glyphs.len() * 6)?;
-            for glyph in layout.glyphs.iter() {
-                let rect: Option<Rect<i32>> = glyph.pixel_bounding_box().map(|r| r.into());
-                // TODO draw rect in array buffer and element array buffer
+            self.font_array_buffer.set_len(layout.glyphs.len() * 4);
+            self.font_element_array_buffer.set_len(layout.glyphs.len() * 6);
+            {
+                let mut next_vertex: u16 = 0;
+                let mut next_index: u16 = 0;
+                for glyph in layout.glyphs.iter() {
+                    if let Some((uv_rect, screen_rect)) = self.font.rect_for(glyph)? {
+                        self.font_array_buffer.set(
+                            &[
+                                Vertex2 {
+                                    position: Vec2::new(screen_rect.min.x as f32, screen_rect.min.y as f32),
+                                    texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.min.y),
+                                    color: F32RGBA {
+                                        red: 1.0,
+                                        green: 1.0,
+                                        blue: 1.0,
+                                        alpha: 1.0,
+                                    },
+                                },
+                                Vertex2 {
+                                    position: Vec2::new(screen_rect.max.x as f32, screen_rect.min.y as f32),
+                                    texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.min.y),
+                                    color: F32RGBA {
+                                        red: 1.0,
+                                        green: 1.0,
+                                        blue: 1.0,
+                                        alpha: 1.0,
+                                    },
+                                },
+                                Vertex2 {
+                                    position: Vec2::new(screen_rect.max.x as f32, screen_rect.max.y as f32),
+                                    texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.max.y),
+                                    color: F32RGBA {
+                                        red: 1.0,
+                                        green: 1.0,
+                                        blue: 1.0,
+                                        alpha: 1.0,
+                                    },
+                                },
+                                Vertex2 {
+                                    position: Vec2::new(screen_rect.min.x as f32, screen_rect.max.y as f32),
+                                    texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.max.y),
+                                    color: F32RGBA {
+                                        red: 1.0,
+                                        green: 1.0,
+                                        blue: 1.0,
+                                        alpha: 1.0,
+                                    },
+                                },
+                            ],
+                            next_vertex as usize,
+                        )?;
+                        self.font_element_array_buffer.set(
+                            &[
+                                next_vertex,
+                                next_vertex + 1,
+                                next_vertex + 2,
+                                next_vertex + 2,
+                                next_vertex + 3,
+                                next_vertex,
+                            ],
+                            next_index as usize,
+                        )?;
+                        next_vertex += 4;
+                        next_index += 6;
+                    };
+                }
             }
+
+            // TODO blending
 
             self.shader_2d.use_program();
 

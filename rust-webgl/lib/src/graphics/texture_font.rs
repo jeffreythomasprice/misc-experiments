@@ -98,12 +98,13 @@ impl<'a> TextureFont<'a> {
         }
     }
 
-    pub fn update_cache<I>(&mut self, glyphs: I) -> Result<(), Error>
+    pub fn update_cache<'b, I>(&mut self, glyphs: I) -> Result<(), Error>
     where
-        I: IntoIterator<Item = PositionedGlyph<'a>>,
+        'a: 'b,
+        I: Iterator<Item = &'b PositionedGlyph<'a>>,
     {
         for glyph in glyphs {
-            self.cache.queue_glyph(0, glyph);
+            self.cache.queue_glyph(0, glyph.clone());
         }
         let mut abort_error = None;
         self.cache
@@ -112,15 +113,17 @@ impl<'a> TextureFont<'a> {
                     return;
                 }
 
-                let mut rgba_data = Vec::with_capacity(data.len());
-                for greyscale in data {
-                    rgba_data.push(U8RGBA {
+                log::debug!("TODO data: {:?}", data);
+                let rgba_data = data
+                    .iter()
+                    .map(|greyscale| U8RGBA {
+                        // TODO put the value in the alpha channel instead
                         red: *greyscale,
                         green: *greyscale,
                         blue: *greyscale,
                         alpha: 255,
-                    });
-                }
+                    })
+                    .collect::<Vec<_>>();
                 let size = Size {
                     width: rect.width(),
                     height: rect.height(),
@@ -136,10 +139,19 @@ impl<'a> TextureFont<'a> {
                 }
             })
             .map_err(|e| format!("error updating font cache: {e:?}"))?;
+
         if let Some(e) = abort_error {
             Err(e)
         } else {
             Ok(())
+        }
+    }
+
+    pub fn rect_for<'b>(&mut self, glyph: &PositionedGlyph<'b>) -> Result<Option<(Rect<f32>, Rect<i32>)>, Error> {
+        match self.cache.rect_for(0, glyph) {
+            Ok(Some((uv_rect, screen_rect))) => Ok(Some((uv_rect.into(), screen_rect.into()))),
+            Ok(None) => Ok(None),
+            Err(e) => Err(format!("error rendering glyph {:?}, error={:?}", glyph, e))?,
         }
     }
 

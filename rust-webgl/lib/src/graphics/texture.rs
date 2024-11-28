@@ -146,6 +146,7 @@ impl Texture {
         source.size = min_size
         */
 
+        log::debug!("TODO pixels: {:?}", pixels);
         self.bind();
         self.context
             .tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_u8_array_and_src_offset(
@@ -161,6 +162,9 @@ impl Texture {
                 0,
             )
             .map_err(|e| format!("error copying pixels to texture region: {e:?}"))?;
+
+        // TODO mark as dirty and regenerate mipmaps
+
         self.bind_none();
         Ok(())
     }
@@ -177,8 +181,8 @@ impl Texture {
             Err(e)?;
         }
 
-        // TODO only if if power of 2 do mipmaps
-        context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
+        // TODO power of 2 should do mipmaps
+        // context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
 
         // TODO if not a power of 2 texture to clamp, although this shouldn't be required in webgl2
         context.tex_parameteri(
@@ -192,16 +196,17 @@ impl Texture {
             WebGl2RenderingContext::REPEAT as i32,
         );
 
-        // TODO should be nearest if not power of 2
         context.tex_parameteri(
             WebGl2RenderingContext::TEXTURE_2D,
             WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-            WebGl2RenderingContext::NEAREST_MIPMAP_LINEAR as i32,
+            // TODO power of 2 should do mipmaps
+            // WebGl2RenderingContext::NEAREST_MIPMAP_LINEAR as i32,
+            WebGl2RenderingContext::NEAREST as i32,
         );
         context.tex_parameteri(
             WebGl2RenderingContext::TEXTURE_2D,
             WebGl2RenderingContext::TEXTURE_MAG_FILTER,
-            WebGl2RenderingContext::LINEAR as i32,
+            WebGl2RenderingContext::NEAREST as i32,
         );
 
         context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, None);
