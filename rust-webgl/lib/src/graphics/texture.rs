@@ -161,7 +161,8 @@ impl Texture {
             )
             .map_err(|e| format!("error copying pixels to texture region: {e:?}"))?;
 
-        // TODO mark as dirty and regenerate mipmaps
+        // TODO mark as dirty instead of regenerating mipmaps
+        self.context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
 
         self.bind_none();
         Ok(())
@@ -175,14 +176,12 @@ impl Texture {
         context.bind_texture(WebGl2RenderingContext::TEXTURE_2D, Some(&result));
 
         if let Err(e) = f(context) {
-            // TODO delete texture
+            context.delete_texture(Some(&result));
             Err(e)?;
         }
 
-        // TODO power of 2 should do mipmaps
-        // context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
+        context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
 
-        // TODO if not a power of 2 texture to clamp, although this shouldn't be required in webgl2
         context.tex_parameteri(
             WebGl2RenderingContext::TEXTURE_2D,
             WebGl2RenderingContext::TEXTURE_WRAP_S,
@@ -197,9 +196,7 @@ impl Texture {
         context.tex_parameteri(
             WebGl2RenderingContext::TEXTURE_2D,
             WebGl2RenderingContext::TEXTURE_MIN_FILTER,
-            // TODO power of 2 should do mipmaps
-            // WebGl2RenderingContext::NEAREST_MIPMAP_LINEAR as i32,
-            WebGl2RenderingContext::NEAREST as i32,
+            WebGl2RenderingContext::NEAREST_MIPMAP_LINEAR as i32,
         );
         context.tex_parameteri(
             WebGl2RenderingContext::TEXTURE_2D,
