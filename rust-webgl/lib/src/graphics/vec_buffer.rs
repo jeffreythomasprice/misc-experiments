@@ -5,7 +5,7 @@ use web_sys::WebGl2RenderingContext;
 
 use crate::error::Error;
 
-use super::{buffer::Buffer, buffer_usage::BufferUsage};
+use super::{buffer::Buffer, buffer::BufferUsage};
 
 /// Both endpoints inclusive
 struct Range {
@@ -130,11 +130,11 @@ where
         self.mark_index_dirty(self.vec.len() - 1);
     }
 
-    pub fn extend_from_slice(&mut self, other: &[T]) {
-        self.vec.extend_from_slice(other);
+    pub fn extend_from_slice(&mut self, slice: &[T]) {
+        self.vec.extend_from_slice(slice);
         self.fix_buffer_len();
         self.mark_range_dirty(Range {
-            min: self.vec.len() - other.len(),
+            min: self.vec.len() - slice.len(),
             max: self.vec.len() - 1,
         });
     }

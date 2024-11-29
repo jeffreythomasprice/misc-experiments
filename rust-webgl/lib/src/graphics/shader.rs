@@ -146,13 +146,15 @@ impl AttributePointer {
 
 #[derive(Debug, Clone)]
 pub struct Uniform {
+    pub context: Rc<WebGl2RenderingContext>,
     pub info: Info,
     pub location: WebGlUniformLocation,
 }
 
 impl Uniform {
-    fn new(index: u32, info: WebGlActiveInfo, location: WebGlUniformLocation) -> Self {
+    fn new(context: Rc<WebGl2RenderingContext>, index: u32, info: WebGlActiveInfo, location: WebGlUniformLocation) -> Self {
         Self {
+            context,
             info: Info::new(index, info),
             location,
         }
@@ -160,17 +162,14 @@ impl Uniform {
 }
 
 pub struct TypedUniform<T> {
-    context: Rc<WebGl2RenderingContext>,
     uniform: Uniform,
     phantom: PhantomData<T>,
 }
 
-impl<T> TypedUniform<T> {
-    // TODO should return an error if the underlying uniform type doesn't match T
-    fn new(context: Rc<WebGl2RenderingContext>, uniform: Uniform) -> Self {
+impl<T> From<Uniform> for TypedUniform<T> {
+    fn from(value: Uniform) -> Self {
         Self {
-            context,
-            uniform,
+            uniform: value.clone(),
             phantom: PhantomData {},
         }
     }
@@ -178,13 +177,14 @@ impl<T> TypedUniform<T> {
 
 impl TypedUniform<i32> {
     pub fn set(&self, value: i32) {
-        self.context.uniform1i(Some(&self.uniform.location), value);
+        self.uniform.context.uniform1i(Some(&self.uniform.location), value);
     }
 }
 
 impl TypedUniform<Matrix4<f32>> {
     pub fn set(&self, value: &Matrix4<f32>, transpose: bool) {
-        self.context
+        self.uniform
+            .context
             .uniform_matrix4fv_with_f32_array(Some(&self.uniform.location), transpose, value.as_slice());
     }
 }
@@ -244,7 +244,7 @@ impl ShaderProgram {
                     "failed to find uniform location on shader with index {index}, name {}",
                     info.name()
                 ))?;
-                let uniform = Uniform::new(index, info, location);
+                let uniform = Uniform::new(context.clone(), index, info, location);
                 uniforms.insert(uniform.info.name.clone(), uniform);
             }
 
@@ -271,49 +271,19 @@ impl ShaderProgram {
         self.context.use_program(None);
     }
 
-    pub fn get_attribute_by_name(&self, name: &str) -> Option<&Attribute> {
-        self.attributes.get(name)
-    }
-
-    pub fn assert_attribute_by_name(&self, name: &str) -> Result<&Attribute, Error> {
+    pub fn get_attribute_by_name(&self, name: &str) -> Result<&Attribute, Error> {
         Ok(self
-            .get_attribute_by_name(name)
+            .attributes
+            .get(name)
             .ok_or_else(|| format!("failed to find attribute named: {name}"))?)
     }
 
-    pub fn get_uniform_by_name(&self, name: &str) -> Option<&Uniform> {
-        self.uniforms.get(name)
-    }
-
-    pub fn assert_uniform_by_name(&self, name: &str) -> Result<&Uniform, Error> {
+    pub fn get_uniform_by_name(&self, name: &str) -> Result<&Uniform, Error> {
         Ok(self
-            .get_uniform_by_name(name)
+            .uniforms
+            .get(name)
             .ok_or_else(|| format!("failed to find uniform named: {name}"))?)
     }
-
-    pub fn get_typed_uniform_by_name_i32(&self, name: &str) -> Option<TypedUniform<i32>> {
-        self.get_uniform_by_name(name)
-            .map(|uniform| TypedUniform::new(self.context.clone(), uniform.clone()))
-    }
-
-    pub fn assert_typed_uniform_by_name_i32(&self, name: &str) -> Result<TypedUniform<i32>, Error> {
-        Ok(self
-            .get_typed_uniform_by_name_i32(name)
-            .ok_or_else(|| format!("failed to find uniform named: {name}"))?)
-    }
-
-    pub fn get_typed_uniform_by_name_matrix4_f32(&self, name: &str) -> Option<TypedUniform<Matrix4<f32>>> {
-        self.get_uniform_by_name(name)
-            .map(|uniform| TypedUniform::new(self.context.clone(), uniform.clone()))
-    }
-
-    pub fn assert_typed_uniform_by_name_matrix4_f32(&self, name: &str) -> Result<TypedUniform<Matrix4<f32>>, Error> {
-        Ok(self
-            .get_typed_uniform_by_name_matrix4_f32(name)
-            .ok_or_else(|| format!("failed to find uniform named: {name}"))?)
-    }
-
-    // TODO more uniform types
 }
 
 impl Drop for ShaderProgram {

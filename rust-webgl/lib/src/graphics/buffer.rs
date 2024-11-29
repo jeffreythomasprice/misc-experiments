@@ -4,7 +4,49 @@ use web_sys::{WebGl2RenderingContext, WebGlBuffer};
 
 use crate::error::Error;
 
-use super::{buffer_target::BufferTarget, buffer_usage::BufferUsage};
+#[derive(Debug)]
+pub enum BufferTarget {
+    ArrayBuffer,
+    ElementArrayBuffer,
+}
+
+impl BufferTarget {
+    pub fn gl_constant(&self) -> u32 {
+        match self {
+            BufferTarget::ArrayBuffer => WebGl2RenderingContext::ARRAY_BUFFER,
+            BufferTarget::ElementArrayBuffer => WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum BufferUsage {
+    StaticDraw,
+    DynamicDraw,
+    StreamDraw,
+    StaticRead,
+    DynamicRead,
+    StreamRead,
+    StaticCopy,
+    DynamicCopy,
+    StreamCopy,
+}
+
+impl BufferUsage {
+    pub fn gl_constant(&self) -> u32 {
+        match self {
+            BufferUsage::StaticDraw => WebGl2RenderingContext::STATIC_DRAW,
+            BufferUsage::DynamicDraw => WebGl2RenderingContext::DYNAMIC_DRAW,
+            BufferUsage::StreamDraw => WebGl2RenderingContext::STREAM_DRAW,
+            BufferUsage::StaticRead => WebGl2RenderingContext::STATIC_READ,
+            BufferUsage::DynamicRead => WebGl2RenderingContext::DYNAMIC_READ,
+            BufferUsage::StreamRead => WebGl2RenderingContext::STREAM_READ,
+            BufferUsage::StaticCopy => WebGl2RenderingContext::STATIC_COPY,
+            BufferUsage::DynamicCopy => WebGl2RenderingContext::DYNAMIC_COPY,
+            BufferUsage::StreamCopy => WebGl2RenderingContext::STREAM_COPY,
+        }
+    }
+}
 
 pub struct Buffer<T> {
     context: Rc<WebGl2RenderingContext>,

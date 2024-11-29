@@ -1,18 +1,16 @@
-mod draw_mode;
+mod mesh;
 mod render_phase;
 
 use bytemuck::{Pod, Zeroable};
-use draw_mode::DrawMode;
 use gloo::utils::document;
 use lib::{
     error::Error,
     events::{KeyPressEvent, MouseButton, MouseMoveEvent, MousePressEvent},
     graphics::{
         self,
-        buffer::Buffer,
-        buffer_usage::BufferUsage,
+        buffer::BufferUsage,
         colors::F32RGBA,
-        shader::{AttributePointer, AttributePointerType, ShaderProgram, Uniform},
+        shader::{AttributePointer, AttributePointerType, ShaderProgram},
         texture::Texture,
         texture_font::TextureFont,
         vec_buffer::VecBuffer,
@@ -21,8 +19,10 @@ use lib::{
     uistate::{run, UIState},
 };
 use log::*;
+use mesh::Mesh;
 use nalgebra::Matrix4;
 use nalgebra_glm::{rotate_y, DVec2, Vec2, Vec3};
+use render_phase::DrawMode;
 use render_phase::RenderPhase;
 use std::{collections::HashMap, f32::consts::TAU, io::Cursor, mem::offset_of, panic, rc::Rc, sync::Mutex, time::Duration};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
@@ -52,12 +52,10 @@ struct State {
     render_phase_3d: RenderPhase<Vertex3>,
     render_phase_2d: RenderPhase<Vertex2>,
 
-    static_texture_array_buffer: VecBuffer<Vertex3>,
-    static_texture_element_array_buffer: VecBuffer<u16>,
+    static_texture_mesh: Mesh<Vertex3>,
     texture: Texture,
 
-    font_array_buffer: VecBuffer<Vertex2>,
-    font_element_array_buffer: VecBuffer<u16>,
+    font_mesh: Mesh<Vertex2>,
     font: TextureFont<'static>,
 
     camera: Camera,
@@ -75,21 +73,21 @@ impl State {
         )?;
         let attributes = vec![
             AttributePointer::new::<Vertex3>(
-                shader.assert_attribute_by_name("position_attribute")?.clone(),
+                shader.get_attribute_by_name("position_attribute")?.clone(),
                 3,
                 AttributePointerType::Float,
                 false,
                 offset_of!(Vertex3, position) as i32,
             ),
             AttributePointer::new::<Vertex3>(
-                shader.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
+                shader.get_attribute_by_name("texture_coordinate_attribute")?.clone(),
                 2,
                 graphics::shader::AttributePointerType::Float,
                 false,
                 offset_of!(Vertex3, texture_coordinate) as i32,
             ),
             AttributePointer::new::<Vertex3>(
-                shader.assert_attribute_by_name("color_attribute")?.clone(),
+                shader.get_attribute_by_name("color_attribute")?.clone(),
                 4,
                 graphics::shader::AttributePointerType::Float,
                 false,
@@ -112,21 +110,21 @@ impl State {
         )?;
         let attributes = vec![
             AttributePointer::new::<Vertex2>(
-                shader.assert_attribute_by_name("position_attribute")?.clone(),
+                shader.get_attribute_by_name("position_attribute")?.clone(),
                 2,
                 AttributePointerType::Float,
                 false,
                 offset_of!(Vertex2, position) as i32,
             ),
             AttributePointer::new::<Vertex2>(
-                shader.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
+                shader.get_attribute_by_name("texture_coordinate_attribute")?.clone(),
                 2,
                 graphics::shader::AttributePointerType::Float,
                 false,
                 offset_of!(Vertex2, texture_coordinate) as i32,
             ),
             AttributePointer::new::<Vertex2>(
-                shader.assert_attribute_by_name("color_attribute")?.clone(),
+                shader.get_attribute_by_name("color_attribute")?.clone(),
                 4,
                 graphics::shader::AttributePointerType::Float,
                 false,
@@ -149,60 +147,53 @@ impl State {
 
         let texture_aspect_ratio = (texture.size().height as f32) / (texture.size().width as f32);
 
-        let static_texture_array_buffer = VecBuffer::new_array_buffer_from_vec(
-            context.clone(),
-            BufferUsage::StaticDraw,
-            vec![
-                Vertex3 {
-                    position: Vec3::new(-1.0, -texture_aspect_ratio, 0.0),
-                    texture_coordinate: Vec2::new(0.0, 1.0),
-                    color: F32RGBA {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
+        let mut static_texture_mesh = Mesh::new(context.clone())?;
+        static_texture_mesh.push_triangle_fan(&[
+            Vertex3 {
+                position: Vec3::new(-1.0, -texture_aspect_ratio, 0.0),
+                texture_coordinate: Vec2::new(0.0, 1.0),
+                color: F32RGBA {
+                    red: 1.0,
+                    green: 1.0,
+                    blue: 1.0,
+                    alpha: 1.0,
                 },
-                Vertex3 {
-                    position: Vec3::new(1.0, -texture_aspect_ratio, 0.0),
-                    texture_coordinate: Vec2::new(1.0, 1.0),
-                    color: F32RGBA {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
+            },
+            Vertex3 {
+                position: Vec3::new(1.0, -texture_aspect_ratio, 0.0),
+                texture_coordinate: Vec2::new(1.0, 1.0),
+                color: F32RGBA {
+                    red: 1.0,
+                    green: 1.0,
+                    blue: 1.0,
+                    alpha: 1.0,
                 },
-                Vertex3 {
-                    position: Vec3::new(1.0, texture_aspect_ratio, 0.0),
-                    texture_coordinate: Vec2::new(1.0, 0.0),
-                    color: F32RGBA {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
+            },
+            Vertex3 {
+                position: Vec3::new(1.0, texture_aspect_ratio, 0.0),
+                texture_coordinate: Vec2::new(1.0, 0.0),
+                color: F32RGBA {
+                    red: 1.0,
+                    green: 1.0,
+                    blue: 1.0,
+                    alpha: 1.0,
                 },
-                Vertex3 {
-                    position: Vec3::new(-1.0, texture_aspect_ratio, 0.0),
-                    texture_coordinate: Vec2::new(0.0, 0.0),
-                    color: F32RGBA {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
+            },
+            Vertex3 {
+                position: Vec3::new(-1.0, texture_aspect_ratio, 0.0),
+                texture_coordinate: Vec2::new(0.0, 0.0),
+                color: F32RGBA {
+                    red: 1.0,
+                    green: 1.0,
+                    blue: 1.0,
+                    alpha: 1.0,
                 },
-            ],
-        )?;
-
-        let static_texture_element_array_buffer =
-            VecBuffer::new_element_array_buffer_from_vec(context.clone(), BufferUsage::StaticDraw, vec![0, 1, 2, 2, 3, 0])?;
+            },
+        ]);
 
         let font = TextureFont::new_with_bytes_and_scale(context.clone(), include_bytes!("../assets/Ubuntu/Ubuntu-Regular.ttf"), 30.0)?;
 
-        let font_array_buffer = VecBuffer::new_array_buffer(context.clone(), BufferUsage::DynamicDraw)?;
-        let font_element_array_buffer = VecBuffer::new_element_array_buffer(context.clone(), BufferUsage::DynamicDraw)?;
+        let font_mesh = Mesh::new(context.clone())?;
 
         Ok(State {
             canvas,
@@ -213,13 +204,11 @@ impl State {
             render_phase_3d,
             render_phase_2d,
 
-            static_texture_array_buffer,
-            static_texture_element_array_buffer,
+            static_texture_mesh,
             texture,
 
             font,
-            font_array_buffer,
-            font_element_array_buffer,
+            font_mesh,
 
             camera: Camera::new(
                 60.0f32.to_radians(),
@@ -282,25 +271,17 @@ impl UIState for State {
             Some(&self.texture),
             Some(self.camera.projection_matrix()),
             Some(&rotate_y(self.camera.model_view_matrix(), self.rotation)),
-            |renderer| {
-                Ok(renderer.draw_elements(
-                    self.static_texture_array_buffer.buffer_mut()?,
-                    self.static_texture_element_array_buffer.buffer_mut()?,
-                    DrawMode::Triangles,
-                ))
-            },
+            |renderer| renderer.draw_mesh(&mut self.static_texture_mesh, DrawMode::Triangles),
         )?;
 
         // TODO simplify font api? combine layout, update_cache, and rect_for all in one?
         if let Some(layout) = self.font.layout("Hello, World!") {
             self.font.update_cache(layout.glyphs.iter())?;
 
-            self.font_array_buffer.clear();
-            self.font_element_array_buffer.clear();
+            self.font_mesh.clear();
             for glyph in layout.glyphs.iter() {
                 if let Some((uv_rect, screen_rect)) = self.font.rect_for(glyph)? {
-                    let next_vertex = self.font_array_buffer.len() as u16;
-                    self.font_array_buffer.extend_from_slice(&[
+                    self.font_mesh.push_triangle_fan(&[
                         Vertex2 {
                             position: Vec2::new(screen_rect.min.x as f32, screen_rect.min.y as f32),
                             texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.min.y),
@@ -342,14 +323,6 @@ impl UIState for State {
                             },
                         },
                     ]);
-                    self.font_element_array_buffer.extend_from_slice(&[
-                        next_vertex,
-                        next_vertex + 1,
-                        next_vertex + 2,
-                        next_vertex + 2,
-                        next_vertex + 3,
-                        next_vertex,
-                    ]);
                 };
             }
 
@@ -361,13 +334,7 @@ impl UIState for State {
                 Some(self.font.get_texture()),
                 Some(&self.ortho_matrix),
                 Some(&Matrix4::identity()),
-                |renderer| {
-                    Ok(renderer.draw_elements(
-                        self.font_array_buffer.buffer_mut()?,
-                        self.font_element_array_buffer.buffer_mut()?,
-                        DrawMode::Triangles,
-                    ))
-                },
+                |renderer| renderer.draw_mesh(&mut self.font_mesh, DrawMode::Triangles),
             )?;
 
             self.context.disable(WebGl2RenderingContext::BLEND);

@@ -5,14 +5,27 @@ use lib::{
     error::Error,
     graphics::{
         buffer::Buffer,
-        shader::{AttributePointer, ShaderProgram, TypedUniform, Uniform},
+        shader::{AttributePointer, ShaderProgram, TypedUniform},
         texture::Texture,
     },
 };
 use nalgebra::Matrix4;
 use web_sys::WebGl2RenderingContext;
 
-use crate::draw_mode::DrawMode;
+use crate::mesh::Mesh;
+
+pub enum DrawMode {
+    Triangles,
+    // TODO triangle fan, etc.
+}
+
+impl DrawMode {
+    pub fn gl_constant(&self) -> u32 {
+        match self {
+            DrawMode::Triangles => WebGl2RenderingContext::TRIANGLES,
+        }
+    }
+}
 
 pub struct RenderPhase<Vertex>
 where
@@ -47,17 +60,17 @@ where
         model_view_matrix_uniform_name: Option<&str>,
     ) -> Result<Self, Error> {
         let sampler_uniform = match sampler_uniform_name {
-            Some(name) => Some(shader.assert_typed_uniform_by_name_i32(name)?),
+            Some(name) => Some(shader.get_uniform_by_name(name)?.clone().into()),
             None => None,
         };
 
         let projection_matrix_uniform = match projection_matrix_uniform_name {
-            Some(name) => Some(shader.assert_typed_uniform_by_name_matrix4_f32(name)?),
+            Some(name) => Some(shader.get_uniform_by_name(name)?.clone().into()),
             None => None,
         };
 
         let model_view_matrix_uniform = match model_view_matrix_uniform_name {
-            Some(name) => Some(shader.assert_typed_uniform_by_name_matrix4_f32(name)?),
+            Some(name) => Some(shader.get_uniform_by_name(name)?.clone().into()),
             None => None,
         };
 
@@ -153,5 +166,16 @@ impl<'a, Vertex> Renderer<'a, Vertex> {
 
         array_buffer.bind_none();
         element_array_buffer.bind_none();
+    }
+}
+
+impl<'a, Vertex> Renderer<'a, Vertex>
+where
+    Vertex: Pod,
+{
+    pub fn draw_mesh(&self, mesh: &mut Mesh<Vertex>, draw_mode: DrawMode) -> Result<(), Error> {
+        let (array_buffer, element_array_buffer) = mesh.buffers();
+        self.draw_elements(array_buffer.buffer_mut()?, element_array_buffer.buffer_mut()?, draw_mode);
+        Ok(())
     }
 }
