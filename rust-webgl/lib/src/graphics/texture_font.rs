@@ -39,6 +39,10 @@ impl<'a> TextureFont<'a> {
         })
     }
 
+    pub fn get_texture(&mut self) -> &Texture {
+        return &self.texture;
+    }
+
     pub fn layout(&self, text: &str) -> Option<LayoutResult<'a>> {
         let v_metrics = self.font.v_metrics(self.scale);
         let advance_height = v_metrics.ascent - v_metrics.descent + v_metrics.line_gap;

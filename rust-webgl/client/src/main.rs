@@ -1,4 +1,8 @@
+mod draw_mode;
+mod render_phase;
+
 use bytemuck::{Pod, Zeroable};
+use draw_mode::DrawMode;
 use gloo::utils::document;
 use lib::{
     error::Error,
@@ -18,6 +22,7 @@ use lib::{
 use log::*;
 use nalgebra::Matrix4;
 use nalgebra_glm::{rotate_y, DVec2, Vec2, Vec3};
+use render_phase::RenderPhase;
 use std::{collections::HashMap, f32::consts::TAU, io::Cursor, mem::offset_of, panic, rc::Rc, sync::Mutex, time::Duration};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
@@ -43,24 +48,11 @@ struct State {
 
     key_state: Rc<Mutex<HashMap<String, bool>>>,
 
-    shader_3d: ShaderProgram,
-    position_attribute_3d: AttributePointer,
-    texture_coordinate_attribute_3d: AttributePointer,
-    color_attribute_3d: AttributePointer,
-    sampler_uniform_3d: Uniform,
-    projection_matrix_uniform_3d: Uniform,
-    model_view_matrix_uniform_3d: Uniform,
-
-    shader_2d: ShaderProgram,
-    position_attribute_2d: AttributePointer,
-    texture_coordinate_attribute_2d: AttributePointer,
-    color_attribute_2d: AttributePointer,
-    sampler_uniform_2d: Uniform,
-    projection_matrix_uniform_2d: Uniform,
-    model_view_matrix_uniform_2d: Uniform,
+    render_phase_3d: RenderPhase,
+    render_phase_2d: RenderPhase,
 
     static_texture_array_buffer: Buffer<Vertex3>,
-    static_texture_element_aray_buffer: Buffer<u16>,
+    static_texture_element_array_buffer: Buffer<u16>,
     texture: Texture,
 
     font_array_buffer: Buffer<Vertex2>,
@@ -75,77 +67,85 @@ struct State {
 
 impl State {
     pub async fn new(canvas: Rc<HtmlCanvasElement>, context: Rc<WebGl2RenderingContext>) -> Result<State, Error> {
-        let shader_3d = ShaderProgram::new(
+        let shader = ShaderProgram::new(
             context.clone(),
             include_str!("shaders/shader_3d.vertex.glsl"),
             include_str!("shaders/shader_3d.fragment.glsl"),
         )?;
-
-        let position_attribute_3d = AttributePointer::new::<Vertex3>(
-            shader_3d.assert_attribute_by_name("position_attribute")?.clone(),
-            3,
-            AttributePointerType::Float,
-            false,
-            offset_of!(Vertex3, position) as i32,
+        let attributes = vec![
+            AttributePointer::new::<Vertex3>(
+                shader.assert_attribute_by_name("position_attribute")?.clone(),
+                3,
+                AttributePointerType::Float,
+                false,
+                offset_of!(Vertex3, position) as i32,
+            ),
+            AttributePointer::new::<Vertex3>(
+                shader.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
+                2,
+                graphics::shader::AttributePointerType::Float,
+                false,
+                offset_of!(Vertex3, texture_coordinate) as i32,
+            ),
+            AttributePointer::new::<Vertex3>(
+                shader.assert_attribute_by_name("color_attribute")?.clone(),
+                4,
+                graphics::shader::AttributePointerType::Float,
+                false,
+                offset_of!(Vertex3, color) as i32,
+            ),
+        ];
+        let sampler_uniform = shader.assert_uniform_by_name("sampler_uniform")?.clone();
+        let projection_matrix_uniform = shader.assert_uniform_by_name("projection_matrix_uniform")?.clone();
+        let model_view_matrix_uniform = shader.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
+        let render_phase_3d = RenderPhase::new(
+            context.clone(),
+            shader,
+            attributes,
+            Some(sampler_uniform),
+            Some(projection_matrix_uniform),
+            Some(model_view_matrix_uniform),
         );
 
-        let texture_coordinate_attribute_3d = AttributePointer::new::<Vertex3>(
-            shader_3d.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
-            2,
-            graphics::shader::AttributePointerType::Float,
-            false,
-            offset_of!(Vertex3, texture_coordinate) as i32,
-        );
-
-        let color_attribute_3d = AttributePointer::new::<Vertex3>(
-            shader_3d.assert_attribute_by_name("color_attribute")?.clone(),
-            4,
-            graphics::shader::AttributePointerType::Float,
-            false,
-            offset_of!(Vertex3, color) as i32,
-        );
-
-        let sampler_uniform_3d = shader_3d.assert_uniform_by_name("sampler_uniform")?.clone();
-
-        let projection_matrix_uniform_3d = shader_3d.assert_uniform_by_name("projection_matrix_uniform")?.clone();
-
-        let model_view_matrix_uniform_3d = shader_3d.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
-
-        let shader_2d = ShaderProgram::new(
+        let shader = ShaderProgram::new(
             context.clone(),
             include_str!("shaders/shader_2d.vertex.glsl"),
             include_str!("shaders/shader_2d.fragment.glsl"),
         )?;
-
-        let position_attribute_2d = AttributePointer::new::<Vertex2>(
-            shader_2d.assert_attribute_by_name("position_attribute")?.clone(),
-            2,
-            AttributePointerType::Float,
-            false,
-            offset_of!(Vertex2, position) as i32,
+        let attributes = vec![
+            AttributePointer::new::<Vertex2>(
+                shader.assert_attribute_by_name("position_attribute")?.clone(),
+                2,
+                AttributePointerType::Float,
+                false,
+                offset_of!(Vertex2, position) as i32,
+            ),
+            AttributePointer::new::<Vertex2>(
+                shader.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
+                2,
+                graphics::shader::AttributePointerType::Float,
+                false,
+                offset_of!(Vertex2, texture_coordinate) as i32,
+            ),
+            AttributePointer::new::<Vertex2>(
+                shader.assert_attribute_by_name("color_attribute")?.clone(),
+                4,
+                graphics::shader::AttributePointerType::Float,
+                false,
+                offset_of!(Vertex2, color) as i32,
+            ),
+        ];
+        let sampler_uniform = shader.assert_uniform_by_name("sampler_uniform")?.clone();
+        let projection_matrix_uniform = shader.assert_uniform_by_name("projection_matrix_uniform")?.clone();
+        let model_view_matrix_uniform = shader.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
+        let render_phase_2d = RenderPhase::new(
+            context.clone(),
+            shader,
+            attributes,
+            Some(sampler_uniform),
+            Some(projection_matrix_uniform),
+            Some(model_view_matrix_uniform),
         );
-
-        let texture_coordinate_attribute_2d = AttributePointer::new::<Vertex2>(
-            shader_2d.assert_attribute_by_name("texture_coordinate_attribute")?.clone(),
-            2,
-            graphics::shader::AttributePointerType::Float,
-            false,
-            offset_of!(Vertex2, texture_coordinate) as i32,
-        );
-
-        let color_attribute_2d = AttributePointer::new::<Vertex2>(
-            shader_2d.assert_attribute_by_name("color_attribute")?.clone(),
-            4,
-            graphics::shader::AttributePointerType::Float,
-            false,
-            offset_of!(Vertex2, color) as i32,
-        );
-
-        let sampler_uniform_2d = shader_2d.assert_uniform_by_name("sampler_uniform")?.clone();
-
-        let projection_matrix_uniform_2d = shader_2d.assert_uniform_by_name("projection_matrix_uniform")?.clone();
-
-        let model_view_matrix_uniform_2d = shader_2d.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
 
         let texture = {
             let image_bytes = include_bytes!("../assets/vader.jpg");
@@ -201,7 +201,7 @@ impl State {
             ],
         )?;
 
-        let static_texture_element_aray_buffer =
+        let static_texture_element_array_buffer =
             Buffer::new_element_array_buffer_with_data(context.clone(), BufferUsage::StaticDraw, &[0, 1, 2, 2, 3, 0])?;
 
         let font = TextureFont::new_with_bytes_and_scale(context.clone(), include_bytes!("../assets/Ubuntu/Ubuntu-Regular.ttf"), 30.0)?;
@@ -215,24 +215,11 @@ impl State {
 
             key_state: Rc::new(Mutex::new(HashMap::new())),
 
-            shader_3d,
-            position_attribute_3d,
-            texture_coordinate_attribute_3d,
-            color_attribute_3d,
-            sampler_uniform_3d,
-            projection_matrix_uniform_3d,
-            model_view_matrix_uniform_3d,
-
-            shader_2d,
-            position_attribute_2d,
-            texture_coordinate_attribute_2d,
-            color_attribute_2d,
-            sampler_uniform_2d,
-            projection_matrix_uniform_2d,
-            model_view_matrix_uniform_2d,
+            render_phase_3d,
+            render_phase_2d,
 
             static_texture_array_buffer,
-            static_texture_element_aray_buffer,
+            static_texture_element_array_buffer,
             texture,
 
             font,
@@ -297,47 +284,17 @@ impl UIState for State {
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
         {
-            self.shader_3d.use_program();
-
-            self.context.uniform_matrix4fv_with_f32_array(
-                Some(&self.projection_matrix_uniform_3d.location),
-                false,
-                self.camera.projection_matrix().as_slice(),
+            self.render_phase_3d.bind(
+                Some(&self.texture),
+                Some(self.camera.projection_matrix()),
+                Some(&rotate_y(self.camera.model_view_matrix(), self.rotation)),
+            )?;
+            self.render_phase_3d.draw_elements(
+                &self.static_texture_array_buffer,
+                &self.static_texture_element_array_buffer,
+                DrawMode::Triangles,
             );
-            self.context.uniform_matrix4fv_with_f32_array(
-                Some(&self.model_view_matrix_uniform_3d.location),
-                false,
-                rotate_y(self.camera.model_view_matrix(), self.rotation).as_slice(),
-            );
-
-            self.context.uniform1i(Some(&self.sampler_uniform_3d.location), 0);
-            self.context.active_texture(WebGl2RenderingContext::TEXTURE0);
-            self.texture.bind();
-
-            self.static_texture_array_buffer.bind();
-            self.static_texture_element_aray_buffer.bind();
-
-            self.position_attribute_3d.enable();
-            self.texture_coordinate_attribute_3d.enable();
-            self.color_attribute_3d.enable();
-
-            self.context.draw_elements_with_i32(
-                WebGl2RenderingContext::TRIANGLES,
-                self.static_texture_element_aray_buffer.len() as i32,
-                WebGl2RenderingContext::UNSIGNED_SHORT,
-                0,
-            );
-
-            self.position_attribute_3d.disable();
-            self.texture_coordinate_attribute_3d.disable();
-            self.color_attribute_3d.disable();
-
-            self.static_texture_array_buffer.bind_none();
-            self.static_texture_element_aray_buffer.bind_none();
-
-            self.texture.bind_none();
-
-            self.shader_3d.use_none();
+            self.render_phase_3d.bind_none();
         }
 
         // TODO simplify font api? combine layout, update_cache, and rect_for all in one?
@@ -418,47 +375,11 @@ impl UIState for State {
             self.context
                 .blend_func(WebGl2RenderingContext::SRC_ALPHA, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
 
-            self.shader_2d.use_program();
-
-            self.context.uniform_matrix4fv_with_f32_array(
-                Some(&self.projection_matrix_uniform_2d.location),
-                false,
-                self.ortho_matrix.as_slice(),
-            );
-            self.context.uniform_matrix4fv_with_f32_array(
-                Some(&self.model_view_matrix_uniform_2d.location),
-                false,
-                Matrix4::identity().as_slice(),
-            );
-
-            self.context.uniform1i(Some(&self.sampler_uniform_2d.location), 0);
-            self.context.active_texture(WebGl2RenderingContext::TEXTURE0);
-            self.font.bind();
-
-            self.font_array_buffer.bind();
-            self.font_element_array_buffer.bind();
-
-            self.position_attribute_2d.enable();
-            self.texture_coordinate_attribute_2d.enable();
-            self.color_attribute_2d.enable();
-
-            self.context.draw_elements_with_i32(
-                WebGl2RenderingContext::TRIANGLES,
-                self.font_element_array_buffer.len() as i32,
-                WebGl2RenderingContext::UNSIGNED_SHORT,
-                0,
-            );
-
-            self.position_attribute_2d.disable();
-            self.texture_coordinate_attribute_2d.disable();
-            self.color_attribute_2d.disable();
-
-            self.font_array_buffer.bind_none();
-            self.font_element_array_buffer.bind_none();
-
-            self.font.bind_none();
-
-            self.shader_2d.use_none();
+            self.render_phase_2d
+                .bind(Some(self.font.get_texture()), Some(&self.ortho_matrix), Some(&Matrix4::identity()))?;
+            self.render_phase_2d
+                .draw_elements(&self.font_array_buffer, &self.font_element_array_buffer, DrawMode::Triangles);
+            self.render_phase_2d.bind_none();
 
             self.context.disable(WebGl2RenderingContext::BLEND);
         }

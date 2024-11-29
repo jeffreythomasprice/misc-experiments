@@ -24,8 +24,8 @@ where
         let buffer = context.create_buffer().ok_or("failed to create buffer")?;
         let mut result = Self {
             context,
-            gl_target: BufferTarget::ArrayBuffer.gl_usage(),
-            gl_usage: usage.gl_usage(),
+            gl_target: BufferTarget::ArrayBuffer.gl_constant(),
+            gl_usage: usage.gl_constant(),
             len: 0,
             stride: size_of::<T>(),
             buffer,
@@ -88,8 +88,8 @@ impl Buffer<u16> {
         let buffer = context.create_buffer().ok_or("failed to create buffer")?;
         let mut result = Self {
             context,
-            gl_target: BufferTarget::ElementArrayBuffer.gl_usage(),
-            gl_usage: usage.gl_usage(),
+            gl_target: BufferTarget::ElementArrayBuffer.gl_constant(),
+            gl_usage: usage.gl_constant(),
             len: 0,
             stride: size_of::<u16>(),
             buffer,

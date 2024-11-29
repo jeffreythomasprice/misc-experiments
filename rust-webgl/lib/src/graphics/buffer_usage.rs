@@ -14,7 +14,7 @@ pub enum BufferUsage {
 }
 
 impl BufferUsage {
-    pub fn gl_usage(&self) -> u32 {
+    pub fn gl_constant(&self) -> u32 {
         match self {
             BufferUsage::StaticDraw => WebGl2RenderingContext::STATIC_DRAW,
             BufferUsage::DynamicDraw => WebGl2RenderingContext::DYNAMIC_DRAW,
