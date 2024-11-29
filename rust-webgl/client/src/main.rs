@@ -15,6 +15,7 @@ use lib::{
         shader::{AttributePointer, AttributePointerType, ShaderProgram, Uniform},
         texture::Texture,
         texture_font::TextureFont,
+        vec_buffer::VecBuffer,
     },
     math::{camera::Camera, size::Size},
     uistate::{run, UIState},
@@ -51,12 +52,12 @@ struct State {
     render_phase_3d: RenderPhase<Vertex3>,
     render_phase_2d: RenderPhase<Vertex2>,
 
-    static_texture_array_buffer: Buffer<Vertex3>,
-    static_texture_element_array_buffer: Buffer<u16>,
+    static_texture_array_buffer: VecBuffer<Vertex3>,
+    static_texture_element_array_buffer: VecBuffer<u16>,
     texture: Texture,
 
-    font_array_buffer: Buffer<Vertex2>,
-    font_element_array_buffer: Buffer<u16>,
+    font_array_buffer: VecBuffer<Vertex2>,
+    font_element_array_buffer: VecBuffer<u16>,
     font: TextureFont<'static>,
 
     camera: Camera,
@@ -148,10 +149,10 @@ impl State {
 
         let texture_aspect_ratio = (texture.size().height as f32) / (texture.size().width as f32);
 
-        let static_texture_array_buffer = Buffer::new_array_buffer_with_data(
+        let static_texture_array_buffer = VecBuffer::new_array_buffer_from_vec(
             context.clone(),
             BufferUsage::StaticDraw,
-            &[
+            vec![
                 Vertex3 {
                     position: Vec3::new(-1.0, -texture_aspect_ratio, 0.0),
                     texture_coordinate: Vec2::new(0.0, 1.0),
@@ -196,12 +197,12 @@ impl State {
         )?;
 
         let static_texture_element_array_buffer =
-            Buffer::new_element_array_buffer_with_data(context.clone(), BufferUsage::StaticDraw, &[0, 1, 2, 2, 3, 0])?;
+            VecBuffer::new_element_array_buffer_from_vec(context.clone(), BufferUsage::StaticDraw, vec![0, 1, 2, 2, 3, 0])?;
 
         let font = TextureFont::new_with_bytes_and_scale(context.clone(), include_bytes!("../assets/Ubuntu/Ubuntu-Regular.ttf"), 30.0)?;
 
-        let font_array_buffer = Buffer::new_array_buffer_with_len(context.clone(), BufferUsage::DynamicDraw, 0)?;
-        let font_element_array_buffer = Buffer::new_element_array_buffer_with_len(context.clone(), BufferUsage::DynamicDraw, 0)?;
+        let font_array_buffer = VecBuffer::new_array_buffer(context.clone(), BufferUsage::DynamicDraw)?;
+        let font_element_array_buffer = VecBuffer::new_element_array_buffer(context.clone(), BufferUsage::DynamicDraw)?;
 
         Ok(State {
             canvas,
@@ -282,11 +283,11 @@ impl UIState for State {
             Some(self.camera.projection_matrix()),
             Some(&rotate_y(self.camera.model_view_matrix(), self.rotation)),
             |renderer| {
-                renderer.draw_elements(
-                    &self.static_texture_array_buffer,
-                    &self.static_texture_element_array_buffer,
+                Ok(renderer.draw_elements(
+                    self.static_texture_array_buffer.buffer_mut()?,
+                    self.static_texture_element_array_buffer.buffer_mut()?,
                     DrawMode::Triangles,
-                );
+                ))
             },
         )?;
 
@@ -294,74 +295,62 @@ impl UIState for State {
         if let Some(layout) = self.font.layout("Hello, World!") {
             self.font.update_cache(layout.glyphs.iter())?;
 
-            // TODO convenience methods for resizing and setting data all at once?
-            self.font_array_buffer.set_len(layout.glyphs.len() * 4);
-            self.font_element_array_buffer.set_len(layout.glyphs.len() * 6);
-            {
-                let mut next_vertex: u16 = 0;
-                let mut next_index: u16 = 0;
-                for glyph in layout.glyphs.iter() {
-                    if let Some((uv_rect, screen_rect)) = self.font.rect_for(glyph)? {
-                        self.font_array_buffer.set(
-                            &[
-                                Vertex2 {
-                                    position: Vec2::new(screen_rect.min.x as f32, screen_rect.min.y as f32),
-                                    texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.min.y),
-                                    color: F32RGBA {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0,
-                                        alpha: 1.0,
-                                    },
-                                },
-                                Vertex2 {
-                                    position: Vec2::new(screen_rect.max.x as f32, screen_rect.min.y as f32),
-                                    texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.min.y),
-                                    color: F32RGBA {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0,
-                                        alpha: 1.0,
-                                    },
-                                },
-                                Vertex2 {
-                                    position: Vec2::new(screen_rect.max.x as f32, screen_rect.max.y as f32),
-                                    texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.max.y),
-                                    color: F32RGBA {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0,
-                                        alpha: 1.0,
-                                    },
-                                },
-                                Vertex2 {
-                                    position: Vec2::new(screen_rect.min.x as f32, screen_rect.max.y as f32),
-                                    texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.max.y),
-                                    color: F32RGBA {
-                                        red: 1.0,
-                                        green: 1.0,
-                                        blue: 1.0,
-                                        alpha: 1.0,
-                                    },
-                                },
-                            ],
-                            next_vertex as usize,
-                        )?;
-                        self.font_element_array_buffer.set(
-                            &[
-                                next_vertex,
-                                next_vertex + 1,
-                                next_vertex + 2,
-                                next_vertex + 2,
-                                next_vertex + 3,
-                                next_vertex,
-                            ],
-                            next_index as usize,
-                        )?;
-                        next_vertex += 4;
-                        next_index += 6;
-                    };
-                }
+            self.font_array_buffer.clear();
+            self.font_element_array_buffer.clear();
+            for glyph in layout.glyphs.iter() {
+                if let Some((uv_rect, screen_rect)) = self.font.rect_for(glyph)? {
+                    let next_vertex = self.font_array_buffer.len() as u16;
+                    self.font_array_buffer.extend_from_slice(&[
+                        Vertex2 {
+                            position: Vec2::new(screen_rect.min.x as f32, screen_rect.min.y as f32),
+                            texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.min.y),
+                            color: F32RGBA {
+                                red: 1.0,
+                                green: 1.0,
+                                blue: 1.0,
+                                alpha: 1.0,
+                            },
+                        },
+                        Vertex2 {
+                            position: Vec2::new(screen_rect.max.x as f32, screen_rect.min.y as f32),
+                            texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.min.y),
+                            color: F32RGBA {
+                                red: 1.0,
+                                green: 1.0,
+                                blue: 1.0,
+                                alpha: 1.0,
+                            },
+                        },
+                        Vertex2 {
+                            position: Vec2::new(screen_rect.max.x as f32, screen_rect.max.y as f32),
+                            texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.max.y),
+                            color: F32RGBA {
+                                red: 1.0,
+                                green: 1.0,
+                                blue: 1.0,
+                                alpha: 1.0,
+                            },
+                        },
+                        Vertex2 {
+                            position: Vec2::new(screen_rect.min.x as f32, screen_rect.max.y as f32),
+                            texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.max.y),
+                            color: F32RGBA {
+                                red: 1.0,
+                                green: 1.0,
+                                blue: 1.0,
+                                alpha: 1.0,
+                            },
+                        },
+                    ]);
+                    self.font_element_array_buffer.extend_from_slice(&[
+                        next_vertex,
+                        next_vertex + 1,
+                        next_vertex + 2,
+                        next_vertex + 2,
+                        next_vertex + 3,
+                        next_vertex,
+                    ]);
+                };
             }
 
             self.context.enable(WebGl2RenderingContext::BLEND);
@@ -373,7 +362,11 @@ impl UIState for State {
                 Some(&self.ortho_matrix),
                 Some(&Matrix4::identity()),
                 |renderer| {
-                    renderer.draw_elements(&self.font_array_buffer, &self.font_element_array_buffer, DrawMode::Triangles);
+                    Ok(renderer.draw_elements(
+                        self.font_array_buffer.buffer_mut()?,
+                        self.font_element_array_buffer.buffer_mut()?,
+                        DrawMode::Triangles,
+                    ))
                 },
             )?;
 

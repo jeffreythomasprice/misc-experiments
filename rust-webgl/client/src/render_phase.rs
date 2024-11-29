@@ -77,10 +77,10 @@ where
         texture: Option<&Texture>,
         projection_matrix: Option<&Matrix4<f32>>,
         model_view_matrix: Option<&Matrix4<f32>>,
-        f: F,
+        mut f: F,
     ) -> Result<(), Error>
     where
-        F: Fn(&Renderer<Vertex>),
+        F: FnMut(&Renderer<Vertex>) -> Result<(), Error>,
     {
         self.shader.use_program();
 
@@ -110,7 +110,7 @@ where
             }
         }
 
-        f(&Renderer {
+        let err = f(&Renderer {
             context: &self.context,
             attributes: &self.attributes,
             _phantom: PhantomData {},
@@ -122,7 +122,7 @@ where
 
         self.shader.use_none();
 
-        Ok(())
+        err
     }
 }
 
