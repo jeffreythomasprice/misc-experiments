@@ -1,11 +1,11 @@
-use std::rc::Rc;
+use std::{marker::PhantomData, rc::Rc};
 
 use bytemuck::Pod;
 use lib::{
     error::Error,
     graphics::{
         buffer::Buffer,
-        shader::{AttributePointer, ShaderProgram, Uniform},
+        shader::{AttributePointer, ShaderProgram, TypedUniform, Uniform},
         texture::Texture,
     },
 };
@@ -14,48 +14,79 @@ use web_sys::WebGl2RenderingContext;
 
 use crate::draw_mode::DrawMode;
 
-pub struct RenderPhase {
+pub struct RenderPhase<Vertex>
+where
+    Vertex: Pod,
+{
     context: Rc<WebGl2RenderingContext>,
     shader: ShaderProgram,
     attributes: Vec<AttributePointer>,
-    sampler_uniform: Option<Uniform>,
-    projection_matrix_uniform: Option<Uniform>,
-    model_view_matrix_uniform: Option<Uniform>,
+    sampler_uniform: Option<TypedUniform<i32>>,
+    projection_matrix_uniform: Option<TypedUniform<Matrix4<f32>>>,
+    model_view_matrix_uniform: Option<TypedUniform<Matrix4<f32>>>,
+    _phantom: PhantomData<Vertex>,
 }
 
-impl RenderPhase {
+pub struct Renderer<'a, Vertex> {
+    context: &'a WebGl2RenderingContext,
+    attributes: &'a [AttributePointer],
+    _phantom: PhantomData<Vertex>,
+}
+
+impl<Vertex> RenderPhase<Vertex>
+where
+    Vertex: Pod,
+{
     pub fn new(
         context: Rc<WebGl2RenderingContext>,
         shader: ShaderProgram,
         // TODO prove that the attributes come from this shader?
         attributes: Vec<AttributePointer>,
-        // TODO should take uniform names and then fail if they don't exist
-        sampler_uniform: Option<Uniform>,
-        projection_matrix_uniform: Option<Uniform>,
-        model_view_matrix_uniform: Option<Uniform>,
-    ) -> Self {
-        Self {
+        sampler_uniform_name: Option<&str>,
+        projection_matrix_uniform_name: Option<&str>,
+        model_view_matrix_uniform_name: Option<&str>,
+    ) -> Result<Self, Error> {
+        let sampler_uniform = match sampler_uniform_name {
+            Some(name) => Some(shader.assert_typed_uniform_by_name_i32(name)?),
+            None => None,
+        };
+
+        let projection_matrix_uniform = match projection_matrix_uniform_name {
+            Some(name) => Some(shader.assert_typed_uniform_by_name_matrix4_f32(name)?),
+            None => None,
+        };
+
+        let model_view_matrix_uniform = match model_view_matrix_uniform_name {
+            Some(name) => Some(shader.assert_typed_uniform_by_name_matrix4_f32(name)?),
+            None => None,
+        };
+
+        Ok(Self {
             context,
             shader,
             attributes,
             sampler_uniform,
             projection_matrix_uniform,
             model_view_matrix_uniform,
-        }
+            _phantom: PhantomData {},
+        })
     }
 
-    pub fn bind(
+    pub fn perform_batch<F>(
         &self,
         texture: Option<&Texture>,
         projection_matrix: Option<&Matrix4<f32>>,
         model_view_matrix: Option<&Matrix4<f32>>,
-    ) -> Result<(), Error> {
+        f: F,
+    ) -> Result<(), Error>
+    where
+        F: Fn(&Renderer<Vertex>),
+    {
         self.shader.use_program();
 
         if let Some(m) = &projection_matrix {
             if let Some(uniform) = &self.projection_matrix_uniform {
-                self.context
-                    .uniform_matrix4fv_with_f32_array(Some(&uniform.location), false, m.as_slice());
+                uniform.set(&m, false);
             } else {
                 Err("projection matrix is provided, but shader doesn't support it")?;
             }
@@ -63,8 +94,7 @@ impl RenderPhase {
 
         if let Some(m) = model_view_matrix {
             if let Some(uniform) = &self.model_view_matrix_uniform {
-                self.context
-                    .uniform_matrix4fv_with_f32_array(Some(&uniform.location), false, m.as_slice());
+                uniform.set(&m, false);
             } else {
                 Err("model view matrix is provided, but shader doesn't support it")?;
             }
@@ -72,7 +102,7 @@ impl RenderPhase {
 
         if let Some(t) = texture {
             if let Some(uniform) = &self.sampler_uniform {
-                self.context.uniform1i(Some(&uniform.location), 0);
+                uniform.set(0);
                 self.context.active_texture(WebGl2RenderingContext::TEXTURE0);
                 t.bind();
             } else {
@@ -80,12 +110,26 @@ impl RenderPhase {
             }
         }
 
+        f(&Renderer {
+            context: &self.context,
+            attributes: &self.attributes,
+            _phantom: PhantomData {},
+        });
+
+        if let Some(t) = texture {
+            t.bind_none();
+        }
+
+        self.shader.use_none();
+
         Ok(())
     }
+}
 
+impl<'a, Vertex> Renderer<'a, Vertex> {
     // TODO draw arrays
 
-    pub fn draw_elements<Vertex>(&self, array_buffer: &Buffer<Vertex>, element_array_buffer: &Buffer<u16>, draw_mode: DrawMode)
+    pub fn draw_elements(&self, array_buffer: &Buffer<Vertex>, element_array_buffer: &Buffer<u16>, draw_mode: DrawMode)
     where
         Vertex: Pod,
     {
@@ -109,14 +153,5 @@ impl RenderPhase {
 
         array_buffer.bind_none();
         element_array_buffer.bind_none();
-    }
-
-    pub fn bind_none(&self) {
-        // TODO unbind texture
-        // if let Some(t) = &self.texture {
-        //     t.bind_none();
-        // }
-
-        self.shader.use_none();
     }
 }

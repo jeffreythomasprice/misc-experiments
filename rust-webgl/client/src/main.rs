@@ -48,8 +48,8 @@ struct State {
 
     key_state: Rc<Mutex<HashMap<String, bool>>>,
 
-    render_phase_3d: RenderPhase,
-    render_phase_2d: RenderPhase,
+    render_phase_3d: RenderPhase<Vertex3>,
+    render_phase_2d: RenderPhase<Vertex2>,
 
     static_texture_array_buffer: Buffer<Vertex3>,
     static_texture_element_array_buffer: Buffer<u16>,
@@ -95,17 +95,14 @@ impl State {
                 offset_of!(Vertex3, color) as i32,
             ),
         ];
-        let sampler_uniform = shader.assert_uniform_by_name("sampler_uniform")?.clone();
-        let projection_matrix_uniform = shader.assert_uniform_by_name("projection_matrix_uniform")?.clone();
-        let model_view_matrix_uniform = shader.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
         let render_phase_3d = RenderPhase::new(
             context.clone(),
             shader,
             attributes,
-            Some(sampler_uniform),
-            Some(projection_matrix_uniform),
-            Some(model_view_matrix_uniform),
-        );
+            Some("sampler_uniform"),
+            Some("projection_matrix_uniform"),
+            Some("model_view_matrix_uniform"),
+        )?;
 
         let shader = ShaderProgram::new(
             context.clone(),
@@ -135,17 +132,14 @@ impl State {
                 offset_of!(Vertex2, color) as i32,
             ),
         ];
-        let sampler_uniform = shader.assert_uniform_by_name("sampler_uniform")?.clone();
-        let projection_matrix_uniform = shader.assert_uniform_by_name("projection_matrix_uniform")?.clone();
-        let model_view_matrix_uniform = shader.assert_uniform_by_name("model_view_matrix_uniform")?.clone();
         let render_phase_2d = RenderPhase::new(
             context.clone(),
             shader,
             attributes,
-            Some(sampler_uniform),
-            Some(projection_matrix_uniform),
-            Some(model_view_matrix_uniform),
-        );
+            Some("sampler_uniform"),
+            Some("projection_matrix_uniform"),
+            Some("model_view_matrix_uniform"),
+        )?;
 
         let texture = {
             let image_bytes = include_bytes!("../assets/vader.jpg");
@@ -283,19 +277,18 @@ impl UIState for State {
         self.context.clear_color(149.0 / 255.0, 154.0 / 255.0, 163.0 / 255.0, 1.0);
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-        {
-            self.render_phase_3d.bind(
-                Some(&self.texture),
-                Some(self.camera.projection_matrix()),
-                Some(&rotate_y(self.camera.model_view_matrix(), self.rotation)),
-            )?;
-            self.render_phase_3d.draw_elements(
-                &self.static_texture_array_buffer,
-                &self.static_texture_element_array_buffer,
-                DrawMode::Triangles,
-            );
-            self.render_phase_3d.bind_none();
-        }
+        self.render_phase_3d.perform_batch(
+            Some(&self.texture),
+            Some(self.camera.projection_matrix()),
+            Some(&rotate_y(self.camera.model_view_matrix(), self.rotation)),
+            |renderer| {
+                renderer.draw_elements(
+                    &self.static_texture_array_buffer,
+                    &self.static_texture_element_array_buffer,
+                    DrawMode::Triangles,
+                );
+            },
+        )?;
 
         // TODO simplify font api? combine layout, update_cache, and rect_for all in one?
         if let Some(layout) = self.font.layout("Hello, World!") {
@@ -375,11 +368,14 @@ impl UIState for State {
             self.context
                 .blend_func(WebGl2RenderingContext::SRC_ALPHA, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
 
-            self.render_phase_2d
-                .bind(Some(self.font.get_texture()), Some(&self.ortho_matrix), Some(&Matrix4::identity()))?;
-            self.render_phase_2d
-                .draw_elements(&self.font_array_buffer, &self.font_element_array_buffer, DrawMode::Triangles);
-            self.render_phase_2d.bind_none();
+            self.render_phase_2d.perform_batch(
+                Some(self.font.get_texture()),
+                Some(&self.ortho_matrix),
+                Some(&Matrix4::identity()),
+                |renderer| {
+                    renderer.draw_elements(&self.font_array_buffer, &self.font_element_array_buffer, DrawMode::Triangles);
+                },
+            )?;
 
             self.context.disable(WebGl2RenderingContext::BLEND);
         }
