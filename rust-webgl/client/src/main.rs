@@ -13,31 +13,31 @@ use lib::{
         texture::Texture,
         texture_font::TextureFont,
     },
-    math::{camera::Camera, size::Size},
+    math::{camera::Camera, size::Size, vec2::Vec2, vec3::Vec3},
     uistate::{run, UIState},
 };
 use log::*;
 use mesh::Mesh;
 use nalgebra::Matrix4;
-use nalgebra_glm::{rotate_y, DVec2, Vec2, Vec3};
+use nalgebra_glm::rotate_y;
 use render_phase::DrawMode;
 use render_phase::RenderPhase;
 use std::{collections::HashMap, f32::consts::TAU, io::Cursor, mem::offset_of, panic, rc::Rc, sync::Mutex, time::Duration};
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
-#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 struct Vertex2 {
-    position: Vec2,
-    texture_coordinate: Vec2,
+    position: Vec2<f32>,
+    texture_coordinate: Vec2<f32>,
     color: F32RGBA,
 }
 
-#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 struct Vertex3 {
-    position: Vec3,
-    texture_coordinate: Vec2,
+    position: Vec3<f32>,
+    texture_coordinate: Vec2<f32>,
     color: F32RGBA,
 }
 
@@ -151,8 +151,12 @@ impl State {
             let height = (image_texture.size().height as f32) / (image_texture.size().width as f32);
             static_texture_mesh.push_triangle_fan(&[
                 Vertex3 {
-                    position: Vec3::new(-1.0, -height, 0.0),
-                    texture_coordinate: Vec2::new(0.0, 1.0),
+                    position: Vec3 {
+                        x: -1.0,
+                        y: -height,
+                        z: 0.0,
+                    },
+                    texture_coordinate: Vec2 { x: 0.0, y: 1.0 },
                     color: F32RGBA {
                         red: 1.0,
                         green: 1.0,
@@ -161,8 +165,12 @@ impl State {
                     },
                 },
                 Vertex3 {
-                    position: Vec3::new(1.0, -height, 0.0),
-                    texture_coordinate: Vec2::new(1.0, 1.0),
+                    position: Vec3 {
+                        x: 1.0,
+                        y: -height,
+                        z: 0.0,
+                    },
+                    texture_coordinate: Vec2 { x: 1.0, y: 1.0 },
                     color: F32RGBA {
                         red: 1.0,
                         green: 1.0,
@@ -171,8 +179,8 @@ impl State {
                     },
                 },
                 Vertex3 {
-                    position: Vec3::new(1.0, height, 0.0),
-                    texture_coordinate: Vec2::new(1.0, 0.0),
+                    position: Vec3 { x: 1.0, y: height, z: 0.0 },
+                    texture_coordinate: Vec2 { x: 1.0, y: 0.0 },
                     color: F32RGBA {
                         red: 1.0,
                         green: 1.0,
@@ -181,8 +189,12 @@ impl State {
                     },
                 },
                 Vertex3 {
-                    position: Vec3::new(-1.0, height, 0.0),
-                    texture_coordinate: Vec2::new(0.0, 0.0),
+                    position: Vec3 {
+                        x: -1.0,
+                        y: height,
+                        z: 0.0,
+                    },
+                    texture_coordinate: Vec2 { x: 0.0, y: 0.0 },
                     color: F32RGBA {
                         red: 1.0,
                         green: 1.0,
@@ -244,8 +256,8 @@ impl State {
             let mut mesh = Mesh::new(context.clone())?;
             mesh.push_triangle_fan(&[
                 Vertex2 {
-                    position: Vec2::new(0.0, 0.0),
-                    texture_coordinate: Vec2::new(0.0, 0.0),
+                    position: Vec2 { x: 0.0, y: 0.0 },
+                    texture_coordinate: Vec2 { x: 0.0, y: 0.0 },
                     color: F32RGBA {
                         red: 1.0,
                         green: 1.0,
@@ -254,8 +266,11 @@ impl State {
                     },
                 },
                 Vertex2 {
-                    position: Vec2::new(size.width as f32, 0.0),
-                    texture_coordinate: Vec2::new(1.0, 0.0),
+                    position: Vec2 {
+                        x: size.width as f32,
+                        y: 0.0,
+                    },
+                    texture_coordinate: Vec2 { x: 1.0, y: 0.0 },
                     color: F32RGBA {
                         red: 1.0,
                         green: 1.0,
@@ -264,8 +279,11 @@ impl State {
                     },
                 },
                 Vertex2 {
-                    position: Vec2::new(size.width as f32, size.height as f32),
-                    texture_coordinate: Vec2::new(1.0, 1.0),
+                    position: Vec2 {
+                        x: size.width as f32,
+                        y: size.height as f32,
+                    },
+                    texture_coordinate: Vec2 { x: 1.0, y: 1.0 },
                     color: F32RGBA {
                         red: 1.0,
                         green: 1.0,
@@ -274,8 +292,11 @@ impl State {
                     },
                 },
                 Vertex2 {
-                    position: Vec2::new(0.0, size.height as f32),
-                    texture_coordinate: Vec2::new(0.0, 1.0),
+                    position: Vec2 {
+                        x: 0.0,
+                        y: size.height as f32,
+                    },
+                    texture_coordinate: Vec2 { x: 0.0, y: 1.0 },
                     color: F32RGBA {
                         red: 1.0,
                         green: 1.0,
@@ -315,9 +336,9 @@ impl State {
                 Size { width: 0, height: 0 },
                 1.0,
                 1000.0,
-                Vec3::new(0.0, 0.0, 6.0),
-                Vec3::new(0.0, 0.0, 0.0),
-                Vec3::new(0.0, 1.0, 0.0),
+                Vec3 { x: 0.0, y: 0.0, z: 6.0 },
+                Vec3 { x: 0.0, y: 0.0, z: 0.0 },
+                Vec3 { x: 0.0, y: 1.0, z: 0.0 },
             ),
             ortho_matrix: Matrix4::identity(),
 
@@ -350,15 +371,12 @@ impl State {
 }
 
 impl UIState for State {
-    fn resize(&mut self, size: DVec2) -> Result<(), Error> {
-        let width = size.x.floor() as u32;
-        let height = size.y.floor() as u32;
+    fn resize(&mut self, size: Size<u32>) -> Result<(), Error> {
+        self.context.viewport(0, 0, size.width as i32, size.height as i32);
 
-        self.context.viewport(0, 0, width as i32, height as i32);
+        self.camera.set_screen_size(size);
 
-        self.camera.set_screen_size(Size { width, height });
-
-        self.ortho_matrix = Matrix4::new_orthographic(0.0, width as f32, height as f32, 0.0, -1.0, 1.0);
+        self.ortho_matrix = Matrix4::new_orthographic(0.0, size.width as f32, size.height as f32, 0.0, -1.0, 1.0);
 
         Ok(())
     }
@@ -390,8 +408,14 @@ impl UIState for State {
                 if let Some((uv_rect, screen_rect)) = self.font.rect_for(glyph)? {
                     self.font_mesh.push_triangle_fan(&[
                         Vertex2 {
-                            position: Vec2::new(screen_rect.min.x as f32, screen_rect.min.y as f32),
-                            texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.min.y),
+                            position: Vec2 {
+                                x: screen_rect.min.x as f32,
+                                y: screen_rect.min.y as f32,
+                            },
+                            texture_coordinate: Vec2 {
+                                x: uv_rect.min.x,
+                                y: uv_rect.min.y,
+                            },
                             color: F32RGBA {
                                 red: 1.0,
                                 green: 1.0,
@@ -400,8 +424,14 @@ impl UIState for State {
                             },
                         },
                         Vertex2 {
-                            position: Vec2::new(screen_rect.max.x as f32, screen_rect.min.y as f32),
-                            texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.min.y),
+                            position: Vec2 {
+                                x: screen_rect.max.x as f32,
+                                y: screen_rect.min.y as f32,
+                            },
+                            texture_coordinate: Vec2 {
+                                x: uv_rect.max.x,
+                                y: uv_rect.min.y,
+                            },
                             color: F32RGBA {
                                 red: 1.0,
                                 green: 1.0,
@@ -410,8 +440,14 @@ impl UIState for State {
                             },
                         },
                         Vertex2 {
-                            position: Vec2::new(screen_rect.max.x as f32, screen_rect.max.y as f32),
-                            texture_coordinate: Vec2::new(uv_rect.max.x, uv_rect.max.y),
+                            position: Vec2 {
+                                x: screen_rect.max.x as f32,
+                                y: screen_rect.max.y as f32,
+                            },
+                            texture_coordinate: Vec2 {
+                                x: uv_rect.max.x,
+                                y: uv_rect.max.y,
+                            },
                             color: F32RGBA {
                                 red: 1.0,
                                 green: 1.0,
@@ -420,8 +456,14 @@ impl UIState for State {
                             },
                         },
                         Vertex2 {
-                            position: Vec2::new(screen_rect.min.x as f32, screen_rect.max.y as f32),
-                            texture_coordinate: Vec2::new(uv_rect.min.x, uv_rect.max.y),
+                            position: Vec2 {
+                                x: screen_rect.min.x as f32,
+                                y: screen_rect.max.y as f32,
+                            },
+                            texture_coordinate: Vec2 {
+                                x: uv_rect.min.x,
+                                y: uv_rect.max.y,
+                            },
                             color: F32RGBA {
                                 red: 1.0,
                                 green: 1.0,

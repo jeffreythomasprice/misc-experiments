@@ -155,8 +155,8 @@ impl Texture {
         let destination_bounds = Rect::with_position_and_size(*destination, source_bounds.size());
 
         // the actual limits of where we can pull pixels from and draw to
-        let pixels_bounds = Rect::with_position_and_size(Vec2 { x: 0, y: 0 }, *pixels_size);
-        let texture_bounds = Rect::with_position_and_size(Vec2 { x: 0, y: 0 }, *self.size());
+        let pixels_bounds = Rect::with_position_and_size(Vec2::zeroes(), *pixels_size);
+        let texture_bounds = Rect::with_position_and_size(Vec2::zeroes(), *self.size());
 
         // clip the bounds we care about to those limits
         let source_bounds = source_bounds.intersect(&pixels_bounds);

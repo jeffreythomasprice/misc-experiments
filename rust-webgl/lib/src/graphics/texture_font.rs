@@ -132,7 +132,7 @@ impl<'a> TextureFont<'a> {
 
                 if let Err(e) = self.texture.copy_pixels(
                     &rect.min.into(),
-                    &Rect::with_position_and_size(Vec2 { x: 0, y: 0 }, size),
+                    &Rect::with_position_and_size(Vec2::zeroes(), size),
                     &size,
                     &rgba_data,
                 ) {

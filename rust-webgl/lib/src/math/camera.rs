@@ -1,29 +1,29 @@
 use nalgebra::{clamp, wrap, Matrix4};
-use nalgebra_glm::{look_at, perspective_fov, rotate_vec3, Vec3};
+use nalgebra_glm::{look_at, perspective_fov, rotate_vec3};
 
-use super::{size::Size, vec2::Vec2};
+use super::{size::Size, vec2::Vec2, vec3::Vec3};
 
 pub struct Camera {
     fov: f32,
     screen_size: Size<u32>,
     near: f32,
     far: f32,
-    position: Vec3,
-    look: Vec3,
-    up: Vec3,
+    position: Vec3<f32>,
+    look: Vec3<f32>,
+    up: Vec3<f32>,
 
     angle_right: f32,
     angle_up: f32,
 
-    rotated_look: Vec3,
-    rotated_right: Vec3,
+    rotated_look: Vec3<f32>,
+    rotated_right: Vec3<f32>,
 
     projection_matrix: Matrix4<f32>,
     model_view_matrix: Matrix4<f32>,
 }
 
 impl Camera {
-    pub fn new(fov: f32, screen_size: Size<u32>, near: f32, far: f32, position: Vec3, target: Vec3, up: Vec3) -> Self {
+    pub fn new(fov: f32, screen_size: Size<u32>, near: f32, far: f32, position: Vec3<f32>, target: Vec3<f32>, up: Vec3<f32>) -> Self {
         let look = (target - position).normalize();
         let up = up.normalize();
         let mut result = Self {
@@ -38,8 +38,8 @@ impl Camera {
             angle_right: 0.0,
             angle_up: 0.0,
 
-            rotated_look: Vec3::zeros(),
-            rotated_right: Vec3::zeros(),
+            rotated_look: Vec3::zeroes(),
+            rotated_right: Vec3::zeroes(),
 
             projection_matrix: Matrix4::identity(),
             model_view_matrix: Matrix4::identity(),
@@ -76,15 +76,15 @@ impl Camera {
     pub fn move_based_on_current_axes(&mut self, forward: f32, up: f32, right: f32) {
         let mut needs_update = false;
         if forward != 0.0f32 {
-            self.position += forward * self.rotated_look;
+            self.position += self.rotated_look * forward;
             needs_update = true;
         }
         if up != 0.0f32 {
-            self.position += up * self.up;
+            self.position += self.up * up;
             needs_update = true;
         }
         if right != 0.0f32 {
-            self.position += right * self.rotated_right;
+            self.position += self.rotated_right * right;
             needs_update = true;
         }
         if needs_update {
@@ -108,9 +108,9 @@ impl Camera {
     }
 
     fn update_rotated_look(&mut self) {
-        let look_with_only_right_angle = rotate_vec3(&self.look, self.angle_right, &self.up);
-        let right_right_only_right_angle = look_with_only_right_angle.cross(&self.up);
-        self.rotated_look = rotate_vec3(&look_with_only_right_angle, self.angle_up, &right_right_only_right_angle);
+        let look_with_only_right_angle = rotate_vec3(&self.look.into(), self.angle_right, &self.up.into());
+        let right_right_only_right_angle = look_with_only_right_angle.cross(&self.up.into());
+        self.rotated_look = rotate_vec3(&look_with_only_right_angle, self.angle_up, &right_right_only_right_angle).into();
         self.rotated_right = self.rotated_look.cross(&self.up);
     }
 
@@ -130,7 +130,7 @@ impl Camera {
     }
 
     fn update_model_view_matrix(&mut self) -> &Matrix4<f32> {
-        self.model_view_matrix = look_at(&self.position, &(self.position + self.rotated_look), &self.up);
+        self.model_view_matrix = look_at(&self.position.into(), &(self.position + self.rotated_look).into(), &self.up.into());
         &self.model_view_matrix
     }
 }

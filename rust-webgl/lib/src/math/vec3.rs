@@ -7,14 +7,15 @@ use bytemuck::{Pod, Zeroable};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Zeroable)]
 #[repr(C)]
-pub struct Vec2<T> {
+pub struct Vec3<T> {
     pub x: T,
     pub y: T,
+    pub z: T,
 }
 
-unsafe impl<T> Pod for Vec2<T> where T: Copy + Zeroable + 'static {}
+unsafe impl<T> Pod for Vec3<T> where T: Copy + Zeroable + 'static {}
 
-impl<T> Clone for Vec2<T>
+impl<T> Clone for Vec3<T>
 where
     T: Clone,
 {
@@ -22,43 +23,42 @@ where
         Self {
             x: self.x.clone(),
             y: self.y.clone(),
+            z: self.z.clone(),
         }
     }
 }
 
-impl<T> Copy for Vec2<T> where T: Copy {}
+impl<T> Copy for Vec3<T> where T: Copy {}
 
-impl<T> Display for Vec2<T>
+impl<T> Display for Vec3<T>
 where
     T: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {})", self.x, self.y)
+        write!(f, "({}, {}, {})", self.x, self.y, self.z)
     }
 }
 
-impl<T> From<nalgebra_glm::TVec2<T>> for Vec2<T>
+impl<T> From<nalgebra_glm::TVec3<T>> for Vec3<T>
 where
     T: Copy,
 {
-    fn from(value: nalgebra_glm::TVec2<T>) -> Self {
-        Self { x: value[0], y: value[1] }
+    fn from(value: nalgebra_glm::TVec3<T>) -> Self {
+        Self {
+            x: value[0],
+            y: value[1],
+            z: value[2],
+        }
     }
 }
 
-impl<T> Into<nalgebra_glm::TVec2<T>> for Vec2<T> {
-    fn into(self) -> nalgebra_glm::TVec2<T> {
-        nalgebra_glm::TVec2::new(self.x, self.y)
+impl<T> Into<nalgebra_glm::TVec3<T>> for Vec3<T> {
+    fn into(self) -> nalgebra_glm::TVec3<T> {
+        nalgebra_glm::TVec3::new(self.x, self.y, self.z)
     }
 }
 
-impl<T> From<rusttype::Point<T>> for Vec2<T> {
-    fn from(value: rusttype::Point<T>) -> Self {
-        Self { x: value.x, y: value.y }
-    }
-}
-
-impl<T> Vec2<T>
+impl<T> Vec3<T>
 where
     T: Zeroable,
 {
@@ -66,11 +66,12 @@ where
         Self {
             x: T::zeroed(),
             y: T::zeroed(),
+            z: T::zeroed(),
         }
     }
 }
 
-impl<T> Add for Vec2<T>
+impl<T> Add for Vec3<T>
 where
     T: Add<Output = T>,
 {
@@ -80,11 +81,12 @@ where
         Self {
             x: self.x + rhs.x,
             y: self.y + rhs.y,
+            z: self.z + rhs.z,
         }
     }
 }
 
-impl<T> AddAssign for Vec2<T>
+impl<T> AddAssign for Vec3<T>
 where
     T: Copy + Add<Output = T>,
 {
@@ -93,7 +95,7 @@ where
     }
 }
 
-impl<T> Sub for Vec2<T>
+impl<T> Sub for Vec3<T>
 where
     T: Sub<Output = T>,
 {
@@ -103,11 +105,12 @@ where
         Self {
             x: self.x - rhs.x,
             y: self.y - rhs.y,
+            z: self.z - rhs.z,
         }
     }
 }
 
-impl<T> SubAssign for Vec2<T>
+impl<T> SubAssign for Vec3<T>
 where
     T: Copy + Sub<Output = T>,
 {
@@ -116,7 +119,7 @@ where
     }
 }
 
-impl<T> Mul<T> for Vec2<T>
+impl<T> Mul<T> for Vec3<T>
 where
     T: Mul<Output = T> + Copy,
 {
@@ -126,11 +129,12 @@ where
         Self {
             x: self.x * rhs,
             y: self.y * rhs,
+            z: self.z * rhs,
         }
     }
 }
 
-impl<T> MulAssign<T> for Vec2<T>
+impl<T> MulAssign<T> for Vec3<T>
 where
     T: Copy + Mul<Output = T>,
 {
@@ -139,7 +143,7 @@ where
     }
 }
 
-impl<T> Div<T> for Vec2<T>
+impl<T> Div<T> for Vec3<T>
 where
     T: Div<Output = T> + Copy,
 {
@@ -149,11 +153,12 @@ where
         Self {
             x: self.x / rhs,
             y: self.y / rhs,
+            z: self.z / rhs,
         }
     }
 }
 
-impl<T> DivAssign<T> for Vec2<T>
+impl<T> DivAssign<T> for Vec3<T>
 where
     T: Copy + Div<Output = T>,
 {
@@ -162,16 +167,16 @@ where
     }
 }
 
-impl<T> Vec2<T>
+impl<T> Vec3<T>
 where
     T: Copy + Add<Output = T> + Mul<Output = T>,
 {
     pub fn magnitude_squared(&self) -> T {
-        self.x * self.x + self.y * self.y
+        self.x * self.x + self.y * self.y + self.z * self.z
     }
 }
 
-impl Vec2<f32> {
+impl Vec3<f32> {
     pub fn magnitude(&self) -> f32 {
         self.magnitude_squared().sqrt()
     }
@@ -181,7 +186,7 @@ impl Vec2<f32> {
     }
 }
 
-impl Vec2<f64> {
+impl Vec3<f64> {
     pub fn magnitude(&self) -> f64 {
         self.magnitude_squared().sqrt()
     }
@@ -191,11 +196,24 @@ impl Vec2<f64> {
     }
 }
 
-impl<T> Vec2<T>
+impl<T> Vec3<T>
 where
     T: Copy + Add<Output = T> + Mul<Output = T>,
 {
     pub fn dot(&self, rhs: &Self) -> T {
-        self.x * rhs.x + self.y * rhs.y
+        self.x * rhs.x + self.y * rhs.y + self.z * rhs.z
+    }
+}
+
+impl<T> Vec3<T>
+where
+    T: Copy + Sub<Output = T> + Mul<Output = T>,
+{
+    pub fn cross(&self, rhs: &Self) -> Self {
+        Self {
+            x: self.y * rhs.z - self.z * rhs.y,
+            y: self.z * rhs.x - self.x * rhs.z,
+            z: self.x * rhs.y - self.y * rhs.x,
+        }
     }
 }

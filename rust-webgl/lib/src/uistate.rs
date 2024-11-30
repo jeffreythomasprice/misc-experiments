@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::events::{KeyPressEvent, MouseMoveEvent, MousePressEvent};
+use crate::math::size::Size;
 use gloo::{
     events::EventListener,
     render::{request_animation_frame, AnimationFrame},
@@ -7,14 +8,13 @@ use gloo::{
 };
 use js_sys::wasm_bindgen::JsCast;
 use log::*;
-use nalgebra_glm::DVec2;
 use serde::Serialize;
 use std::{future::Future, panic, rc::Rc, sync::Mutex, time::Duration};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlCanvasElement, WebGl2RenderingContext};
 
 pub trait UIState {
-    fn resize(&mut self, #[allow(unused)] size: DVec2) -> Result<(), Error> {
+    fn resize(&mut self, #[allow(unused)] size: Size<u32>) -> Result<(), Error> {
         Ok(())
     }
 
@@ -225,7 +225,10 @@ fn resize(canvas: &HtmlCanvasElement, state: &mut Box<dyn UIState>) -> Result<()
     let height = window().inner_height()?.as_f64().ok_or("expected float")?;
     canvas.set_width(width.floor() as u32);
     canvas.set_height(height.floor() as u32);
-    state.resize(DVec2::new(width, height))
+    state.resize(Size {
+        width: width as u32,
+        height: height as u32,
+    })
 }
 
 fn anim_loop<F: Fn(Duration) + 'static>(f: F) {
