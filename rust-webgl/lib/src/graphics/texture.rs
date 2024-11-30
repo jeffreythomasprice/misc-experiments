@@ -1,7 +1,7 @@
 use super::colors::U8RGBA;
 use crate::{
     error::Error,
-    math::{rect::Rect, size::Size},
+    math::{rect::Rect, size::Size, vec2::Vec2},
 };
 use image::{EncodableLayout, ImageFormat};
 use std::{
@@ -135,45 +135,98 @@ impl Texture {
 
     /// Draws the given pixel array to the texture.
     ///
-    /// Pixels aren't scaled.
+    /// `destination` is the location on this texture to draw pixels to. Pixels that fall outside the bounds of this textuer are silently
+    /// ignored.
+    ///
+    /// `source` is the bounding rectangle inside the source image to draw from. Pixels that lie outside the source image are silently
+    /// ignored.
+    ///
+    /// `pixels` and `pixel_size` are the whole image to pull pixels from.
+    ///
     pub fn copy_pixels(
         &mut self,
-        destination: &Rect<u32>,
+        destination: &Vec2<u32>,
         source: &Rect<u32>,
-        source_size: Size<u32>,
+        pixels_size: &Size<u32>,
         pixels: &[U8RGBA],
     ) -> Result<(), Error> {
-        /*
-        TODO actually copy sub images
+        // where we want to pull pixels from
+        let source_bounds = source;
+        let destination_bounds = Rect::with_position_and_size(*destination, source_bounds.size());
 
-        clip destination to (0,0) x this.size
-        clip source to (0,0) x source_size
+        // the actual limits of where we can pull pixels from and draw to
+        let pixels_bounds = Rect::with_position_and_size(Vec2 { x: 0, y: 0 }, *pixels_size);
+        let texture_bounds = Rect::with_position_and_size(Vec2 { x: 0, y: 0 }, *self.size());
 
-        min_size = min(destination.size, source.size)
-        destination.size = min_size
-        source.size = min_size
-        */
+        // clip the bounds we care about to those limits
+        let source_bounds = source_bounds.intersect(&pixels_bounds);
+        let destination_bounds = destination_bounds.intersect(&texture_bounds);
 
-        self.bind();
-        self.context
-            .tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_u8_array_and_src_offset(
-                WebGl2RenderingContext::TEXTURE_2D,
-                0,
-                destination.min.x as i32,
-                destination.min.y as i32,
-                source_size.width as i32,
-                source_size.height as i32,
-                WebGl2RenderingContext::RGBA,
-                WebGl2RenderingContext::UNSIGNED_BYTE,
-                bytemuck::cast_slice(pixels),
-                0,
-            )
-            .map_err(|e| format!("error copying pixels to texture region: {e:?}"))?;
+        match (source_bounds, destination_bounds) {
+            // we have at least one actual pixel to draw
+            (Some(source_bounds), Some(destination_bounds)) => {
+                // further clip to the smaller of the two sizes
+                // this could happen if the previous intersection clipped one of them
+                // we can only draw the smaller region
+                let (source_bounds, destination_bounds) = if source_bounds.size() != destination_bounds.size() {
+                    let smaller_size = Size {
+                        width: source_bounds.size().width.min(destination_bounds.size().width),
+                        height: source_bounds.size().height.min(destination_bounds.size().height),
+                    };
+                    (
+                        Rect::with_position_and_size(*source_bounds.origin(), smaller_size),
+                        Rect::with_position_and_size(*destination_bounds.origin(), smaller_size),
+                    )
+                } else {
+                    (source_bounds, destination_bounds)
+                };
 
-        // TODO mark as dirty instead of regenerating mipmaps
-        self.context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
+                self.bind();
 
-        self.bind_none();
+                // we can only copy the whole pixels array at once
+                // so if we're trying to copy something other than the whole thing at once we have to go row by row
+                if source_bounds != pixels_bounds {
+                    for y in 0..source_bounds.size().height {
+                        self.context
+                            .tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_u8_array_and_src_offset(
+                                WebGl2RenderingContext::TEXTURE_2D,
+                                0,
+                                destination_bounds.origin().x as i32,
+                                (y + destination_bounds.origin().y) as i32,
+                                source_bounds.size().width as i32,
+                                1,
+                                WebGl2RenderingContext::RGBA,
+                                WebGl2RenderingContext::UNSIGNED_BYTE,
+                                bytemuck::cast_slice(pixels),
+                                0,
+                            )
+                            .map_err(|e| format!("error copying pixels to texture region, row={}: {:?}", y, e))?;
+                    }
+                } else {
+                    self.context
+                        .tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_u8_array_and_src_offset(
+                            WebGl2RenderingContext::TEXTURE_2D,
+                            0,
+                            destination_bounds.origin().x as i32,
+                            destination_bounds.origin().y as i32,
+                            pixels_size.width as i32,
+                            pixels_size.height as i32,
+                            WebGl2RenderingContext::RGBA,
+                            WebGl2RenderingContext::UNSIGNED_BYTE,
+                            bytemuck::cast_slice(pixels),
+                            0,
+                        )
+                        .map_err(|e| format!("error copying pixels to texture region: {e:?}"))?;
+                };
+
+                // TODO mark as dirty instead of regenerating mipmaps
+                self.context.generate_mipmap(WebGl2RenderingContext::TEXTURE_2D);
+
+                self.bind_none();
+            }
+            // at least one end is out of bounds, so nothing to do
+            _ => (),
+        };
         Ok(())
     }
 

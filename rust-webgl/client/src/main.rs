@@ -205,17 +205,39 @@ impl State {
                     pixels.push(U8RGBA {
                         red: a,
                         green: b,
-                        blue: a,
+                        blue: 255 - a,
                         alpha: 255,
                     });
                 }
             }
-            let texture = Texture::new_with_pixels(
+
+            let size = Size {
+                width: size.width as u32,
+                height: size.height as u32,
+            };
+
+            let mut texture = Texture::new_with_pixels(
                 context.clone(),
-                Size {
-                    width: size.width as u32,
-                    height: size.height as u32,
-                },
+                size,
+                &(0..(size.width * size.height))
+                    .map(|_| U8RGBA {
+                        red: 0,
+                        green: 0,
+                        blue: 0,
+                        alpha: 0,
+                    })
+                    .collect::<Vec<_>>(),
+            )?;
+            texture.copy_pixels(
+                &lib::math::vec2::Vec2 { x: 64, y: 64 },
+                &lib::math::rect::Rect::with_position_and_size(lib::math::vec2::Vec2 { x: 64, y: 128 }, Size { width: 512, height: 512 }),
+                &size,
+                &pixels,
+            )?;
+            texture.copy_pixels(
+                &lib::math::vec2::Vec2 { x: 128, y: 192 },
+                &lib::math::rect::Rect::with_position_and_size(lib::math::vec2::Vec2 { x: 64, y: 64 }, Size { width: 128, height: 128 }),
+                &size,
                 &pixels,
             )?;
 

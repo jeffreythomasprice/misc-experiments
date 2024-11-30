@@ -100,3 +100,25 @@ impl<T> From<rusttype::Rect<T>> for Rect<T> {
         }
     }
 }
+
+impl<T> Rect<T>
+where
+    T: Copy + PartialOrd + Ord,
+{
+    pub fn intersect(&self, other: &Self) -> Option<Self> {
+        if other.max.x < self.min.x || other.min.x > self.max.x || other.max.y < self.min.y || other.min.y > self.max.y {
+            None
+        } else {
+            Some(Rect {
+                min: Vec2 {
+                    x: self.min.x.max(other.min.x),
+                    y: self.min.y.max(other.min.y),
+                },
+                max: Vec2 {
+                    x: self.max.x.min(other.max.x),
+                    y: self.max.y.min(other.max.y),
+                },
+            })
+        }
+    }
+}

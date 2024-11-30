@@ -131,9 +131,9 @@ impl<'a> TextureFont<'a> {
                 };
 
                 if let Err(e) = self.texture.copy_pixels(
-                    &rect.into(),
+                    &rect.min.into(),
                     &Rect::with_position_and_size(Vec2 { x: 0, y: 0 }, size),
-                    size,
+                    &size,
                     &rgba_data,
                 ) {
                     abort_error = Some(e);
