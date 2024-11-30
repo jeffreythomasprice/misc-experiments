@@ -208,7 +208,6 @@ impl State {
         let (procedural_texture, procedural_texture_mesh) = {
             let size = Size { width: 256, height: 256 };
 
-            // TODO test texSubImage2D here
             let mut pixels = Vec::with_capacity(size.width * size.height);
             for y in 0..size.height {
                 let b = ((y as f64) / ((size.height - 1) as f64) * 255.0) as u8;
