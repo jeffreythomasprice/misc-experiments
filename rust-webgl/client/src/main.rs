@@ -8,12 +8,10 @@ use lib::{
     events::{KeyPressEvent, MouseButton, MouseMoveEvent, MousePressEvent},
     graphics::{
         self,
-        buffer::BufferUsage,
-        colors::F32RGBA,
+        colors::{F32RGBA, U8RGBA},
         shader::{AttributePointer, AttributePointerType, ShaderProgram},
         texture::Texture,
         texture_font::TextureFont,
-        vec_buffer::VecBuffer,
     },
     math::{camera::Camera, size::Size},
     uistate::{run, UIState},
@@ -52,11 +50,14 @@ struct State {
     render_phase_3d: RenderPhase<Vertex3>,
     render_phase_2d: RenderPhase<Vertex2>,
 
-    static_texture_mesh: Mesh<Vertex3>,
-    texture: Texture,
+    image_texture: Texture,
+    image_texture_mesh: Mesh<Vertex3>,
 
-    font_mesh: Mesh<Vertex2>,
+    procedural_texture: Texture,
+    procedural_texture_mesh: Mesh<Vertex2>,
+
     font: TextureFont<'static>,
+    font_mesh: Mesh<Vertex2>,
 
     camera: Camera,
     ortho_matrix: Matrix4<f32>,
@@ -140,56 +141,130 @@ impl State {
             Some("model_view_matrix_uniform"),
         )?;
 
-        let texture = {
+        let image_texture = {
             let image_bytes = include_bytes!("../assets/vader.jpg");
             Texture::new_with_image_data(context.clone(), Some("vader.jpg"), Cursor::new(image_bytes))?
         };
 
-        let texture_aspect_ratio = (texture.size().height as f32) / (texture.size().width as f32);
-
         let mut static_texture_mesh = Mesh::new(context.clone())?;
-        static_texture_mesh.push_triangle_fan(&[
-            Vertex3 {
-                position: Vec3::new(-1.0, -texture_aspect_ratio, 0.0),
-                texture_coordinate: Vec2::new(0.0, 1.0),
-                color: F32RGBA {
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                    alpha: 1.0,
+        {
+            let height = (image_texture.size().height as f32) / (image_texture.size().width as f32);
+            static_texture_mesh.push_triangle_fan(&[
+                Vertex3 {
+                    position: Vec3::new(-1.0, -height, 0.0),
+                    texture_coordinate: Vec2::new(0.0, 1.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
                 },
-            },
-            Vertex3 {
-                position: Vec3::new(1.0, -texture_aspect_ratio, 0.0),
-                texture_coordinate: Vec2::new(1.0, 1.0),
-                color: F32RGBA {
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                    alpha: 1.0,
+                Vertex3 {
+                    position: Vec3::new(1.0, -height, 0.0),
+                    texture_coordinate: Vec2::new(1.0, 1.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
                 },
-            },
-            Vertex3 {
-                position: Vec3::new(1.0, texture_aspect_ratio, 0.0),
-                texture_coordinate: Vec2::new(1.0, 0.0),
-                color: F32RGBA {
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                    alpha: 1.0,
+                Vertex3 {
+                    position: Vec3::new(1.0, height, 0.0),
+                    texture_coordinate: Vec2::new(1.0, 0.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
                 },
-            },
-            Vertex3 {
-                position: Vec3::new(-1.0, texture_aspect_ratio, 0.0),
-                texture_coordinate: Vec2::new(0.0, 0.0),
-                color: F32RGBA {
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                    alpha: 1.0,
+                Vertex3 {
+                    position: Vec3::new(-1.0, height, 0.0),
+                    texture_coordinate: Vec2::new(0.0, 0.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
                 },
-            },
-        ]);
+            ]);
+        }
+
+        let (procedural_texture, procedural_texture_mesh) = {
+            let size = Size { width: 256, height: 256 };
+
+            // TODO test texSubImage2D here
+            let mut pixels = Vec::with_capacity(size.width * size.height);
+            for y in 0..size.height {
+                let b = ((y as f64) / ((size.height - 1) as f64) * 255.0) as u8;
+                for x in 0..size.width {
+                    let a = ((x as f64) / ((size.width - 1) as f64) * 255.0) as u8;
+                    pixels.push(U8RGBA {
+                        red: a,
+                        green: b,
+                        blue: a,
+                        alpha: 255,
+                    });
+                }
+            }
+            let texture = Texture::new_with_pixels(
+                context.clone(),
+                Size {
+                    width: size.width as u32,
+                    height: size.height as u32,
+                },
+                &pixels,
+            )?;
+
+            let mut mesh = Mesh::new(context.clone())?;
+            mesh.push_triangle_fan(&[
+                Vertex2 {
+                    position: Vec2::new(0.0, 0.0),
+                    texture_coordinate: Vec2::new(0.0, 0.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                },
+                Vertex2 {
+                    position: Vec2::new(size.width as f32, 0.0),
+                    texture_coordinate: Vec2::new(1.0, 0.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                },
+                Vertex2 {
+                    position: Vec2::new(size.width as f32, size.height as f32),
+                    texture_coordinate: Vec2::new(1.0, 1.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                },
+                Vertex2 {
+                    position: Vec2::new(0.0, size.height as f32),
+                    texture_coordinate: Vec2::new(0.0, 1.0),
+                    color: F32RGBA {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                },
+            ]);
+
+            (texture, mesh)
+        };
 
         let font = TextureFont::new_with_bytes_and_scale(context.clone(), include_bytes!("../assets/Ubuntu/Ubuntu-Regular.ttf"), 30.0)?;
 
@@ -204,8 +279,11 @@ impl State {
             render_phase_3d,
             render_phase_2d,
 
-            static_texture_mesh,
-            texture,
+            image_texture,
+            image_texture_mesh: static_texture_mesh,
+
+            procedural_texture,
+            procedural_texture_mesh,
 
             font,
             font_mesh,
@@ -268,10 +346,17 @@ impl UIState for State {
         self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
         self.render_phase_3d.perform_batch(
-            Some(&self.texture),
+            Some(&self.image_texture),
             Some(self.camera.projection_matrix()),
             Some(&rotate_y(self.camera.model_view_matrix(), self.rotation)),
-            |renderer| renderer.draw_mesh(&mut self.static_texture_mesh, DrawMode::Triangles),
+            |renderer| renderer.draw_mesh(&mut self.image_texture_mesh, DrawMode::Triangles),
+        )?;
+
+        self.render_phase_2d.perform_batch(
+            Some(&self.procedural_texture),
+            Some(&self.ortho_matrix),
+            Some(&Matrix4::identity()),
+            |renderer| renderer.draw_mesh(&mut self.procedural_texture_mesh, DrawMode::Triangles),
         )?;
 
         // TODO simplify font api? combine layout, update_cache, and rect_for all in one?

@@ -99,7 +99,7 @@ where
 
         if let Some(m) = &projection_matrix {
             if let Some(uniform) = &self.projection_matrix_uniform {
-                uniform.set(&m, false);
+                uniform.set(m, false);
             } else {
                 Err("projection matrix is provided, but shader doesn't support it")?;
             }
@@ -107,7 +107,7 @@ where
 
         if let Some(m) = model_view_matrix {
             if let Some(uniform) = &self.model_view_matrix_uniform {
-                uniform.set(&m, false);
+                uniform.set(m, false);
             } else {
                 Err("model view matrix is provided, but shader doesn't support it")?;
             }
@@ -139,7 +139,7 @@ where
     }
 }
 
-impl<'a, Vertex> Renderer<'a, Vertex> {
+impl<Vertex> Renderer<'_, Vertex> {
     // TODO draw arrays
 
     pub fn draw_elements(&self, array_buffer: &Buffer<Vertex>, element_array_buffer: &Buffer<u16>, draw_mode: DrawMode)
@@ -169,7 +169,7 @@ impl<'a, Vertex> Renderer<'a, Vertex> {
     }
 }
 
-impl<'a, Vertex> Renderer<'a, Vertex>
+impl<Vertex> Renderer<'_, Vertex>
 where
     Vertex: Pod,
 {

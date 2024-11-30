@@ -40,7 +40,7 @@ impl<'a> TextureFont<'a> {
     }
 
     pub fn get_texture(&mut self) -> &Texture {
-        return &self.texture;
+        &self.texture
     }
 
     pub fn layout(&self, text: &str) -> Option<LayoutResult<'a>> {
@@ -105,7 +105,7 @@ impl<'a> TextureFont<'a> {
         I: Iterator<Item = &'b PositionedGlyph<'a>>,
     {
         // TODO can we avoid making a clone of the input glyphs?
-        let glyphs = glyphs.map(|x| x.clone()).collect::<Vec<_>>();
+        let glyphs = glyphs.cloned().collect::<Vec<_>>();
         loop {
             for glyph in glyphs.iter() {
                 self.cache.queue_glyph(0, glyph.clone());

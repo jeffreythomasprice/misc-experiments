@@ -23,7 +23,7 @@ impl Texture {
         Ok(context
             .get_parameter(WebGl2RenderingContext::MAX_TEXTURE_SIZE)?
             .as_f64()
-            .ok_or(format!("expected max texture size to be a number"))? as usize)
+            .ok_or("expected max texture size to be a number".to_string())? as usize)
     }
 
     pub fn new_with_size(context: Rc<WebGl2RenderingContext>, size: Size<u32>) -> Result<Self, Error> {
