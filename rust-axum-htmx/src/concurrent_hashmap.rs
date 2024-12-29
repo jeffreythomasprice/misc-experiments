@@ -20,7 +20,7 @@ where
 
     pub async fn values(&self) -> Vec<V> {
         let data = &mut *self.data.lock().await;
-        data.values().map(|x| x.clone()).collect()
+        data.values().cloned().collect()
     }
 
     pub async fn get(&self, key: &K) -> Option<V> {
