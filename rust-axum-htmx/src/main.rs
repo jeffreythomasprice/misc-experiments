@@ -1,12 +1,11 @@
-mod cache;
+mod concurrent_hashmap;
 mod templates;
 
 use std::{
     collections::HashMap,
     fmt::Debug,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-    rc::Rc,
+    net::{Incoming, SocketAddr},
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -22,19 +21,16 @@ use axum::{
     Router,
 };
 use axum_extra::{headers::UserAgent, TypedHeader};
+use concurrent_hashmap::ConcurrentHashMap;
 use envconfig::Envconfig;
 use futures::{
     stream::{SplitSink, StreamExt},
     SinkExt,
 };
-use mustache::Template;
 use serde::{Deserialize, Serialize};
 use templates::Templates;
-use tokio::{spawn, sync::Mutex, task::spawn_local};
-use tower_http::{
-    services::ServeDir,
-    trace::{DefaultMakeSpan, TraceLayer},
-};
+use tokio::{spawn, sync::Mutex};
+use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
@@ -165,42 +161,32 @@ impl Debug for ActiveWebsocketConnection {
 #[derive(Clone)]
 struct AppState {
     templates: Templates,
+    websockets: ConcurrentHashMap<Uuid, ActiveWebsocketConnection>,
     clicks: Arc<Mutex<u64>>,
-    websockets: Arc<Mutex<HashMap<Uuid, ActiveWebsocketConnection>>>,
 }
 
 impl AppState {
     fn new() -> Self {
         Self {
             templates: Templates::new(),
+            websockets: ConcurrentHashMap::new(),
             clicks: Arc::new(Mutex::new(0)),
-            websockets: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     async fn new_websocket_connection(&mut self, ws: ActiveWebsocketConnection) {
-        let websockets = &mut *self.websockets.lock().await;
         info!("registered new active websocket connection: {:?}", ws);
-        websockets.insert(ws.id, ws);
+        self.websockets.insert(ws.id, ws).await;
     }
 
     async fn close_websocket_connection(&mut self, ws: ActiveWebsocketConnection) {
         info!("removing websocket connection: {:?}", ws);
-        let websockets = &mut *self.websockets.lock().await;
-        websockets.remove(&ws.id);
+        self.websockets.remove(&ws.id).await;
     }
 
     async fn broadcast(&mut self, message: String) -> Result<(), HttpError> {
-        let message = self
-            .templates
-            .template_path_to_string(
-                "templates/new-message.html",
-                &NewMessage { content: message },
-            )
-            .await?;
         info!("broadcasting {}", message);
-        let websockets = &*self.websockets.lock().await;
-        for ws in websockets.values() {
+        for ws in self.websockets.values().await {
             if let Err(e) = ws.send(message.clone()).await {
                 error!(
                     "error sending message to websocket: {:?}, error: {:?}",
@@ -287,15 +273,50 @@ async fn websocket(
     user_agent: Option<TypedHeader<UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
+    State(templates): State<Templates>,
 ) -> impl IntoResponse {
     info!(
         "websocket connected, addr: {}, user agent: {:?}",
         addr, user_agent
     );
-    ws.on_upgrade(move |socket| websocket_upgrade(state, socket, addr))
+    ws.on_upgrade(move |socket| websocket_upgrade(state, templates, socket, addr))
 }
 
-async fn websocket_upgrade(state: AppState, socket: WebSocket, addr: SocketAddr) {
+async fn websocket_upgrade(
+    state: AppState,
+    templates: Templates,
+    socket: WebSocket,
+    addr: SocketAddr,
+) {
+    async fn incoming(
+        mut state: AppState,
+        mut templates: Templates,
+        ws: ActiveWebsocketConnection,
+        message: IncomingWebsocketMessage,
+    ) -> anyhow::Result<()> {
+        let message = templates
+            .template_path_to_string(
+                "templates/new-message.html",
+                &NewMessage {
+                    content: format!("{}: {}", ws.id, message.message),
+                },
+            )
+            .await
+            .map_err(|e| {
+                anyhow!(
+                    "error rendering template to respond to websocket message: {:?}",
+                    e
+                )
+            })?;
+
+        state
+            .broadcast(message)
+            .await
+            .map_err(|e| anyhow!("error responding to websocket message: {:?}", e))?;
+
+        Ok(())
+    }
+
     state
         .clone()
         .new_websocket_connection(ActiveWebsocketConnection::new(
@@ -304,14 +325,12 @@ async fn websocket_upgrade(state: AppState, socket: WebSocket, addr: SocketAddr)
             {
                 let state = state.clone();
                 move |ws, message| {
-                    let mut state = state.clone();
+                    let state = state.clone();
+                    let templates = templates.clone();
                     let ws = ws.clone();
                     spawn(async move {
-                        if let Err(e) = state
-                            .broadcast(format!("{}: {}", ws.id, message.message))
-                            .await
-                        {
-                            error!("error broadcasting: {:?}", e);
+                        if let Err(e) = incoming(state, templates, ws, message).await {
+                            error!("error handling incoming websocket message: {:?}", e);
                         }
                     });
                     Ok(())

@@ -1,4 +1,4 @@
-use crate::{cache::Cache, HttpError};
+use crate::{concurrent_hashmap::ConcurrentHashMap, HttpError};
 use anyhow::anyhow;
 use mustache::Template;
 use serde::Serialize;
@@ -6,13 +6,13 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 
 #[derive(Clone)]
 pub struct Templates {
-    templates: Cache<String, Arc<Template>>,
+    templates: ConcurrentHashMap<String, Arc<Template>>,
 }
 
 impl Templates {
     pub fn new() -> Self {
         Self {
-            templates: Cache::new(),
+            templates: ConcurrentHashMap::new(),
         }
     }
 
@@ -22,7 +22,7 @@ impl Templates {
     {
         let key = format!("{:?}", path);
         self.templates
-            .get_or_create(key, || async {
+            .get_or_insert(key, || async {
                 Ok(Arc::new(mustache::compile_path(&path).map_err(|e| {
                     anyhow!(
                         "error compiling template from path: {:?}, error: {:?}",
