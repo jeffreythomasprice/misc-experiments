@@ -1,14 +1,14 @@
 mod concurrent_hashmap;
 mod db;
+mod errors;
 mod templates;
 mod websockets;
 
-use std::{fmt::Debug, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::anyhow;
 use axum::{
     extract::{ws::WebSocket, ConnectInfo, FromRef, State, WebSocketUpgrade},
-    http::StatusCode,
     response::{Html, IntoResponse},
     routing::{any, get, post},
     Router,
@@ -17,9 +17,9 @@ use axum_extra::{headers::UserAgent, TypedHeader};
 use chrono::Utc;
 use db::notifications;
 use envconfig::Envconfig;
-use serde::Serialize;
+use errors::HttpError;
 use sqlx::{Pool, Postgres};
-use templates::Templates;
+use templates::{Counter, Index, Messages, NewMessage, Templates};
 use tokio::{spawn, sync::Mutex};
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tracing::*;
@@ -48,27 +48,6 @@ struct Config {
 
     #[envconfig(from = "POSTGRES_DB")]
     pub postgres_db: String,
-}
-
-#[derive(Debug, Clone)]
-struct HttpError {
-    status: StatusCode,
-    message: String,
-}
-
-impl From<anyhow::Error> for HttpError {
-    fn from(value: anyhow::Error) -> Self {
-        Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            message: format!("{value:}"),
-        }
-    }
-}
-
-impl IntoResponse for HttpError {
-    fn into_response(self) -> axum::response::Response {
-        (self.status, self.message).into_response()
-    }
 }
 
 #[derive(Clone)]
@@ -116,21 +95,6 @@ impl FromRef<AppState> for WebSockets {
     fn from_ref(input: &AppState) -> Self {
         input.websockets.clone()
     }
-}
-
-#[derive(Serialize)]
-struct Index {
-    content: String,
-}
-
-#[derive(Serialize)]
-struct Counter {
-    clicks: u64,
-}
-
-#[derive(Serialize)]
-struct NewMessage {
-    content: String,
 }
 
 #[tokio::main]
@@ -291,31 +255,16 @@ async fn websocket(
 }
 
 async fn index(State(state): State<AppState>, State(mut templates): State<Templates>) -> Result<impl IntoResponse, HttpError> {
-    let counter = templates
-        .template_path_to_string(
-            "templates/counter.html",
-            &Counter {
-                clicks: state.get_clicks().await,
-            },
-        )
-        .await?;
-    let messages = templates.template_path_to_string("templates/messages.html", &0).await?;
+    let counter = Counter::new(state.get_clicks().await).render(&mut templates).await?;
+    let messages = Messages::new().render(&mut templates).await?;
     let content = counter + &messages;
-    Ok(Html(
-        templates
-            .template_path_to_string("templates/index.html", &Index { content })
-            .await?,
-    ))
+    Ok(Html(Index::new(content).render(&mut templates).await?))
 }
 
 async fn click(State(mut state): State<AppState>, State(mut templates): State<Templates>) -> Result<impl IntoResponse, HttpError> {
     let clicks = state.click().await;
     info!("click, new counter: {}", clicks);
-    Ok(Html(
-        templates
-            .template_path_to_string("templates/counter.html", &Counter { clicks })
-            .await?,
-    ))
+    Ok(Html(Counter::new(clicks).render(&mut templates).await?))
 }
 
 async fn broadcast_message(
@@ -325,16 +274,10 @@ async fn broadcast_message(
     id: u64,
 ) -> anyhow::Result<()> {
     if let Some(message) = messages_dao.get_by_id(id as i32).await? {
-        let message = templates
-            .template_path_to_string(
-                "templates/new-message.html",
-                &NewMessage {
-                    content: format!("{}: {}", message.sender, message.message),
-                },
-            )
+        let message = NewMessage::new(message)
+            .render(templates)
             .await
             .map_err(|e| anyhow!("error rendering template to respond to websocket message: {:?}", e))?;
-
         websockets
             .broadcast(message)
             .await

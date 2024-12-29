@@ -1,8 +1,11 @@
+mod views;
+
 use crate::{concurrent_hashmap::ConcurrentHashMap, HttpError};
 use anyhow::anyhow;
 use mustache::Template;
 use serde::Serialize;
 use std::{fmt::Debug, path::Path, sync::Arc};
+pub use views::*;
 
 #[derive(Clone)]
 pub struct Templates {
@@ -24,21 +27,13 @@ impl Templates {
         self.templates
             .get_or_insert(key, || async {
                 Ok(Arc::new(mustache::compile_path(&path).map_err(|e| {
-                    anyhow!(
-                        "error compiling template from path: {:?}, error: {:?}",
-                        path,
-                        e
-                    )
+                    anyhow!("error compiling template from path: {:?}, error: {:?}", path, e)
                 })?))
             })
             .await
     }
 
-    pub async fn template_path_to_string<P, T>(
-        &mut self,
-        path: P,
-        data: &T,
-    ) -> Result<String, HttpError>
+    pub async fn template_path_to_string<P, T>(&mut self, path: P, data: &T) -> Result<String, HttpError>
     where
         P: AsRef<Path> + Debug,
         T: Serialize,
