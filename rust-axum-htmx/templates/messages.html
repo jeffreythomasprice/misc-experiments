@@ -4,7 +4,10 @@
 		ws-connect="/websocket"
 	>
 		<div id="messages"></div>
-		<form ws-send>
+		<form
+			id="messages-form"
+			ws-send
+		>
 			<label for="message">Message: </label>
 			<input name="message">
 		</form>

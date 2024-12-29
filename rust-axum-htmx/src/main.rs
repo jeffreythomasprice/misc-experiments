@@ -28,7 +28,7 @@ use futures::{
     SinkExt,
 };
 use mustache::Template;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use templates::Templates;
 use tokio::{spawn, sync::Mutex, task::spawn_local};
 use tower_http::{
@@ -69,6 +69,13 @@ impl IntoResponse for HttpError {
     }
 }
 
+#[derive(Debug, Deserialize)]
+struct IncomingWebsocketMessage {
+    pub message: String,
+    #[serde(rename = "HEADERS")]
+    pub headers: HashMap<String, Option<String>>,
+}
+
 #[derive(Clone)]
 struct ActiveWebsocketConnection {
     id: Uuid,
@@ -84,7 +91,8 @@ impl ActiveWebsocketConnection {
         close: CloseCallback,
     ) -> Self
     where
-        IncomingMessageCallback: Fn(String) -> anyhow::Result<()> + Send + 'static,
+        IncomingMessageCallback:
+            Fn(&Self, IncomingWebsocketMessage) -> anyhow::Result<()> + Send + 'static,
         CloseCallback: Fn(&Self) -> anyhow::Result<()> + Send + 'static,
     {
         let (sink, mut stream) = socket.split();
@@ -98,7 +106,7 @@ impl ActiveWebsocketConnection {
         {
             let result = result.clone();
             spawn(async move {
-                if let Some(message) = stream.next().await {
+                while let Some(message) = stream.next().await {
                     match message {
                         Ok(ws::Message::Text(message)) => {
                             trace!(
@@ -106,9 +114,14 @@ impl ActiveWebsocketConnection {
                                 result,
                                 message
                             );
-                            if let Err(e) = incoming(message) {
-                                error!("error in websocket message handler, websocket: {:?}, error: {:?}", result, e);
-                            }
+                            match serde_json::from_str(&message) {
+                                Ok(message) => {
+                                    if let Err(e) = incoming(&result, message) {
+                                        error!("error in websocket message handler, websocket: {:?}, error: {:?}", result, e);
+                                    }
+                                }
+                                Err(e) => error!("error deserializing incoming websocket message, websocket: {:?}, error: {:?}", result, e),
+                            };
                         }
                         Ok(ws::Message::Binary(message)) => {
                             trace!("TODO received websocket binary message: {:?}", message);
@@ -119,15 +132,13 @@ impl ActiveWebsocketConnection {
                             if let Err(e) = close(&result) {
                                 error!("error in websocket close handler while handling close event, websocket: {:?}, error: {:?}", result,e);
                             }
+                            return;
                         }
                         Ok(ws::Message::Ping(_)) | Ok(ws::Message::Pong(_)) => (),
                         Err(e) => error!("error receiving websocket message: {:?}", e),
                     }
                 }
                 trace!("websocket loop closed, websocket: {:?}", result);
-                if let Err(e) = close(&result) {
-                    error!("error in websocket close handler while handling websocket loop closed, websocket: {:?}, error: {:?}", result,e);
-                }
             });
         }
 
@@ -292,11 +303,12 @@ async fn websocket_upgrade(state: AppState, socket: WebSocket, addr: SocketAddr)
             addr,
             {
                 let state = state.clone();
-                move |message| {
+                move |ws, message| {
                     let mut state = state.clone();
+                    let ws = ws.clone();
                     spawn(async move {
                         if let Err(e) = state
-                            .broadcast(format!("TODO response to {}", message))
+                            .broadcast(format!("{}: {}", ws.id, message.message))
                             .await
                         {
                             error!("error broadcasting: {:?}", e);
