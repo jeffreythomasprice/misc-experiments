@@ -153,14 +153,12 @@ async fn main() -> anyhow::Result<()> {
     debug!("postgres_port = {}", config.postgres_port);
     debug!("postgres_db = {}", config.postgres_db);
 
-    let pool = sqlx::PgPool::connect(
-        format!(
-            "postgres://{}:{}@{}:{}/{}",
-            config.postgres_user, config.postgres_password, config.postgres_host, config.postgres_port, config.postgres_db
-        )
-        .as_str(),
-    )
-    .await?;
+    let db_str = format!(
+        "postgres://{}:{}@{}:{}/{}",
+        config.postgres_user, config.postgres_password, config.postgres_host, config.postgres_port, config.postgres_db
+    );
+    info!("db connection str = {}", db_str);
+    let pool = sqlx::PgPool::connect(&db_str).await?;
 
     sqlx::migrate!().run(&pool).await?;
 
@@ -326,7 +324,7 @@ async fn broadcast_message(
     websockets: &mut WebSockets,
     id: u64,
 ) -> anyhow::Result<()> {
-    if let Some(message) = messages_dao.get_by_id(id).await {
+    if let Some(message) = messages_dao.get_by_id(id as i32).await? {
         let message = templates
             .template_path_to_string(
                 "templates/new-message.html",
