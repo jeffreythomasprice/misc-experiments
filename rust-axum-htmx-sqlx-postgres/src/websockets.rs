@@ -100,7 +100,7 @@ impl ActiveWebsocketConnection {
     {
         match serde_json::from_str(message) {
             Ok(message) => {
-                if let Err(e) = incoming(&self, message) {
+                if let Err(e) = incoming(self, message) {
                     error!("error in websocket message handler, websocket: {:?}, error: {:?}", self, e);
                 }
             }

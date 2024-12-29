@@ -1,8 +1,6 @@
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use sqlx::{query, query_as, Pool, Postgres};
-use tracing::*;
 
 #[derive(Debug, Clone)]
 pub struct Message {

@@ -170,7 +170,7 @@ async fn main() -> anyhow::Result<()> {
         let websockets = state.websockets.clone();
         let last_message_id = Arc::new(Mutex::new(None));
         spawn(async move {
-            if let Err(e) = db::notifications::listen(&pool, &vec!["table_update"], {
+            if let Err(e) = db::notifications::listen(&pool, &["table_update"], {
                 |notification: db::notifications::Payload| {
                     debug!("postgres notification: {notification:?}");
                     let messages_dao = messages_dao.clone();
@@ -250,7 +250,7 @@ async fn websocket(
                 sender: ws.id.to_string(),
                 message: message.message,
             })
-            .await;
+            .await?;
         Ok(())
     }
 

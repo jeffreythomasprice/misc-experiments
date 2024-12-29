@@ -27,8 +27,8 @@ where
     T: DeserializeOwned + Debug,
     F: Fn(T) -> Result<()>,
 {
-    let mut listener = PgListener::connect_with(&pool).await?;
-    listener.listen_all(channels.iter().map(|s| *s)).await?;
+    let mut listener = PgListener::connect_with(pool).await?;
+    listener.listen_all(channels.iter().copied()).await?;
     loop {
         while let Some(notification) = listener.try_recv().await? {
             if let Err(e) = (|| -> Result<()> {
