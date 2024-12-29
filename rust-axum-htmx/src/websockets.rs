@@ -30,8 +30,7 @@ impl ActiveWebsocketConnection {
         close: CloseCallback,
     ) -> Self
     where
-        IncomingMessageCallback:
-            Fn(&Self, IncomingWebsocketMessage) -> anyhow::Result<()> + Send + 'static,
+        IncomingMessageCallback: Fn(&Self, IncomingWebsocketMessage) -> anyhow::Result<()> + Send + 'static + Sync,
         CloseCallback: Fn(&Self) -> anyhow::Result<()> + Send + 'static,
     {
         let (sink, mut stream) = socket.split();
@@ -48,28 +47,32 @@ impl ActiveWebsocketConnection {
                 while let Some(message) = stream.next().await {
                     match message {
                         Ok(ws::Message::Text(message)) => {
-                            trace!(
-                                "received websocket message, websocket: {:?}, message: {}",
-                                result,
-                                message
-                            );
-                            match serde_json::from_str(&message) {
-                                Ok(message) => {
-                                    if let Err(e) = incoming(&result, message) {
-                                        error!("error in websocket message handler, websocket: {:?}, error: {:?}", result, e);
-                                    }
-                                }
-                                Err(e) => error!("error deserializing incoming websocket message, websocket: {:?}, error: {:?}", result, e),
-                            };
+                            trace!("received websocket text message, websocket: {:?}, message: {}", result, message);
+                            result.handle_incoming(&incoming, &message);
                         }
                         Ok(ws::Message::Binary(message)) => {
-                            trace!("TODO received websocket binary message: {:?}", message);
-                            todo!()
+                            match std::str::from_utf8(&message) {
+                                Ok(message) => {
+                                    trace!("received websocket binary message, websocket: {:?}, message: {}", result, message);
+                                    result.handle_incoming(&incoming, message);
+                                }
+                                Err(e) => {
+                                    error!(
+                                        "incoming binary message is not a utf8 string, websocket: {:?}, message len: {} bytes, error: {:?}",
+                                        result,
+                                        message.len(),
+                                        e
+                                    )
+                                }
+                            };
                         }
                         Ok(ws::Message::Close(_)) => {
                             debug!("websocket closed: {:?}", result);
                             if let Err(e) = close(&result) {
-                                error!("error in websocket close handler while handling close event, websocket: {:?}, error: {:?}", result,e);
+                                error!(
+                                    "error in websocket close handler while handling close event, websocket: {:?}, error: {:?}",
+                                    result, e
+                                );
                             }
                             return;
                         }
@@ -84,11 +87,28 @@ impl ActiveWebsocketConnection {
         result
     }
 
-    async fn send(&self, s: String) -> anyhow::Result<()> {
+    pub async fn send(&self, s: String) -> anyhow::Result<()> {
         let sink = &mut *self.sink.lock().await;
         trace!("sending to {:?}, message={}", self, s);
         sink.send(ws::Message::Text(s)).await?;
         Ok(())
+    }
+
+    fn handle_incoming<IncomingMessageCallback>(&self, incoming: &IncomingMessageCallback, message: &str)
+    where
+        IncomingMessageCallback: Fn(&Self, IncomingWebsocketMessage) -> anyhow::Result<()> + Send + 'static,
+    {
+        match serde_json::from_str(message) {
+            Ok(message) => {
+                if let Err(e) = incoming(&self, message) {
+                    error!("error in websocket message handler, websocket: {:?}, error: {:?}", self, e);
+                }
+            }
+            Err(e) => error!(
+                "error deserializing incoming websocket message, websocket: {:?}, error: {:?}",
+                self, e
+            ),
+        };
     }
 }
 
@@ -127,10 +147,7 @@ impl WebSockets {
         info!("broadcasting {}", message);
         for ws in self.websockets.values().await {
             if let Err(e) = ws.send(message.clone()).await {
-                error!(
-                    "error sending message to websocket: {:?}, error: {:?}",
-                    ws, e
-                );
+                error!("error sending message to websocket: {:?}, error: {:?}", ws, e);
             }
         }
         Ok(())
