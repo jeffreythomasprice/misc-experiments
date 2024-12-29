@@ -1,0 +1,12 @@
+<div>
+	<div
+		hx-ext="ws"
+		ws-connect="/websocket"
+	>
+		<div id="messages"></div>
+		<form ws-send>
+			<label for="message">Message: </label>
+			<input name="message">
+		</form>
+	</div>
+</div>

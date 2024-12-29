@@ -1,25 +1,43 @@
+mod cache;
+mod templates;
+
 use std::{
     collections::HashMap,
     fmt::Debug,
-    path::Path,
+    net::SocketAddr,
+    path::{Path, PathBuf},
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use anyhow::anyhow;
 use axum::{
-    extract::State,
+    extract::{
+        ws::{self, WebSocket},
+        ConnectInfo, FromRef, State, WebSocketUpgrade,
+    },
     http::StatusCode,
     response::{Html, IntoResponse},
-    routing::{get, post},
+    routing::{any, get, post},
     Router,
 };
+use axum_extra::{headers::UserAgent, TypedHeader};
 use envconfig::Envconfig;
+use futures::{
+    stream::{SplitSink, StreamExt},
+    SinkExt,
+};
 use mustache::Template;
 use serde::Serialize;
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use templates::Templates;
+use tokio::{spawn, sync::Mutex, task::spawn_local};
+use tower_http::{
+    services::ServeDir,
+    trace::{DefaultMakeSpan, TraceLayer},
+};
 use tracing::*;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use uuid::Uuid;
 
 #[derive(Envconfig)]
 struct Config {
@@ -30,6 +48,7 @@ struct Config {
     pub port: u16,
 }
 
+#[derive(Debug, Clone)]
 struct HttpError {
     status: StatusCode,
     message: String,
@@ -51,9 +70,151 @@ impl IntoResponse for HttpError {
 }
 
 #[derive(Clone)]
+struct ActiveWebsocketConnection {
+    id: Uuid,
+    addr: SocketAddr,
+    sink: Arc<Mutex<SplitSink<WebSocket, ws::Message>>>,
+}
+
+impl ActiveWebsocketConnection {
+    fn new<IncomingMessageCallback, CloseCallback>(
+        socket: WebSocket,
+        addr: SocketAddr,
+        incoming: IncomingMessageCallback,
+        close: CloseCallback,
+    ) -> Self
+    where
+        IncomingMessageCallback: Fn(String) -> anyhow::Result<()> + Send + 'static,
+        CloseCallback: Fn(&Self) -> anyhow::Result<()> + Send + 'static,
+    {
+        let (sink, mut stream) = socket.split();
+
+        let result = Self {
+            id: Uuid::new_v4(),
+            addr,
+            sink: Arc::new(Mutex::new(sink)),
+        };
+
+        {
+            let result = result.clone();
+            spawn(async move {
+                if let Some(message) = stream.next().await {
+                    match message {
+                        Ok(ws::Message::Text(message)) => {
+                            trace!(
+                                "received websocket message, websocket: {:?}, message: {}",
+                                result,
+                                message
+                            );
+                            if let Err(e) = incoming(message) {
+                                error!("error in websocket message handler, websocket: {:?}, error: {:?}", result, e);
+                            }
+                        }
+                        Ok(ws::Message::Binary(message)) => {
+                            trace!("TODO received websocket binary message: {:?}", message);
+                            todo!()
+                        }
+                        Ok(ws::Message::Close(_)) => {
+                            debug!("websocket closed: {:?}", result);
+                            if let Err(e) = close(&result) {
+                                error!("error in websocket close handler while handling close event, websocket: {:?}, error: {:?}", result,e);
+                            }
+                        }
+                        Ok(ws::Message::Ping(_)) | Ok(ws::Message::Pong(_)) => (),
+                        Err(e) => error!("error receiving websocket message: {:?}", e),
+                    }
+                }
+                trace!("websocket loop closed, websocket: {:?}", result);
+                if let Err(e) = close(&result) {
+                    error!("error in websocket close handler while handling websocket loop closed, websocket: {:?}, error: {:?}", result,e);
+                }
+            });
+        }
+
+        result
+    }
+
+    async fn send(&self, s: String) -> anyhow::Result<()> {
+        let sink = &mut *self.sink.lock().await;
+        trace!("sending to {:?}, message={}", self, s);
+        sink.send(ws::Message::Text(s)).await?;
+        Ok(())
+    }
+}
+
+impl Debug for ActiveWebsocketConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ActiveWebsocketConnection")
+            .field("id", &self.id)
+            .field("addr", &self.addr)
+            .finish()
+    }
+}
+
+#[derive(Clone)]
 struct AppState {
-    templates: Arc<Mutex<HashMap<String, Arc<Template>>>>,
+    templates: Templates,
     clicks: Arc<Mutex<u64>>,
+    websockets: Arc<Mutex<HashMap<Uuid, ActiveWebsocketConnection>>>,
+}
+
+impl AppState {
+    fn new() -> Self {
+        Self {
+            templates: Templates::new(),
+            clicks: Arc::new(Mutex::new(0)),
+            websockets: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    async fn new_websocket_connection(&mut self, ws: ActiveWebsocketConnection) {
+        let websockets = &mut *self.websockets.lock().await;
+        info!("registered new active websocket connection: {:?}", ws);
+        websockets.insert(ws.id, ws);
+    }
+
+    async fn close_websocket_connection(&mut self, ws: ActiveWebsocketConnection) {
+        info!("removing websocket connection: {:?}", ws);
+        let websockets = &mut *self.websockets.lock().await;
+        websockets.remove(&ws.id);
+    }
+
+    async fn broadcast(&mut self, message: String) -> Result<(), HttpError> {
+        let message = self
+            .templates
+            .template_path_to_string(
+                "templates/new-message.html",
+                &NewMessage { content: message },
+            )
+            .await?;
+        info!("broadcasting {}", message);
+        let websockets = &*self.websockets.lock().await;
+        for ws in websockets.values() {
+            if let Err(e) = ws.send(message.clone()).await {
+                error!(
+                    "error sending message to websocket: {:?}, error: {:?}",
+                    ws, e
+                );
+            }
+        }
+        Ok(())
+    }
+
+    async fn get_clicks(&self) -> u64 {
+        *self.clicks.lock().await
+    }
+
+    async fn click(&mut self) -> u64 {
+        let clicks = &mut *self.clicks.lock().await;
+        *clicks += 1;
+        *clicks
+    }
+}
+
+impl FromRef<AppState> for Templates {
+    fn from_ref(input: &AppState) -> Self {
+        input.templates.clone()
+    }
 }
 
 #[derive(Serialize)]
@@ -66,60 +227,9 @@ struct Counter {
     clicks: u64,
 }
 
-impl AppState {
-    fn new() -> Self {
-        Self {
-            templates: Arc::new(Mutex::new(HashMap::new())),
-            clicks: Arc::new(Mutex::new(0)),
-        }
-    }
-
-    fn template_path<P>(&mut self, path: P) -> Result<Arc<Template>, HttpError>
-    where
-        P: AsRef<Path> + Debug,
-    {
-        // TODO replace with a FallableCache system?
-        let templates = &mut *self.templates.lock().unwrap();
-        let key = format!("{:?}", path);
-        match templates.entry(key) {
-            std::collections::hash_map::Entry::Occupied(occupied_entry) => {
-                Ok(occupied_entry.get().clone())
-            }
-            std::collections::hash_map::Entry::Vacant(vacant_entry) => {
-                let result = Arc::new(mustache::compile_path(&path).map_err(|e| {
-                    anyhow!(
-                        "error compiling template from path: {:?}, error: {:?}",
-                        path,
-                        e
-                    )
-                })?);
-                vacant_entry.insert(result.clone());
-                Ok(result)
-            }
-        }
-    }
-
-    fn template_path_to_string<P, T>(&mut self, path: P, data: &T) -> Result<String, HttpError>
-    where
-        P: AsRef<Path> + Debug,
-        T: Serialize,
-    {
-        let template = self.template_path(path)?;
-        let result = template
-            .render_to_string(data)
-            .map_err(|e| anyhow!("error rendering template: {e:?}"))?;
-        Ok(result)
-    }
-
-    fn get_clicks(&self) -> u64 {
-        *self.clicks.lock().unwrap()
-    }
-
-    fn click(&mut self) -> u64 {
-        let clicks = &mut *self.clicks.lock().unwrap();
-        *clicks += 1;
-        *clicks
-    }
+#[derive(Serialize)]
+struct NewMessage {
+    content: String,
 }
 
 #[tokio::main]
@@ -139,39 +249,109 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::new();
 
     let app = Router::new()
-        .nest_service("/static", ServeDir::new("static"))
+        .nest_service(
+            "/static",
+            ServeDir::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("static")),
+        )
         .route("/", get(index))
+        .route("/websocket", any(websocket))
         .route("/click", post(click))
         .with_state(state)
         .layer(TraceLayer::new_for_http());
 
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    let serve_result = axum::serve(listener, app);
+    let serve_result = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    );
     info!("listening at {}", addr);
     serve_result.await?;
 
     Ok(())
 }
 
-async fn index(State(mut state): State<AppState>) -> Result<impl IntoResponse, HttpError> {
-    let content = state.template_path_to_string(
-        "templates/counter.html",
-        &Counter {
-            clicks: state.get_clicks(),
-        },
-    )?;
-    Ok(Html(state.template_path_to_string(
-        "templates/index.html",
-        &Index { content },
-    )?))
+async fn websocket(
+    ws: WebSocketUpgrade,
+    user_agent: Option<TypedHeader<UserAgent>>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    info!(
+        "websocket connected, addr: {}, user agent: {:?}",
+        addr, user_agent
+    );
+    ws.on_upgrade(move |socket| websocket_upgrade(state, socket, addr))
 }
 
-async fn click(State(mut state): State<AppState>) -> Result<impl IntoResponse, HttpError> {
-    let clicks = state.click();
+async fn websocket_upgrade(state: AppState, socket: WebSocket, addr: SocketAddr) {
+    state
+        .clone()
+        .new_websocket_connection(ActiveWebsocketConnection::new(
+            socket,
+            addr,
+            {
+                let state = state.clone();
+                move |message| {
+                    let mut state = state.clone();
+                    spawn(async move {
+                        if let Err(e) = state
+                            .broadcast(format!("TODO response to {}", message))
+                            .await
+                        {
+                            error!("error broadcasting: {:?}", e);
+                        }
+                    });
+                    Ok(())
+                }
+            },
+            {
+                let state = state.clone();
+                move |ws| {
+                    let mut state = state.clone();
+                    let ws = ws.clone();
+                    spawn(async move {
+                        state.close_websocket_connection(ws).await;
+                    });
+                    Ok(())
+                }
+            },
+        ))
+        .await
+}
+
+async fn index(
+    State(state): State<AppState>,
+    State(mut templates): State<Templates>,
+) -> Result<impl IntoResponse, HttpError> {
+    let counter = templates
+        .template_path_to_string(
+            "templates/counter.html",
+            &Counter {
+                clicks: state.get_clicks().await,
+            },
+        )
+        .await?;
+    let messages = templates
+        .template_path_to_string("templates/messages.html", &0)
+        .await?;
+    let content = counter + &messages;
+    Ok(Html(
+        templates
+            .template_path_to_string("templates/index.html", &Index { content })
+            .await?,
+    ))
+}
+
+async fn click(
+    State(mut state): State<AppState>,
+    State(mut templates): State<Templates>,
+) -> Result<impl IntoResponse, HttpError> {
+    let clicks = state.click().await;
     info!("click, new counter: {}", clicks);
-    Ok(Html(state.template_path_to_string(
-        "templates/counter.html",
-        &Counter { clicks },
-    )?))
+    Ok(Html(
+        templates
+            .template_path_to_string("templates/counter.html", &Counter { clicks })
+            .await?,
+    ))
 }
