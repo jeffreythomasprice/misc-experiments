@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "client"
+		}
+	],
+	"settings": {
+		"go.toolsEnvVars": {
+			"GOOS": "js",
+			"GOARCH": "wasm"
+		}
+	}
+}
