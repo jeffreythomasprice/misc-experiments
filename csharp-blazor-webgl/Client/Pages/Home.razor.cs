@@ -15,7 +15,7 @@ public partial class Home : ComponentBase
     {
         if (firstRender)
         {
-            await Lib.WebGl.Canvas.Create(JS, Canvas, new DemoState());
+            await Lib.WebGl.Canvas.Create(JS, Canvas, DemoState.Create());
         }
     }
 }

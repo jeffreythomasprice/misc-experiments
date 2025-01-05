@@ -189,14 +189,20 @@ public class WebGL2RenderingContext
         objRef.InvokeVoid("bufferData", type, size, usage);
     }
 
-    // TODO BufferData with byte[]
+    public void BufferData(BufferType type, byte[] data, BufferUsage usage)
+    {
+        objRef.InvokeVoid("bufferData_uint8", type, data, usage);
+    }
 
     public void BufferData(BufferType type, float[] data, BufferUsage usage)
     {
         objRef.InvokeVoid("bufferData_float32", type, data, usage);
     }
 
-    // TODO BufferData with double[]
+    public void BufferData(BufferType type, double[] data, BufferUsage usage)
+    {
+        objRef.InvokeVoid("bufferData_float64", type, data, usage);
+    }
 
     public void BufferSubData(BufferType type, int offset, byte[] data)
     {

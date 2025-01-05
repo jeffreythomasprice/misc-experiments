@@ -1,4 +1,5 @@
 ﻿using BlazorExperiments.Lib.WebGl;
+using System.Drawing;
 
 namespace BlazorExperiments.Lib.StateMachine;
 
@@ -7,6 +8,7 @@ public class StateMachine : IAsyncDisposable
     private readonly WebGL2RenderingContext gl;
     private IState? currentState;
     private TimeSpan? lastAnim;
+    private Size? size;
 
     private StateMachine(WebGL2RenderingContext gl, IState initialState)
     {
@@ -29,11 +31,12 @@ public class StateMachine : IAsyncDisposable
         return new StateMachine(gl, initialState);
     }
 
-    public async Task ResizeAsync(int width, int height)
+    public async Task ResizeAsync(Size size)
     {
+        this.size = size;
         if (currentState != null)
         {
-            await PossibleSwitchTo(await currentState.ResizeAsync(gl, width, height));
+            await PossibleSwitchTo(await currentState.ResizeAsync(gl, size));
         }
     }
 
@@ -43,7 +46,7 @@ public class StateMachine : IAsyncDisposable
         {
             if (lastAnim != null)
             {
-                var delta = lastAnim.Value - timeSpan;
+                var delta = timeSpan - lastAnim.Value;
                 await PossibleSwitchTo(await currentState.UpdateAsync(gl, delta));
             }
             lastAnim = timeSpan;
@@ -62,6 +65,11 @@ public class StateMachine : IAsyncDisposable
                 await currentState.DeactivateAsync(gl);
             }
             currentState = nextState;
+
+            if (size != null)
+            {
+                await PossibleSwitchTo(await currentState.ResizeAsync(gl, size.Value));
+            }
         }
     }
 }

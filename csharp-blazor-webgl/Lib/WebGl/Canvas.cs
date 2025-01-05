@@ -11,11 +11,19 @@ public class Canvas : IAsyncDisposable
 
     public static async Task<Canvas> Create(IJSRuntime js, ElementReference canvas, IState initialState)
     {
+        var result = new Canvas();
+
+        // js init
         var jsInProcess = (IJSInProcessRuntime)js;
         var module = await jsInProcess.InvokeAsync<IJSInProcessObjectReference>("import", "./_content/Lib/Canvas.js");
-        var result = new Canvas();
-        var gl = new WebGL2RenderingContext(module.Invoke<IJSInProcessObjectReference>("init", result.thisRef, canvas));
-        result.stateMachine = await StateMachine.StateMachine.Create(gl, initialState);
+        var context = module.Invoke<IJSInProcessObjectReference>("init", result.thisRef, canvas);
+
+        // state machine init
+        result.stateMachine = await StateMachine.StateMachine.Create(new WebGL2RenderingContext(context), initialState);
+
+        // initial resize event so we know the initial size of the screen
+        context.InvokeVoid("resize");
+
         return result;
     }
 
@@ -23,16 +31,18 @@ public class Canvas : IAsyncDisposable
     {
         thisRef = DotNetObjectReference.Create(this);
     }
+
     public ValueTask DisposeAsync()
     {
         thisRef?.Dispose();
+        thisRef = null;
         return ValueTask.CompletedTask;
     }
 
     [JSInvokable]
     public void Resize(int width, int height)
     {
-        stateMachine?.ResizeAsync(width, height);
+        stateMachine?.ResizeAsync(new(width, height));
     }
 
     [JSInvokable]

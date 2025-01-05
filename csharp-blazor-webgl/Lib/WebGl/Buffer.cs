@@ -51,7 +51,7 @@ public class Buffer<T> : IDisposable, IList<T>
     private bool disposedValue;
 
     private readonly WebGL2RenderingContext.Buffer buffer;
-    private Range? dirty;
+    private SparseIntegerSet dirty;
 
     public Buffer(
         WebGL2RenderingContext gl,
@@ -80,6 +80,8 @@ public class Buffer<T> : IDisposable, IList<T>
         gl.BindBuffer(type, buffer);
         gl.BufferData(type, data.Length, usage);
         gl.BindBuffer(type, null);
+
+        dirty = new SparseIntegerSet();
     }
 
     protected virtual void Dispose(bool disposing)
@@ -108,12 +110,16 @@ public class Buffer<T> : IDisposable, IList<T>
     public void Bind()
     {
         gl.BindBuffer(Type, buffer);
-        if (dirty.HasValue)
+
+        if (!dirty.IsEmpty)
         {
-            var start = dirty.Value.Start.Value * Stride;
-            var end = dirty.Value.End.Value * Stride;
-            gl.BufferSubData(Type, start, data[start..end]);
-            dirty = null;
+            foreach (var range in dirty.Ranges)
+            {
+                var start = range.Start.Value * Stride;
+                var end = range.End.Value * Stride;
+                gl.BufferSubData(Type, start, data[start..end]);
+            }
+            dirty.Clear();
         }
     }
 
@@ -137,7 +143,9 @@ public class Buffer<T> : IDisposable, IList<T>
                 gl.BindBuffer(Type, buffer);
                 gl.BufferData(Type, data.Length, Usage);
                 gl.BindBuffer(Type, null);
-                dirty = 0..Count;
+
+                dirty.Clear();
+                dirty.Add(0..Count);
             }
         }
     }
@@ -153,11 +161,13 @@ public class Buffer<T> : IDisposable, IList<T>
             ArgumentOutOfRangeException.ThrowIfNegative(value);
             if (count != value)
             {
+                if (value > count)
+                {
+                    dirty.Add(count..value);
+                }
+
                 Capacity = Math.Max(Capacity, value);
                 count = value;
-
-                // TODO smarter dirty check, should only have to update when growing
-                dirty = 0..Count;
             }
         }
     }
@@ -191,17 +201,7 @@ public class Buffer<T> : IDisposable, IList<T>
                     Marshal.StructureToPtr(value!, (nint)ptr, false);
                 }
             }
-            // TODO helper method for dirty tracking?
-            if (dirty == null)
-            {
-                dirty = index..(index + 1);
-            }
-            else
-            {
-                int start = Math.Min(dirty.Value.Start.Value, index);
-                int end = Math.Max(dirty.Value.End.Value, index + 1);
-                dirty = start..end;
-            }
+            dirty.Add(index);
         }
     }
 

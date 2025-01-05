@@ -1,4 +1,5 @@
 ﻿using BlazorExperiments.Lib.WebGl;
+using System.Drawing;
 
 namespace BlazorExperiments.Lib.StateMachine;
 
@@ -14,7 +15,7 @@ public abstract class IState
         return Task.CompletedTask;
     }
 
-    public virtual Task<IState> ResizeAsync(WebGL2RenderingContext gl, int width, int height)
+    public virtual Task<IState> ResizeAsync(WebGL2RenderingContext gl, Size size)
     {
         return Task.FromResult(this);
     }
