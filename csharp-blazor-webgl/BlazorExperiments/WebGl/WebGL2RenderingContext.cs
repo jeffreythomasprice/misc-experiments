@@ -8,27 +8,39 @@ public class WebGL2RenderingContext
     public record class ShaderProgram(IJSInProcessObjectReference ObjRef);
     public record class Buffer(IJSInProcessObjectReference ObjRef);
 
+    // TODO enum
     public const int COLOR_BUFFER_BIT = 0x00004000;
 
-    public const int FRAGMENT_SHADER = 0x8B30;
-    public const int VERTEX_SHADER = 0x8B31;
+    public enum ShaderType
+    {
+        FRAGMENT_SHADER = 0x8B30,
+        VERTEX_SHADER = 0x8B31,
+    }
 
+    // TODO enum
     public const int COMPILE_STATUS = 0x8B81;
     public const int LINK_STATUS = 0x8B82;
 
-    public const int ARRAY_BUFFER = 0x8892;
-    public const int ELEMENT_ARRAY_BUFFER = 0x8893;
+    public enum BufferType
+    {
+        ARRAY_BUFFER = 0x8892,
+        ELEMENT_ARRAY_BUFFER = 0x8893,
+    }
 
-    public const int STATIC_DRAW = 0x88E4;
-    public const int STREAM_DRAW = 0x88E0;
-    public const int DYNAMIC_DRAW = 0x88E8;
-    public const int STREAM_READ = 0x88E1;
-    public const int STREAM_COPY = 0x88E2;
-    public const int STATIC_READ = 0x88E5;
-    public const int STATIC_COPY = 0x88E6;
-    public const int DYNAMIC_READ = 0x88E9;
-    public const int DYNAMIC_COPY = 0x88EA;
+    public enum BufferUsage
+    {
+        STATIC_DRAW = 0x88E4,
+        STREAM_DRAW = 0x88E0,
+        DYNAMIC_DRAW = 0x88E8,
+        STREAM_READ = 0x88E1,
+        STREAM_COPY = 0x88E2,
+        STATIC_READ = 0x88E5,
+        STATIC_COPY = 0x88E6,
+        DYNAMIC_READ = 0x88E9,
+        DYNAMIC_COPY = 0x88EA,
+    }
 
+    // TODO enum
     public const int BYTE = 0x1400;
     public const int UNSIGNED_BYTE = 0x1401;
     public const int SHORT = 0x1402;
@@ -37,6 +49,7 @@ public class WebGL2RenderingContext
     public const int UNSIGNED_INT = 0x1405;
     public const int FLOAT = 0x1406;
 
+    // TODO enum
     public const int POINTS = 0x0000;
     public const int LINES = 0x0001;
     public const int LINE_LOOP = 0x0002;
@@ -67,7 +80,7 @@ public class WebGL2RenderingContext
         objRef.InvokeVoid("clear", bits);
     }
 
-    public Shader CreateShader(int type)
+    public Shader CreateShader(ShaderType type)
     {
         return new Shader(objRef.Invoke<IJSInProcessObjectReference>("createShader", type));
     }
@@ -154,20 +167,39 @@ public class WebGL2RenderingContext
         objRef.InvokeVoid("deleteBuffer", buffer.ObjRef);
     }
 
-    public void BindBuffer(int type, Buffer? buffer)
+    public void BindBuffer(BufferType type, Buffer? buffer)
     {
         objRef.InvokeVoid("bindBuffer", type, buffer?.ObjRef);
     }
 
-    // TODO BufferData with size
+    public void BufferData(BufferType type, int size, BufferUsage usage)
+    {
+        objRef.InvokeVoid("bufferData", type, size, usage);
+    }
+
     // TODO BufferData with byte[]
 
-    public void BufferData(int type, float[] data, int usage)
+    public void BufferData(BufferType type, float[] data, BufferUsage usage)
     {
         objRef.InvokeVoid("bufferData_float32", type, data, usage);
     }
 
     // TODO BufferData with double[]
+
+    public void BufferSubData(BufferType type, int offset, byte[] data)
+    {
+        objRef.InvokeVoid("bufferSubData_uint8", type, offset, data);
+    }
+
+    public void BufferSubData(BufferType type, int offset, float[] data)
+    {
+        objRef.InvokeVoid("bufferSubData_float32", type, offset, data);
+    }
+
+    public void BufferSubData(BufferType type, int offset, double[] data)
+    {
+        objRef.InvokeVoid("bufferSubData_float64", type, offset, data);
+    }
 
     public void EnableVertexAttribArray(int i)
     {

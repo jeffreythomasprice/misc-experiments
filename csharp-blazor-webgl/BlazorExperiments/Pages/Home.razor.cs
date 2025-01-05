@@ -13,9 +13,9 @@ public partial class Home : ComponentBase
 
     private DotNetObjectReference<Home>? thisRef;
 
-    private WebGL2RenderingContext? context;
+    private WebGL2RenderingContext? gl;
     private Shader? shader;
-    private WebGL2RenderingContext.Buffer? arrayBuffer;
+    private Buffer<float>? arrayBuffer;
 
     public void Dispose()
     {
@@ -33,10 +33,10 @@ public partial class Home : ComponentBase
         {
             var jsInProcess = (IJSInProcessRuntime)JS;
             var module = await jsInProcess.InvokeAsync<IJSInProcessObjectReference>("import", "./js/experiment.js");
-            context = new WebGL2RenderingContext(module.Invoke<IJSInProcessObjectReference>("init", thisRef, Canvas));
+            gl = new WebGL2RenderingContext(module.Invoke<IJSInProcessObjectReference>("init", thisRef, Canvas));
 
             shader = new Shader(
-                context,
+                gl,
                 """
                 attribute vec2 positionAttribute;
 
@@ -51,45 +51,38 @@ public partial class Home : ComponentBase
                 """
             );
 
-            arrayBuffer = context.CreateBuffer();
-            context.BindBuffer(WebGL2RenderingContext.ARRAY_BUFFER, arrayBuffer);
-            context.BufferData(
-                WebGL2RenderingContext.ARRAY_BUFFER,
-                [
-                    -0.5f, -0.5f,
-                    0.5f, -0.5f,
-                    0.0f, 0.5f,
-                ],
-                WebGL2RenderingContext.STATIC_DRAW
-            );
-            context.BindBuffer(WebGL2RenderingContext.ARRAY_BUFFER, null);
+            arrayBuffer = new Buffer<float>(gl, WebGL2RenderingContext.BufferType.ARRAY_BUFFER, WebGL2RenderingContext.BufferUsage.STATIC_DRAW) {
+                -0.5f, -0.5f,
+                0.5f, -0.5f,
+                0.0f, 0.5f,
+            };
         }
     }
 
     [JSInvokable]
     public void Resize(int width, int height)
     {
-        context?.Viewport(0, 0, width, height);
+        gl?.Viewport(0, 0, width, height);
     }
 
     [JSInvokable]
     public void Anim(double time)
     {
-        if (context == null || shader == null)
+        if (gl == null || shader == null || arrayBuffer == null)
         {
             return;
         }
 
-        context.ClearColor(0.25, 0.5, 0.75, 1.0);
-        context.Clear(WebGL2RenderingContext.COLOR_BUFFER_BIT);
+        gl.ClearColor(0.25, 0.5, 0.75, 1.0);
+        gl.Clear(WebGL2RenderingContext.COLOR_BUFFER_BIT);
 
         shader.UseProgram();
 
         var positionAttribute = shader.GetAttribLocation("positionAttribute");
 
-        context.BindBuffer(WebGL2RenderingContext.ARRAY_BUFFER, arrayBuffer);
-        context.EnableVertexAttribArray(positionAttribute);
-        context.VertexAttribPointer(
+        arrayBuffer.Bind();
+        gl.EnableVertexAttribArray(positionAttribute);
+        gl.VertexAttribPointer(
             positionAttribute,
             2,
             WebGL2RenderingContext.FLOAT,
@@ -98,11 +91,11 @@ public partial class Home : ComponentBase
             0
         );
 
-        context.DrawArrays(WebGL2RenderingContext.TRIANGLES, 0, 3);
+        gl.DrawArrays(WebGL2RenderingContext.TRIANGLES, 0, 3);
 
-        context.DisableVertexAttribArray(positionAttribute);
-        context.BindBuffer(WebGL2RenderingContext.ARRAY_BUFFER, null);
+        gl.DisableVertexAttribArray(positionAttribute);
+        gl.BindBuffer(WebGL2RenderingContext.BufferType.ARRAY_BUFFER, null);
 
-        context.UseProgram(null);
+        gl.UseProgram(null);
     }
 }

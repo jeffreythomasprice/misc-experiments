@@ -8,10 +8,10 @@ public class Shader : IDisposable
 
     public Shader(WebGL2RenderingContext gl, string vertexSource, string fragmentSource)
     {
-        var vertexShader = CreateShader(gl, WebGL2RenderingContext.VERTEX_SHADER, vertexSource);
+        var vertexShader = CreateShader(gl, WebGL2RenderingContext.ShaderType.VERTEX_SHADER, vertexSource);
         try
         {
-            var fragmentShader = CreateShader(gl, WebGL2RenderingContext.FRAGMENT_SHADER, fragmentSource);
+            var fragmentShader = CreateShader(gl, WebGL2RenderingContext.ShaderType.FRAGMENT_SHADER, fragmentSource);
             try
             {
                 var program = gl.CreateProgram();
@@ -80,7 +80,7 @@ public class Shader : IDisposable
         }
     }
 
-    private static WebGL2RenderingContext.Shader CreateShader(WebGL2RenderingContext gl, int type, string source)
+    private static WebGL2RenderingContext.Shader CreateShader(WebGL2RenderingContext gl, WebGL2RenderingContext.ShaderType type, string source)
     {
         var result = gl.CreateShader(type);
         gl.ShaderSource(result, source);

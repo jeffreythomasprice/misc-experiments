@@ -24,5 +24,17 @@ export function init(dotNetObj, canvas) {
 		context.bufferData(type, new Float32Array(bytes), usage);
 	};
 
+	context.bufferSubData_uint8 = (type, offset, data) => {
+		context.bufferSubData(type, offset, new Uint8Array(data));
+	};
+
+	context.bufferSubData_float32 = (type, offset, data) => {
+		context.bufferSubData(type, offset, new Float32Array(data));
+	};
+
+	context.bufferSubData_float64 = (type, offset, data) => {
+		context.bufferSubData(type, offset, new Float64Array(data));
+	};
+
 	return context;
 }
