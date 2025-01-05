@@ -8,8 +8,10 @@ public class WebGL2RenderingContext
     public record class ShaderProgram(IJSInProcessObjectReference ObjRef);
     public record class Buffer(IJSInProcessObjectReference ObjRef);
 
-    // TODO enum
-    public const int COLOR_BUFFER_BIT = 0x00004000;
+    public enum ClearBuffer
+    {
+        COLOR_BUFFER_BIT = 0x00004000,
+    }
 
     public enum ShaderType
     {
@@ -17,9 +19,15 @@ public class WebGL2RenderingContext
         VERTEX_SHADER = 0x8B31,
     }
 
-    // TODO enum
-    public const int COMPILE_STATUS = 0x8B81;
-    public const int LINK_STATUS = 0x8B82;
+    public enum ShaderParameter
+    {
+        COMPILE_STATUS = 0x8B81,
+    }
+
+    public enum ShaderProgramParameter
+    {
+        LINK_STATUS = 0x8B82,
+    }
 
     public enum BufferType
     {
@@ -40,23 +48,27 @@ public class WebGL2RenderingContext
         DYNAMIC_COPY = 0x88EA,
     }
 
-    // TODO enum
-    public const int BYTE = 0x1400;
-    public const int UNSIGNED_BYTE = 0x1401;
-    public const int SHORT = 0x1402;
-    public const int UNSIGNED_SHORT = 0x1403;
-    public const int INT = 0x1404;
-    public const int UNSIGNED_INT = 0x1405;
-    public const int FLOAT = 0x1406;
+    public enum DataType
+    {
+        BYTE = 0x1400,
+        UNSIGNED_BYTE = 0x1401,
+        SHORT = 0x1402,
+        UNSIGNED_SHORT = 0x1403,
+        INT = 0x1404,
+        UNSIGNED_INT = 0x1405,
+        FLOAT = 0x1406,
+    }
 
-    // TODO enum
-    public const int POINTS = 0x0000;
-    public const int LINES = 0x0001;
-    public const int LINE_LOOP = 0x0002;
-    public const int LINE_STRIP = 0x0003;
-    public const int TRIANGLES = 0x0004;
-    public const int TRIANGLE_STRIP = 0x0005;
-    public const int TRIANGLE_FAN = 0x0006;
+    public enum DrawMode
+    {
+        POINTS = 0x0000,
+        LINES = 0x0001,
+        LINE_LOOP = 0x0002,
+        LINE_STRIP = 0x0003,
+        TRIANGLES = 0x0004,
+        TRIANGLE_STRIP = 0x0005,
+        TRIANGLE_FAN = 0x0006,
+    }
 
     private readonly IJSInProcessObjectReference objRef;
 
@@ -75,7 +87,7 @@ public class WebGL2RenderingContext
         objRef.InvokeVoid("clearColor", red, green, blue, alpha);
     }
 
-    public void Clear(int bits)
+    public void Clear(ClearBuffer bits)
     {
         objRef.InvokeVoid("clear", bits);
     }
@@ -100,7 +112,7 @@ public class WebGL2RenderingContext
         objRef.InvokeVoid("compileShader", shader.ObjRef);
     }
 
-    public T GetShaderParameter<T>(Shader shader, int pname)
+    public T GetShaderParameter<T>(Shader shader, ShaderParameter pname)
     {
         return objRef.Invoke<T>("getShaderParameter", shader.ObjRef, pname);
     }
@@ -135,7 +147,7 @@ public class WebGL2RenderingContext
         objRef.InvokeVoid("linkProgram", program.ObjRef);
     }
 
-    public T GetProgramParameter<T>(ShaderProgram program, int pname)
+    public T GetProgramParameter<T>(ShaderProgram program, ShaderProgramParameter pname)
     {
         return objRef.Invoke<T>("getProgramParameter", program.ObjRef, pname);
     }
@@ -211,15 +223,18 @@ public class WebGL2RenderingContext
         objRef.InvokeVoid("disableVertexAttribArray", i);
     }
 
-    public void VertexAttribPointer(int index, int size, int type, bool normalized, int stride, int offset)
+    public void VertexAttribPointer(int index, int size, DataType type, bool normalized, int stride, int offset)
     {
         objRef.InvokeVoid("vertexAttribPointer", index, size, type, normalized, stride, offset);
     }
 
-    public void DrawArrays(int mode, int first, int count)
+    public void DrawArrays(DrawMode mode, int first, int count)
     {
         objRef.InvokeVoid("drawArrays", mode, first, count);
     }
 
-    // TODO drawElements
+    public void DrawElements(DrawMode mode, int count, DataType type, int offset)
+    {
+        objRef.InvokeVoid("drawElements", mode, count, type, offset);
+    }
 }

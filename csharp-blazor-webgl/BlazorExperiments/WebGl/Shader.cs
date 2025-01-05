@@ -21,7 +21,7 @@ public class Shader : IDisposable
                 gl.DetachShader(program, vertexShader);
                 gl.DetachShader(program, fragmentShader);
 
-                if (!gl.GetProgramParameter<bool>(program, WebGL2RenderingContext.LINK_STATUS))
+                if (!gl.GetProgramParameter<bool>(program, WebGL2RenderingContext.ShaderProgramParameter.LINK_STATUS))
                 {
                     var log = gl.GetProgramInfoLog(program);
                     gl.DeleteProgram(program);
@@ -86,7 +86,7 @@ public class Shader : IDisposable
         gl.ShaderSource(result, source);
         gl.CompileShader(result);
 
-        if (!gl.GetShaderParameter<bool>(result, WebGL2RenderingContext.COMPILE_STATUS))
+        if (!gl.GetShaderParameter<bool>(result, WebGL2RenderingContext.ShaderParameter.COMPILE_STATUS))
         {
             var log = gl.GetShaderInfoLog(result);
             gl.DeleteShader(result);
