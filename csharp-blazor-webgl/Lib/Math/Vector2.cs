@@ -9,45 +9,64 @@ public struct Vector2<T> :
     IDivisionOperators<Vector2<T>, T, Vector2<T>>
     where T : INumber<T>
 {
-    public required T X { get; init; }
-    public required T Y { get; init; }
+    public readonly T X;
+    public readonly T Y;
+
+    public Vector2(T x, T y)
+    {
+        X = x;
+        Y = y;
+    }
 
     public static Vector2<T> operator +(Vector2<T> left, Vector2<T> right)
     {
-        return new()
-        {
-            X = left.X + right.X,
-            Y = left.Y + right.Y
-        };
+        return new(
+            left.X + right.X,
+            left.Y + right.Y
+        );
     }
 
     public static Vector2<T> operator -(Vector2<T> left, Vector2<T> right)
     {
-        return new()
-        {
-            X = left.X - right.X,
-            Y = left.Y - right.Y
-        };
+        return new(
+            left.X - right.X,
+            left.Y - right.Y
+        );
     }
 
     public static Vector2<T> operator *(Vector2<T> left, T right)
     {
-        return new()
-        {
-            X = left.X * right,
-            Y = left.Y * right
-        };
+        return new(
+            left.X * right,
+            left.Y * right
+        );
     }
 
     public static Vector2<T> operator /(Vector2<T> left, T right)
     {
-        return new()
-        {
-            X = left.X / right,
-            Y = left.Y / right
-        };
+        return new(
+            left.X / right,
+            left.Y / right
+        );
     }
 
-    // TODO magnitude
-    // TODO dot product
+    public T MagnitudeSquared => X * X + Y * Y;
+
+    public T DotProduct(Vector2<T> other)
+    {
+        return X * other.X + Y * other.Y;
+    }
+}
+
+public static class Vector2SqrtExtensions
+{
+    public static T GetMagnitude<T>(this Vector2<T> v) where T : INumber<T>, IRootFunctions<T>
+    {
+        return T.Sqrt(v.MagnitudeSquared);
+    }
+
+    public static Vector2<T> Normalized<T>(this Vector2<T> v) where T : INumber<T>, IRootFunctions<T>
+    {
+        return v / v.GetMagnitude();
+    }
 }

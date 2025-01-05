@@ -19,28 +19,40 @@ export function init(dotNetObj, canvas) {
 	};
 	requestAnimationFrame(time => anim(time));
 
-	context.bufferData_uint8 = (type, bytes, usage) => {
-		context.bufferData(type, new Uint8Array(bytes), usage);
+	context.getActiveInfoName = (activeInfo) => {
+		return activeInfo.name;
 	};
 
-	context.bufferData_float32 = (type, bytes, usage) => {
-		context.bufferData(type, new Float32Array(bytes), usage);
+	context.getActiveInfoType = (activeInfo) => {
+		return activeInfo.type;
 	};
 
-	context.bufferData_float64 = (type, bytes, usage) => {
-		context.bufferData(type, new Float64Array(bytes), usage);
+	context.getActiveInfoSize = (activeInfo) => {
+		return activeInfo.size;
 	};
 
-	context.bufferSubData_uint8 = (type, offset, data) => {
-		context.bufferSubData(type, offset, new Uint8Array(data));
+	context.bufferData_uint8 = (target, bytes, usage) => {
+		context.bufferData(target, new Uint8Array(bytes), usage);
 	};
 
-	context.bufferSubData_float32 = (type, offset, data) => {
-		context.bufferSubData(type, offset, new Float32Array(data));
+	context.bufferData_float32 = (target, bytes, usage) => {
+		context.bufferData(target, new Float32Array(bytes), usage);
 	};
 
-	context.bufferSubData_float64 = (type, offset, data) => {
-		context.bufferSubData(type, offset, new Float64Array(data));
+	context.bufferData_float64 = (target, bytes, usage) => {
+		context.bufferData(target, new Float64Array(bytes), usage);
+	};
+
+	context.bufferSubData_uint8 = (target, offset, data) => {
+		context.bufferSubData(target, offset, new Uint8Array(data));
+	};
+
+	context.bufferSubData_float32 = (target, offset, data) => {
+		context.bufferSubData(target, offset, new Float32Array(data));
+	};
+
+	context.bufferSubData_float64 = (target, offset, data) => {
+		context.bufferSubData(target, offset, new Float64Array(data));
 	};
 
 	return context;

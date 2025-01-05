@@ -2,9 +2,24 @@
 
 public class Shader : IDisposable
 {
+    public record class Attribute(WebGL2RenderingContext.ActiveInfo Info, int Location);
+
+    public record class Uniform(Shader shader, WebGL2RenderingContext.ActiveInfo Info, WebGL2RenderingContext.UniformLocation Location)
+    {
+        public void Set(int value)
+        {
+            shader.gl.Uniform1i(shader.program, Location, value);
+        }
+
+        // TODO more uniforms uniform[1234][fi][v]()
+    }
+
     private readonly WebGL2RenderingContext gl;
     private readonly WebGL2RenderingContext.ShaderProgram program;
     private bool disposedValue;
+
+    public readonly IReadOnlyDictionary<string, Attribute> Attributes;
+    public readonly IReadOnlyDictionary<string, Uniform> Uniforms;
 
     public Shader(WebGL2RenderingContext gl, string vertexSource, string fragmentSource)
     {
@@ -40,6 +55,24 @@ public class Shader : IDisposable
         {
             gl.DeleteShader(vertexShader);
         }
+
+        var attributes = new Dictionary<string, Attribute>();
+        for (var i = 0; i < gl.GetProgramParameter<int>(program, WebGL2RenderingContext.ShaderProgramParameter.ACTIVE_ATTRIBUTES); i++)
+        {
+            var info = gl.GetActiveAttrib(program, i);
+            var location = gl.GetAttribLocation(program, info.Name);
+            attributes.Add(info.Name, new(info, location));
+        }
+        this.Attributes = attributes;
+
+        var uniforms = new Dictionary<string, Uniform>();
+        for (var i = 0; i < gl.GetProgramParameter<int>(program, WebGL2RenderingContext.ShaderProgramParameter.ACTIVE_UNIFORMS); i++)
+        {
+            var info = gl.GetActiveUniform(program, i);
+            var location = gl.GetUniformLocation(program, info.Name);
+            uniforms.Add(info.Name, new(this, info, location));
+        }
+        this.Uniforms = uniforms;
     }
 
     ~Shader()
@@ -58,16 +91,6 @@ public class Shader : IDisposable
     public void UseProgram()
     {
         gl.UseProgram(program);
-    }
-
-    public int GetAttribLocation(string name)
-    {
-        var result = gl.GetAttribLocation(program, name);
-        if (result < 0)
-        {
-            throw new Exception($"no such attribute: {name}");
-        }
-        return result;
     }
 
     protected virtual void Dispose(bool disposing)

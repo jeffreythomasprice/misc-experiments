@@ -40,7 +40,7 @@ public class Buffer<T> : IDisposable, IList<T>
 
     public readonly int Stride = Marshal.SizeOf<T>();
 
-    public readonly WebGL2RenderingContext.BufferType Type;
+    public readonly WebGL2RenderingContext.BufferTarget Type;
     public readonly WebGL2RenderingContext.BufferUsage Usage;
 
     private readonly WebGL2RenderingContext gl;
@@ -55,7 +55,7 @@ public class Buffer<T> : IDisposable, IList<T>
 
     public Buffer(
         WebGL2RenderingContext gl,
-        WebGL2RenderingContext.BufferType type,
+        WebGL2RenderingContext.BufferTarget type,
         WebGL2RenderingContext.BufferUsage usage,
         int length = 0,
         int capacity = 0
