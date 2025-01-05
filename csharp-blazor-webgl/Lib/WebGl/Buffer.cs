@@ -134,7 +134,7 @@ public class Buffer<T> : IDisposable, IList<T>
             ArgumentOutOfRangeException.ThrowIfNegative(value);
             if (Capacity != value)
             {
-                count = Math.Min(count, value);
+                count = System.Math.Min(count, value);
 
                 var newData = new byte[Stride * value];
                 Array.Copy(data, newData, count * Stride);
@@ -166,7 +166,7 @@ public class Buffer<T> : IDisposable, IList<T>
                     dirty.Add(count..value);
                 }
 
-                Capacity = Math.Max(Capacity, value);
+                Capacity = System.Math.Max(Capacity, value);
                 count = value;
             }
         }

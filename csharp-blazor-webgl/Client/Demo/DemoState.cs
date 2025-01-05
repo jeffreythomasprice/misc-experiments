@@ -1,4 +1,5 @@
-﻿using BlazorExperiments.Lib.StateMachine;
+﻿using BlazorExperiments.Lib.Math;
+using BlazorExperiments.Lib.StateMachine;
 using BlazorExperiments.Lib.WebGl;
 using System.Drawing;
 using System.Runtime.InteropServices;
@@ -34,7 +35,7 @@ public class DemoState : IState
     public static IState Create()
     {
         return new WaitForPendingTaskState(
-            new SolidColorBackgroundState(0.75, 0.5, 0.25, 1.0),
+            new SolidColorBackgroundState(System.Drawing.Color.HotPink.ToRGBA().ToDouble()),
             (gl) =>
             {
                 var shader = new Shader(
@@ -96,7 +97,7 @@ public class DemoState : IState
 
     public override Task RenderAsync(WebGL2RenderingContext gl)
     {
-        gl.ClearColor(0.25, 0.5, 0.75, 1.0);
+        gl.ClearColor(System.Drawing.Color.SeaShell.ToRGBA().ToDouble());
         gl.Clear(WebGL2RenderingContext.ClearBuffer.COLOR_BUFFER_BIT);
 
         shader.UseProgram();

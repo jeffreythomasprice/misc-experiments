@@ -1,4 +1,5 @@
-﻿using Microsoft.JSInterop;
+﻿using BlazorExperiments.Lib.Math;
+using Microsoft.JSInterop;
 
 namespace BlazorExperiments.Lib.WebGl;
 
@@ -85,6 +86,11 @@ public class WebGL2RenderingContext
     public void ClearColor(double red, double green, double blue, double alpha)
     {
         objRef.InvokeVoid("clearColor", red, green, blue, alpha);
+    }
+
+    public void ClearColor(ColorRGBA<double> color)
+    {
+        ClearColor(color.Red, color.Green, color.Blue, color.Alpha);
     }
 
     public void Clear(ClearBuffer bits)
