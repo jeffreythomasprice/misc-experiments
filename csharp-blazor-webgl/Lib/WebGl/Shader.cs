@@ -1,4 +1,4 @@
-﻿namespace BlazorExperiments.WebGl;
+﻿namespace BlazorExperiments.Lib.WebGl;
 
 public class Shader : IDisposable
 {

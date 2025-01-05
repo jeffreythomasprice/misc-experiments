@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @param {HTMLCanvasElement} canvas
  */
 export function init(dotNetObj, canvas) {

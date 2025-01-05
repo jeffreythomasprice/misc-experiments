@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Runtime.InteropServices;
 
-namespace BlazorExperiments.WebGl;
+namespace BlazorExperiments.Lib.WebGl;
 
 public class Buffer<T> : IDisposable, IList<T>
 {

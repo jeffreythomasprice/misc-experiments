@@ -1,4 +1,4 @@
-using BlazorExperiments;
+using BlazorExperiments.Client;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 

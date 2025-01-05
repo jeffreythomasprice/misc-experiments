@@ -1,6 +1,6 @@
 ﻿using Microsoft.JSInterop;
 
-namespace BlazorExperiments.WebGl;
+namespace BlazorExperiments.Lib.WebGl;
 
 public class WebGL2RenderingContext
 {
