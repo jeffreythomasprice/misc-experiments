@@ -337,12 +337,19 @@ public class WebGL2RenderingContext
         return new(objRef.Invoke<IJSInProcessObjectReference>("getUniformLocation", program.ObjRef, name));
     }
 
-    public void Uniform1i(ShaderProgram program, UniformLocation location, int value)
+    public void Uniform1i(UniformLocation location, int value)
     {
         objRef.InvokeVoid("uniform1i", location.ObjRef, value);
     }
 
     // TODO more uniforms uniform[1234][fi][v]()
+
+    // TODO uniformMatrix[23]fv
+
+    public void UniformMatrix4fv(UniformLocation location, bool transpose, float[] value)
+    {
+        objRef.InvokeVoid("uniformMatrix4fv", location.ObjRef, transpose, value);
+    }
 
     public void UseProgram(ShaderProgram? program)
     {

@@ -27,7 +27,11 @@ public class DemoState : IState
 
     private readonly Shader.Attribute positionAttribute;
     private readonly Shader.Attribute textureCoordinateAttribute;
+    private readonly Shader.Uniform projectionMatrixUniform;
+    private readonly Shader.Uniform modelViewMatrixUniform;
     private readonly Shader.Uniform samplerUniform;
+
+    private Matrix4<float> orthoMatrix;
 
     public static IState Create()
     {
@@ -41,10 +45,13 @@ public class DemoState : IState
                     attribute vec2 positionAttribute;
                     attribute vec2 textureCoordinateAttribute;
 
+                    uniform mat4 projectionMatrixUniform;
+                    uniform mat4 modelViewMatrixUniform;
+
                     varying vec2 textureCoordinateVarying;
 
                     void main() {
-                        gl_Position = vec4(positionAttribute, 0, 1);
+                        gl_Position = projectionMatrixUniform * modelViewMatrixUniform * vec4(positionAttribute, 0, 1);
                         textureCoordinateVarying = textureCoordinateAttribute;
                     }
                     """,
@@ -76,10 +83,10 @@ public class DemoState : IState
 
                 var arrayBuffer = new Buffer<Vertex>(gl, WebGL2RenderingContext.BufferTarget.ARRAY_BUFFER, WebGL2RenderingContext.BufferUsage.STATIC_DRAW)
                 {
-                    new (new( -0.5f, -0.5f ), new(0,0)),
-                    new (new( -0.5f, +0.5f ), new(0,1)),
-                    new (new( +0.5f, +0.5f ), new(1,1)),
-                    new (new( +0.5f, -0.5f ), new(1,0)),
+                    new (new(50,50), new(0,0)),
+                    new (new(50,400), new(0,1)),
+                    new (new(400,400), new(1,1)),
+                    new (new(400,50), new(1,0)),
                 };
 
                 var elementArrayBuffer = new Buffer<ushort>(gl, WebGL2RenderingContext.BufferTarget.ELEMENT_ARRAY_BUFFER, WebGL2RenderingContext.BufferUsage.STATIC_DRAW)
@@ -102,12 +109,16 @@ public class DemoState : IState
 
         positionAttribute = shader.Attributes["positionAttribute"];
         textureCoordinateAttribute = shader.Attributes["textureCoordinateAttribute"];
+        projectionMatrixUniform = shader.Uniforms["projectionMatrixUniform"];
+        modelViewMatrixUniform = shader.Uniforms["modelViewMatrixUniform"];
         samplerUniform = shader.Uniforms["samplerUniform"];
     }
 
     public override Task<IState> ResizeAsync(WebGL2RenderingContext gl, Size size)
     {
         gl.Viewport(0, 0, size.Width, size.Height);
+
+        orthoMatrix = Matrix4<float>.CreateOrtho(0, size.Width, size.Height, 0, -1, 1);
 
         return Task.FromResult<IState>(this);
     }
@@ -118,6 +129,11 @@ public class DemoState : IState
         gl.Clear(WebGL2RenderingContext.ClearBuffer.COLOR_BUFFER_BIT);
 
         shader.UseProgram();
+
+        // TODO tests involving perspective and lookat matricies
+
+        projectionMatrixUniform.Set(true, orthoMatrix);
+        modelViewMatrixUniform.Set(false, Matrix4<float>.Identity);
 
         gl.ActiveTexture(WebGL2RenderingContext.ActiveTextureIndex.TEXTURE0);
         samplerUniform.Set(0);

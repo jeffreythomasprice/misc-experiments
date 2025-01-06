@@ -6,7 +6,8 @@ public struct Vector2<T> :
     IAdditionOperators<Vector2<T>, Vector2<T>, Vector2<T>>,
     ISubtractionOperators<Vector2<T>, Vector2<T>, Vector2<T>>,
     IMultiplyOperators<Vector2<T>, T, Vector2<T>>,
-    IDivisionOperators<Vector2<T>, T, Vector2<T>>
+    IDivisionOperators<Vector2<T>, T, Vector2<T>>,
+    IUnaryNegationOperators<Vector2<T>, Vector2<T>>
     where T : INumber<T>
 {
     public readonly T X;
@@ -48,6 +49,11 @@ public struct Vector2<T> :
             left.X / right,
             left.Y / right
         );
+    }
+
+    public static Vector2<T> operator -(Vector2<T> value)
+    {
+        return new(-value.X, -value.Y);
     }
 
     public T MagnitudeSquared => X * X + Y * Y;

@@ -1,17 +1,26 @@
-﻿namespace BlazorExperiments.Lib.WebGl;
+﻿using BlazorExperiments.Lib.Math;
+
+namespace BlazorExperiments.Lib.WebGl;
 
 public class Shader : IDisposable
 {
     public record class Attribute(WebGL2RenderingContext.ActiveInfo Info, int Location);
 
-    public record class Uniform(Shader shader, WebGL2RenderingContext.ActiveInfo Info, WebGL2RenderingContext.UniformLocation Location)
+    public record class Uniform(WebGL2RenderingContext gl, WebGL2RenderingContext.ActiveInfo Info, WebGL2RenderingContext.UniformLocation Location)
     {
         public void Set(int value)
         {
-            shader.gl.Uniform1i(shader.program, Location, value);
+            gl.Uniform1i(Location, value);
         }
 
         // TODO more uniforms uniform[1234][fi][v]()
+
+        // TODO uniformMatrix[23]fv
+
+        public void Set(bool transpose, Matrix4<float> value)
+        {
+            gl.UniformMatrix4fv(Location, transpose, value.Data.ToArray());
+        }
     }
 
     private readonly WebGL2RenderingContext gl;
@@ -70,7 +79,7 @@ public class Shader : IDisposable
         {
             var info = gl.GetActiveUniform(program, i);
             var location = gl.GetUniformLocation(program, info.Name);
-            uniforms.Add(info.Name, new(this, info, location));
+            uniforms.Add(info.Name, new(gl, info, location));
         }
         this.Uniforms = uniforms;
     }
