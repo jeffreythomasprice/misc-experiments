@@ -10,10 +10,10 @@ public class DemoState : IState
 {
     private struct Vertex
     {
-        public readonly Vector2<float> Position;
+        public readonly Vector3<float> Position;
         public readonly Vector2<float> TextureCoordinate;
 
-        public Vertex(Vector2<float> position, Vector2<float> textureCoordinate)
+        public Vertex(Vector3<float> position, Vector2<float> textureCoordinate)
         {
             Position = position;
             TextureCoordinate = textureCoordinate;
@@ -32,6 +32,9 @@ public class DemoState : IState
     private readonly Shader.Uniform samplerUniform;
 
     private Matrix4<float> orthoMatrix;
+    private Matrix4<float> perspectiveMatrix;
+
+    private float rotation;
 
     public static IState Create()
     {
@@ -42,7 +45,7 @@ public class DemoState : IState
                 var shader = new Shader(
                     gl,
                     """
-                    attribute vec2 positionAttribute;
+                    attribute vec3 positionAttribute;
                     attribute vec2 textureCoordinateAttribute;
 
                     uniform mat4 projectionMatrixUniform;
@@ -51,7 +54,7 @@ public class DemoState : IState
                     varying vec2 textureCoordinateVarying;
 
                     void main() {
-                        gl_Position = projectionMatrixUniform * modelViewMatrixUniform * vec4(positionAttribute, 0, 1);
+                        gl_Position = projectionMatrixUniform * modelViewMatrixUniform * vec4(positionAttribute, 1);
                         textureCoordinateVarying = textureCoordinateAttribute;
                     }
                     """,
@@ -81,12 +84,15 @@ public class DemoState : IState
                 }
                 var texture = new Texture(gl, textureSize, texturePixels);
 
+                var textureAspectRatioHeight = 1.0f;
+                var textureAspectRatioWidth = textureAspectRatioHeight * (float)textureSize.Width / (float)textureSize.Height;
+
                 var arrayBuffer = new Buffer<Vertex>(gl, WebGL2RenderingContext.BufferTarget.ARRAY_BUFFER, WebGL2RenderingContext.BufferUsage.STATIC_DRAW)
                 {
-                    new (new(50,50), new(0,0)),
-                    new (new(50,400), new(0,1)),
-                    new (new(400,400), new(1,1)),
-                    new (new(400,50), new(1,0)),
+                    new (new(-textureAspectRatioWidth, -textureAspectRatioHeight, 0), new(0,0)),
+                    new (new(-textureAspectRatioWidth, +textureAspectRatioHeight, 0), new(0,1)),
+                    new (new(+textureAspectRatioWidth, +textureAspectRatioHeight, 0), new(1,1)),
+                    new (new(+textureAspectRatioWidth, -textureAspectRatioHeight, 0), new(1,0)),
                 };
 
                 var elementArrayBuffer = new Buffer<ushort>(gl, WebGL2RenderingContext.BufferTarget.ELEMENT_ARRAY_BUFFER, WebGL2RenderingContext.BufferUsage.STATIC_DRAW)
@@ -119,6 +125,14 @@ public class DemoState : IState
         gl.Viewport(0, 0, size.Width, size.Height);
 
         orthoMatrix = Matrix4<float>.CreateOrtho(0, size.Width, size.Height, 0, -1, 1);
+        perspectiveMatrix = Matrix4<float>.CreatePerspective(60f * MathF.PI / 180.0f, size.Width, size.Height, 0.01f, 1000.0f);
+
+        return Task.FromResult<IState>(this);
+    }
+
+    public override Task<IState> UpdateAsync(WebGL2RenderingContext gl, TimeSpan timeSpan)
+    {
+        rotation = (rotation + 90.0f * MathF.PI / 180.0f * (float)timeSpan.TotalSeconds) % (MathF.PI * 2);
 
         return Task.FromResult<IState>(this);
     }
@@ -130,10 +144,14 @@ public class DemoState : IState
 
         shader.UseProgram();
 
-        // TODO tests involving perspective and lookat matricies
-
-        projectionMatrixUniform.Set(true, orthoMatrix);
-        modelViewMatrixUniform.Set(false, Matrix4<float>.Identity);
+        projectionMatrixUniform.Set(true, perspectiveMatrix);
+        // TODO lookat camera
+        modelViewMatrixUniform.Set(
+            false,
+            Matrix4<float>.Identity
+                .Translate(new(0, 0, -6))
+                .Rotate(new(0, 1, 0), rotation)
+        );
 
         gl.ActiveTexture(WebGL2RenderingContext.ActiveTextureIndex.TEXTURE0);
         samplerUniform.Set(0);
@@ -142,10 +160,11 @@ public class DemoState : IState
         arrayBuffer.Bind();
         elementArrayBuffer.Bind();
 
+        // TODO helpers for vertex attributes
         gl.EnableVertexAttribArray(positionAttribute.Location);
         gl.VertexAttribPointer(
             positionAttribute.Location,
-            2,
+            3,
             WebGL2RenderingContext.DataType.FLOAT,
             false,
             Marshal.SizeOf<Vertex>(),
