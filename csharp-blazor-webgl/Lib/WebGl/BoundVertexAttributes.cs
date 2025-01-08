@@ -12,14 +12,12 @@ public class BoundVertexAttributes<T>
     );
 
     private readonly WebGL2RenderingContext gl;
-    private readonly Shader shader;
     private readonly int stride;
     private readonly List<Item> items;
 
     public BoundVertexAttributes(WebGL2RenderingContext gl, Shader shader)
     {
         this.gl = gl;
-        this.shader = shader;
         stride = Marshal.SizeOf<T>();
 
         var items = new List<Item>();
@@ -43,7 +41,7 @@ public class BoundVertexAttributes<T>
         }
     }
 
-    public void UseShaderAndEnableVertexAttributes()
+    public void Enable()
     {
         foreach (var item in items)
         {
@@ -57,16 +55,14 @@ public class BoundVertexAttributes<T>
                 item.Offset
             );
         }
-        shader.UseProgram();
     }
 
-    public void DisableVertexAttributesAndUseNoShader()
+    public void Disable()
     {
         foreach (var item in items)
         {
             gl.DisableVertexAttribArray(item.ShaderAttribute.Location);
         }
-        gl.UseProgram(null);
     }
 
     private static Shader.Attribute FindShaderAttribute(Shader shader, string name)

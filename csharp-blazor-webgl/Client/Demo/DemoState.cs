@@ -141,10 +141,12 @@ public class DemoState : IState
         gl.ClearColor(System.Drawing.Color.SkyBlue.ToRGBA().ToDouble());
         gl.Clear(WebGL2RenderingContext.ClearBuffer.COLOR_BUFFER_BIT);
 
+        shader.UseProgram();
+
         arrayBuffer.Bind();
         elementArrayBuffer.Bind();
 
-        vertexAttributes.UseShaderAndEnableVertexAttributes();
+        vertexAttributes.Enable();
 
         projectionMatrixUniform.Set(true, perspectiveMatrix);
         modelViewMatrixUniform.Set(
@@ -163,12 +165,14 @@ public class DemoState : IState
 
         gl.DrawElements(WebGL2RenderingContext.DrawMode.TRIANGLES, elementArrayBuffer.Count, WebGL2RenderingContext.DataType.UNSIGNED_SHORT, 0);
 
-        vertexAttributes.DisableVertexAttributesAndUseNoShader();
+        vertexAttributes.Disable();
 
         gl.BindBuffer(WebGL2RenderingContext.BufferTarget.ARRAY_BUFFER, null);
         gl.BindBuffer(WebGL2RenderingContext.BufferTarget.ELEMENT_ARRAY_BUFFER, null);
 
         gl.BindTexture(WebGL2RenderingContext.TextureTarget.TEXTURE_2D, null);
+
+        gl.UseProgram(null);
 
         return Task.CompletedTask;
     }
