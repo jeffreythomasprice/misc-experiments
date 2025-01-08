@@ -2,96 +2,8 @@
 using BlazorExperiments.Lib.StateMachine;
 using BlazorExperiments.Lib.WebGl;
 using System.Drawing;
-using System.Reflection;
-using System.Runtime.InteropServices;
 
 namespace BlazorExperiments.Client.Demo;
-
-// TODO move me
-[AttributeUsage(AttributeTargets.Field)]
-public class VertexAttribute : Attribute
-{
-    // TODO make name optional, guess based on prop name
-    public readonly string Name;
-    public readonly int Size;
-    public readonly WebGL2RenderingContext.DataType DataType;
-    public readonly bool Normalized;
-
-    public VertexAttribute(string name, int size, WebGL2RenderingContext.DataType dataType, bool normalized)
-    {
-        Name = name;
-        Size = size;
-        DataType = dataType;
-        Normalized = normalized;
-    }
-}
-
-// TODO move me
-public class BoundVertexAttributes<T>
-{
-    private record class Item(
-        VertexAttribute VertexAttribute,
-        Shader.Attribute ShaderAttribute,
-        int Offset
-    );
-
-    private readonly WebGL2RenderingContext gl;
-    private readonly Shader shader;
-    private readonly int stride;
-    private readonly List<Item> items;
-
-    public BoundVertexAttributes(WebGL2RenderingContext gl, Shader shader)
-    {
-        this.gl = gl;
-        this.shader = shader;
-        stride = Marshal.SizeOf<T>();
-
-        Console.WriteLine($"TODO DoStuff {typeof(T)}");
-        var items = new List<Item>();
-        foreach (var f in typeof(T).GetFields())
-        {
-            Console.WriteLine($"TODO f = {f}");
-            var vertexAttribute = f.GetCustomAttribute<VertexAttribute>();
-            if (vertexAttribute != null)
-            {
-                Console.WriteLine($"TODO this has vertex attribute stuff, {vertexAttribute.Name}, {vertexAttribute.Size}, {vertexAttribute.DataType}, {vertexAttribute.Normalized}");
-                var shaderAttribute = shader.Attributes[vertexAttribute.Name];
-                if (shaderAttribute == null)
-                {
-                    throw new NullReferenceException($"no such shader attribute {vertexAttribute.Name}");
-                }
-                items.Add(new(vertexAttribute, shaderAttribute, (int)Marshal.OffsetOf<T>(f.Name)));
-            }
-        }
-        this.items = items;
-    }
-
-    public void UseShaderAndEnableVertexAttributes()
-    {
-        foreach (var item in items)
-        {
-            gl.EnableVertexAttribArray(item.ShaderAttribute.Location);
-            gl.VertexAttribPointer(
-                item.ShaderAttribute.Location,
-                item.VertexAttribute.Size,
-                item.VertexAttribute.DataType,
-                item.VertexAttribute.Normalized,
-                stride,
-                item.Offset
-            );
-        }
-        shader.UseProgram();
-    }
-
-    public void DisableVertexAttributesAndUseNoShader()
-    {
-        foreach (var item in items)
-        {
-            gl.DisableVertexAttribArray(item.ShaderAttribute.Location);
-        }
-        gl.UseProgram(null);
-    }
-}
 
 public class DemoState : IState
 {
@@ -110,13 +22,11 @@ public class DemoState : IState
     }
 
     private readonly Shader shader;
-    private readonly BoundVertexAttributes<Vertex> vertexAttributes;
     private readonly Texture texture;
     private readonly Buffer<Vertex> arrayBuffer;
     private readonly Buffer<ushort> elementArrayBuffer;
 
-    private readonly Shader.Attribute positionAttribute;
-    private readonly Shader.Attribute textureCoordinateAttribute;
+    private readonly BoundVertexAttributes<Vertex> vertexAttributes;
     private readonly Shader.Uniform projectionMatrixUniform;
     private readonly Shader.Uniform modelViewMatrixUniform;
     private readonly Shader.Uniform samplerUniform;
@@ -161,8 +71,6 @@ public class DemoState : IState
                     """
                 );
 
-                var vertexAttributes = new BoundVertexAttributes<Vertex>(gl, shader);
-
                 var textureSize = new Size(256, 256);
                 var texturePixels = new ColorRGBA<byte>[textureSize.Width * textureSize.Height];
                 for (var y = 0; y < textureSize.Height; y++)
@@ -193,21 +101,19 @@ public class DemoState : IState
                     2,3,0,
                 };
 
-                return Task.FromResult<IState>(new DemoState(shader, vertexAttributes, texture, arrayBuffer, elementArrayBuffer));
+                return Task.FromResult<IState>(new DemoState(gl, shader, texture, arrayBuffer, elementArrayBuffer));
             }
         );
     }
 
-    private DemoState(Shader shader, BoundVertexAttributes<Vertex> vertexAttributes, Texture texture, Buffer<Vertex> arrayBuffer, Buffer<ushort> elementArrayBuffer)
+    private DemoState(WebGL2RenderingContext gl, Shader shader, Texture texture, Buffer<Vertex> arrayBuffer, Buffer<ushort> elementArrayBuffer)
     {
         this.shader = shader;
-        this.vertexAttributes = vertexAttributes;
         this.texture = texture;
         this.arrayBuffer = arrayBuffer;
         this.elementArrayBuffer = elementArrayBuffer;
 
-        positionAttribute = shader.Attributes["positionAttribute"];
-        textureCoordinateAttribute = shader.Attributes["textureCoordinateAttribute"];
+        vertexAttributes = new BoundVertexAttributes<Vertex>(gl, shader);
         projectionMatrixUniform = shader.Uniforms["projectionMatrixUniform"];
         modelViewMatrixUniform = shader.Uniforms["modelViewMatrixUniform"];
         samplerUniform = shader.Uniforms["samplerUniform"];
@@ -241,11 +147,13 @@ public class DemoState : IState
         vertexAttributes.UseShaderAndEnableVertexAttributes();
 
         projectionMatrixUniform.Set(true, perspectiveMatrix);
-        // TODO lookat camera
         modelViewMatrixUniform.Set(
             false,
-            Matrix4<float>.Identity
-                .Translate(new(0, 0, -6))
+            Matrix4<float>.CreateLookAt(
+                new(0, 0, 6),
+                new(0, 0, 0),
+                new(0, 1, 0)
+            )
                 .Rotate(new(0, 1, 0), rotation)
         );
 
