@@ -5,52 +5,52 @@ namespace BlazorExperiments.Lib.StateMachine;
 
 public abstract class IState
 {
-    public virtual Task ActivateAsync(WebGL2RenderingContext gl)
+    public virtual Task ActivateAsync(StateMachine sm, WebGL2RenderingContext gl)
     {
         return Task.CompletedTask;
     }
 
-    public virtual Task DeactivateAsync(WebGL2RenderingContext gl)
+    public virtual Task DeactivateAsync(StateMachine sm, WebGL2RenderingContext gl)
     {
         return Task.CompletedTask;
     }
 
-    public virtual Task<IState> ResizeAsync(WebGL2RenderingContext gl, Size size)
+    public virtual Task<IState> ResizeAsync(StateMachine sm, WebGL2RenderingContext gl, Size size)
     {
         return Task.FromResult(this);
     }
 
-    public virtual Task<IState> UpdateAsync(WebGL2RenderingContext gl, TimeSpan timeSpan)
+    public virtual Task<IState> UpdateAsync(StateMachine sm, WebGL2RenderingContext gl, TimeSpan timeSpan)
     {
         return Task.FromResult(this);
     }
 
-    public virtual Task RenderAsync(WebGL2RenderingContext gl)
+    public virtual Task RenderAsync(StateMachine sm, WebGL2RenderingContext gl)
     {
         return Task.CompletedTask;
     }
 
-    public virtual Task MouseDown(MouseEvent e)
+    public virtual Task MouseDown(StateMachine sm, MouseEvent e)
     {
         return Task.CompletedTask;
     }
 
-    public virtual Task MouseUp(MouseEvent e)
+    public virtual Task MouseUp(StateMachine sm, MouseEvent e)
     {
         return Task.CompletedTask;
     }
 
-    public virtual Task MouseMove(MouseMoveEvent e)
+    public virtual Task MouseMove(StateMachine sm, MouseMoveEvent e)
     {
         return Task.CompletedTask;
     }
 
-    public virtual Task KeyDown(KeyEvent e)
+    public virtual Task KeyDown(StateMachine sm, KeyEvent e)
     {
         return Task.CompletedTask;
     }
 
-    public virtual Task KeyUp(KeyEvent e)
+    public virtual Task KeyUp(StateMachine sm, KeyEvent e)
     {
         return Task.CompletedTask;
     }

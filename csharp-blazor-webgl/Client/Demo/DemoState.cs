@@ -127,7 +127,7 @@ public class DemoState : IState
         samplerUniform = shader.Uniforms["samplerUniform"];
     }
 
-    public override Task<IState> ResizeAsync(WebGL2RenderingContext gl, Size size)
+    public override Task<IState> ResizeAsync(StateMachine sm, WebGL2RenderingContext gl, Size size)
     {
         gl.Viewport(0, 0, size.Width, size.Height);
 
@@ -137,14 +137,14 @@ public class DemoState : IState
         return Task.FromResult<IState>(this);
     }
 
-    public override Task<IState> UpdateAsync(WebGL2RenderingContext gl, TimeSpan timeSpan)
+    public override Task<IState> UpdateAsync(StateMachine sm, WebGL2RenderingContext gl, TimeSpan timeSpan)
     {
         rotation = (rotation + 90.0f * MathF.PI / 180.0f * (float)timeSpan.TotalSeconds) % (MathF.PI * 2);
 
         return Task.FromResult<IState>(this);
     }
 
-    public override Task RenderAsync(WebGL2RenderingContext gl)
+    public override Task RenderAsync(StateMachine sm, WebGL2RenderingContext gl)
     {
         gl.ClearColor(System.Drawing.Color.SkyBlue.ToRGBA().ToDouble());
         gl.Clear(WebGL2RenderingContext.ClearBuffer.COLOR_BUFFER_BIT);
@@ -185,31 +185,35 @@ public class DemoState : IState
         return Task.CompletedTask;
     }
 
-    public override Task MouseDown(MouseEvent e)
+    public override Task MouseDown(StateMachine sm, MouseEvent e)
     {
         Console.WriteLine($"TODO DemoState, MouseDown, {e}");
+        if (e.Button == 0)
+        {
+            sm.IsPointerLocked = !sm.IsPointerLocked;
+        }
         return Task.CompletedTask;
     }
 
-    public override Task MouseUp(MouseEvent e)
+    public override Task MouseUp(StateMachine sm, MouseEvent e)
     {
         Console.WriteLine($"TODO DemoState, MouseUp, {e}");
         return Task.CompletedTask;
     }
 
-    public override Task MouseMove(MouseMoveEvent e)
+    public override Task MouseMove(StateMachine sm, MouseMoveEvent e)
     {
         Console.WriteLine($"TODO DemoState, MouseMove, {e}");
         return Task.CompletedTask;
     }
 
-    public override Task KeyDown(KeyEvent e)
+    public override Task KeyDown(StateMachine sm, KeyEvent e)
     {
         Console.WriteLine($"TODO DemoState, KeyDown, {e}");
         return Task.CompletedTask;
     }
 
-    public override Task KeyUp(KeyEvent e)
+    public override Task KeyUp(StateMachine sm, KeyEvent e)
     {
         Console.WriteLine($"TODO DemoState, KeyUp, {e}");
         return Task.CompletedTask;

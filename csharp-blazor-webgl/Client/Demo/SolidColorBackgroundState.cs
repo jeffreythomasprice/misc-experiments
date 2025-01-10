@@ -13,7 +13,7 @@ public class SolidColorBackgroundState : IState
         this.color = color;
     }
 
-    public override Task RenderAsync(WebGL2RenderingContext gl)
+    public override Task RenderAsync(StateMachine sm, WebGL2RenderingContext gl)
     {
         gl.ClearColor(color);
         gl.Clear(WebGL2RenderingContext.ClearBuffer.COLOR_BUFFER_BIT);

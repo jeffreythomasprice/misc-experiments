@@ -5,13 +5,15 @@ namespace BlazorExperiments.Lib.StateMachine;
 
 public class StateMachine : IAsyncDisposable
 {
+    private readonly Canvas canvas;
     private readonly WebGL2RenderingContext gl;
     private IState? currentState;
     private TimeSpan? lastAnim;
     private Size? size;
 
-    private StateMachine(WebGL2RenderingContext gl, IState initialState)
+    private StateMachine(Canvas canvas, WebGL2RenderingContext gl, IState initialState)
     {
+        this.canvas = canvas;
         this.gl = gl;
         currentState = initialState;
     }
@@ -20,15 +22,22 @@ public class StateMachine : IAsyncDisposable
     {
         if (currentState != null)
         {
-            await currentState.DeactivateAsync(gl);
+            await currentState.DeactivateAsync(this, gl);
             currentState = null;
         }
     }
 
-    public static async Task<StateMachine> Create(WebGL2RenderingContext gl, IState initialState)
+    public static async Task<StateMachine> Create(Canvas canvas, WebGL2RenderingContext gl, IState initialState)
     {
-        await initialState.ActivateAsync(gl);
-        return new StateMachine(gl, initialState);
+        var result = new StateMachine(canvas, gl, initialState);
+        await initialState.ActivateAsync(result, gl);
+        return result;
+    }
+
+    public bool IsPointerLocked
+    {
+        get => canvas.IsPointerLocked;
+        set => canvas.IsPointerLocked = value;
     }
 
     public async Task ResizeAsync(Size size)
@@ -36,7 +45,7 @@ public class StateMachine : IAsyncDisposable
         this.size = size;
         if (currentState != null)
         {
-            await PossibleSwitchTo(await currentState.ResizeAsync(gl, size));
+            await PossibleSwitchTo(await currentState.ResizeAsync(this, gl, size));
         }
     }
 
@@ -47,11 +56,11 @@ public class StateMachine : IAsyncDisposable
             if (lastAnim != null)
             {
                 var delta = timeSpan - lastAnim.Value;
-                await PossibleSwitchTo(await currentState.UpdateAsync(gl, delta));
+                await PossibleSwitchTo(await currentState.UpdateAsync(this, gl, delta));
             }
             lastAnim = timeSpan;
 
-            await currentState.RenderAsync(gl);
+            await currentState.RenderAsync(this, gl);
         }
     }
 
@@ -60,7 +69,7 @@ public class StateMachine : IAsyncDisposable
         // TODO keep track of button states
         if (currentState != null)
         {
-            await currentState.MouseDown(e);
+            await currentState.MouseDown(this, e);
         }
     }
 
@@ -69,7 +78,7 @@ public class StateMachine : IAsyncDisposable
         // TODO keep track of button states
         if (currentState != null)
         {
-            await currentState.MouseUp(e);
+            await currentState.MouseUp(this, e);
         }
     }
 
@@ -77,7 +86,7 @@ public class StateMachine : IAsyncDisposable
     {
         if (currentState != null)
         {
-            await currentState.MouseMove(e);
+            await currentState.MouseMove(this, e);
         }
     }
 
@@ -86,7 +95,7 @@ public class StateMachine : IAsyncDisposable
         // TODO keep track of key states
         if (currentState != null)
         {
-            await currentState.KeyDown(e);
+            await currentState.KeyDown(this, e);
         }
     }
 
@@ -95,7 +104,7 @@ public class StateMachine : IAsyncDisposable
         // TODO keep track of key states
         if (currentState != null)
         {
-            await currentState.KeyUp(e);
+            await currentState.KeyUp(this, e);
         }
     }
 
@@ -103,16 +112,16 @@ public class StateMachine : IAsyncDisposable
     {
         if (nextState != currentState)
         {
-            await nextState.ActivateAsync(gl);
+            await nextState.ActivateAsync(this, gl);
             if (currentState != null)
             {
-                await currentState.DeactivateAsync(gl);
+                await currentState.DeactivateAsync(this, gl);
             }
             currentState = nextState;
 
             if (size != null)
             {
-                await PossibleSwitchTo(await currentState.ResizeAsync(gl, size.Value));
+                await PossibleSwitchTo(await currentState.ResizeAsync(this, gl, size.Value));
             }
         }
     }

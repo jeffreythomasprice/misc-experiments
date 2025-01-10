@@ -75,5 +75,17 @@ export function init(dotNetObj, canvas) {
 		dotNetObj.invokeMethod("KeyUp", e.key, e.code);
 	});
 
+	context.getIsPointerLocked = () => {
+		return document.pointerLockElement === canvas;
+	};
+
+	context.setIsPointerLocked = (b) => {
+		if (b) {
+			canvas.requestPointerLock();
+		} else {
+			document.exitPointerLock();
+		}
+	};
+
 	return context;
 }

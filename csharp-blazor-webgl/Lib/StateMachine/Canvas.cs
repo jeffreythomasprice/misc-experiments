@@ -7,6 +7,7 @@ namespace BlazorExperiments.Lib.StateMachine;
 public class Canvas : IAsyncDisposable
 {
     private DotNetObjectReference<Canvas>? thisRef;
+    private IJSInProcessObjectReference? context;
     private StateMachine? stateMachine;
 
     public static async Task<Canvas> Create(IJSRuntime js, ElementReference canvas, IState initialState)
@@ -16,13 +17,13 @@ public class Canvas : IAsyncDisposable
         // js init
         var jsInProcess = (IJSInProcessRuntime)js;
         var module = await jsInProcess.InvokeAsync<IJSInProcessObjectReference>("import", "./_content/Lib/Canvas.js");
-        var context = module.Invoke<IJSInProcessObjectReference>("init", result.thisRef, canvas);
+        result.context = module.Invoke<IJSInProcessObjectReference>("init", result.thisRef, canvas);
 
         // state machine init
-        result.stateMachine = await StateMachine.Create(new WebGL2RenderingContext(context), initialState);
+        result.stateMachine = await StateMachine.Create(result, new WebGL2RenderingContext(result.context), initialState);
 
         // initial resize event so we know the initial size of the screen
-        context.InvokeVoid("resize");
+        result.context.InvokeVoid("resize");
 
         return result;
     }
@@ -37,6 +38,15 @@ public class Canvas : IAsyncDisposable
         thisRef?.Dispose();
         thisRef = null;
         return ValueTask.CompletedTask;
+    }
+
+    public bool IsPointerLocked
+    {
+        get => context?.Invoke<Boolean>("getIsPointerLocked") ?? false;
+        set
+        {
+            context?.InvokeVoid("setIsPointerLocked", value);
+        }
     }
 
     [JSInvokable]
