@@ -75,4 +75,14 @@ public record struct Degrees<T>(T Value) :
     {
         return new(T.Clamp(value.Value, min.Value, max.Value));
     }
+
+    public static T Cos(Degrees<T> value)
+    {
+        return T.Cos(value.Radians.Value);
+    }
+
+    public static T Sin(Degrees<T> value)
+    {
+        return T.Sin(value.Radians.Value);
+    }
 }

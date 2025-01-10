@@ -50,10 +50,10 @@ public struct Matrix4<T> :
         };
     }
 
-    public static Matrix4<T> CreateRotation(Vector3<T> axis, T angle)
+    public static Matrix4<T> CreateRotation(Vector3<T> axis, Radians<T> angle)
     {
-        var c = T.Cos(angle);
-        var s = T.Sin(angle);
+        var c = Radians<T>.Cos(angle);
+        var s = Radians<T>.Sin(angle);
         axis = axis.Normalized();
         return new()
         {
@@ -141,7 +141,7 @@ public struct Matrix4<T> :
         return Matrix4<T>.CreateScale(v) * this;
     }
 
-    public Matrix4<T> Rotate(Vector3<T> axis, T angle)
+    public Matrix4<T> Rotate(Vector3<T> axis, Radians<T> angle)
     {
         return Matrix4<T>.CreateRotation(axis, angle) * this;
     }

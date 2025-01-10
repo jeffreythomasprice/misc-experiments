@@ -31,10 +31,9 @@ public class DemoState : IState
     private readonly Shader.Uniform modelViewMatrixUniform;
     private readonly Shader.Uniform samplerUniform;
 
-    private Matrix4<float> orthoMatrix;
-    private Matrix4<float> perspectiveMatrix;
+    private PerspectiveCamera<float> perspectiveCamera;
 
-    private float rotation;
+    private Degrees<float> rotation;
 
     public static IState Create()
     {
@@ -101,20 +100,20 @@ public class DemoState : IState
                     2,3,0,
                 };
 
-                new PerspectiveCamera(
+                var perspectiveCamera = new PerspectiveCamera<float>(
                     new(0, 0),
                     new Degrees<float>(60).Radians,
                     new(0, 0, 6),
-                    new(0, 2, 0),
+                    new(0, 0, 0),
                     new(0, 1, 0)
                 );
 
-                return Task.FromResult<IState>(new DemoState(gl, shader, texture, arrayBuffer, elementArrayBuffer));
+                return Task.FromResult<IState>(new DemoState(gl, shader, texture, arrayBuffer, elementArrayBuffer, perspectiveCamera));
             }
         );
     }
 
-    private DemoState(WebGL2RenderingContext gl, Shader shader, Texture texture, Buffer<Vertex> arrayBuffer, Buffer<ushort> elementArrayBuffer)
+    private DemoState(WebGL2RenderingContext gl, Shader shader, Texture texture, Buffer<Vertex> arrayBuffer, Buffer<ushort> elementArrayBuffer, PerspectiveCamera<float> perspectiveCamera)
     {
         this.shader = shader;
         this.texture = texture;
@@ -125,21 +124,22 @@ public class DemoState : IState
         projectionMatrixUniform = shader.Uniforms["projectionMatrixUniform"];
         modelViewMatrixUniform = shader.Uniforms["modelViewMatrixUniform"];
         samplerUniform = shader.Uniforms["samplerUniform"];
+
+        this.perspectiveCamera = perspectiveCamera;
     }
 
     public override Task<IState> ResizeAsync(StateMachine sm, WebGL2RenderingContext gl, Size size)
     {
         gl.Viewport(0, 0, size.Width, size.Height);
 
-        orthoMatrix = Matrix4<float>.CreateOrtho(0, size.Width, size.Height, 0, -1, 1);
-        perspectiveMatrix = Matrix4<float>.CreatePerspective(new Degrees<float>(60).Radians, size.Width, size.Height, 0.01f, 1000.0f);
+        perspectiveCamera.WindowSize = size;
 
         return Task.FromResult<IState>(this);
     }
 
     public override Task<IState> UpdateAsync(StateMachine sm, WebGL2RenderingContext gl, TimeSpan timeSpan)
     {
-        rotation = (rotation + 90.0f * MathF.PI / 180.0f * (float)timeSpan.TotalSeconds) % (MathF.PI * 2);
+        rotation = (rotation + new Degrees<float>(90.0f) * new Degrees<float>((float)timeSpan.TotalSeconds)) % new Degrees<float>(360);
 
         return Task.FromResult<IState>(this);
     }
@@ -156,15 +156,17 @@ public class DemoState : IState
 
         vertexAttributes.Enable();
 
-        projectionMatrixUniform.Set(true, perspectiveMatrix);
+        projectionMatrixUniform.Set(true, perspectiveCamera.ProjectionMatrix);
         modelViewMatrixUniform.Set(
             false,
-            Matrix4<float>.CreateLookAt(
-                new(0, 0, 6),
-                new(0, 0, 0),
-                new(0, 1, 0)
-            )
-                .Rotate(new(0, 1, 0), rotation)
+            perspectiveCamera.ModelViewMatrix
+        // TODO put rotation back
+        //Matrix4<float>.CreateLookAt(
+        //    new(0, 0, 6),
+        //    new(0, 0, 0),
+        //    new(0, 1, 0)
+        //)
+        //    .Rotate(new(0, 1, 0), rotation.Radians)
         );
 
         gl.ActiveTexture(WebGL2RenderingContext.ActiveTextureIndex.TEXTURE0);
@@ -185,9 +187,8 @@ public class DemoState : IState
         return Task.CompletedTask;
     }
 
-    public override Task MouseDown(StateMachine sm, MouseEvent e)
+    public override Task MouseUp(StateMachine sm, MouseEvent e)
     {
-        Console.WriteLine($"TODO DemoState, MouseDown, {e}");
         if (e.Button == 0)
         {
             sm.IsPointerLocked = !sm.IsPointerLocked;
@@ -195,15 +196,12 @@ public class DemoState : IState
         return Task.CompletedTask;
     }
 
-    public override Task MouseUp(StateMachine sm, MouseEvent e)
-    {
-        Console.WriteLine($"TODO DemoState, MouseUp, {e}");
-        return Task.CompletedTask;
-    }
-
     public override Task MouseMove(StateMachine sm, MouseMoveEvent e)
     {
-        Console.WriteLine($"TODO DemoState, MouseMove, {e}");
+        if (sm.IsPointerLocked)
+        {
+            perspectiveCamera.Turn(new(e.Movement.X, e.Movement.Y));
+        }
         return Task.CompletedTask;
     }
 
