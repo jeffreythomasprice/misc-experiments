@@ -14,6 +14,11 @@ public struct ColorRGBA<T>
         Blue = blue;
         Alpha = alpha;
     }
+
+    public override string ToString()
+    {
+        return $"RGBA({Red}, {Green}, {Blue}, {Alpha})";
+    }
 }
 
 public static class ColorRGBAExtensions

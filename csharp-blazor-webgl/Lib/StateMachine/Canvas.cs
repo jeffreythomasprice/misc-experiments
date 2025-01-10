@@ -1,13 +1,13 @@
-﻿using BlazorExperiments.Lib.StateMachine;
+﻿using BlazorExperiments.Lib.WebGl;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
-namespace BlazorExperiments.Lib.WebGl;
+namespace BlazorExperiments.Lib.StateMachine;
 
 public class Canvas : IAsyncDisposable
 {
     private DotNetObjectReference<Canvas>? thisRef;
-    private StateMachine.StateMachine? stateMachine;
+    private StateMachine? stateMachine;
 
     public static async Task<Canvas> Create(IJSRuntime js, ElementReference canvas, IState initialState)
     {
@@ -19,7 +19,7 @@ public class Canvas : IAsyncDisposable
         var context = module.Invoke<IJSInProcessObjectReference>("init", result.thisRef, canvas);
 
         // state machine init
-        result.stateMachine = await StateMachine.StateMachine.Create(new WebGL2RenderingContext(context), initialState);
+        result.stateMachine = await StateMachine.Create(new WebGL2RenderingContext(context), initialState);
 
         // initial resize event so we know the initial size of the screen
         context.InvokeVoid("resize");
@@ -49,5 +49,40 @@ public class Canvas : IAsyncDisposable
     public void Anim(double time)
     {
         stateMachine?.Anim(TimeSpan.FromMilliseconds(time));
+    }
+
+    [JSInvokable]
+    public void MouseDown(int button, int x, int y)
+    {
+        var e = new MouseEvent(button, new(x, y));
+        stateMachine?.MouseDown(e);
+    }
+
+    [JSInvokable]
+    public void MouseUp(int button, int x, int y)
+    {
+        var e = new MouseEvent(button, new(x, y));
+        stateMachine?.MouseUp(e);
+    }
+
+    [JSInvokable]
+    public void MouseMove(int x, int y, int movementX, int movementY)
+    {
+        var e = new MouseMoveEvent(new(x, y), new(movementX, movementY));
+        stateMachine?.MouseMove(e);
+    }
+
+    [JSInvokable]
+    public void KeyDown(string key, string code)
+    {
+        var e = new KeyEvent(key, code);
+        stateMachine?.KeyDown(e);
+    }
+
+    [JSInvokable]
+    public void KeyUp(string key, string code)
+    {
+        var e = new KeyEvent(key, code);
+        stateMachine?.KeyUp(e);
     }
 }

@@ -19,6 +19,11 @@ public struct Vector2<T> :
         Y = y;
     }
 
+    public override string ToString()
+    {
+        return $"({X}, {Y})";
+    }
+
     public static Vector2<T> operator +(Vector2<T> left, Vector2<T> right)
     {
         return new(
@@ -64,7 +69,7 @@ public struct Vector2<T> :
     }
 }
 
-public static class Vector2SqrtExtensions
+public static class Vector2Extensions
 {
     public static T GetMagnitude<T>(this Vector2<T> v) where T : INumber<T>, IRootFunctions<T>
     {

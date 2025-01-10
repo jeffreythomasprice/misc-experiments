@@ -55,6 +55,50 @@ public class StateMachine : IAsyncDisposable
         }
     }
 
+    public async Task MouseDown(MouseEvent e)
+    {
+        // TODO keep track of button states
+        if (currentState != null)
+        {
+            await currentState.MouseDown(e);
+        }
+    }
+
+    public async Task MouseUp(MouseEvent e)
+    {
+        // TODO keep track of button states
+        if (currentState != null)
+        {
+            await currentState.MouseUp(e);
+        }
+    }
+
+    public async Task MouseMove(MouseMoveEvent e)
+    {
+        if (currentState != null)
+        {
+            await currentState.MouseMove(e);
+        }
+    }
+
+    public async Task KeyDown(KeyEvent e)
+    {
+        // TODO keep track of key states
+        if (currentState != null)
+        {
+            await currentState.KeyDown(e);
+        }
+    }
+
+    public async Task KeyUp(KeyEvent e)
+    {
+        // TODO keep track of key states
+        if (currentState != null)
+        {
+            await currentState.KeyUp(e);
+        }
+    }
+
     private async Task PossibleSwitchTo(IState nextState)
     {
         if (nextState != currentState)

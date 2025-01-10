@@ -4,21 +4,6 @@
 export function init(dotNetObj, canvas) {
 	const context = canvas.getContext("webgl2", { powerPreference: "high-performance" });
 
-	context.resize = () => {
-		const width = window.innerWidth;
-		const height = window.innerHeight;
-		canvas.width = width;
-		canvas.height = height;
-		dotNetObj.invokeMethod("Resize", width, height);
-	};
-	window.addEventListener("resize", () => context.resize());
-
-	const anim = time => {
-		dotNetObj.invokeMethod("Anim", time);
-		requestAnimationFrame(time => anim(time));
-	};
-	requestAnimationFrame(time => anim(time));
-
 	context.getActiveInfoName = (activeInfo) => {
 		return activeInfo.name;
 	};
@@ -54,6 +39,41 @@ export function init(dotNetObj, canvas) {
 	context.bufferSubData_float64 = (target, offset, data) => {
 		context.bufferSubData(target, offset, new Float64Array(data));
 	};
+
+	context.resize = () => {
+		const width = window.innerWidth;
+		const height = window.innerHeight;
+		canvas.width = width;
+		canvas.height = height;
+		dotNetObj.invokeMethod("Resize", width, height);
+	};
+	window.addEventListener("resize", () => context.resize());
+
+	const anim = time => {
+		dotNetObj.invokeMethod("Anim", time);
+		requestAnimationFrame(time => anim(time));
+	};
+	requestAnimationFrame(time => anim(time));
+
+	canvas.addEventListener("mousedown", e => {
+		dotNetObj.invokeMethod("MouseDown", e.button, e.x, e.y);
+	});
+
+	canvas.addEventListener("mouseup", e => {
+		dotNetObj.invokeMethod("MouseUp", e.button, e.x, e.y);
+	});
+
+	canvas.addEventListener("mousemove", e => {
+		dotNetObj.invokeMethod("MouseMove", e.x, e.y, e.movementX, e.movementY);
+	});
+
+	window.addEventListener("keydown", e => {
+		dotNetObj.invokeMethod("KeyDown", e.key, e.code);
+	});
+
+	window.addEventListener("keyup", e => {
+		dotNetObj.invokeMethod("KeyUp", e.key, e.code);
+	});
 
 	return context;
 }

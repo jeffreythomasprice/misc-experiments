@@ -21,6 +21,11 @@ public struct Vector3<T> :
         Z = z;
     }
 
+    public override string ToString()
+    {
+        return $"({X}, {Y}, {Z})";
+    }
+
     public static Vector3<T> operator +(Vector3<T> left, Vector3<T> right)
     {
         return new(
@@ -79,7 +84,7 @@ public struct Vector3<T> :
     }
 }
 
-public static class Vector3SqrtExtensions
+public static class Vector3Extensions
 {
     public static T GetMagnitude<T>(this Vector3<T> v) where T : INumber<T>, IRootFunctions<T>
     {
@@ -89,5 +94,20 @@ public static class Vector3SqrtExtensions
     public static Vector3<T> Normalized<T>(this Vector3<T> v) where T : INumber<T>, IRootFunctions<T>
     {
         return v / v.GetMagnitude();
+    }
+
+    public static Radians<T> AngleBetween<T>(this Vector3<T> v, Vector3<T> other) where T : INumber<T>, IRootFunctions<T>, ITrigonometricFunctions<T>
+    {
+        /*
+        https://stackoverflow.com/a/16544330/9290998
+        https://stackoverflow.com/a/67719217/9290998
+        x = dot(a, b)
+        y = dot(n, cross(a, b))
+        angle = atan2(y, x)
+        */
+        return TrigExtensions.Atan2(
+            v.CrossProduct(other).GetMagnitude(),
+            v.DotProduct(other)
+        );
     }
 }

@@ -28,6 +28,30 @@ public abstract class IState
     public virtual Task RenderAsync(WebGL2RenderingContext gl)
     {
         return Task.CompletedTask;
+    }
 
+    public virtual Task MouseDown(MouseEvent e)
+    {
+        return Task.CompletedTask;
+    }
+
+    public virtual Task MouseUp(MouseEvent e)
+    {
+        return Task.CompletedTask;
+    }
+
+    public virtual Task MouseMove(MouseMoveEvent e)
+    {
+        return Task.CompletedTask;
+    }
+
+    public virtual Task KeyDown(KeyEvent e)
+    {
+        return Task.CompletedTask;
+    }
+
+    public virtual Task KeyUp(KeyEvent e)
+    {
+        return Task.CompletedTask;
     }
 }

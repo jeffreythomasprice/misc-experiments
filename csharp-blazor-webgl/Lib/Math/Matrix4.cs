@@ -80,10 +80,10 @@ public struct Matrix4<T> :
         };
     }
 
-    public static Matrix4<T> CreatePerspective(T verticalFieldOfView, T width, T height, T near, T far)
+    public static Matrix4<T> CreatePerspective(Radians<T> verticalFieldOfView, T width, T height, T near, T far)
     {
         var two = T.One + T.One;
-        var f = T.One / T.Tan(verticalFieldOfView / two);
+        var f = T.One / T.Tan(verticalFieldOfView.Value / two);
         var aspect = width / height;
         return new()
         {

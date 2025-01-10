@@ -101,6 +101,14 @@ public class DemoState : IState
                     2,3,0,
                 };
 
+                new PerspectiveCamera(
+                    new(0, 0),
+                    new Degrees<float>(60).Radians,
+                    new(0, 0, 6),
+                    new(0, 2, 0),
+                    new(0, 1, 0)
+                );
+
                 return Task.FromResult<IState>(new DemoState(gl, shader, texture, arrayBuffer, elementArrayBuffer));
             }
         );
@@ -124,7 +132,7 @@ public class DemoState : IState
         gl.Viewport(0, 0, size.Width, size.Height);
 
         orthoMatrix = Matrix4<float>.CreateOrtho(0, size.Width, size.Height, 0, -1, 1);
-        perspectiveMatrix = Matrix4<float>.CreatePerspective(60f * MathF.PI / 180.0f, size.Width, size.Height, 0.01f, 1000.0f);
+        perspectiveMatrix = Matrix4<float>.CreatePerspective(new Degrees<float>(60).Radians, size.Width, size.Height, 0.01f, 1000.0f);
 
         return Task.FromResult<IState>(this);
     }
@@ -174,6 +182,36 @@ public class DemoState : IState
 
         gl.UseProgram(null);
 
+        return Task.CompletedTask;
+    }
+
+    public override Task MouseDown(MouseEvent e)
+    {
+        Console.WriteLine($"TODO DemoState, MouseDown, {e}");
+        return Task.CompletedTask;
+    }
+
+    public override Task MouseUp(MouseEvent e)
+    {
+        Console.WriteLine($"TODO DemoState, MouseUp, {e}");
+        return Task.CompletedTask;
+    }
+
+    public override Task MouseMove(MouseMoveEvent e)
+    {
+        Console.WriteLine($"TODO DemoState, MouseMove, {e}");
+        return Task.CompletedTask;
+    }
+
+    public override Task KeyDown(KeyEvent e)
+    {
+        Console.WriteLine($"TODO DemoState, KeyDown, {e}");
+        return Task.CompletedTask;
+    }
+
+    public override Task KeyUp(KeyEvent e)
+    {
+        Console.WriteLine($"TODO DemoState, KeyUp, {e}");
         return Task.CompletedTask;
     }
 }

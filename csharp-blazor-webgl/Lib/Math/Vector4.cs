@@ -23,6 +23,11 @@ public struct Vector4<T> :
         W = w;
     }
 
+    public override string ToString()
+    {
+        return $"({X}, {Y}, {Z}, {W})";
+    }
+
     public static Vector4<T> operator +(Vector4<T> left, Vector4<T> right)
     {
         return new(
@@ -76,7 +81,7 @@ public struct Vector4<T> :
     }
 }
 
-public static class Vector4SqrtExtensions
+public static class Vector4Extensions
 {
     public static T GetMagnitude<T>(this Vector4<T> v) where T : INumber<T>, IRootFunctions<T>
     {
