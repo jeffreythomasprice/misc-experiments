@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 
 namespace BlazorExperiments.Lib.Math;
 
@@ -7,7 +8,8 @@ public struct Vector4<T> :
     ISubtractionOperators<Vector4<T>, Vector4<T>, Vector4<T>>,
     IMultiplyOperators<Vector4<T>, T, Vector4<T>>,
     IDivisionOperators<Vector4<T>, T, Vector4<T>>,
-    IUnaryNegationOperators<Vector4<T>, Vector4<T>>
+    IUnaryNegationOperators<Vector4<T>, Vector4<T>>,
+    IEqualityOperators<Vector4<T>, Vector4<T>, bool>
     where T : INumber<T>
 {
     public readonly T X;
@@ -71,6 +73,33 @@ public struct Vector4<T> :
     public static Vector4<T> operator -(Vector4<T> value)
     {
         return new(-value.X, -value.Y, -value.Z, -value.W);
+    }
+
+    public override bool Equals([NotNullWhen(true)] object? obj)
+    {
+        if (obj is Vector4<T> v)
+        {
+            return Equals(v);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public bool Equals(Vector4<T> other)
+    {
+        return this == other;
+    }
+
+    public static bool operator ==(Vector4<T> left, Vector4<T> right)
+    {
+        return left.X == right.X && left.Y == right.Y && left.Z == right.Z && left.W == right.W;
+    }
+
+    public static bool operator !=(Vector4<T> left, Vector4<T> right)
+    {
+        return !(left == right);
     }
 
     public T MagnitudeSquared => X * X + Y * Y + Z * Z + W * W;

@@ -1,6 +1,12 @@
-﻿namespace BlazorExperiments.Lib.Math;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 
-public struct ColorRGBA<T>
+namespace BlazorExperiments.Lib.Math;
+
+public struct ColorRGBA<T> :
+    IEqualityOperators<ColorRGBA<T>, ColorRGBA<T>, bool>
+    where T :
+        IEqualityOperators<T, T, bool>
 {
     public readonly T Red;
     public readonly T Green;
@@ -18,6 +24,33 @@ public struct ColorRGBA<T>
     public override string ToString()
     {
         return $"RGBA({Red}, {Green}, {Blue}, {Alpha})";
+    }
+
+    public override bool Equals([NotNullWhen(true)] object? obj)
+    {
+        if (obj is ColorRGBA<T> v)
+        {
+            return Equals(v);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public bool Equals(ColorRGBA<T> other)
+    {
+        return this == other;
+    }
+
+    public static bool operator ==(ColorRGBA<T> left, ColorRGBA<T> right)
+    {
+        return left.Red == right.Red && left.Green == right.Green && left.Blue == right.Blue && left.Alpha == right.Alpha;
+    }
+
+    public static bool operator !=(ColorRGBA<T> left, ColorRGBA<T> right)
+    {
+        return !(left == right);
     }
 }
 

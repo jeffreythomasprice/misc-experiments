@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 
 namespace BlazorExperiments.Lib.Math;
 
@@ -7,7 +8,8 @@ public struct Vector3<T> :
     ISubtractionOperators<Vector3<T>, Vector3<T>, Vector3<T>>,
     IMultiplyOperators<Vector3<T>, T, Vector3<T>>,
     IDivisionOperators<Vector3<T>, T, Vector3<T>>,
-    IUnaryNegationOperators<Vector3<T>, Vector3<T>>
+    IUnaryNegationOperators<Vector3<T>, Vector3<T>>,
+    IEqualityOperators<Vector3<T>, Vector3<T>, bool>
     where T : INumber<T>
 {
     public readonly T X;
@@ -65,6 +67,33 @@ public struct Vector3<T> :
     public static Vector3<T> operator -(Vector3<T> value)
     {
         return new(-value.X, -value.Y, -value.Z);
+    }
+
+    public override bool Equals([NotNullWhen(true)] object? obj)
+    {
+        if (obj is Vector3<T> v)
+        {
+            return Equals(v);
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public bool Equals(Vector3<T> other)
+    {
+        return this == other;
+    }
+
+    public static bool operator ==(Vector3<T> left, Vector3<T> right)
+    {
+        return left.X == right.X && left.Y == right.Y && left.Z == right.Z;
+    }
+
+    public static bool operator !=(Vector3<T> left, Vector3<T> right)
+    {
+        return !(left == right);
     }
 
     public T MagnitudeSquared => X * X + Y * Y + Z * Z;

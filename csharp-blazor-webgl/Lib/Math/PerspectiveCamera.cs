@@ -24,7 +24,14 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
 
     public PerspectiveCamera(Size windowSize, Radians<T> verticalFieldOfView, T nearClipPlane, T farClipPlane, Vector3<T> position, Vector3<T> target, Vector3<T> defaultUp)
     {
-        // TODO check invalid args
+        if (position == target)
+        {
+            throw new ArgumentException("camera position and target can't be the same point");
+        }
+        if (defaultUp == new Vector3<T>(T.Zero, T.Zero, T.Zero))
+        {
+            throw new ArgumentException("up vector can't be (0,0,0)");
+        }
 
         this.windowSize = windowSize;
         this.verticalFieldOfView = verticalFieldOfView;
@@ -106,7 +113,7 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         set
         {
             windowSize = value;
-            // TODO make dirty
+            projectionMatrix = null;
         }
     }
 
@@ -116,7 +123,7 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         set
         {
             verticalFieldOfView = value;
-            // TODO make dirty
+            projectionMatrix = null;
         }
     }
 
@@ -126,7 +133,7 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         set
         {
             nearClipPlane = value;
-            // TODO make dirty
+            projectionMatrix = null;
         }
     }
 
@@ -136,45 +143,60 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         set
         {
             farClipPlane = value;
-            // TODO make dirty
+            projectionMatrix = null;
         }
     }
 
     public Radians<T> AngleRight
     {
         get => angleRight;
-        // TODO make dirty
-        set => angleRight = FixAngleRight(value);
+        set
+        {
+            angleRight = FixAngleRight(value);
+            modelViewMatrix = null;
+            forward = null;
+            rightRightAngleOnly = null;
+            forwardRightAngleOnly = null;
+        }
     }
 
     public Radians<T> AngleUp
     {
         get => angleUp;
-        // TODO make dirty
-        set => angleUp = FixAngleUp(value);
+        set
+        {
+            angleUp = FixAngleUp(value);
+            modelViewMatrix = null;
+            forward = null;
+            rightRightAngleOnly = null;
+            forwardRightAngleOnly = null;
+        }
     }
 
     public Vector3<T> Position
     {
         get => position;
-        // TODO make dirty
-        set => position = value;
+        set
+        {
+            position = value;
+            modelViewMatrix = null;
+        }
     }
 
     public void Turn(Vector2<T> mouseMovement)
     {
         var v = mouseMovement * TurnSpeed;
-        angleRight += new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.X);
-        angleUp -= new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.Y);
+        AngleRight += new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.X);
+        AngleUp -= new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.Y);
     }
 
     public void Move(T forward, T strafe, T up)
     {
-        position += Forward * forward - RightRightAngleOnly * strafe + defaultUp * up;
+        Position += Forward * forward - RightRightAngleOnly * strafe + defaultUp * up;
     }
 
-    // TODO cache
-    public Matrix4<T> ProjectionMatrix => Matrix4<T>.CreatePerspective(
+    private Matrix4<T>? projectionMatrix;
+    public Matrix4<T> ProjectionMatrix => projectionMatrix ??= Matrix4<T>.CreatePerspective(
         verticalFieldOfView,
         T.CreateChecked(windowSize.Width),
         T.CreateChecked(windowSize.Height),
@@ -182,17 +204,17 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         farClipPlane
     );
 
-    // TODO cache
-    public Matrix4<T> ModelViewMatrix => Matrix4<T>.CreateLookAt(position, position + Forward, defaultUp);
+    private Matrix4<T>? modelViewMatrix;
+    public Matrix4<T> ModelViewMatrix => modelViewMatrix ??= Matrix4<T>.CreateLookAt(position, position + Forward, defaultUp);
 
-    // TODO cache
-    private Vector3<T> Forward => Matrix4<T>.CreateRotation(RightRightAngleOnly, angleUp).ApplyToVector(ForwardRightAngleOnly);
+    private Vector3<T>? forward;
+    private Vector3<T> Forward => forward ??= Matrix4<T>.CreateRotation(RightRightAngleOnly, AngleUp).ApplyToVector(ForwardRightAngleOnly);
 
-    // TODO cache
-    private Vector3<T> RightRightAngleOnly => defaultUp.CrossProduct(ForwardRightAngleOnly);
+    private Vector3<T>? rightRightAngleOnly;
+    private Vector3<T> RightRightAngleOnly => rightRightAngleOnly ??= defaultUp.CrossProduct(ForwardRightAngleOnly);
 
-    // TODO cache
-    private Vector3<T> ForwardRightAngleOnly => Matrix4<T>.CreateRotation(defaultUp, angleRight).ApplyToVector(defaultForward);
+    private Vector3<T>? forwardRightAngleOnly;
+    private Vector3<T> ForwardRightAngleOnly => forwardRightAngleOnly ??= Matrix4<T>.CreateRotation(defaultUp, AngleRight).ApplyToVector(defaultForward);
 
     private static Radians<T> FixAngleRight(Radians<T> value)
     {
