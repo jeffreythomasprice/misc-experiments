@@ -7,7 +7,7 @@ public class WaitForPendingTaskState : IState
 {
     private readonly IState interimState;
     private Task<IState>? waitForTask;
-    private Func<WebGL2RenderingContext, Task<IState>>? waitForFunc;
+    private Func<StateMachine, WebGL2RenderingContext, Task<IState>>? waitForFunc;
 
     public WaitForPendingTaskState(IState interimState, Task<IState> waitFor)
     {
@@ -15,7 +15,7 @@ public class WaitForPendingTaskState : IState
         this.waitForTask = waitFor;
     }
 
-    public WaitForPendingTaskState(IState interimState, Func<WebGL2RenderingContext, Task<IState>> waitFor)
+    public WaitForPendingTaskState(IState interimState, Func<StateMachine, WebGL2RenderingContext, Task<IState>> waitFor)
     {
         this.interimState = interimState;
         this.waitForFunc = waitFor;
@@ -25,7 +25,8 @@ public class WaitForPendingTaskState : IState
     {
         if (waitForFunc != null && waitForTask == null)
         {
-            waitForTask = waitForFunc(gl);
+            waitForTask = waitForFunc(sm, gl);
+            waitForFunc = null;
         }
 
         await interimState.ActivateAsync(sm, gl);
@@ -46,7 +47,16 @@ public class WaitForPendingTaskState : IState
     {
         if (waitForTask?.IsCompleted == true)
         {
-            return waitForTask.Result;
+            try
+            {
+                return await waitForTask;
+            }
+            catch (Exception e)
+            {
+                // TODO error handling that isn't just console
+                Console.WriteLine($"error loading initial state: {e}");
+                waitForTask = null;
+            }
         }
 
         await interimState.UpdateAsync(sm, gl, timeSpan);

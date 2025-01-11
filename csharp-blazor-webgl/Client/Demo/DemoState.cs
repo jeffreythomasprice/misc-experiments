@@ -1,4 +1,5 @@
-﻿using BlazorExperiments.Lib.Math;
+﻿using BlazorExperiments.Lib.Dom;
+using BlazorExperiments.Lib.Math;
 using BlazorExperiments.Lib.StateMachine;
 using BlazorExperiments.Lib.WebGl;
 using System.Drawing;
@@ -39,7 +40,7 @@ public class DemoState : IState
     {
         return new WaitForPendingTaskState(
             new SolidColorBackgroundState(System.Drawing.Color.HotPink.ToRGBA().ToDouble()),
-            (gl) =>
+            async (sm, gl) =>
             {
                 var shader = new Shader(
                     gl,
@@ -57,7 +58,7 @@ public class DemoState : IState
                         textureCoordinateVarying = textureCoordinateAttribute;
                     }
                     """,
-                        """
+                    """
                     precision mediump float;
                 
                     uniform sampler2D samplerUniform;
@@ -82,6 +83,10 @@ public class DemoState : IState
                     }
                 }
                 var texture = new Texture(gl, textureSize, texturePixels);
+
+                // TODO use url image
+                var image = await Image.FromUrl(sm.JS, "foobar");
+                Console.WriteLine($"TODO image size = {image.Size}");
 
                 var textureAspectRatioHeight = 1.0f;
                 var textureAspectRatioWidth = textureAspectRatioHeight * (float)textureSize.Width / (float)textureSize.Height;
@@ -110,7 +115,7 @@ public class DemoState : IState
                     new(0, 1, 0)
                 );
 
-                return Task.FromResult<IState>(new DemoState(gl, shader, texture, arrayBuffer, elementArrayBuffer, perspectiveCamera));
+                return new DemoState(gl, shader, texture, arrayBuffer, elementArrayBuffer, perspectiveCamera);
             }
         );
     }

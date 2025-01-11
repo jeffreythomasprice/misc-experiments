@@ -1,14 +1,15 @@
-﻿using BlazorExperiments.Lib.WebGl;
+﻿using BlazorExperiments.Lib.StateMachine;
+using BlazorExperiments.Lib.WebGl;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
-namespace BlazorExperiments.Lib.StateMachine;
+namespace BlazorExperiments.Lib.Dom;
 
 public class Canvas : IAsyncDisposable
 {
     private DotNetObjectReference<Canvas>? thisRef;
     private IJSInProcessObjectReference? context;
-    private StateMachine? stateMachine;
+    private StateMachine.StateMachine? stateMachine;
 
     public static async Task<Canvas> Create(IJSRuntime js, ElementReference canvas, IState initialState)
     {
@@ -20,7 +21,7 @@ public class Canvas : IAsyncDisposable
         result.context = module.Invoke<IJSInProcessObjectReference>("init", result.thisRef, canvas);
 
         // state machine init
-        result.stateMachine = await StateMachine.Create(result, new WebGL2RenderingContext(result.context), initialState);
+        result.stateMachine = await StateMachine.StateMachine.Create(js, result, new WebGL2RenderingContext(result.context), initialState);
 
         // initial resize event so we know the initial size of the screen
         result.context.InvokeVoid("resize");
@@ -42,7 +43,7 @@ public class Canvas : IAsyncDisposable
 
     public bool IsPointerLocked
     {
-        get => context?.Invoke<Boolean>("getIsPointerLocked") ?? false;
+        get => context?.Invoke<bool>("getIsPointerLocked") ?? false;
         set
         {
             context?.InvokeVoid("setIsPointerLocked", value);

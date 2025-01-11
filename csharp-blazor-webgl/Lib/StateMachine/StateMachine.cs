@@ -1,10 +1,14 @@
-﻿using BlazorExperiments.Lib.WebGl;
+﻿using BlazorExperiments.Lib.Dom;
+using BlazorExperiments.Lib.WebGl;
+using Microsoft.JSInterop;
 using System.Drawing;
 
 namespace BlazorExperiments.Lib.StateMachine;
 
 public class StateMachine : IAsyncDisposable
 {
+    public readonly IJSRuntime JS;
+
     private readonly Canvas canvas;
     private readonly WebGL2RenderingContext gl;
 
@@ -17,8 +21,9 @@ public class StateMachine : IAsyncDisposable
     private readonly Dictionary<MouseButton, bool> mouseButtonState;
     private readonly Dictionary<KeyboardKey, bool> keyState;
 
-    private StateMachine(Canvas canvas, WebGL2RenderingContext gl, IState initialState)
+    private StateMachine(IJSRuntime js, Canvas canvas, WebGL2RenderingContext gl, IState initialState)
     {
+        this.JS = js;
         this.canvas = canvas;
         this.gl = gl;
         currentState = initialState;
@@ -36,9 +41,9 @@ public class StateMachine : IAsyncDisposable
         }
     }
 
-    public static async Task<StateMachine> Create(Canvas canvas, WebGL2RenderingContext gl, IState initialState)
+    public static async Task<StateMachine> Create(IJSRuntime js, Canvas canvas, WebGL2RenderingContext gl, IState initialState)
     {
-        var result = new StateMachine(canvas, gl, initialState);
+        var result = new StateMachine(js, canvas, gl, initialState);
         await initialState.ActivateAsync(result, gl);
         return result;
     }

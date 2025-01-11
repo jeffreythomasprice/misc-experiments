@@ -22,6 +22,12 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
     private Radians<T> angleRight;
     private Radians<T> angleUp;
 
+    private Matrix4<T>? projectionMatrix;
+    private Matrix4<T>? modelViewMatrix;
+    private Vector3<T>? forward;
+    private Vector3<T>? rightRightAngleOnly;
+    private Vector3<T>? forwardRightAngleOnly;
+
     public PerspectiveCamera(Size windowSize, Radians<T> verticalFieldOfView, T nearClipPlane, T farClipPlane, Vector3<T> position, Vector3<T> target, Vector3<T> defaultUp)
     {
         if (position == target)
@@ -195,7 +201,6 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         Position += Forward * forward - RightRightAngleOnly * strafe + defaultUp * up;
     }
 
-    private Matrix4<T>? projectionMatrix;
     public Matrix4<T> ProjectionMatrix => projectionMatrix ??= Matrix4<T>.CreatePerspective(
         verticalFieldOfView,
         T.CreateChecked(windowSize.Width),
@@ -204,16 +209,12 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         farClipPlane
     );
 
-    private Matrix4<T>? modelViewMatrix;
     public Matrix4<T> ModelViewMatrix => modelViewMatrix ??= Matrix4<T>.CreateLookAt(position, position + Forward, defaultUp);
 
-    private Vector3<T>? forward;
     private Vector3<T> Forward => forward ??= Matrix4<T>.CreateRotation(RightRightAngleOnly, AngleUp).ApplyToVector(ForwardRightAngleOnly);
 
-    private Vector3<T>? rightRightAngleOnly;
     private Vector3<T> RightRightAngleOnly => rightRightAngleOnly ??= defaultUp.CrossProduct(ForwardRightAngleOnly);
 
-    private Vector3<T>? forwardRightAngleOnly;
     private Vector3<T> ForwardRightAngleOnly => forwardRightAngleOnly ??= Matrix4<T>.CreateRotation(defaultUp, AngleRight).ApplyToVector(defaultForward);
 
     private static Radians<T> FixAngleRight(Radians<T> value)

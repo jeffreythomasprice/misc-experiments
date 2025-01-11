@@ -15,7 +15,7 @@ public partial class Home : ComponentBase
     {
         if (firstRender)
         {
-            await Lib.StateMachine.Canvas.Create(JS, Canvas, DemoState.Create());
+            await Lib.Dom.Canvas.Create(JS, Canvas, DemoState.Create());
         }
     }
 }

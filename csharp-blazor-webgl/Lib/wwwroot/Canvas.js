@@ -2,6 +2,12 @@
  * @param {HTMLCanvasElement} canvas
  */
 export function init(dotNetObj, canvas) {
+	canvas.style.position = "absolute";
+	canvas.style.left = "0";
+	canvas.style.top = "0";
+	canvas.style.width = "100%";
+	canvas.style.height = "100%";
+
 	const context = canvas.getContext("webgl2", { powerPreference: "high-performance" });
 
 	context.getActiveInfoName = (activeInfo) => {
