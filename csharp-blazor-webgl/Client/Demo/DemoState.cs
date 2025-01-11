@@ -103,6 +103,8 @@ public class DemoState : IState
                 var perspectiveCamera = new PerspectiveCamera<float>(
                     new(0, 0),
                     new Degrees<float>(60).Radians,
+                    0.01f,
+                    1000,
                     new(0, 0, 6),
                     new(0, 0, 0),
                     new(0, 1, 0)
@@ -166,7 +168,8 @@ public class DemoState : IState
         {
             up -= 1.0f;
         }
-        perspectiveCamera.Move(forward, strafe, up);
+        var speed = (float)(7 * timeSpan.TotalSeconds);
+        perspectiveCamera.Move(forward * speed, strafe * speed, up * speed);
 
         rotation = (rotation + new Degrees<float>(90.0f) * new Degrees<float>((float)timeSpan.TotalSeconds)) % new Degrees<float>(360);
 
@@ -189,13 +192,7 @@ public class DemoState : IState
         modelViewMatrixUniform.Set(
             false,
             perspectiveCamera.ModelViewMatrix
-        // TODO put rotation back
-        //Matrix4<float>.CreateLookAt(
-        //    new(0, 0, 6),
-        //    new(0, 0, 0),
-        //    new(0, 1, 0)
-        //)
-        //    .Rotate(new(0, 1, 0), rotation.Radians)
+                .Rotate(new(0, 1, 0), rotation.Radians)
         );
 
         gl.ActiveTexture(WebGL2RenderingContext.ActiveTextureIndex.TEXTURE0);

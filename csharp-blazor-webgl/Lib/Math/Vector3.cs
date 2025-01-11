@@ -105,7 +105,7 @@ public static class Vector3Extensions
         y = dot(n, cross(a, b))
         angle = atan2(y, x)
         */
-        return TrigExtensions.Atan2(
+        return TrigExtensions<T>.Atan2(
             v.CrossProduct(other).GetMagnitude(),
             v.DotProduct(other)
         );

@@ -5,8 +5,14 @@ namespace BlazorExperiments.Lib.Math;
 
 public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrigonometricFunctions<T>
 {
+    private static Radians<T> TwoPi = new(T.Pi * T.CreateChecked(2));
+    private static readonly Radians<T> UpAngleLimit = new(T.Pi * T.CreateChecked(0.49));
+    private static readonly T TurnSpeed = T.CreateChecked(1) / T.CreateChecked(700);
+
     private Size windowSize;
     private Radians<T> verticalFieldOfView;
+    private T nearClipPlane;
+    private T farClipPlane;
 
     private readonly Vector3<T> defaultUp;
     private readonly Vector3<T> defaultForward;
@@ -16,14 +22,14 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
     private Radians<T> angleRight;
     private Radians<T> angleUp;
 
-    // TODO JEFF this is all janked up, double check all math
-
-    public PerspectiveCamera(Size windowSize, Radians<T> verticalFieldOfView, Vector3<T> position, Vector3<T> target, Vector3<T> defaultUp)
+    public PerspectiveCamera(Size windowSize, Radians<T> verticalFieldOfView, T nearClipPlane, T farClipPlane, Vector3<T> position, Vector3<T> target, Vector3<T> defaultUp)
     {
         // TODO check invalid args
 
         this.windowSize = windowSize;
         this.verticalFieldOfView = verticalFieldOfView;
+        this.nearClipPlane = nearClipPlane;
+        this.farClipPlane = farClipPlane;
 
         this.defaultUp = defaultUp.Normalized();
 
@@ -76,7 +82,7 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         }
         else
         {
-            angleRightFixed = new Radians<T>(T.Pi * T.CreateChecked(2)) - angleRight;
+            angleRightFixed = TwoPi - angleRight;
         }
         this.angleRight = FixAngleRight(angleRightFixed);
 
@@ -114,6 +120,26 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         }
     }
 
+    public T NearClipPlane
+    {
+        get => nearClipPlane;
+        set
+        {
+            nearClipPlane = value;
+            // TODO make dirty
+        }
+    }
+
+    public T FarClipPlane
+    {
+        get => farClipPlane;
+        set
+        {
+            farClipPlane = value;
+            // TODO make dirty
+        }
+    }
+
     public Radians<T> AngleRight
     {
         get => angleRight;
@@ -137,15 +163,14 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
 
     public void Turn(Vector2<T> mouseMovement)
     {
-        // TODO put constants somewhere
-        var v = mouseMovement / T.CreateChecked(700);
+        var v = mouseMovement * TurnSpeed;
         angleRight += new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.X);
         angleUp -= new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.Y);
     }
 
     public void Move(T forward, T strafe, T up)
     {
-        position += Forward * forward + RightRightAngleOnly * strafe + defaultUp * up;
+        position += Forward * forward - RightRightAngleOnly * strafe + defaultUp * up;
     }
 
     // TODO cache
@@ -153,9 +178,8 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         verticalFieldOfView,
         T.CreateChecked(windowSize.Width),
         T.CreateChecked(windowSize.Height),
-        // TODO near and far should be configurable
-        T.CreateChecked(0.01),
-        T.CreateChecked(1000.0)
+        nearClipPlane,
+        farClipPlane
     );
 
     // TODO cache
@@ -172,12 +196,10 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
 
     private static Radians<T> FixAngleRight(Radians<T> value)
     {
-        // TODO put constants somewhere
-        var pi2 = new Radians<T>(T.Pi * T.CreateChecked(2));
-        var x = value % pi2;
+        var x = value % TwoPi;
         if (x < new Radians<T>(T.Zero))
         {
-            return x + pi2;
+            return x + TwoPi;
         }
         else
         {
@@ -187,8 +209,6 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
 
     private static Radians<T> FixAngleUp(Radians<T> value)
     {
-        // TODO put constants somewhere
-        var limit = new Radians<T>(T.Pi * T.CreateChecked(0.49));
-        return Radians<T>.Clamp(value, -limit, limit);
+        return Radians<T>.Clamp(value, -UpAngleLimit, UpAngleLimit);
     }
 }
