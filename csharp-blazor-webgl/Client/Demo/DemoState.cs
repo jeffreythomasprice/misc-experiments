@@ -139,6 +139,35 @@ public class DemoState : IState
 
     public override Task<IState> UpdateAsync(StateMachine sm, WebGL2RenderingContext gl, TimeSpan timeSpan)
     {
+        float forward = 0;
+        float strafe = 0;
+        float up = 0;
+        if (sm.GetKeyState(KeyboardKey.ArrowUp) || sm.GetKeyState(KeyboardKey.KeyW))
+        {
+            forward += 1.0f;
+        }
+        if (sm.GetKeyState(KeyboardKey.ArrowDown) || sm.GetKeyState(KeyboardKey.KeyS))
+        {
+            forward -= 1.0f;
+        }
+        if (sm.GetKeyState(KeyboardKey.ArrowLeft) || sm.GetKeyState(KeyboardKey.KeyA))
+        {
+            strafe -= 1.0f;
+        }
+        if (sm.GetKeyState(KeyboardKey.ArrowRight) || sm.GetKeyState(KeyboardKey.KeyD))
+        {
+            strafe += 1.0f;
+        }
+        if (sm.GetKeyState(KeyboardKey.Space))
+        {
+            up += 1.0f;
+        }
+        if (sm.GetKeyState(KeyboardKey.ShiftLeft))
+        {
+            up -= 1.0f;
+        }
+        perspectiveCamera.Move(forward, strafe, up);
+
         rotation = (rotation + new Degrees<float>(90.0f) * new Degrees<float>((float)timeSpan.TotalSeconds)) % new Degrees<float>(360);
 
         return Task.FromResult<IState>(this);
@@ -202,18 +231,6 @@ public class DemoState : IState
         {
             perspectiveCamera.Turn(new(e.Movement.X, e.Movement.Y));
         }
-        return Task.CompletedTask;
-    }
-
-    public override Task KeyDown(StateMachine sm, KeyEvent e)
-    {
-        Console.WriteLine($"TODO DemoState, KeyDown, {e}");
-        return Task.CompletedTask;
-    }
-
-    public override Task KeyUp(StateMachine sm, KeyEvent e)
-    {
-        Console.WriteLine($"TODO DemoState, KeyUp, {e}");
         return Task.CompletedTask;
     }
 }

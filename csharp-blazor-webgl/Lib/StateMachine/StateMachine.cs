@@ -7,15 +7,24 @@ public class StateMachine : IAsyncDisposable
 {
     private readonly Canvas canvas;
     private readonly WebGL2RenderingContext gl;
+
     private IState? currentState;
+
     private TimeSpan? lastAnim;
+
     private Size? size;
+
+    private readonly Dictionary<MouseButton, bool> mouseButtonState;
+    private readonly Dictionary<KeyboardKey, bool> keyState;
 
     private StateMachine(Canvas canvas, WebGL2RenderingContext gl, IState initialState)
     {
         this.canvas = canvas;
         this.gl = gl;
         currentState = initialState;
+
+        mouseButtonState = new Dictionary<MouseButton, bool>();
+        keyState = new Dictionary<KeyboardKey, bool>();
     }
 
     public async ValueTask DisposeAsync()
@@ -38,6 +47,16 @@ public class StateMachine : IAsyncDisposable
     {
         get => canvas.IsPointerLocked;
         set => canvas.IsPointerLocked = value;
+    }
+
+    public bool GetMouseButtonState(MouseButton button)
+    {
+        return mouseButtonState.GetValueOrDefault(button, false);
+    }
+
+    public bool GetKeyState(KeyboardKey key)
+    {
+        return keyState.GetValueOrDefault(key, false);
     }
 
     public async Task ResizeAsync(Size size)
@@ -66,7 +85,7 @@ public class StateMachine : IAsyncDisposable
 
     public async Task MouseDown(MouseEvent e)
     {
-        // TODO keep track of button states
+        mouseButtonState[e.Button] = true;
         if (currentState != null)
         {
             await currentState.MouseDown(this, e);
@@ -75,7 +94,7 @@ public class StateMachine : IAsyncDisposable
 
     public async Task MouseUp(MouseEvent e)
     {
-        // TODO keep track of button states
+        mouseButtonState[e.Button] = false;
         if (currentState != null)
         {
             await currentState.MouseUp(this, e);
@@ -92,7 +111,7 @@ public class StateMachine : IAsyncDisposable
 
     public async Task KeyDown(KeyEvent e)
     {
-        // TODO keep track of key states
+        keyState[e.Key] = true;
         if (currentState != null)
         {
             await currentState.KeyDown(this, e);
@@ -101,7 +120,7 @@ public class StateMachine : IAsyncDisposable
 
     public async Task KeyUp(KeyEvent e)
     {
-        // TODO keep track of key states
+        keyState[e.Key] = false;
         if (currentState != null)
         {
             await currentState.KeyUp(this, e);

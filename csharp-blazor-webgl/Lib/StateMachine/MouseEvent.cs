@@ -2,4 +2,4 @@
 
 namespace BlazorExperiments.Lib.StateMachine;
 
-public record MouseEvent(int Button, Vector2<int> Position);
+public record MouseEvent(MouseButton Button, Vector2<int> Position);

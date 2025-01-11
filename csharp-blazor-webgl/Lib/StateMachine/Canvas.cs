@@ -64,14 +64,14 @@ public class Canvas : IAsyncDisposable
     [JSInvokable]
     public void MouseDown(int button, int x, int y)
     {
-        var e = new MouseEvent(button, new(x, y));
+        var e = new MouseEvent((MouseButton)button, new(x, y));
         stateMachine?.MouseDown(e);
     }
 
     [JSInvokable]
     public void MouseUp(int button, int x, int y)
     {
-        var e = new MouseEvent(button, new(x, y));
+        var e = new MouseEvent((MouseButton)button, new(x, y));
         stateMachine?.MouseUp(e);
     }
 

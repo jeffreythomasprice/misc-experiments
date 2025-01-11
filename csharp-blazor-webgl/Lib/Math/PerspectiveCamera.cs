@@ -16,6 +16,8 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
     private Radians<T> angleRight;
     private Radians<T> angleUp;
 
+    // TODO JEFF this is all janked up, double check all math
+
     public PerspectiveCamera(Size windowSize, Radians<T> verticalFieldOfView, Vector3<T> position, Vector3<T> target, Vector3<T> defaultUp)
     {
         // TODO check invalid args
@@ -24,14 +26,10 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         this.verticalFieldOfView = verticalFieldOfView;
 
         this.defaultUp = defaultUp.Normalized();
-        Console.WriteLine($"TODO defaultUp = {defaultUp}");
 
         this.position = position;
-        Console.WriteLine($"TODO position = {position}");
-        Console.WriteLine($"TODO target = {target}");
 
         var forward = (target - position).Normalized();
-        Console.WriteLine($"TODO forward = {forward}");
         if (T.Abs(forward.X) > T.Abs(forward.Y) && T.Abs(forward.X) > T.Abs(forward.Z))
         {
             if (T.Sign(forward.X) > 0)
@@ -65,10 +63,8 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
                 defaultForward = new(T.Zero, T.Zero, -T.One);
             }
         }
-        Console.WriteLine($"TODO defaultForward = {defaultForward}");
 
         var defaultRight = defaultUp.CrossProduct(defaultForward);
-        Console.WriteLine($"TODO defaultRight = {defaultRight}");
 
         var q = new Plane<T>(defaultUp, position).ClosestPointTo(target);
         var u = q - position;
@@ -144,7 +140,7 @@ public class PerspectiveCamera<T> where T : INumber<T>, IRootFunctions<T>, ITrig
         // TODO put constants somewhere
         var v = mouseMovement / T.CreateChecked(700);
         angleRight += new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.X);
-        angleUp += new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.Y);
+        angleUp -= new Degrees<T>(T.CreateChecked(45)).Radians * new Radians<T>(v.Y);
     }
 
     public void Move(T forward, T strafe, T up)
