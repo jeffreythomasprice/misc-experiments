@@ -5,7 +5,7 @@ namespace BlazorExperiments.Lib.Dom;
 
 public class Image : IDisposable
 {
-    private readonly IJSInProcessObjectReference objRef;
+    internal readonly IJSInProcessObjectReference objRef;
     private bool disposedValue;
 
     public static async Task<Image> FromUrl(IJSRuntime js, string url)

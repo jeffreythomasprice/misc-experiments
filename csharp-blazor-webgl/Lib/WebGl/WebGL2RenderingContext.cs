@@ -1,4 +1,5 @@
-﻿using BlazorExperiments.Lib.Math;
+﻿using BlazorExperiments.Lib.Dom;
+using BlazorExperiments.Lib.Math;
 using Microsoft.JSInterop;
 
 namespace BlazorExperiments.Lib.WebGl;
@@ -474,5 +475,10 @@ public class WebGL2RenderingContext
     public void TexImage2D(TextureTarget target, int level, TextureInternalFormat internalFormat, int width, int height, int border, TextureFormat format, TextureDataType type, byte[] pixels)
     {
         objRef.InvokeVoid("texImage2D", target, level, internalFormat, width, height, border, format, type, pixels);
+    }
+
+    public void TexImage2D(TextureTarget target, int level, TextureInternalFormat internalFormat, TextureFormat format, TextureDataType type, Image pixels)
+    {
+        objRef.InvokeVoid("texImage2D", target, level, internalFormat, format, type, pixels.objRef);
     }
 }

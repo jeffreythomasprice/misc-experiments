@@ -71,22 +71,22 @@ public class DemoState : IState
                     """
                 );
 
-                var textureSize = new Size(256, 256);
-                var texturePixels = new ColorRGBA<byte>[textureSize.Width * textureSize.Height];
-                for (var y = 0; y < textureSize.Height; y++)
-                {
-                    var b = (byte)((double)y / (double)textureSize.Height * 255.0);
-                    for (var x = 0; x < textureSize.Width; x++)
-                    {
-                        var a = (byte)((double)x / (double)textureSize.Width * 255.0);
-                        texturePixels[y * textureSize.Width + x] = new(a, b, a, 255);
-                    }
-                }
-                var texture = new Texture(gl, textureSize, texturePixels);
+                //var textureSize = new Size(256, 256);
+                //var texturePixels = new ColorRGBA<byte>[textureSize.Width * textureSize.Height];
+                //for (var y = 0; y < textureSize.Height; y++)
+                //{
+                //    var b = (byte)((double)y / (double)textureSize.Height * 255.0);
+                //    for (var x = 0; x < textureSize.Width; x++)
+                //    {
+                //        var a = (byte)((double)x / (double)textureSize.Width * 255.0);
+                //        texturePixels[y * textureSize.Width + x] = new(a, b, a, 255);
+                //    }
+                //}
+                //var texture = new Texture(gl, textureSize, texturePixels);
 
-                // TODO use url image
-                var image = await Image.FromUrl(sm.JS, "foobar");
-                Console.WriteLine($"TODO image size = {image.Size}");
+                var image = await Image.FromUrl(sm.JS, "graphic-2471012_960_720.png");
+                var textureSize = image.Size;
+                var texture = new Texture(gl, image);
 
                 var textureAspectRatioHeight = 1.0f;
                 var textureAspectRatioWidth = textureAspectRatioHeight * (float)textureSize.Width / (float)textureSize.Height;
