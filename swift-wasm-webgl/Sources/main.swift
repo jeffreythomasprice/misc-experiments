@@ -193,19 +193,19 @@ let arrayBuffer = WebGLBuffer<Vertex>(
     collection: [
         Vertex(
             position: Vector3(x: -1, y: -1, z: 0),
-            color: RGBA(r: 1, g: 1, b: 0, a: 1)
+            color: RGBA(r: 1, g: 0, b: 0, a: 1)
         ),
         Vertex(
             position: Vector3(x: 1, y: -1, z: 0),
-            color: RGBA(r: 0, g: 1, b: 1, a: 1)
+            color: RGBA(r: 0, g: 1, b: 0, a: 1)
         ),
         Vertex(
             position: Vector3(x: 1, y: 1, z: 0),
-            color: RGBA(r: 1, g: 0, b: 1, a: 1)
+            color: RGBA(r: 0, g: 0, b: 1, a: 1)
         ),
         Vertex(
             position: Vector3(x: -1, y: 1, z: 0),
-            color: RGBA(r: 0.5, g: 0, b: 1, a: 1)
+            color: RGBA(r: 1, g: 1, b: 0, a: 1)
         ),
     ]
 )
