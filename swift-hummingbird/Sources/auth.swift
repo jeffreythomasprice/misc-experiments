@@ -46,10 +46,10 @@ actor Auth {
         return (payload, try await keyCollection.sign(payload))
     }
 
-    func verify(jwt: String, on db: any Database) async throws -> User {
+    func verify(jwt: String, db: Database) async throws -> User {
         let payload = try await keyCollection.verify(jwt, as: UserJWTPayload.self, iteratingKeys: false)
         logger.trace("verified payload = \(payload)")
-        if let user = try await User.findByUsername(on: db, username: payload.username) {
+        if let user = try await User.findByUsername(db: db, username: payload.username) {
             return user
         } else {
             throw VerifyError.noSuchUser(username: payload.username)

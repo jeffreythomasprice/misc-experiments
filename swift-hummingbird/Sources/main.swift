@@ -1,11 +1,10 @@
-import FluentKit
-import FluentPostgresDriver
 import Foundation
 import Hummingbird
-import HummingbirdFluent
 import HummingbirdRouter
 import Logging
 import Mustache
+import PostgresMigrations
+import PostgresNIO
 import SwiftDotenv
 import Synchronization
 
@@ -18,10 +17,10 @@ try Dotenv.configure(atPath: "local.env")
 
 let env = Env(logger: logger)
 
-let fluent = await {
+let db = await {
     var logger = logger
     logger.logLevel = .info
-    return await initDb(logger: logger, env: env)
+    return await Database(logger: logger, env: env)
 }()
 
 let auth: Auth
@@ -84,11 +83,11 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
             let password: String
         }
         let requestBody = try await request.decode(as: LoginRequest.self, context: context)
-        context.logger.debug("TODO requestBody \(requestBody)")
+        context.logger.debug("login request username=\(requestBody.username)")
         if case let .some(user) = try await User.validateCredentials(
-            on: fluent.db(), username: requestBody.username, password: requestBody.password)
+            db: db, username: requestBody.username, password: requestBody.password)
         {
-            context.logger.debug("TODO success, user = \(user)")
+            context.logger.debug("login success")
             var response = try await loginPage(request: request, context: context)
             let (jwtPayload, jwt) = try await auth.sign(user: user)
             response.setCookie(
@@ -100,6 +99,7 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
             )
             return response
         } else {
+            context.logger.debug("login failure")
             // TODO show login page again with error message
             throw HTTPError(.unauthorized)
         }
@@ -122,11 +122,13 @@ var app = Application(
     logger: logger
 )
 
+app.addServices(await db.client)
+
 app.beforeServerStarts {
-    try await fluent.migrate()
+    try await db.migrate()
 
     // TODO testing, remove me
-    for user in try await User.query(on: fluent.db()).all() {
+    for try await user in try await User.listAll(db: db) {
         await logger.debug("TODO user: \(user)")
     }
 }

@@ -1,25 +1,27 @@
-import FluentKit
-import SQLKit
+import Logging
+import PostgresMigrations
+import PostgresNIO
 
-struct V1CreateUsersTable: AsyncMigration {
-    var name: String = "V1_createUsersTable"
-
-    func prepare(on database: any FluentKit.Database) async throws {
-        try await database.schema("users")
-            .id()
-            .field("username", .string, .required)
-            .unique(on: .init(stringLiteral: "username"))
-            .field("password", .string, .required)
-            .create().get()
-        if let sql = database as? SQLDatabase {
-            try await sql.insert(into: "users").columns(["id", "username", "password"]).values([
-                SQLFunction("gen_random_uuid"), SQLBind("admin"), SQLBind("admin"),
-            ])
-            .run()
-        }
+struct V1CreateUserTable: DatabaseMigration {
+    func apply(connection: PostgresConnection, logger: Logger) async throws {
+        try await connection.query(
+            """
+            CREATE TABLE users (
+                "username" VARCHAR(256) NOT NULL,
+                "password" VARCHAR(256) NOT NULL
+            )
+            """,
+            logger: logger
+        )
+        try await connection.query(
+            """
+            INSERT INTO users ("username", "password") VALUES (\("admin"), \("admin"))
+            """,
+            logger: logger
+        )
     }
 
-    func revert(on database: any FluentKit.Database) async throws {
-        try await database.schema("users").delete().get()
+    func revert(connection: PostgresConnection, logger: Logger) async throws {
+        try await connection.query("DROP TABLE users", logger: logger)
     }
 }

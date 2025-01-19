@@ -1,37 +1,44 @@
-import FluentKit
+extension AsyncSequence {
+    func toArray() async throws -> [Element] {
+        try await reduce(into: [Element]()) { results, elem in
+            results.append(elem)
+        }
+    }
+}
 
-final class User: Model, @unchecked Sendable {
-    static let schema: String = "users"
-
-    @ID(key: .id)
-    var id: UUID?
-
-    @Field(key: "username")
+struct User {
     var username: String
+    var password: String?
 
-    @Field(key: "password")
-    var password: String
-
-    init() {}
-
-    init(id: UUID? = nil, username: String, password: String) {
-        self.id = id
-        self.username = username
-        self.password = password
+    static func listAll(db: Database) async throws -> any AsyncSequence<User, any Error> {
+        try await db.client.query("SELECT username FROM users")
+            .decode((String).self)
+            .map { (username) in
+                User(username: username)
+            }
     }
 
-    static func validateCredentials(on db: any Database, username: String, password: String) async throws -> User? {
-        try await User.query(on: db)
-            .filter(\.$username == username)
-            .filter(\.$password == password)
-            .first()
-            .get()
+    static func validateCredentials(db: Database, username: String, password: String) async throws -> User? {
+        try await db.client.query(
+            "SELECT username, password FROM users WHERE username = \(username) AND password = \(password)"
+        )
+        .decode((String, String).self)
+        .map { (username, password) in
+            User(username: username, password: password)
+        }
+        .toArray()
+        .first
     }
 
-    static func findByUsername(on db: any Database, username: String) async throws -> User? {
-        try await User.query(on: db)
-            .filter(\.$username == username)
-            .first()
-            .get()
+    static func findByUsername(db: Database, username: String) async throws -> User? {
+        try await db.client.query(
+            "SELECT username FROM users WHERE username = \(username)"
+        )
+        .decode((String).self)
+        .map { (username) in
+            User(username: username)
+        }
+        .toArray()
+        .first
     }
 }
