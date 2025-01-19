@@ -64,17 +64,9 @@ actor Auth {
             throw VerifyError.missingCookie
         }
     }
-
-    func getUser(request: Request, db: Database) async -> User? {
-        do {
-            return try await verify(request: request, db: db)
-        } catch {
-            return nil
-        }
-    }
 }
 
-struct AuthMiddleware<Context: RequestContext>: RouterMiddleware {
+struct AuthMiddleware<Context: ExtendedRequestContext>: RouterMiddleware {
     private let auth: Auth
     private let db: Database
     private let redirect: String
@@ -92,6 +84,7 @@ struct AuthMiddleware<Context: RequestContext>: RouterMiddleware {
         do {
             let result = try await auth.verify(request: request, db: db)
             context.logger.debug("auth success \(result.username)")
+            context.currentUser = result
         } catch {
             context.logger.debug("auth error \(error)")
             return Response.redirect(to: redirect)

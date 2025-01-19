@@ -16,7 +16,7 @@ private struct ClickData {
     var clicks: Int
 }
 
-private func clickView(request: Request, context: any RequestContext, auth: Auth, db: Database, clicks c: Int? = nil) async throws
+private func clickView(request: Request, context: ExtendedRequestContext, clicks c: Int? = nil) async throws
     -> Response
 {
     let clicks =
@@ -27,22 +27,20 @@ private func clickView(request: Request, context: any RequestContext, auth: Auth
         }
     let data = ClickData(clicks: clicks)
     return try await indexView(request: request, context: context) {
-        await IndexData(request: request, auth: auth, db: db, content: try templates.renderToString(data, withTemplate: "clicks.html"))
+        IndexData(content: try templates.renderToString(data, withTemplate: "clicks.html"))
     }
 }
 
-struct ClickController<Context: RouterRequestContext>: RouterController {
-    var auth: Auth
-    var db: Database
+struct ClickController<Context: ExtendedRequestContext>: RouterController {
     var clicks: ClickActor
 
-    var body: some RouterMiddleware<Context> {
+    var body: some RouterMiddleware<ExtendedRequestContext> {
         RouteGroup("click") {
             Get { request, context in
-                try await clickView(request: request, context: context, auth: auth, db: db)
+                try await clickView(request: request, context: context)
             }
             Post { request, context in
-                return try await clickView(request: request, context: context, auth: auth, db: db, clicks: await clicks.increment())
+                return try await clickView(request: request, context: context, clicks: await clicks.increment())
             }
         }
     }

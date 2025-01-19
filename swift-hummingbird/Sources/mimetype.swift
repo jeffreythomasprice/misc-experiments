@@ -72,21 +72,3 @@ struct MIMETypeResponseEncoder: ResponseEncoder {
         throw HTTPError(.badRequest)
     }
 }
-
-struct MIMETypeAwareRequestContext: RequestContext, RouterRequestContext {
-    var coreContext: CoreRequestContextStorage
-
-    init(source: Source) {
-        self.coreContext = .init(source: source)
-    }
-
-    var requestDecoder: MIMETypeRequestDecoder {
-        return MIMETypeRequestDecoder()
-    }
-
-    var responseEncoder: MIMETypeResponseEncoder {
-        return MIMETypeResponseEncoder()
-    }
-
-    var routerContext: RouterBuilderContext = .init()
-}

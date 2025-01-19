@@ -37,7 +37,7 @@ do {
 
 let clicks = ClickActor()
 
-let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
+let router = RouterBuilder(context: ExtendedRequestContext.self) {
     CORSMiddleware()
     LogRequestsMiddleware(.trace, includeHeaders: .all())
     ErrorMiddleware(templates: templates)
@@ -55,12 +55,12 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
     Get("favicon.ico") { _, _ in Response.redirect(to: "/static/favicon.ico") }
 
     // TODO real landing page, no click demo
-    LoginController(auth: auth, db: db, redirectOnSuccessfulLogin: "/auth/click")
+    LoginController(redirectOnSuccessfulLogin: "/auth/click")
 
     RouteGroup("auth") {
         AuthMiddleware(auth: auth, db: db, redirect: "/login")
 
-        ClickController(auth: auth, db: db, clicks: clicks)
+        ClickController(clicks: clicks)
     }
 }
 
