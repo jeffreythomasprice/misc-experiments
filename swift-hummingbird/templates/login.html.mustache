@@ -8,12 +8,17 @@
 		name="username"
 		type="text"
 		placeholder="Username"
+		value="{{{username}}}"
 	/>
 	<label for="password">Password: </label>
 	<input
 		name="password"
 		type="password"
 		placeholder="Password"
+		value="{{{password}}}"
 	/>
 	<button type="submit">Login</button>
+	{{#errorMessages}}
+	<div class="error">{{.}}</div>
+	{{/errorMessages}}
 </form>

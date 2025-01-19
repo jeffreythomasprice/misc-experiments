@@ -17,15 +17,11 @@ try Dotenv.configure(atPath: "local.env")
 
 let env = Env(logger: logger)
 
-let db = await {
-    var logger = logger
-    logger.logLevel = .info
-    return await Database(logger: logger, env: env)
-}()
+let db = await Database(logger: logger.child(logLevel: .info, label: "DB"), env: env)
 
 let auth: Auth
 do {
-    auth = try await Auth(logger: logger)
+    auth = try await Auth(logger: logger.child(label: "Auth"))
 } catch {
     logger.critical("auth init error: \(error)")
     exit(1)
@@ -33,7 +29,7 @@ do {
 
 let templates: Templates
 do {
-    templates = try await Templates.init(logger: logger, directory: "templates", withExtension: "mustache")
+    templates = try await Templates.init(logger: logger.child(label: "Templates"), directory: "templates", withExtension: "mustache")
 } catch {
     logger.critical("mustache init error: \(error)")
     exit(1)
@@ -61,9 +57,15 @@ func clicksHandler(request: Request, context: any RequestContext) async throws -
     }
 }
 
-func loginPage(request: Request, context: MIMETypeAwareRequestContext) async throws -> Response {
+struct LoginData {
+    var username: String
+    var password: String
+    var errorMessages: [String]?
+}
+
+func loginPage(request: Request, context: any RequestContext, data: LoginData) async throws -> Response {
     try await index(request: request, context: context) {
-        try templates.renderToString([:], withTemplate: "login.html")
+        try templates.renderToString(data, withTemplate: "login.html")
     }
 }
 
@@ -71,11 +73,22 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
     CORSMiddleware()
     LogRequestsMiddleware(.trace, includeHeaders: .all())
     ErrorMiddleware(templates: templates)
+    FileMiddleware(
+        "static", urlBasePath: "/staticFiles/", cacheControl: .init([]),
+        searchForIndexHtml: false, logger: logger.child(label: "FilesMiddleware"))
     // TODO auth middleware, check my jwt
     //             let jwtUser = try await auth.verify(jwt: jwt, on: fluent.db())
 
-    Route(.get, "", handler: loginPage)
-    Route(.get, "index.html", handler: loginPage)
+    Route(.get, "") { request, context in
+        Response.redirect(to: "/login")
+    }
+    Route(.get, "index.html") { request, context in
+        Response.redirect(to: "/login")
+    }
+
+    Route(.get, "login") { request, context in
+        try await loginPage(request: request, context: context, data: LoginData(username: "", password: ""))
+    }
 
     Route(.post, "login") { request, context in
         struct LoginRequest: Decodable {
@@ -88,7 +101,15 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
             db: db, username: requestBody.username, password: requestBody.password)
         {
             context.logger.debug("login success")
-            var response = try await loginPage(request: request, context: context)
+            // TODO should be a logged in page, or a redirect
+            var response = try await loginPage(
+                request: request,
+                context: context,
+                data: LoginData(
+                    username: requestBody.username,
+                    password: requestBody.password
+                )
+            )
             let (jwtPayload, jwt) = try await auth.sign(user: user)
             response.setCookie(
                 Cookie(
@@ -100,8 +121,15 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
             return response
         } else {
             context.logger.debug("login failure")
-            // TODO show login page again with error message
-            throw HTTPError(.unauthorized)
+            return try await loginPage(
+                request: request,
+                context: context,
+                data: LoginData(
+                    username: requestBody.username,
+                    password: requestBody.password,
+                    errorMessages: ["Invalid credentials."]
+                )
+            )
         }
     }
 
@@ -119,7 +147,7 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
 var app = Application(
     router: router,
     configuration: .init(address: .hostname(env.assert("HOST"), port: env.assertInt("PORT"))),
-    logger: logger
+    logger: logger.child(label: "App")
 )
 
 app.addServices(await db.client)

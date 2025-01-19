@@ -63,3 +63,20 @@ struct PrintLogger: LogHandler {
         print(result, to: &destination)
     }
 }
+
+extension Logger {
+    func child(logLevel: Level? = nil, label: String? = nil) -> Logger {
+        var result =
+            if let label = label {
+                Logger(label: "\(self.label).\(label)")
+            } else {
+                self
+            }
+        if let logLevel = logLevel {
+            result.logLevel = logLevel
+        } else {
+            result.logLevel = self.logLevel
+        }
+        return result
+    }
+}
