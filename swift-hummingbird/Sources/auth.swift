@@ -1,5 +1,6 @@
 import FluentKit
 import Foundation
+import Hummingbird
 import JWTKit
 import Logging
 
@@ -35,7 +36,6 @@ actor Auth {
         let publicKey = try Insecure.RSA.PublicKey(pem: publicKeyStr)
         logger.trace("jwt public key \(publicKey)")
 
-        logger.debug("TODO jwt private key deref public key = \(privateKey.publicKey)")
         keyCollection = JWTKeyCollection()
         await keyCollection.add(rsa: privateKey, digestAlgorithm: .sha256)
     }
@@ -53,6 +53,36 @@ actor Auth {
             return user
         } else {
             throw VerifyError.noSuchUser(username: payload.username)
+        }
+    }
+}
+
+struct AuthMiddleware<Context: RequestContext>: RouterMiddleware {
+    private let auth: Auth
+    private let db: Database
+    private let redirect: String
+
+    init(auth: Auth, db: Database, redirect: String) {
+        self.auth = auth
+        self.db = db
+        self.redirect = redirect
+    }
+
+    func handle(
+        _ request: HummingbirdCore.Request, context: Context,
+        next: (HummingbirdCore.Request, Context) async throws -> HummingbirdCore.Response
+    ) async throws -> HummingbirdCore.Response {
+        if let jwtCookie = request.cookies["jwt"] {
+            do {
+                let result = try await auth.verify(jwt: jwtCookie.value, db: db)
+                context.logger.debug("auth success \(result.username)")
+            } catch {
+                context.logger.debug("auth error \(error)")
+                return Response.redirect(to: redirect)
+            }
+            return try await next(request, context)
+        } else {
+            return Response.redirect(to: redirect)
         }
     }
 }

@@ -44,7 +44,7 @@ func index(request: Request, context: any RequestContext, content: () async thro
 actor ClicksActor {
     var clicks = 0
 
-    func inccrement() {
+    func increment() {
         clicks += 1
     }
 }
@@ -76,8 +76,6 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
     FileMiddleware(
         "static", urlBasePath: "/static/", cacheControl: .init([]),
         searchForIndexHtml: false, logger: logger.child(label: "FilesMiddleware"))
-    // TODO auth middleware, check my jwt
-    //             let jwtUser = try await auth.verify(jwt: jwt, on: fluent.db())
 
     Route(.get, "") { _, _ in
         Response.redirect(to: "/login")
@@ -103,15 +101,8 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
             db: db, username: requestBody.username, password: requestBody.password)
         {
             context.logger.debug("login success")
-            // TODO should be a logged in page, or a redirect
-            var response = try await loginPage(
-                request: request,
-                context: context,
-                data: LoginData(
-                    username: requestBody.username,
-                    password: requestBody.password
-                )
-            )
+            // TODO real landing page, no click demo
+            var response = Response.redirect(to: "/auth/click")
             let (jwtPayload, jwt) = try await auth.sign(user: user)
             response.setCookie(
                 Cookie(
@@ -135,15 +126,18 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
         }
     }
 
-    /*
-    TODO real routes
-    RouteGroup("user") {
-        BasicAuthenticationMiddleware()
-        Route(.post, "login") { request, context in
-            ...
+    RouteGroup("auth") {
+        AuthMiddleware(auth: auth, db: db, redirect: "/login")
+
+        // TODO no click demo
+        Route(.get, "click") { request, context in
+            try await clicksHandler(request: request, context: context)
+        }
+        Route(.post, "click") { request, context in
+            await clicks.increment()
+            return try await clicksHandler(request: request, context: context)
         }
     }
-    */
 }
 
 var app = Application(
@@ -156,11 +150,6 @@ app.addServices(await db.client)
 
 app.beforeServerStarts {
     try await db.migrate()
-
-    // TODO testing, remove me
-    for try await user in try await User.listAll(db: db) {
-        await logger.debug("TODO user: \(user)")
-    }
 }
 
 do {
