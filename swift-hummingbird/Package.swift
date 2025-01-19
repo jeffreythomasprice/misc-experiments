@@ -13,6 +13,7 @@ let package = Package(
         .package(url: "https://github.com/hummingbird-project/swift-mustache", from: "2.0.0"),
         .package(url: "https://github.com/thebarndog/swift-dotenv.git", from: "2.0.0"),
         .package(url: "https://github.com/vapor/fluent-kit.git", from: "1.50.0"),
+        .package(url: "https://github.com/vapor/jwt-kit.git", from: "5.0.0"),
     ],
     targets: [
         .executableTarget(
@@ -26,6 +27,7 @@ let package = Package(
                 .product(name: "Mustache", package: "swift-mustache"),
                 .product(name: "SwiftDotenv", package: "swift-dotenv"),
                 .product(name: "FluentKit", package: "fluent-kit"),
+                .product(name: "JWTKit", package: "jwt-kit"),
             ]
         ),
         .testTarget(

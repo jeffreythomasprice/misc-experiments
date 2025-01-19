@@ -20,10 +20,17 @@ final class User: Model, @unchecked Sendable {
         self.password = password
     }
 
-    static func validateCredentials(on: any Database, username: String, password: String) async throws -> User? {
-        try await User.query(on: on)
+    static func validateCredentials(on db: any Database, username: String, password: String) async throws -> User? {
+        try await User.query(on: db)
             .filter(\.$username == username)
             .filter(\.$password == password)
+            .first()
+            .get()
+    }
+
+    static func findByUsername(on db: any Database, username: String) async throws -> User? {
+        try await User.query(on: db)
+            .filter(\.$username == username)
             .first()
             .get()
     }

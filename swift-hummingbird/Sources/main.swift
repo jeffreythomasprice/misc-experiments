@@ -24,6 +24,14 @@ let fluent = await {
     return await initDb(logger: logger, env: env)
 }()
 
+let auth: Auth
+do {
+    auth = try await Auth(logger: logger)
+} catch {
+    logger.critical("auth init error: \(error)")
+    exit(1)
+}
+
 let templates: Templates
 do {
     templates = try await Templates.init(logger: logger, directory: "templates", withExtension: "mustache")
@@ -64,6 +72,8 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
     CORSMiddleware()
     LogRequestsMiddleware(.trace, includeHeaders: .all())
     ErrorMiddleware(templates: templates)
+    // TODO auth middleware, check my jwt
+    //             let jwtUser = try await auth.verify(jwt: jwt, on: fluent.db())
 
     Route(.get, "", handler: loginPage)
     Route(.get, "index.html", handler: loginPage)
@@ -79,7 +89,16 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
             on: fluent.db(), username: requestBody.username, password: requestBody.password)
         {
             context.logger.debug("TODO success, user = \(user)")
-            return try await loginPage(request: request, context: context)
+            var response = try await loginPage(request: request, context: context)
+            let (jwtPayload, jwt) = try await auth.sign(user: user)
+            response.setCookie(
+                Cookie(
+                    name: "jwt",
+                    value: jwt,
+                    expires: jwtPayload.exp.value
+                )
+            )
+            return response
         } else {
             // TODO show login page again with error message
             throw HTTPError(.unauthorized)
