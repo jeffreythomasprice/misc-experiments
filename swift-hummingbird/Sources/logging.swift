@@ -52,10 +52,10 @@ struct PrintLogger: LogHandler {
         level: Logger.Level, message: Logger.Message, metadata: Logger.Metadata?, source: String, file: String, function: String, line: UInt
     ) {
         let date = formatter.string(from: Date())
-        let metadata = metadata?.map { key, value in "\(key)=\(value)" }.joined(separator: " ")
+        let metadata = self.metadata.map { key, value in "\(key)=\(value)" } + (metadata?.map { key, value in "\(key)=\(value)" } ?? [])
         var result = "\(date) \(level) \(name): "
-        if case let .some(metadata) = metadata {
-            result += metadata
+        if !metadata.isEmpty {
+            result += metadata.joined(separator: " ")
             result += " "
         }
         result += message.description

@@ -35,7 +35,6 @@ private func clickView(request: Request, context: ExtendedRequestContext, clicks
         context: context,
         clicks: clicks
     )
-    context.logger.debug("TODO click, current user = \(data.currentUser)")
     return try templates.renderToResponse(data, withTemplate: "clicks.html")
 }
 

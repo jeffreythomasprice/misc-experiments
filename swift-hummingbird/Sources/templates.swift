@@ -30,14 +30,10 @@ final class Templates: Sendable {
     }
 
     func renderToString<T: TemplateData>(_ object: T, withTemplate template: String) throws -> String {
-        // TODO convenience extensions for logging lots of metadata?
-        logger.trace(
-            "rendering template",
-            metadata: Logger.Metadata(
-                dictionaryLiteral: ("template", Logger.Metadata.Value(stringLiteral: template)),
-                ("templateData", Logger.Metadata.Value(stringLiteral: String(describing: object)))
-            )
-        )
+        var logger = logger
+        logger[metadataKey: "template"] = "\(template)"
+        logger[metadataKey: "templateData"] = "\(String(describing: object))"
+        logger.trace("rendering template")
         if case let .some(result) = mustacheLibrary.render(object, withTemplate: template) {
             return result
         } else {
