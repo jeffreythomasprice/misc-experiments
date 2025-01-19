@@ -19,4 +19,12 @@ final class User: Model, @unchecked Sendable {
         self.username = username
         self.password = password
     }
+
+    static func validateCredentials(on: any Database, username: String, password: String) async throws -> User? {
+        try await User.query(on: on)
+            .filter(\.$username == username)
+            .filter(\.$password == password)
+            .first()
+            .get()
+    }
 }

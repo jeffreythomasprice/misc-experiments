@@ -37,6 +37,7 @@ func index(request: Request, context: any RequestContext, content: () async thro
     return try templates.renderToResponse(["content": content], withTemplate: "index.html")
 }
 
+// TODO no
 actor ClicksActor {
     var clicks = 0
 
@@ -46,19 +47,63 @@ actor ClicksActor {
 }
 let clicks = ClicksActor()
 
+// TODO no
 func clicksHandler(request: Request, context: any RequestContext) async throws -> Response {
     return try await index(request: request, context: context) {
-        return try templates.renderToString(["clicks": await clicks.clicks], withTemplate: "clicks.html")
+        try templates.renderToString(["clicks": await clicks.clicks], withTemplate: "clicks.html")
     }
 }
 
-let router = RouterBuilder(context: BasicRouterRequestContext.self) {
+func loginPage(request: Request, context: any RequestContext) async throws -> Response {
+    try await index(request: request, context: context) {
+        try templates.renderToString([:], withTemplate: "login.html")
+    }
+}
+
+// TODO do something smart with Accept and Content-Type headers, see https://docs.hummingbird.codes/2.0/documentation/hummingbird/encodinganddecoding#DecodingEncoding-based-on-Request-headers
+struct URLEncodedRequestContext: RequestContext, RouterRequestContext {
+    var coreContext: CoreRequestContextStorage
+
+    init(source: Source) {
+        self.coreContext = .init(source: source)
+    }
+
+    var requestDecoder: URLEncodedFormDecoder {
+        return URLEncodedFormDecoder()
+    }
+
+    var responseEncoder: URLEncodedFormEncoder {
+        return URLEncodedFormEncoder()
+    }
+
+    var routerContext: RouterBuilderContext = .init()
+}
+
+let router = RouterBuilder(context: URLEncodedRequestContext.self) {
     CORSMiddleware()
     LogRequestsMiddleware(.trace, includeHeaders: .all())
     ErrorMiddleware(templates: templates)
 
-    Route(.get, "", handler: clicksHandler)
-    Route(.get, "index.html", handler: clicksHandler)
+    Route(.get, "", handler: loginPage)
+    Route(.get, "index.html", handler: loginPage)
+
+    Route(.post, "login") { request, context in
+        struct LoginRequest: Decodable {
+            let username: String
+            let password: String
+        }
+        let requestBody = try await request.decode(as: LoginRequest.self, context: context)
+        context.logger.debug("TODO requestBody \(requestBody)")
+        if case let .some(user) = try await User.validateCredentials(
+            on: fluent.db(), username: requestBody.username, password: requestBody.password)
+        {
+            context.logger.debug("TODO success, user = \(user)")
+            return try await loginPage(request: request, context: context)
+        } else {
+            // TODO show login page again with error message
+            throw HTTPError(.unauthorized)
+        }
+    }
 
     /*
     TODO real routes
