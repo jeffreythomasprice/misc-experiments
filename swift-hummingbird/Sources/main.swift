@@ -16,51 +16,13 @@ logger.logLevel = .trace
 
 try Dotenv.configure(atPath: "local.env")
 
-let assertEnvVar = { (_ name: String) -> String in
-    if case let .some(result) = Dotenv[name] {
-        return result.stringValue
-    }
-    logger.critical("expected env var \(name)")
-    exit(1)
-}
+let env = Env(logger: logger)
 
-let assertEnvVarInt = { (_ name: String) -> Int in
-    if case let .some(result) = Int(assertEnvVar(name)) {
-        return result
-    }
-    logger.critical("env var isn't an integer \(name)")
-    exit(1)
-}
-
-let fluent = Fluent(logger: logger)
-fluent.databases.use(
-    .postgres(
-        configuration: .init(
-            hostname: assertEnvVar("POSTGRES_HOST"), port: assertEnvVarInt("POSTGRES_PORT"), username: assertEnvVar("POSTGRES_USER"),
-            password: assertEnvVar("POSTGRES_PASSWORD"), database: assertEnvVar("POSTGRES_DB"),
-            tls: .disable),
-        maxConnectionsPerEventLoop: 1, connectionPoolTimeout: .seconds(10), encodingContext: .default,
-        decodingContext: .default,
-        sqlLogLevel: .debug),
-    as: .psql)
-
-struct TestMigration: AsyncMigration {
-    func prepare(on database: any FluentKit.Database) async throws {
-        try await database.schema("users")
-            .field("username", .string, .required)
-            .unique(on: .init(stringLiteral: "username"))
-            .field("password", .string, .required)
-            .create().get()
-        if let sql = database as? SQLDatabase {
-            try await sql.insert(into: "users").columns(["username", "password"]).values(["admin", "admin"]).run()
-        }
-    }
-
-    func revert(on database: any FluentKit.Database) async throws {
-        try await database.schema("users").delete().get()
-    }
-}
-await fluent.migrations.add(TestMigration())
+let fluent = await {
+    var logger = logger
+    logger.logLevel = .info
+    return await initDb(logger: logger, env: env)
+}()
 
 let templates: Templates
 do {
@@ -111,16 +73,21 @@ let router = RouterBuilder(context: BasicRouterRequestContext.self) {
 
 var app = Application(
     router: router,
-    configuration: .init(address: .hostname(assertEnvVar("HOST"), port: assertEnvVarInt("PORT"))),
+    configuration: .init(address: .hostname(env.assert("HOST"), port: env.assertInt("PORT"))),
     logger: logger
 )
 
 app.beforeServerStarts {
     try await fluent.migrate()
+
+    // TODO testing, remove me
+    for user in try await User.query(on: fluent.db()).all() {
+        await logger.debug("TODO user: \(user)")
+    }
 }
 
 do {
     try await app.runService()
 } catch {
-    logger.critical("server error: \(error)")
+    logger.critical("server error: \(String(reflecting: error))")
 }
