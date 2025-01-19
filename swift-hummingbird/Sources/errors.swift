@@ -18,17 +18,25 @@ struct ErrorMiddleware<Context: RequestContext>: RouterMiddleware {
     func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
         do {
             return try await next(request, context)
-        } catch let error as TemplateErrors {
-            context.logger.warning("handler failed: \(error)")
+        } catch let error as HasErrorData {
+            context.logger.warning("handler failed with error template: \(error)")
             let data = error.errorData
             do {
                 return try templates.renderToResponse(data, withTemplate: "error.html")
             } catch {
-                context.logger.error("failed to render template for \(data), error: \(error)")
+                context.logger.error("failed to render template for \(data), new error: \(error)")
+                return Response(status: .internalServerError)
+            }
+        } catch let error as HTTPError {
+            context.logger.warning("handler failed with http error: \(error)")
+            do {
+                return try error.response(from: request, context: context)
+            } catch {
+                context.logger.error("failed to render response from previous http error, new error: \(error)")
                 return Response(status: .internalServerError)
             }
         } catch {
-            context.logger.warning("handler failed: \(error)")
+            context.logger.warning("handler failed other error: \(error)")
             return Response(status: .internalServerError)
         }
     }

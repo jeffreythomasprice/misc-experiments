@@ -1,0 +1,26 @@
+services:
+  db:
+    container_name: db
+    image: postgres
+    env_file: "local.env"
+    environment:
+      PGDATA: /data/postgres
+    volumes:
+      - db:/data/postgres
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    networks:
+      - db
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d postgres" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  db:
+    driver: bridge
+
+volumes:
+  db:
