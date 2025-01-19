@@ -74,17 +74,19 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
     LogRequestsMiddleware(.trace, includeHeaders: .all())
     ErrorMiddleware(templates: templates)
     FileMiddleware(
-        "static", urlBasePath: "/staticFiles/", cacheControl: .init([]),
+        "static", urlBasePath: "/static/", cacheControl: .init([]),
         searchForIndexHtml: false, logger: logger.child(label: "FilesMiddleware"))
     // TODO auth middleware, check my jwt
     //             let jwtUser = try await auth.verify(jwt: jwt, on: fluent.db())
 
-    Route(.get, "") { request, context in
+    Route(.get, "") { _, _ in
         Response.redirect(to: "/login")
     }
-    Route(.get, "index.html") { request, context in
+    Route(.get, "index.html") { _, _ in
         Response.redirect(to: "/login")
     }
+
+    Route(.get, "favicon.ico") { _, _ in Response.redirect(to: "/static/favicon.ico") }
 
     Route(.get, "login") { request, context in
         try await loginPage(request: request, context: context, data: LoginData(username: "", password: ""))
