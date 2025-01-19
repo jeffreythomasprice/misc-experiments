@@ -1,15 +1,16 @@
+import Foundation
 import Hummingbird
 import HummingbirdRouter
 
-struct LoginData {
+private struct LoginData {
     var username: String
     var password: String
     var errorMessages: [String]?
 }
 
-func loginView(request: Request, context: any RequestContext, data: LoginData) async throws -> Response {
+private func loginView(request: Request, context: any RequestContext, auth: Auth, db: Database, data: LoginData) async throws -> Response {
     try await indexView(request: request, context: context) {
-        IndexData(content: try templates.renderToString(data, withTemplate: "login.html"))
+        await IndexData(request: request, auth: auth, db: db, content: try templates.renderToString(data, withTemplate: "login.html"))
     }
 }
 
@@ -19,12 +20,14 @@ private struct LoginRequest: Decodable {
 }
 
 struct LoginController<Context: RouterRequestContext>: RouterController {
+    var auth: Auth
+    var db: Database
     var redirectOnSuccessfulLogin: String
 
     var body: some RouterMiddleware<Context> {
         RouteGroup("login") {
             Get { request, context in
-                try await loginView(request: request, context: context, data: LoginData(username: "", password: ""))
+                try await loginView(request: request, context: context, auth: auth, db: db, data: LoginData(username: "", password: ""))
             }
             Post { request, context in
                 let requestBody = try await request.decode(as: LoginRequest.self, context: context)
@@ -48,6 +51,8 @@ struct LoginController<Context: RouterRequestContext>: RouterController {
                     return try await loginView(
                         request: request,
                         context: context,
+                        auth: auth,
+                        db: db,
                         data: LoginData(
                             username: requestBody.username,
                             password: requestBody.password,
@@ -55,6 +60,15 @@ struct LoginController<Context: RouterRequestContext>: RouterController {
                         )
                     )
                 }
+            }
+        }
+
+        RouteGroup("logout") {
+            Get { request, context in
+                var response = Response.redirect(to: "login")
+                // "delete" cookie by clearing it and setting expiration  to now
+                response.setCookie(Cookie(name: "jwt", value: "", expires: Date.now))
+                return response
             }
         }
     }

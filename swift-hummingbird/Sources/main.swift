@@ -55,12 +55,12 @@ let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
     Get("favicon.ico") { _, _ in Response.redirect(to: "/static/favicon.ico") }
 
     // TODO real landing page, no click demo
-    LoginController(redirectOnSuccessfulLogin: "/auth/click")
+    LoginController(auth: auth, db: db, redirectOnSuccessfulLogin: "/auth/click")
 
     RouteGroup("auth") {
         AuthMiddleware(auth: auth, db: db, redirect: "/login")
 
-        ClickController(clicks: clicks)
+        ClickController(auth: auth, db: db, clicks: clicks)
     }
 }
 

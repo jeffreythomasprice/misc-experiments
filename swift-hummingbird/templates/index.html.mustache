@@ -10,6 +10,12 @@
 </head>
 
 <body>
+	{{#currentUser}}
+	<div>
+		Logged in as: {{username}}
+		<a href="/logout">Log Out</a>
+	</div>
+	{{/currentUser}}
 	{{{content}}}
 </body>
 

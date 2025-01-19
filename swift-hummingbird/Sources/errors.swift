@@ -28,6 +28,7 @@ struct ErrorMiddleware<Context: RequestContext>: RouterMiddleware {
                 return Response(status: .internalServerError)
             }
         } catch let error as HTTPError {
+            // TODO render a template for HTTP errors, special case for 404
             context.logger.warning("handler failed with http error: \(error)")
             do {
                 return try error.response(from: request, context: context)

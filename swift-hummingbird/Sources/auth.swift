@@ -20,6 +20,7 @@ struct UserJWTPayload: JWTPayload {
 
 enum VerifyError: Error {
     case noSuchUser(username: String)
+    case missingCookie
 }
 
 actor Auth {
@@ -55,6 +56,22 @@ actor Auth {
             throw VerifyError.noSuchUser(username: payload.username)
         }
     }
+
+    func verify(request: Request, db: Database) async throws -> User {
+        if let jwtCookie = request.cookies["jwt"] {
+            return try await auth.verify(jwt: jwtCookie.value, db: db)
+        } else {
+            throw VerifyError.missingCookie
+        }
+    }
+
+    func getUser(request: Request, db: Database) async -> User? {
+        do {
+            return try await verify(request: request, db: db)
+        } catch {
+            return nil
+        }
+    }
 }
 
 struct AuthMiddleware<Context: RequestContext>: RouterMiddleware {
@@ -69,20 +86,16 @@ struct AuthMiddleware<Context: RequestContext>: RouterMiddleware {
     }
 
     func handle(
-        _ request: HummingbirdCore.Request, context: Context,
-        next: (HummingbirdCore.Request, Context) async throws -> HummingbirdCore.Response
-    ) async throws -> HummingbirdCore.Response {
-        if let jwtCookie = request.cookies["jwt"] {
-            do {
-                let result = try await auth.verify(jwt: jwtCookie.value, db: db)
-                context.logger.debug("auth success \(result.username)")
-            } catch {
-                context.logger.debug("auth error \(error)")
-                return Response.redirect(to: redirect)
-            }
-            return try await next(request, context)
-        } else {
+        _ request: Request, context: Context,
+        next: (Request, Context) async throws -> Response
+    ) async throws -> Response {
+        do {
+            let result = try await auth.verify(request: request, db: db)
+            context.logger.debug("auth success \(result.username)")
+        } catch {
+            context.logger.debug("auth error \(error)")
             return Response.redirect(to: redirect)
         }
+        return try await next(request, context)
     }
 }
