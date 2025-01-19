@@ -54,32 +54,13 @@ func clicksHandler(request: Request, context: any RequestContext) async throws -
     }
 }
 
-func loginPage(request: Request, context: any RequestContext) async throws -> Response {
+func loginPage(request: Request, context: MIMETypeAwareRequestContext) async throws -> Response {
     try await index(request: request, context: context) {
         try templates.renderToString([:], withTemplate: "login.html")
     }
 }
 
-// TODO do something smart with Accept and Content-Type headers, see https://docs.hummingbird.codes/2.0/documentation/hummingbird/encodinganddecoding#DecodingEncoding-based-on-Request-headers
-struct URLEncodedRequestContext: RequestContext, RouterRequestContext {
-    var coreContext: CoreRequestContextStorage
-
-    init(source: Source) {
-        self.coreContext = .init(source: source)
-    }
-
-    var requestDecoder: URLEncodedFormDecoder {
-        return URLEncodedFormDecoder()
-    }
-
-    var responseEncoder: URLEncodedFormEncoder {
-        return URLEncodedFormEncoder()
-    }
-
-    var routerContext: RouterBuilderContext = .init()
-}
-
-let router = RouterBuilder(context: URLEncodedRequestContext.self) {
+let router = RouterBuilder(context: MIMETypeAwareRequestContext.self) {
     CORSMiddleware()
     LogRequestsMiddleware(.trace, includeHeaders: .all())
     ErrorMiddleware(templates: templates)

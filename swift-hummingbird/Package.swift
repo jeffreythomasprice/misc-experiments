@@ -27,6 +27,12 @@ let package = Package(
                 .product(name: "SwiftDotenv", package: "swift-dotenv"),
                 .product(name: "FluentKit", package: "fluent-kit"),
             ]
-        )
+        ),
+        .testTarget(
+            name: "ExperimentTests",
+            dependencies: [
+                .byName(name: "Experiment")
+            ]
+        ),
     ]
 )
