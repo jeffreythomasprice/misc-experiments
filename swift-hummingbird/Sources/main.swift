@@ -44,17 +44,20 @@ fluent.databases.use(
         sqlLogLevel: .debug),
     as: .psql)
 
-struct TestMigration: Migration {
-    func prepare(on database: any FluentKit.Database) -> NIOCore.EventLoopFuture<Void> {
-        database.schema("users")
-            .id()
-            .field("email", .string, .required, .sql(unsafeRaw: "unique"))
+struct TestMigration: AsyncMigration {
+    func prepare(on database: any FluentKit.Database) async throws {
+        try await database.schema("users")
+            .field("username", .string, .required)
+            .unique(on: .init(stringLiteral: "username"))
             .field("password", .string, .required)
-            .create()
+            .create().get()
+        if let sql = database as? SQLDatabase {
+            try await sql.insert(into: "users").columns(["username", "password"]).values(["admin", "admin"]).run()
+        }
     }
 
-    func revert(on database: any FluentKit.Database) -> NIOCore.EventLoopFuture<Void> {
-        database.schema("users").delete()
+    func revert(on database: any FluentKit.Database) async throws {
+        try await database.schema("users").delete().get()
     }
 }
 await fluent.migrations.add(TestMigration())
