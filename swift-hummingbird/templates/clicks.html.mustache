@@ -1,8 +1,12 @@
 <!-- TODO remove clicks demo -->
-<form
-	method="post"
-	action="/auth/click"
->
-	<div>Clicks: {{clicks}}</div>
-	<button type="submit">Click Me</button>
-</form>
+{{<index.html}}
+	{{$body}}
+		<form
+			method="post"
+			action="/auth/click"
+		>
+			<div>Clicks: {{clicks}}</div>
+			<button type="submit">Click Me</button>
+		</form>
+	{{/body}}
+{{/index.html}}

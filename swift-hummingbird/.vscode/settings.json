@@ -9,8 +9,5 @@
 		"**/.DS_Store": true,
 		"**/Thumbs.db": true,
 		"**/.build": true,
-	},
-	"files.associations": {
-		"*.mustache": "html"
 	}
 }

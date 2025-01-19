@@ -5,18 +5,19 @@
 	<meta charset="utf-8" />
 	<link
 		rel="stylesheet"
-		href="static/index.css"
+		href="/static/index.css"
 	>
 </head>
 
 <body>
 	{{#currentUser}}
-	<div>
-		Logged in as: {{username}}
-		<a href="/logout">Log Out</a>
-	</div>
+		<div>
+			Logged in as: {{username}}
+			<a href="/logout">Log Out</a>
+		</div>
 	{{/currentUser}}
-	{{{content}}}
+	{{$body}}
+	{{/body}}
 </body>
 
 </html>

@@ -2,16 +2,22 @@ import Foundation
 import Hummingbird
 import HummingbirdRouter
 
-private struct LoginData {
+private class LoginData: TemplateData {
     var username: String
     var password: String
     var errorMessages: [String]?
+
+    init(username: String = "", password: String = "", errorMessages: [String]? = nil) {
+        self.username = username
+        self.password = password
+        self.errorMessages = errorMessages
+    }
+
+    var currentUser: User? = nil
 }
 
 private func loginView(request: Request, context: ExtendedRequestContext, data: LoginData) async throws -> Response {
-    try await indexView(request: request, context: context) {
-        IndexData(content: try templates.renderToString(data, withTemplate: "login.html"))
-    }
+    try templates.renderToResponse(data, withTemplate: "login.html")
 }
 
 private struct LoginRequest: Decodable {
@@ -25,7 +31,9 @@ struct LoginController<Context: ExtendedRequestContext>: RouterController {
     var body: some RouterMiddleware<ExtendedRequestContext> {
         RouteGroup("login") {
             Get { request, context in
-                try await loginView(request: request, context: context, data: LoginData(username: "", password: ""))
+                try await loginView(
+                    request: request, context: context,
+                    data: LoginData())
             }
             Post { request, context in
                 let requestBody = try await request.decode(as: LoginRequest.self, context: context)

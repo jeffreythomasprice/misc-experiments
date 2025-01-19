@@ -12,8 +12,14 @@ actor ClickActor {
     }
 }
 
-private struct ClickData {
+private class ClickData: TemplateData {
     var clicks: Int
+    var currentUser: User?
+
+    init(context: ExtendedRequestContext, clicks: Int) {
+        self.clicks = clicks
+        self.currentUser = context.currentUser
+    }
 }
 
 private func clickView(request: Request, context: ExtendedRequestContext, clicks c: Int? = nil) async throws
@@ -25,10 +31,12 @@ private func clickView(request: Request, context: ExtendedRequestContext, clicks
         } else {
             await clicks.clicks
         }
-    let data = ClickData(clicks: clicks)
-    return try await indexView(request: request, context: context) {
-        IndexData(content: try templates.renderToString(data, withTemplate: "clicks.html"))
-    }
+    let data = ClickData(
+        context: context,
+        clicks: clicks
+    )
+    context.logger.debug("TODO click, current user = \(data.currentUser)")
+    return try templates.renderToResponse(data, withTemplate: "clicks.html")
 }
 
 struct ClickController<Context: ExtendedRequestContext>: RouterController {
