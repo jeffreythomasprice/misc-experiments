@@ -2,7 +2,6 @@ import Foundation
 import Hummingbird
 import HummingbirdRouter
 import Logging
-import Mustache
 import PostgresMigrations
 import PostgresNIO
 import SwiftDotenv
@@ -27,20 +26,12 @@ do {
     exit(1)
 }
 
-let templates: Templates
-do {
-    templates = try await Templates.init(logger: logger.child(label: "Templates"), directory: "templates", withExtension: "mustache")
-} catch {
-    logger.critical("mustache init error: \(error)")
-    exit(1)
-}
-
 let clicks = ClickActor()
 
 let router = RouterBuilder(context: ExtendedRequestContext.self) {
     CORSMiddleware()
     LogRequestsMiddleware(.trace, includeHeaders: .all())
-    ErrorMiddleware(templates: templates)
+    ErrorMiddleware()
     FileMiddleware(
         "static", urlBasePath: "/static/", cacheControl: .init([]),
         searchForIndexHtml: false, logger: logger.child(label: "FilesMiddleware"))

@@ -1,23 +1,33 @@
+import Elementary
 import Foundation
 import Hummingbird
+import HummingbirdElementary
 import HummingbirdRouter
 
-private class LoginData: TemplateData {
-    var currentUser: User? = nil
-    var navBar: NavBar? = nil
-    var username: String
-    var password: String
-    var errorMessages: [String]?
+private class Content: HTML {
+    private let username: String
+    private let password: String
+    private let errorMessages: [String]?
 
     init(username: String = "", password: String = "", errorMessages: [String]? = nil) {
         self.username = username
         self.password = password
         self.errorMessages = errorMessages
     }
-}
 
-private func loginView(request: Request, context: ExtendedRequestContext, data: LoginData) async throws -> Response {
-    try templates.renderToResponse(data, withTemplate: "login.html")
+    var content: some HTML {
+        div {
+            div { "Login" }
+            form(.method(.post), .action("/login")) {
+                label(.for("username")) { "Username" }
+                input(.name("username"), .type(.text), .placeholder("Username"), .value(username))
+                label(.for("password")) { "Password" }
+                input(.name("password"), .type(.text), .placeholder("password"), .value(password))
+                button(.type(.submit)) { "Login" }
+                ErrorMessages(messages: errorMessages)
+            }
+        }
+    }
 }
 
 private struct LoginRequest: Decodable {
@@ -31,9 +41,9 @@ struct LoginController<Context: ExtendedRequestContext>: RouterController {
     var body: some RouterMiddleware<ExtendedRequestContext> {
         RouteGroup("login") {
             Get { request, context in
-                try await loginView(
-                    request: request, context: context,
-                    data: LoginData())
+                HTMLResponse {
+                    IndexPage(context: context, content: Content())
+                }
             }
             Post { request, context in
                 let requestBody = try await request.decode(as: LoginRequest.self, context: context)
@@ -54,15 +64,16 @@ struct LoginController<Context: ExtendedRequestContext>: RouterController {
                     return response
                 } else {
                     context.logger.debug("login failure")
-                    return try await loginView(
-                        request: request,
-                        context: context,
-                        data: LoginData(
-                            username: requestBody.username,
-                            password: requestBody.password,
-                            errorMessages: ["Invalid credentials."]
+                    return try HTMLResponse {
+                        IndexPage(
+                            context: context,
+                            content: Content(
+                                username: requestBody.username,
+                                password: requestBody.password,
+                                errorMessages: ["Invalid credentials."]
+                            )
                         )
-                    )
+                    }.response(from: request, context: context)
                 }
             }
         }

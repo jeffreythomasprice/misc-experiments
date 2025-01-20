@@ -1,57 +1,48 @@
+import Elementary
 import Hummingbird
+import HummingbirdElementary
 import HummingbirdRouter
 
-let ROUTE_GROUP_PATH = "users"
-let BASE_PATH = "/auth/\(ROUTE_GROUP_PATH)"
+private let ROUTE_GROUP_PATH = "users"
+private let BASE_PATH = "/auth/\(ROUTE_GROUP_PATH)"
 
-private struct UsersTableRow {
-    let username: String
-    let editUrl: String?
-    let deleteUrl: String?
-}
-
-private struct UsersTableData: TemplateData {
-    let currentUser: User?
-    let navBar: NavBar?
-    let users: [UsersTableRow]
-    let createUrl: String
+private class TableContent: HTML {
+    private let users: [User]
+    private let currentUser: User?
 
     init(context: ExtendedRequestContext, users: [User]) {
-        (self.currentUser, self.navBar) = commonTemplateData(context: context)
-        let currentUser = self.currentUser
-        self.users = users.map { user in
-            let isCurrentUser = user.username == currentUser?.username
-            let isAdmin = currentUser?.isAdmin ?? false
-            let editUrl: String? =
-                if isAdmin || isCurrentUser {
-                    "\(BASE_PATH)/edit/\(user.username)"
-                } else {
-                    nil
-                }
-            let deleteUrl: String? =
-                if isAdmin && !isCurrentUser {
-                    "\(BASE_PATH)/delete/\(user.username)"
-                } else {
-                    nil
-                }
-            return UsersTableRow(
-                username: user.username,
-                editUrl: editUrl,
-                deleteUrl: deleteUrl
-            )
-        }
-        self.createUrl = "\(BASE_PATH)/create"
+        self.users = users
+        self.currentUser = context.currentUser
     }
-}
 
-private func usersTableView(request: Request, context: ExtendedRequestContext, db: Database) async throws -> Response {
-    // TODO paging
-    let users = try await User.listAll(db: db).toArray()
-    let data = UsersTableData(
-        context: context,
-        users: users
-    )
-    return try templates.renderToResponse(data, withTemplate: "users-table-view.html")
+    var content: some HTML {
+        div {
+            table {
+                tr {
+                    th { "Username" }
+                    th {}
+                    th {}
+                }
+                for user in users {
+                    tr {
+                        td { user.username }
+                        td {
+                            if currentUser?.isAdmin == true || user.username == currentUser?.username {
+                                a(.href("\(BASE_PATH)/edit/\(user.username)")) { "Edit" }
+                            }
+                        }
+                        td {
+                            if currentUser?.isAdmin == true && user.username != currentUser?.username {
+                                a(.href("\(BASE_PATH)/delete/\(user.username)")) { "Delete" }
+                            }
+                        }
+                    }
+                }
+            }
+            // TODO paging info
+            a(.href("\(BASE_PATH)/create")) { "New" }
+        }
+    }
 }
 
 struct UsersController<Context: ExtendedRequestContext>: RouterController {
@@ -60,7 +51,10 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
     var body: some RouterMiddleware<ExtendedRequestContext> {
         RouteGroup("\(ROUTE_GROUP_PATH)") {
             Get { request, context in
-                try await usersTableView(request: request, context: context, db: db)
+                let users = try await User.listAll(db: db).toArray()
+                return HTMLResponse {
+                    IndexPage(context: context, content: TableContent(context: context, users: users))
+                }
             }
 
             // TODO impl
