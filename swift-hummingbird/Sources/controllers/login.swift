@@ -3,6 +3,8 @@ import Hummingbird
 import HummingbirdRouter
 
 private class LoginData: TemplateData {
+    var currentUser: User? = nil
+    var navBar: NavBar? = nil
     var username: String
     var password: String
     var errorMessages: [String]?
@@ -12,8 +14,6 @@ private class LoginData: TemplateData {
         self.password = password
         self.errorMessages = errorMessages
     }
-
-    var currentUser: User? = nil
 }
 
 private func loginView(request: Request, context: ExtendedRequestContext, data: LoginData) async throws -> Response {

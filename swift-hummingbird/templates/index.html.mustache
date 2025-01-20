@@ -16,6 +16,15 @@
 			<a href="/logout">Log Out</a>
 		</div>
 	{{/currentUser}}
+	
+	{{#navBar}}
+		<div>
+			{{#items}}
+				<a href="{{url}}">{{text}}</a>
+			{{/items}}
+		</div>
+	{{/navBar}}
+
 	{{$body}}
 	{{/body}}
 </body>

@@ -13,8 +13,32 @@ extension TemplateErrors: HasErrorData {
     }
 }
 
+struct NavBarItem {
+    let text: String
+    let url: String
+}
+
+struct NavBar {
+    let items: [NavBarItem]
+}
+
 protocol TemplateData {
-    var currentUser: User? { get set }
+    var currentUser: User? { get }
+    var navBar: NavBar? { get }
+}
+
+func commonTemplateData(context: ExtendedRequestContext?) -> (User?, NavBar?) {
+    if let context = context {
+        return (
+            context.currentUser,
+            NavBar(items: [
+                NavBarItem(text: "Clicks", url: "/auth/click"),
+                NavBarItem(text: "Users", url: "/auth/users"),
+            ])
+        )
+    } else {
+        return (nil, nil)
+    }
 }
 
 final class Templates: Sendable {

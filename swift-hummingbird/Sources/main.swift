@@ -61,6 +61,7 @@ let router = RouterBuilder(context: ExtendedRequestContext.self) {
         AuthMiddleware(auth: auth, db: db, redirect: "/login")
 
         ClickController(clicks: clicks)
+        UsersController(db: db)
     }
 }
 

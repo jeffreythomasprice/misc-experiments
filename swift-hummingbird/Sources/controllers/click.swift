@@ -13,12 +13,13 @@ actor ClickActor {
 }
 
 private class ClickData: TemplateData {
-    var clicks: Int
-    var currentUser: User?
+    let currentUser: User?
+    let navBar: NavBar?
+    let clicks: Int
 
     init(context: ExtendedRequestContext, clicks: Int) {
+        (self.currentUser, self.navBar) = commonTemplateData(context: context)
         self.clicks = clicks
-        self.currentUser = context.currentUser
     }
 }
 
