@@ -1,3 +1,19 @@
 .error {
 	color: red;
 }
+
+table,
+tr,
+td,
+th {
+	border: 1px solid;
+	border-collapse: collapse;
+}
+
+th {
+	background-color: darkgrey;
+}
+
+.disabled {
+	color: gray;
+}

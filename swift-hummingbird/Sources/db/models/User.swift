@@ -2,12 +2,29 @@
 struct Paging {
     let limit: Int
     let offset: Int
+
+    init(limit: Int, offset: Int) {
+        self.limit = limit
+        self.offset = offset
+    }
+
+    init(limit: Int, page: Int) {
+        self.init(limit: limit, offset: limit * (page - 1))
+    }
+
+    var pageIndex: Int {
+        offset / limit + 1
+    }
 }
 
 struct PagingResults<T> {
     let paging: Paging
     let totalCount: Int
     let results: [T]
+
+    var pageIndex: Int {
+        paging.pageIndex
+    }
 
     var pageCount: Int {
         let pageCount = totalCount / paging.limit
@@ -18,8 +35,36 @@ struct PagingResults<T> {
         }
     }
 
-    var pageIndex: Int {
-        paging.offset / paging.limit + 1
+    var firstPage: Paging? {
+        if pageCount > 1 && pageIndex > 1 {
+            Paging(limit: paging.limit, page: 1)
+        } else {
+            nil
+        }
+    }
+
+    var previousPage: Paging? {
+        if pageIndex <= 1 {
+            nil
+        } else {
+            Paging(limit: paging.limit, page: pageIndex - 1)
+        }
+    }
+
+    var nextPage: Paging? {
+        if pageIndex >= pageCount {
+            nil
+        } else {
+            Paging(limit: paging.limit, page: pageIndex + 1)
+        }
+    }
+
+    var lastPage: Paging? {
+        if pageCount >= 1 && pageIndex < pageCount {
+            Paging(limit: paging.limit, page: pageCount)
+        } else {
+            nil
+        }
     }
 }
 

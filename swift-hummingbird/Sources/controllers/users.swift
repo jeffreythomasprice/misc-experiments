@@ -6,6 +6,10 @@ import HummingbirdRouter
 private let ROUTE_GROUP_PATH = "users"
 private let BASE_PATH = "/auth/\(ROUTE_GROUP_PATH)"
 
+private struct ListRequestQueryParams: Decodable {
+    let page: Int?
+}
+
 private class TableContent: HTML {
     private let currentUser: User?
     private let results: PagingResults<User>
@@ -49,16 +53,33 @@ private class TableContent: HTML {
                 }
             }
 
-            // TODO paging info, reusable widget?
+            // TODO make paging controls a reusable widget?
             div {
                 "Total: \(results.totalCount), Page: \(results.pageIndex)/\(results.pageCount), \(results.paging.limit) results per page"
             }
-            // TODO page controls
-            // TODO also a drop down for how many records per page?
-            a(.href("")) { "First" }
-            a(.href("")) { "Prev" }
-            a(.href("")) { "Next" }
-            a(.href("")) { "Last" }
+            div {
+                // TODO a drop down for how many records per page?
+                if let p = results.firstPage {
+                    a(.href("\(BASE_PATH)?page=\(p.pageIndex)")) { "First" }
+                } else {
+                    div(.class("disabled")) { "First" }
+                }
+                if let p = results.previousPage {
+                    a(.href("\(BASE_PATH)?page=\(p.pageIndex)")) { "Prev" }
+                } else {
+                    div(.class("disabled")) { "Prev" }
+                }
+                if let p = results.nextPage {
+                    a(.href("\(BASE_PATH)?page=\(p.pageIndex)")) { "Next" }
+                } else {
+                    div(.class("disabled")) { "Next" }
+                }
+                if let p = results.lastPage {
+                    a(.href("\(BASE_PATH)?page=\(p.pageIndex)")) { "Last" }
+                } else {
+                    div(.class("disabled")) { "Last" }
+                }
+            }
 
             if currentUser?.isAdmin == true {
                 a(.href("\(BASE_PATH)/create")) { "New" }
@@ -157,14 +178,16 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
     var body: some RouterMiddleware<ExtendedRequestContext> {
         RouteGroup("\(ROUTE_GROUP_PATH)") {
             Get { request, context in
+                let query = try request.uri.decodeQuery(as: ListRequestQueryParams.self, context: context)
+                context.logger.debug("TODO desired page = \(query)")
                 return HTMLResponse {
                     AsyncContent {
                         IndexPage(
                             context: context,
                             content: try await TableContent(
                                 context: context, db: db,
-                                // TODO pull paging params from some part of the request
-                                paging: Paging(limit: 10, offset: 0)))
+                                // TODO page limit should come from request
+                                paging: Paging(limit: 10, page: query.page ?? 1)))
                     }
                 }
             }
@@ -193,7 +216,7 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
                                     context: context,
                                     content: try await TableContent(
                                         context: context, db: db,
-                                        // TODO pull paging params from some part of the request
+                                        // TODO page limit should come from request
                                         paging: Paging(limit: 10, offset: 0),
                                         messages: ["Created user \(requestBody.username)."]))
                             }
@@ -255,7 +278,7 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
                                 context: context,
                                 content: try await TableContent(
                                     context: context, db: db,
-                                    // TODO pull paging params from some part of the request
+                                    // TODO page limit should come from request
                                     paging: Paging(limit: 10, offset: 0),
                                     messages: ["Updated user \(username)."]))
                         }
@@ -275,7 +298,7 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
                                 context: context,
                                 content: try await TableContent(
                                     context: context, db: db,
-                                    // TODO pull paging params from some part of the request
+                                    // TODO page limit should come from request
                                     paging: Paging(limit: 10, offset: 0),
                                     messages: ["Deleted user \(username)."]))
                         }
