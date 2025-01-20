@@ -7,7 +7,7 @@ struct V1CreateUserTable: DatabaseMigration {
         try await connection.query(
             """
             CREATE TABLE "users" (
-                "username" VARCHAR(256) NOT NULL,
+                "username" VARCHAR(256) NOT NULL UNIQUE,
                 "password" VARCHAR(256) NOT NULL,
                 "isAdmin" BOOLEAN NOT NULL
             )

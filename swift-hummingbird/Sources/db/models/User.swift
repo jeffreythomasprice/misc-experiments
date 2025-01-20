@@ -42,4 +42,36 @@ struct User {
         .toArray()
         .first
     }
+
+    func create(db: Database) async throws {
+        try await db.client.query(
+            """
+            INSERT INTO "users" ("username", "password", "isAdmin") VALUES (\(username), \(password), \(isAdmin))
+            """
+        )
+    }
+
+    func update(db: Database) async throws {
+        if password == nil || password?.isEmpty == true {
+            try await db.client.query(
+                """
+                UPDATE "users" SET "isAdmin" = \(isAdmin) WHERE "username" = \(username)
+                """
+            )
+        } else {
+            try await db.client.query(
+                """
+                UPDATE "users" SET "password" = \(password), "isAdmin" = \(isAdmin) WHERE "username" = \(username)
+                """
+            )
+        }
+    }
+
+    static func deleteByUsername(db: Database, username: String) async throws {
+        try await db.client.query(
+            """
+            DELETE FROM "users" WHERE "username" = \(username)
+            """
+        )
+    }
 }

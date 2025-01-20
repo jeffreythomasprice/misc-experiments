@@ -8,7 +8,8 @@ struct NavBarItem {
 class IndexPage<Content: HTML>: HTMLDocument {
     private let currentUser: User?
     private let navBar: [NavBarItem]?
-    private let _body: Content
+    // can't override the real content variable, so call it something else
+    private let _content: Content
 
     init(context: ExtendedRequestContext, content: Content) {
         currentUser = context.currentUser
@@ -20,7 +21,7 @@ class IndexPage<Content: HTML>: HTMLDocument {
         } else {
             navBar = nil
         }
-        _body = content
+        _content = content
     }
 
     var title: String = "Experiment"
@@ -46,6 +47,6 @@ class IndexPage<Content: HTML>: HTMLDocument {
             }
         }
 
-        _body
+        _content
     }
 }

@@ -81,13 +81,24 @@ struct AuthMiddleware<Context: ExtendedRequestContext>: RouterMiddleware {
         _ request: Request, context: Context,
         next: (Request, Context) async throws -> Response
     ) async throws -> Response {
-        do {
-            let result = try await auth.verify(request: request, db: db)
-            context.logger.debug("auth success \(result.username)")
-            context.currentUser = result
-        } catch {
-            context.logger.debug("auth error \(error)")
-            return Response.redirect(to: redirect)
+        if context.currentUser == nil {
+            do {
+                let result = try await auth.verify(request: request, db: db)
+                context.logger.debug("auth success \(result.username)")
+                context.currentUser = result
+            } catch {
+                context.logger.debug("auth error \(error)")
+                return Response.redirect(to: redirect)
+            }
+        }
+        return try await next(request, context)
+    }
+}
+
+struct RequiresAdmin<Context: ExtendedRequestContext>: RouterMiddleware {
+    func handle(_ request: Input, context: Context, next: (Input, Context) async throws -> Output) async throws -> Output {
+        if context.currentUser?.isAdmin != true {
+            throw HTTPError(.forbidden)
         }
         return try await next(request, context)
     }
