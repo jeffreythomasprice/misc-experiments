@@ -7,12 +7,19 @@ private let ROUTE_GROUP_PATH = "users"
 private let BASE_PATH = "/auth/\(ROUTE_GROUP_PATH)"
 
 private class TableContent: HTML {
-    private let users: [User]
     private let currentUser: User?
+    private let results: PagingResults<User>
+    private let messages: [String]?
 
-    init(context: ExtendedRequestContext, users: [User]) {
-        self.users = users
+    init(context: ExtendedRequestContext, results: PagingResults<User>, messages: [String]? = nil) {
         self.currentUser = context.currentUser
+        self.results = results
+        self.messages = messages
+    }
+
+    convenience init(context: ExtendedRequestContext, db: Database, paging: Paging, messages: [String]? = nil) async throws {
+        let results = try await User.listAll(db: db, paging: paging)
+        self.init(context: context, results: results, messages: messages)
     }
 
     var content: some HTML {
@@ -24,7 +31,7 @@ private class TableContent: HTML {
                     th {}
                     th {}
                 }
-                for user in users {
+                for user in results.results {
                     tr {
                         td { user.username }
                         td { if user.isAdmin { "✓" } else { "X" } }
@@ -41,9 +48,25 @@ private class TableContent: HTML {
                     }
                 }
             }
-            // TODO paging info
+
+            // TODO paging info, reusable widget?
+            div {
+                "Total: \(results.totalCount), Page: \(results.pageIndex)/\(results.pageCount), \(results.paging.limit) results per page"
+            }
+            // TODO page controls
+            // TODO also a drop down for how many records per page?
+            a(.href("")) { "First" }
+            a(.href("")) { "Prev" }
+            a(.href("")) { "Next" }
+            a(.href("")) { "Last" }
+
             if currentUser?.isAdmin == true {
                 a(.href("\(BASE_PATH)/create")) { "New" }
+            }
+            if let messages = messages {
+                for message in messages {
+                    div { message }
+                }
             }
         }
     }
@@ -134,9 +157,15 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
     var body: some RouterMiddleware<ExtendedRequestContext> {
         RouteGroup("\(ROUTE_GROUP_PATH)") {
             Get { request, context in
-                let users = try await User.listAll(db: db).toArray()
                 return HTMLResponse {
-                    IndexPage(context: context, content: TableContent(context: context, users: users))
+                    AsyncContent {
+                        IndexPage(
+                            context: context,
+                            content: try await TableContent(
+                                context: context, db: db,
+                                // TODO pull paging params from some part of the request
+                                paging: Paging(limit: 10, offset: 0)))
+                    }
                 }
             }
 
@@ -158,10 +187,19 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
                         try await User(username: requestBody.username, password: requestBody.password, isAdmin: requestBody.isAdminBool)
                             .create(
                                 db: db)
-                        // TODO when showing next page, show a success message too?
-                        return Response.redirect(to: "\(BASE_PATH)")
+                        return HTMLResponse {
+                            AsyncContent {
+                                IndexPage(
+                                    context: context,
+                                    content: try await TableContent(
+                                        context: context, db: db,
+                                        // TODO pull paging params from some part of the request
+                                        paging: Paging(limit: 10, offset: 0),
+                                        messages: ["Created user \(requestBody.username)."]))
+                            }
+                        }
                     } else {
-                        return try HTMLResponse {
+                        return HTMLResponse {
                             IndexPage(
                                 context: context,
                                 content: CreateContent(
@@ -172,7 +210,7 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
                                         "User already exists."
                                     ]
                                 ))
-                        }.response(from: request, context: context)
+                        }
                     }
                 }
             }
@@ -211,8 +249,17 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
                     )
                     // TODO if changing admin current user must be admin
                     try await User(username: username, password: password, isAdmin: requestBody.isAdminBool).update(db: db)
-                    // TODO when showing next page, show a success message too?
-                    return Response.redirect(to: "\(BASE_PATH)")
+                    return HTMLResponse {
+                        AsyncContent {
+                            IndexPage(
+                                context: context,
+                                content: try await TableContent(
+                                    context: context, db: db,
+                                    // TODO pull paging params from some part of the request
+                                    paging: Paging(limit: 10, offset: 0),
+                                    messages: ["Updated user \(username)."]))
+                        }
+                    }
                 } else {
                     throw HTTPError(.badRequest)
                 }
@@ -222,8 +269,17 @@ struct UsersController<Context: ExtendedRequestContext>: RouterController {
                 if let username = context.parameters.get("username", as: String.self) {
                     // TODO require admin or username matches current user
                     try await User.deleteByUsername(db: db, username: username)
-                    // TODO when showing next page, show a success message too?
-                    return Response.redirect(to: "\(BASE_PATH)")
+                    return HTMLResponse {
+                        AsyncContent {
+                            IndexPage(
+                                context: context,
+                                content: try await TableContent(
+                                    context: context, db: db,
+                                    // TODO pull paging params from some part of the request
+                                    paging: Paging(limit: 10, offset: 0),
+                                    messages: ["Deleted user \(username)."]))
+                        }
+                    }
                 } else {
                     throw HTTPError(.badRequest)
                 }

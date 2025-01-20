@@ -1,18 +1,53 @@
+// TODO move paging stuff
+struct Paging {
+    let limit: Int
+    let offset: Int
+}
+
+struct PagingResults<T> {
+    let paging: Paging
+    let totalCount: Int
+    let results: [T]
+
+    var pageCount: Int {
+        let pageCount = totalCount / paging.limit
+        return if pageCount * paging.limit < totalCount {
+            pageCount + 1
+        } else {
+            pageCount
+        }
+    }
+
+    var pageIndex: Int {
+        paging.offset / paging.limit + 1
+    }
+}
+
 struct User {
     var username: String
     var password: String?
     var isAdmin: Bool
 
-    static func listAll(db: Database) async throws -> any AsyncSequence<User, any Error> {
-        try await db.client.query(
+    static func listAll(db: Database, paging: Paging) async throws -> PagingResults<User> {
+        let count: Int! = try await db.client.query(
             """
-            SELECT "username", "isAdmin" FROM "users"
+            SELECT COUNT(*) FROM "users"
+            """
+        )
+        .decode(Int.self)
+        .toArray()
+        .first
+        let results = try await db.client.query(
+            """
+            SELECT "username", "isAdmin" FROM "users" ORDER BY "username" LIMIT \(paging.limit) OFFSET \(paging.offset)
             """
         )
         .decode((String, Bool).self)
         .map { (username, isAdmin) in
             User(username: username, isAdmin: isAdmin)
         }
+        .toArray()
+        return PagingResults(paging: paging, totalCount: count, results: results)
     }
 
     static func validateCredentials(db: Database, username: String, password: String) async throws -> User? {

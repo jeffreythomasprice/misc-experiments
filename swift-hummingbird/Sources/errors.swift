@@ -41,6 +41,7 @@ struct ErrorMiddleware<Context: ExtendedRequestContext>: RouterMiddleware {
         do {
             return try await next(request, context)
         } catch let error as HTTPError {
+            context.logger.warning("handler failed http error: \(String(reflecting: error))")
             return responseForError(request: request, context: context, error: error)
         } catch {
             context.logger.warning("handler failed other error: \(String(reflecting: error))")
