@@ -5,7 +5,7 @@ import JavaScriptKit
 // TODO move me
 class FPS {
     let MAX_BUCKET_TIME: TimeInterval = 1
-    let MAX_BUCKETS = 100
+    let MAX_BUCKETS = 4
 
     private class Bucket {
         var count: Int = 0
@@ -435,7 +435,6 @@ let animate = JSClosure { args in
     _ = gl.uniformMatrix4fv(
         modelViewMatrixUniform.location,
         false,
-        // TODO also apply rotation
         camera.transformMatrix
             .rotate(axis: Vector3(x: 0, y: 1, z: 0), angle: rotation.radians)
             .data
