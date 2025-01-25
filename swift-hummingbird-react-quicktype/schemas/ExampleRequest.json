@@ -1,0 +1,12 @@
+{
+	"type": "object",
+	"properties": {
+		"incrementBy": {
+			"type": "integer"
+		}
+	},
+	"required": [
+		"incrementBy"
+	],
+	"additionalProperties": false
+}

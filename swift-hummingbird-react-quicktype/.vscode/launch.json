@@ -1,0 +1,40 @@
+{
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:swift-hummingbird-react-quicktype}/server",
+			"name": "Debug server (server)",
+			"program": "${workspaceFolder:swift-hummingbird-react-quicktype}/server/.build/debug/server",
+			"preLaunchTask": "swift: Build Debug server (server)"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:swift-hummingbird-react-quicktype}/server",
+			"name": "Release server (server)",
+			"program": "${workspaceFolder:swift-hummingbird-react-quicktype}/server/.build/release/server",
+			"preLaunchTask": "swift: Build Release server (server)"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:swift-hummingbird-react-quicktype}/server",
+			"name": "Debug Experiment (server)",
+			"program": "${workspaceFolder:swift-hummingbird-react-quicktype}/server/.build/debug/Experiment",
+			"preLaunchTask": "swift: Build Debug Experiment (server)"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:swift-hummingbird-react-quicktype}/server",
+			"name": "Release Experiment (server)",
+			"program": "${workspaceFolder:swift-hummingbird-react-quicktype}/server/.build/release/Experiment",
+			"preLaunchTask": "swift: Build Release Experiment (server)"
+		}
+	]
+}

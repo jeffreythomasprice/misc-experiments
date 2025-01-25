@@ -1,0 +1,15 @@
+{
+	"lldb.library": "/home/jeff/swift/swift-6.0.3-RELEASE-debian12/usr/lib/liblldb.so",
+	"lldb.launch.expressions": "native",
+	"files.exclude": {
+		"**/.git": true,
+		"**/.svn": true,
+		"**/.hg": true,
+		"**/CVS": true,
+		"**/.DS_Store": true,
+		"**/Thumbs.db": true,
+		"**/node_modules": true,
+		"**/.build": true,
+		"**/dist": true,
+	}
+}

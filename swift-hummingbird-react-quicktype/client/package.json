@@ -1,0 +1,21 @@
+{
+  "name": "client",
+  "module": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.tsx --outfile dist/index.js",
+    "watch": "bun run build --watch"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
