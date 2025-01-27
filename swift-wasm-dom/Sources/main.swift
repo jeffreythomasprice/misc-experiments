@@ -11,14 +11,14 @@ struct Attribute {
 }
 
 struct Attributes {
-    private let value: JSObject
+    private let value: JSValue
 
-    fileprivate init(value: JSObject) {
+    fileprivate init(value: JSValue) {
         self.value = value
     }
 
     func get(name: String) throws -> String? {
-        let resultValue = self.value[dynamicMember: name]
+        let resultValue = self.value.getAttribute(name)
         if resultValue.isNull || resultValue.isUndefined {
             return nil
         }
@@ -29,7 +29,7 @@ struct Attributes {
     }
 
     func set(name: String, value: String) {
-        self.value[dynamicMember: name] = JSValue(stringLiteral: value)
+        _ = self.value.setAttribute(name, value)
     }
 
     func set(attribute: Attribute) {
@@ -37,11 +37,15 @@ struct Attributes {
     }
 }
 
-struct DOMNode {
+class DOMNode {
     let value: JSObject
 
+    init(value: JSObject) {
+        self.value = value
+    }
+
     var attributes: Attributes {
-        Attributes(value: value)
+        Attributes(value: value.jsValue)
     }
 
     var parentNode: DOMNode? {
@@ -59,16 +63,15 @@ struct DOMNode {
     }
 }
 
-func createElement(tag: String) -> DOMNode? {
-    if let result = JSObject.global.document.createElement(tag).object {
-        DOMNode(value: result)
-    } else {
-        nil
+class DOMElement: DOMNode {
+    func replaceChildren(child: DOMNode) {
+        _ = value.jsValue.replaceChildren(child.value)
     }
 }
 
 enum RenderError: Error {
     case failedToCreateTag
+    case failedToCreateTextNode
 }
 
 protocol HTML {
@@ -91,9 +94,12 @@ class Element: HTML {
     func render() throws -> DOMNode {
         // TODO only re-render if dirty?
 
-        guard let renderedElement = createElement(tag: tag) else {
-            throw RenderError.failedToCreateTag
-        }
+        let renderedElement =
+            if let result = JSObject.global.document.createElement(tag).object {
+                DOMNode(value: result)
+            } else {
+                throw RenderError.failedToCreateTag
+            }
 
         for a in attributes {
             renderedElement.attributes.set(attribute: a)
@@ -115,9 +121,35 @@ class Element: HTML {
     }
 }
 
+class TextElement: HTML {
+    let s: String
+
+    private var renderedElement: DOMNode?
+
+    init(stringLiteral: String) {
+        self.s = stringLiteral
+    }
+
+    func render() throws -> DOMNode {
+        let renderedElement =
+            if let result = JSObject.global.document.createTextNode(s).object {
+                DOMNode(value: result)
+            } else {
+                throw RenderError.failedToCreateTextNode
+            }
+        self.renderedElement = renderedElement
+        return renderedElement
+    }
+}
+
+extension HTML {
+    func renderTo(parent: DOMElement) throws {
+        parent.replaceChildren(child: try self.render())
+    }
+}
+
 JavaScriptEventLoop.installGlobalExecutor()
 
-let root = Element(tag: "div", attributes: [Attribute(name: "name", value: "foo")], content: [])
-// var root = JSObject.global.document.createElement("div")
-// root.innerText = "Hello, World!"
-_ = JSObject.global.document.body.replaceChildren(root.)
+let body = DOMElement(value: JSObject.global.document.body.object!)
+let root = Element(tag: "div", attributes: [Attribute(name: "name", value: "foo")], content: [TextElement(stringLiteral: "Hello, World!")])
+try root.renderTo(parent: body)
