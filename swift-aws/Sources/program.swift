@@ -90,9 +90,9 @@ class Program {
                     request: ECS.ListClustersRequest(),
                     getNextPage: { request in
                         try await ecs.listClusters(request)
-                    })
-                {
-                    logger.debug("TODO cluster = \(result)")
+                    }
+                ).sorted() {
+                    print("\(result)")
                 }
             }
         }
