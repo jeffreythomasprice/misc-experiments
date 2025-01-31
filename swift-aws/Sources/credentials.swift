@@ -29,6 +29,16 @@ struct Credentials: Codable {
     init(
         logger: Logger,
         cache: any Cache<Credentials>,
+        profile: Profile
+    ) async throws {
+        try await self.init(
+            logger: logger, cache: cache, accessKeyId: profile.awsAccessKey, secretAccessKey: profile.awsSecretAccessKey,
+            serialNumber: profile.serialNumber)
+    }
+
+    init(
+        logger: Logger,
+        cache: any Cache<Credentials>,
         accessKeyId: String,
         secretAccessKey: String,
         serialNumber: String

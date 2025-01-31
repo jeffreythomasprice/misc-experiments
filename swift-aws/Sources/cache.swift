@@ -28,10 +28,10 @@ class FileSystemCache<T>: Cache where T: Codable {
     private var state: [String: ExpiringValue<T>]
 
     init(fileName: String) throws {
-        var fullPath = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        fullPath.append(components: ".cache", "swift-aws-experiment", fileName)
-        fullPath.standardize()
-        self.fullPath = fullPath
+        self.fullPath =
+            URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appending(
+                components: ".cache", "swift-aws-experiment", fileName
+            ).standardized
 
         var parentPath = fullPath
         parentPath.append(components: "..")

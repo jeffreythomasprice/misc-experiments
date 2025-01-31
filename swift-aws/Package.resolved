@@ -1,5 +1,5 @@
 {
-  "originHash" : "31cf01efa25865da3e2221b9483b4f4c7c58aac80753149e559f8cfdcd59de6b",
+  "originHash" : "2139d444ec4c0649f530ce4f04a5e4f2cf9ed9185b64f1dafcde4f0b906a8a03",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -89,15 +89,6 @@
       "state" : {
         "revision" : "a64a0abc2530f767af15dd88dda7f64d5f1ff9de",
         "version" : "1.2.0"
-      }
-    },
-    {
-      "identity" : "swift-dotenv",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/thebarndog/swift-dotenv.git",
-      "state" : {
-        "revision" : "d13062940a3cdb2b13efa22ecc83b07b21c2e8dc",
-        "version" : "2.1.0"
       }
     },
     {
@@ -197,6 +188,15 @@
       "state" : {
         "revision" : "c8a44d836fe7913603e246acab7c528c2e780168",
         "version" : "1.4.0"
+      }
+    },
+    {
+      "identity" : "yams",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jpsim/Yams.git",
+      "state" : {
+        "revision" : "3036ba9d69cf1fd04d433527bc339dc0dc75433d",
+        "version" : "5.1.3"
       }
     }
   ],
