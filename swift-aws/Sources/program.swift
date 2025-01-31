@@ -86,9 +86,14 @@ class Program {
             let credentials = try await getCredentials(profile: profile)
             try await doWithClient(client: credentials.createAWSClient()) { client in
                 let ecs = ECS(client: client)
-                let clusters = try await ecs.listClusters()
-                // TODO paging, show all
-                logger.debug("TODO clusters = \(clusters)")
+                for result in try await paging(
+                    request: ECS.ListClustersRequest(),
+                    getNextPage: { request in
+                        try await ecs.listClusters(request)
+                    })
+                {
+                    logger.debug("TODO cluster = \(result)")
+                }
             }
         }
     }
@@ -111,5 +116,59 @@ class Program {
             logger.error("fatal: \(error)")
             exit(1)
         }
+    }
+}
+
+protocol WithNextToken {
+    func withNextToken(nextToken: String) -> Self
+}
+
+protocol HasNextToken {
+    var nextToken: String? { get }
+}
+
+protocol HasDataPage<T> {
+    associatedtype T
+
+    var data: [T]? { get }
+}
+
+func paging<DataType, RequestType: WithNextToken, ResponseType: HasNextToken & HasDataPage<DataType>>(
+    request: RequestType,
+    getNextPage: (RequestType) async throws -> ResponseType
+) async throws -> [DataType] {
+    var results: [DataType] = []
+    var nextToken: String? = nil
+    while true {
+        let nextRequest =
+            if let nextToken = nextToken {
+                request.withNextToken(nextToken: nextToken)
+            } else {
+                request
+            }
+        let result = try await getNextPage(
+            nextRequest)
+        if let data = result.data {
+            results.append(contentsOf: data)
+        }
+        nextToken = result.nextToken
+        if nextToken == nil {
+            break
+        }
+    }
+    return results
+}
+
+extension ECS.ListClustersRequest: WithNextToken {
+    func withNextToken(nextToken: String) -> SotoECS.ECS.ListClustersRequest {
+        ECS.ListClustersRequest(maxResults: self.maxResults, nextToken: nextToken)
+    }
+}
+
+extension ECS.ListClustersResponse: HasNextToken & HasDataPage {
+    typealias T = String
+
+    var data: [String]? {
+        self.clusterArns
     }
 }
