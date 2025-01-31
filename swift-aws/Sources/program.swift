@@ -4,20 +4,14 @@ import Logging
 import SotoECS
 import SotoSTS
 
-// TODO put some actual operations back
-//     try await doWithClient(client: credentials.createAWSClient()) { client in
-//         let ecs = ECS(client: client)
-//         let clusters = try await ecs.listClusters()
-//         logger.debug("TODO clusters = \(clusters)")
-//     }
-
 @main
 struct Main: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "",
         version: "0.0.1",
         subcommands: [
-            Env.self
+            Env.self,
+            ListClusters.self,
         ]
     )
 }
@@ -33,8 +27,18 @@ extension Main {
 
         @OptionGroup var options: Options
 
-        mutating func run() async throws {
-            try await Program().env(profile: options.profile)
+        mutating func run() async {
+            await Program().env(profile: options.profile)
+        }
+    }
+
+    struct ListClusters: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "List all ECS clusters")
+
+        @OptionGroup var options: Options
+
+        mutating func run() async {
+            await Program().listClusters(profile: options.profile)
         }
     }
 }
@@ -48,7 +52,7 @@ class Program {
     private let config: Config
     private let credentialsCache: any Cache<Credentials>
 
-    init() async throws {
+    init() async {
         LoggingSystem.bootstrap { name in PrintLogger.init(name: name, destination: SendableTextOutputStream(Stdout())) }
 
         var logger = Logger(label: "Experiment")
@@ -63,16 +67,30 @@ class Program {
 
             credentialsCache = try FileSystemCache<Credentials>(fileName: "credentials")
         } catch {
-            logger.error("fatal: \(error)")
+            logger.error("init error: \(error)")
             exit(1)
         }
     }
 
-    func env(profile: String) async throws {
-        let credentials = try await getCredentials(profile: profile)
-        print("export AWS_ACCESS_KEY_ID=\(credentials.accessKeyId)")
-        print("export AWS_SECRET_ACCESS_KEY=\(credentials.secretAccessKey)")
-        print("export AWS_SESSION_TOKEN=\(credentials.sessionToken)")
+    func env(profile: String) async {
+        await orExit {
+            let credentials = try await getCredentials(profile: profile)
+            print("export AWS_ACCESS_KEY_ID=\(credentials.accessKeyId)")
+            print("export AWS_SECRET_ACCESS_KEY=\(credentials.secretAccessKey)")
+            print("export AWS_SESSION_TOKEN=\(credentials.sessionToken)")
+        }
+    }
+
+    func listClusters(profile: String) async {
+        await orExit {
+            let credentials = try await getCredentials(profile: profile)
+            try await doWithClient(client: credentials.createAWSClient()) { client in
+                let ecs = ECS(client: client)
+                let clusters = try await ecs.listClusters()
+                // TODO paging, show all
+                logger.debug("TODO clusters = \(clusters)")
+            }
+        }
     }
 
     private func getCredentials(profile profileName: String) async throws -> Credentials {
@@ -84,5 +102,14 @@ class Program {
             cache: credentialsCache,
             profile: profile
         )
+    }
+
+    private func orExit(_ f: () async throws -> Void) async {
+        do {
+            try await f()
+        } catch {
+            logger.error("fatal: \(error)")
+            exit(1)
+        }
     }
 }
