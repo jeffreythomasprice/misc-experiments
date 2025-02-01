@@ -2,7 +2,7 @@ import Foundation
 import Logging
 import SotoSTS
 
-enum CredentialsError: Error {
+private enum CredentialsError: Error {
     case missingResponseCredentials
 }
 
@@ -28,7 +28,7 @@ struct Credentials: Codable {
 
     init(
         logger: Logger,
-        cache: any Cache<Credentials>,
+        cache: Cache<Credentials>,
         profile: Profile
     ) async throws {
         try await self.init(
@@ -38,7 +38,7 @@ struct Credentials: Codable {
 
     init(
         logger: Logger,
-        cache: any Cache<Credentials>,
+        cache: Cache<Credentials>,
         accessKeyId: String,
         secretAccessKey: String,
         serialNumber: String

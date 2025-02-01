@@ -1,34 +1,79 @@
 import Foundation
 
-protocol Cache<T> {
-    associatedtype T
+class Cache<T> where T: Codable {
+    private let storage: any Storage
+    private let prefix: String
 
-    func get(key: String) async throws -> T?
-    func set(key: String, value: T, expiresAt: Date) async throws
+    init(storage: any Storage, prefix: String) {
+        self.storage = storage
+        self.prefix = prefix
+    }
+
+    func get(key: String) async throws -> T? {
+        try await storage.get(key: getKey(key: key))
+    }
+
+    func set(key: String, value: T, expiresAt: Date) async throws {
+        try await storage.set(key: getKey(key: key), value: value, expiresAt: expiresAt)
+    }
+
+    func del(key: String) async throws {
+        try await storage.del(key: getKey(key: key))
+    }
+
+    private func getKey(key: String) -> String {
+        return "\(prefix)\(key)"
+    }
+}
+
+protocol Storage {
+    func get<T>(key: String) async throws -> T? where T: Decodable
+    func set<T>(key: String, value: T, expiresAt: Date) async throws where T: Codable
     func del(key: String) async throws
 }
 
-struct ExpiringValue<T>: Codable where T: Codable {
-    let value: T
+private struct ExpiringValue: Codable {
+    enum Error: Swift.Error {
+        case encodingError
+        case decodingError
+    }
+
+    let json: String
     let expiresAt: Date
+
+    init<T>(value: T, expiresAt: Date) throws where T: Encodable {
+        guard let json = String(data: try jsonEncoder.encode(value), encoding: .utf8) else {
+            throw Error.encodingError
+        }
+        self.json = json
+        self.expiresAt = expiresAt
+    }
+
+    func getValue<T>() throws -> T where T: Decodable {
+        guard let data = json.data(using: .utf8) else {
+            throw Error.encodingError
+        }
+        return try jsonDecoder.decode(T.self, from: data)
+    }
 
     var isExpired: Bool {
         expiresAt < Date.now
     }
+
+    enum CodingKeys: String, CodingKey {
+        case json = "value"
+        case expiresAt
+    }
 }
 
-class FileSystemCache<T>: Cache where T: Codable {
+class FileSystemStorage: Storage {
     private let fullPath: URL
     private let parentPath: URL
 
-    private var state: [String: ExpiringValue<T>]
+    private var state: [String: ExpiringValue]
 
     init(fileName: String) throws {
-        // TODO should be relative to exe location, or configurable
-        self.fullPath =
-            URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appending(
-                components: ".cache", "swift-aws-experiment", fileName
-            ).standardized
+        self.fullPath = dataFilePath(named: fileName)
 
         var parentPath = fullPath
         parentPath.append(components: "..")
@@ -39,21 +84,21 @@ class FileSystemCache<T>: Cache where T: Codable {
         try self.loadFromFile()
     }
 
-    func get(key: String) async throws -> T? {
+    func get<T>(key: String) async throws -> T? where T: Decodable {
         if let result = self.state[key] {
             if result.isExpired {
                 try await self.del(key: key)
                 return nil
             } else {
-                return result.value
+                return try result.getValue()
             }
         } else {
             return nil
         }
     }
 
-    func set(key: String, value: T, expiresAt: Date) async throws {
-        self.state[key] = .init(value: value, expiresAt: expiresAt)
+    func set<T>(key: String, value: T, expiresAt: Date) async throws where T: Encodable {
+        self.state[key] = try .init(value: value, expiresAt: expiresAt)
         try self.saveToFile()
     }
 
@@ -65,21 +110,39 @@ class FileSystemCache<T>: Cache where T: Codable {
     private func loadFromFile() throws {
         try makeDir()
         if let data = try? Data(contentsOf: fullPath) {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            self.state = try decoder.decode([String: ExpiringValue<T>].self, from: data)
+            self.state = try jsonDecoder.decode([String: ExpiringValue].self, from: data)
+            removeAllExpiredKeys()
         }
     }
 
     private func saveToFile() throws {
         try makeDir()
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(state).write(to: fullPath)
+        removeAllExpiredKeys()
+        try jsonEncoder.encode(state).write(to: fullPath)
     }
 
     private func makeDir() throws {
         try FileManager.default.createDirectory(
             at: parentPath, withIntermediateDirectories: true)
     }
+
+    private func removeAllExpiredKeys() {
+        self.state.filter { (_, value) in
+            value.isExpired
+        }.forEach { (key, _) in
+            self.state.removeValue(forKey: key)
+        }
+    }
+}
+
+private var jsonEncoder: JSONEncoder {
+    let result = JSONEncoder()
+    result.dateEncodingStrategy = .iso8601
+    return result
+}
+
+private var jsonDecoder: JSONDecoder {
+    let result = JSONDecoder()
+    result.dateDecodingStrategy = .iso8601
+    return result
 }

@@ -98,7 +98,7 @@ enum ProfileError: Error {
 class Program {
     private let logger: Logger
     private let config: Config
-    private let credentialsCache: any Cache<Credentials>
+    private let credentialsCache: Cache<Credentials>
 
     init() async {
         LoggingSystem.bootstrap { name in PrintLogger.init(name: name, destination: SendableTextOutputStream(Stdout())) }
@@ -108,12 +108,10 @@ class Program {
         self.logger = logger
 
         do {
-            config = try await Config(
-                contentsOf: URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appending(
-                    components: "config", "config.yaml"
-                ).standardized)
+            config = try await Config()
 
-            credentialsCache = try FileSystemCache<Credentials>(fileName: "credentials")
+            let storage = try FileSystemStorage(fileName: "data")
+            credentialsCache = Cache(storage: storage, prefix: "credentials")
         } catch {
             logger.error("init error: \(error)")
             exit(1)
@@ -247,6 +245,23 @@ class Program {
             let desiredCount = service.desiredCount?.description ?? "<failed to get desired count>"
             print("service name: \(serviceName), task count: \(runningCount)/\(desiredCount)")
 
+            print("    deployments")
+            for deployment in (service.deployments ?? [])
+                .sorted(by: { a, b in
+                    if let a = a.createdAt, let b = b.createdAt {
+                        a.compare(b) == .orderedAscending
+                    } else {
+                        false
+                    }
+                })
+            {
+                let createdAt = deployment.createdAt?.ISO8601Format() ?? "<no created at>"
+                let rolloutState = deployment.rolloutState?.description ?? "<no rollout state>"
+                let runningCount = deployment.runningCount?.description ?? "<no running count>"
+                let desiredCount = deployment.desiredCount?.description ?? "<no desired count>"
+                print("        \(createdAt), rollout state: \(rolloutState), tasks: \(runningCount)/\(desiredCount)")
+            }
+
             if let taskDefinition = taskDefinition {
                 print("    task definition")
                 for containerDefinition in taskDefinition.containerDefinitions ?? [] {
@@ -307,35 +322,5 @@ class Program {
             logger.error("fatal: \(error)")
             exit(1)
         }
-    }
-}
-
-struct TimeComponents {
-    let days: Int
-    let hours: Int
-    let minutes: Int
-    let seconds: Int
-    let subsecond: Double
-
-    init(days: Int, hours: Int, minutes: Int, seconds: Int, subsecond: Double) {
-        self.days = days
-        self.hours = hours
-        self.minutes = minutes
-        self.seconds = seconds
-        self.subsecond = subsecond
-    }
-
-    init(timeInterval: TimeInterval) {
-        var remainder = timeInterval
-        let days = Int(floor(remainder / TimeInterval.Days))
-        remainder -= Double(days) * TimeInterval.Days
-        let hours = Int(floor(remainder / TimeInterval.Hours))
-        remainder -= Double(hours) * TimeInterval.Hours
-        let minutes = Int(floor(remainder / TimeInterval.Minutes))
-        remainder -= Double(minutes) * TimeInterval.Minutes
-        let seconds = Int(floor(remainder / TimeInterval.Seconds))
-        remainder -= Double(seconds) * TimeInterval.Seconds
-        let subsecond = remainder
-        self.init(days: days, hours: hours, minutes: minutes, seconds: seconds, subsecond: subsecond)
     }
 }

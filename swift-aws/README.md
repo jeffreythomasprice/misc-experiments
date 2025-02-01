@@ -1,11 +1,9 @@
-TODO ECS task deployments
-
 TODO TUI dashboard, watcher
 
 TODO cloudformation deployments
 
 ```
-# config/config.yaml
+# ~/.swift-aws-tool/config.yaml
 profiles:
   main:
     awsAccessKey: <redacted>
