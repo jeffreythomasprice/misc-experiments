@@ -1,7 +1,5 @@
 TODO TUI dashboard, watcher
 
-TODO cloudformation deployments
-
 ```
 # ~/.swift-aws-tool/config.yaml
 profiles:
@@ -22,16 +20,21 @@ swift run Experiment env --profile sdlc && eval $(swift run Experiment env --pro
 ```
 
 ```
-swift run Experiment list-clusters --profile main --region us-east-1
-swift run Experiment list-clusters --profile main --region eu-central-1
+swift run Experiment list-ecs-clusters --profile main --region us-east-1
+swift run Experiment list-ecs-clusters --profile main --region eu-central-1
 ```
 
 ```
-swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-nonprod --filter broker-dev
-swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-nonprod --filter broker-qa
-swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-stg
-swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-sandbox
-swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-prod
-swift run Experiment describe-cluster --profile main --region eu-central-1 --cluster-name broker-stg-eu
-swift run Experiment describe-cluster --profile main --region eu-central-1 --cluster-name broker-prod-eu
+swift run Experiment describe-ecs-cluster --profile main --region us-east-1 --cluster-name broker-nonprod --filter broker-dev
+swift run Experiment describe-ecs-cluster --profile main --region us-east-1 --cluster-name broker-nonprod --filter broker-qa
+swift run Experiment describe-ecs-cluster --profile main --region us-east-1 --cluster-name broker-stg
+swift run Experiment describe-ecs-cluster --profile main --region us-east-1 --cluster-name broker-sandbox
+swift run Experiment describe-ecs-cluster --profile main --region us-east-1 --cluster-name broker-prod
+swift run Experiment describe-ecs-cluster --profile main --region eu-central-1 --cluster-name broker-stg-eu
+swift run Experiment describe-ecs-cluster --profile main --region eu-central-1 --cluster-name broker-prod-eu
+```
+
+```
+swift run Experiment list-cloud-formation-stacks --profile sdlc --region us-east-1 --filter platform-services-dev
+swift run Experiment list-cloud-formation-stacks --profile sdlc --region us-east-1 --filter platform-services-qa
 ```

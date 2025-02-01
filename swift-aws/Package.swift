@@ -18,8 +18,9 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Yams", package: "Yams"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "SotoECS", package: "soto"),
                 .product(name: "SotoSTS", package: "soto"),
+                .product(name: "SotoECS", package: "soto"),
+                .product(name: "SotoCloudFormation", package: "soto"),
             ]
         )
     ]

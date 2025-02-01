@@ -42,7 +42,7 @@ extension TimeInterval {
         let components = self.components
         let days =
             if components.days > 0 {
-                "\(components.days) d "
+                "\(components.days)d "
             } else {
                 ""
             }

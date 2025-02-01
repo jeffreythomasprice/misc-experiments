@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import Logging
+import SotoCloudFormation
 import SotoECS
 import SotoSTS
 
@@ -11,8 +12,9 @@ struct Main: AsyncParsableCommand {
         version: "0.0.1",
         subcommands: [
             Env.self,
-            ListClusters.self,
-            DescribeCluster.self,
+            ListECSClusters.self,
+            DescribeECSCluster.self,
+            ListCloudFormationStacks.self,
         ]
     )
 }
@@ -47,17 +49,17 @@ extension Main {
         }
     }
 
-    struct ListClusters: AsyncParsableCommand {
+    struct ListECSClusters: AsyncParsableCommand {
         static let configuration = CommandConfiguration(abstract: "List all ECS clusters")
 
         @OptionGroup var options: Options
 
         mutating func run() async throws {
-            await Program().listClusters(profile: options.profile, region: try options.getAwsRegion())
+            await Program().listECSClusters(profile: options.profile, region: try options.getAwsRegion())
         }
     }
 
-    struct DescribeCluster: AsyncParsableCommand {
+    struct DescribeECSCluster: AsyncParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Describe an ECS cluster")
 
         @OptionGroup var options: Options
@@ -79,14 +81,27 @@ extension Main {
 
         mutating func run() async throws {
             if let clusterArn = self.clusterArn {
-                await Program().describeCluster(
+                await Program().describeECSCluster(
                     profile: options.profile, region: try options.getAwsRegion(), clusterArn: clusterArn, filter: filter)
             } else if let clusterName = self.clusterName {
-                await Program().describeCluster(
+                await Program().describeECSCluster(
                     profile: options.profile, region: try options.getAwsRegion(), clusterName: clusterName, filter: filter)
             } else {
                 throw ValidationError("should be impossible")
             }
+        }
+    }
+
+    struct ListCloudFormationStacks: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "List all cloudformation stacks")
+
+        @OptionGroup var options: Options
+
+        @Option(name: .customLong("filter"), help: "Only show stack names that contain this string")
+        var filter: String?
+
+        mutating func run() async throws {
+            await Program().listCloudFormationStacks(profile: options.profile, region: try options.getAwsRegion(), filter: filter)
         }
     }
 }
@@ -127,10 +142,10 @@ class Program {
         }
     }
 
-    func listClusters(profile: String, region: Region) async {
-        await doWithProfile(profile: profile, region: region) { _, ecs in
+    func listECSClusters(profile: String, region: Region) async {
+        await doWithProfile(profile: profile, region: region) { clientFactory in
             for result in try await Paging({ nextToken async throws in
-                let results = try await ecs.listClusters(ECS.ListClustersRequest(nextToken: nextToken))
+                let results = try await clientFactory.ecs.listClusters(ECS.ListClustersRequest(nextToken: nextToken))
                 return (results.nextToken, results.clusterArns)
             }).collect().sorted() {
                 print("\(result)")
@@ -138,10 +153,10 @@ class Program {
         }
     }
 
-    func describeCluster(profile: String, region: Region, clusterName: String, filter: String?) async {
-        await doWithProfile(profile: profile, region: region) { _, ecs in
+    func describeECSCluster(profile: String, region: Region, clusterName: String, filter: String?) async {
+        await doWithProfile(profile: profile, region: region) { clientFactory in
             let results = try await Paging({ nextToken async throws in
-                let results = try await ecs.listClusters(ECS.ListClustersRequest(nextToken: nextToken))
+                let results = try await clientFactory.ecs.listClusters(ECS.ListClustersRequest(nextToken: nextToken))
                 return (results.nextToken, results.clusterArns)
             }).filter { clusterArn in
                 clusterArn.hasSuffix("/\(clusterName)")
@@ -160,13 +175,44 @@ class Program {
                 exit(1)
             }
 
-            try await describeCluster(ecs: ecs, clusterArn: results[0], filter: filter)
+            try await describeCluster(ecs: clientFactory.ecs, clusterArn: results[0], filter: filter)
         }
     }
 
-    func describeCluster(profile: String, region: Region, clusterArn: String, filter: String?) async {
-        await doWithProfile(profile: profile, region: region) { _, ecs in
-            try await describeCluster(ecs: ecs, clusterArn: clusterArn, filter: filter)
+    func describeECSCluster(profile: String, region: Region, clusterArn: String, filter: String?) async {
+        await doWithProfile(profile: profile, region: region) { clientFactory in
+            try await describeCluster(ecs: clientFactory.ecs, clusterArn: clusterArn, filter: filter)
+        }
+    }
+
+    func listCloudFormationStacks(profile: String, region: Region, filter: String?) async {
+        await doWithProfile(profile: profile, region: region) { clientFactory in
+            let stacks = try await Paging({ nextToken async throws in
+                let results = try await clientFactory.cloudFormation.describeStacks(
+                    CloudFormation.DescribeStacksInput(nextToken: nextToken))
+                return (results.nextToken, results.stacks)
+            })
+            .filter { stack in
+                if let filter = filter {
+                    stack.stackName?.localizedCaseInsensitiveContains(filter) ?? false
+                } else {
+                    true
+                }
+            }
+            .collect()
+            .sorted { a, b in
+                if let a = a.stackName, let b = b.stackName {
+                    a.localizedCaseInsensitiveCompare(b) == .orderedAscending
+                } else {
+                    false
+                }
+            }
+            for stack in stacks {
+                let stackName = stack.stackName ?? "<no name>"
+                let stackStatus = stack.stackStatus?.description ?? "<no status>"
+                let stackStatusReason = stack.stackStatusReason ?? "<no status reason>"
+                print("\(stackName), status: \(stackStatus), reason: \(stackStatusReason)")
+            }
         }
     }
 
@@ -294,12 +340,11 @@ class Program {
         }
     }
 
-    private func doWithProfile(profile: String, region: Region, _ f: (AWSClient, ECS) async throws -> Void) async {
+    private func doWithProfile(profile: String, region: Region, _ f: (ClientFactory) async throws -> Void) async {
         await orExit {
             let credentials = try await getCredentials(profile: profile)
             try await doWithClient(client: credentials.createAWSClient()) { client in
-                let ecs = ECS(client: client, region: region)
-                try await f(client, ecs)
+                try await f(ClientFactory(client: client, region: region))
             }
         }
     }
@@ -322,5 +367,23 @@ class Program {
             logger.error("fatal: \(error)")
             exit(1)
         }
+    }
+}
+
+struct ClientFactory {
+    private let client: AWSClient
+    private let region: Region
+
+    init(client: AWSClient, region: Region) {
+        self.client = client
+        self.region = region
+    }
+
+    var ecs: ECS {
+        ECS(client: client, region: region)
+    }
+
+    var cloudFormation: CloudFormation {
+        CloudFormation(client: client, region: region)
     }
 }
