@@ -21,6 +21,20 @@ extension Main {
     struct Options: ParsableArguments {
         @Option(name: .shortAndLong, help: "Which profile in the config file to use")
         var profile: String
+
+        @Option(name: .shortAndLong, help: "Region")
+        var region: String
+
+        func getAwsRegion() throws -> Region {
+            guard let result = Region.init(awsRegionName: region) else {
+                throw ValidationError("Must provide a valid AWS region")
+            }
+            return result
+        }
+
+        func validate() throws {
+            _ = try getAwsRegion()
+        }
     }
 
     struct Env: AsyncParsableCommand {
@@ -28,8 +42,8 @@ extension Main {
 
         @OptionGroup var options: Options
 
-        mutating func run() async {
-            await Program().env(profile: options.profile)
+        mutating func run() async throws {
+            await Program().env(profile: options.profile, region: try options.getAwsRegion())
         }
     }
 
@@ -38,8 +52,8 @@ extension Main {
 
         @OptionGroup var options: Options
 
-        mutating func run() async {
-            await Program().listClusters(profile: options.profile)
+        mutating func run() async throws {
+            await Program().listClusters(profile: options.profile, region: try options.getAwsRegion())
         }
     }
 
@@ -65,9 +79,11 @@ extension Main {
 
         mutating func run() async throws {
             if let clusterArn = self.clusterArn {
-                await Program().describeCluster(profile: options.profile, clusterArn: clusterArn, filter: filter)
+                await Program().describeCluster(
+                    profile: options.profile, region: try options.getAwsRegion(), clusterArn: clusterArn, filter: filter)
             } else if let clusterName = self.clusterName {
-                await Program().describeCluster(profile: options.profile, clusterName: clusterName, filter: filter)
+                await Program().describeCluster(
+                    profile: options.profile, region: try options.getAwsRegion(), clusterName: clusterName, filter: filter)
             } else {
                 throw ValidationError("should be impossible")
             }
@@ -104,7 +120,7 @@ class Program {
         }
     }
 
-    func env(profile: String) async {
+    func env(profile: String, region: Region) async {
         await orExit {
             let credentials = try await getCredentials(profile: profile)
             print("export AWS_ACCESS_KEY_ID=\(credentials.accessKeyId)")
@@ -113,9 +129,8 @@ class Program {
         }
     }
 
-    func listClusters(profile: String) async {
-        await doWithProfile(profile: profile) { client in
-            let ecs = ECS(client: client)
+    func listClusters(profile: String, region: Region) async {
+        await doWithProfile(profile: profile, region: region) { _, ecs in
             for result in try await Paging({ nextToken async throws in
                 let results = try await ecs.listClusters(ECS.ListClustersRequest(nextToken: nextToken))
                 return (results.nextToken, results.clusterArns)
@@ -125,10 +140,8 @@ class Program {
         }
     }
 
-    func describeCluster(profile: String, clusterName: String, filter: String?) async {
-        await doWithProfile(profile: profile) { client in
-            let ecs = ECS(client: client)
-
+    func describeCluster(profile: String, region: Region, clusterName: String, filter: String?) async {
+        await doWithProfile(profile: profile, region: region) { _, ecs in
             let results = try await Paging({ nextToken async throws in
                 let results = try await ecs.listClusters(ECS.ListClustersRequest(nextToken: nextToken))
                 return (results.nextToken, results.clusterArns)
@@ -149,19 +162,17 @@ class Program {
                 exit(1)
             }
 
-            try await describeCluster(client: client, clusterArn: results[0], filter: filter)
+            try await describeCluster(ecs: ecs, clusterArn: results[0], filter: filter)
         }
     }
 
-    func describeCluster(profile: String, clusterArn: String, filter: String?) async {
-        await doWithProfile(profile: profile) { client in
-            try await describeCluster(client: client, clusterArn: clusterArn, filter: filter)
+    func describeCluster(profile: String, region: Region, clusterArn: String, filter: String?) async {
+        await doWithProfile(profile: profile, region: region) { _, ecs in
+            try await describeCluster(ecs: ecs, clusterArn: clusterArn, filter: filter)
         }
     }
 
-    private func describeCluster(client: AWSClient, clusterArn: String, filter: String?) async throws {
-        let ecs = ECS(client: client)
-
+    private func describeCluster(ecs: ECS, clusterArn: String, filter: String?) async throws {
         let services = try await Paging({ nextToken async throws in
             let result = try await ecs.listServices(ECS.ListServicesRequest(cluster: clusterArn, nextToken: nextToken))
             return (result.nextToken, result.serviceArns)
@@ -268,11 +279,12 @@ class Program {
         }
     }
 
-    private func doWithProfile(profile: String, _ f: (AWSClient) async throws -> Void) async {
+    private func doWithProfile(profile: String, region: Region, _ f: (AWSClient, ECS) async throws -> Void) async {
         await orExit {
             let credentials = try await getCredentials(profile: profile)
             try await doWithClient(client: credentials.createAWSClient()) { client in
-                try await f(client)
+                let ecs = ECS(client: client, region: region)
+                try await f(client, ecs)
             }
         }
     }
@@ -325,36 +337,5 @@ struct TimeComponents {
         remainder -= Double(seconds) * TimeInterval.Seconds
         let subsecond = remainder
         self.init(days: days, hours: hours, minutes: minutes, seconds: seconds, subsecond: subsecond)
-    }
-}
-
-extension TimeInterval {
-    static var Seconds: Self { 1 }
-    static var Minutes: Self { Seconds * 60 }
-    static var Hours: Self { Minutes * 60 }
-    static var Days: Self { Hours * 24 }
-
-    var components: TimeComponents { .init(timeInterval: self) }
-
-    func humanReadable() -> String {
-        let components = self.components
-        let days =
-            if components.days > 0 {
-                "\(components.days) d "
-            } else {
-                ""
-            }
-        let microseconds = Int(components.subsecond * 100000).description.leftPad(toLength: 6, withPad: "0")
-        return "\(days)\(components.hours):\(components.minutes):\(components.seconds).\(microseconds)"
-    }
-}
-
-extension String {
-    func leftPad<T: StringProtocol>(toLength: Int, withPad padString: T) -> String {
-        String(
-            String(reversed())
-                .padding(toLength: toLength, withPad: padString, startingAt: 0)
-                .reversed()
-        )
     }
 }

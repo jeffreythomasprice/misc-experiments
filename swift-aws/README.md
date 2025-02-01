@@ -1,13 +1,8 @@
-TODO plan
+TODO ECS task deployments
 
-goal 1:
-- cli only, tui dashboard
-- periodically check ecs cluster status
+TODO TUI dashboard, watcher
 
-goal 2:
-- more configurable tui dashboard
-- check on other statuses, e.g. cloudformation stack updates
-
+TODO cloudformation deployments
 
 ```
 # config/config.yaml
@@ -23,10 +18,22 @@ profiles:
 ```
 
 ```
-swift run Experiment env --profile main
-swift run Experiment env --profile sdlc
+# eval on the first invocation blocks typing the MFA code
+swift run Experiment env --profile main && eval $(swift run Experiment env --profile main)
+swift run Experiment env --profile sdlc && eval $(swift run Experiment env --profile sdlc)
+```
 
-TODO if it needs to prompt for fresh session token the eval doesn't actually work
-eval $(swift run Experiment env --profile main)
-eval $(swift run Experiment env --profile sdlc)
+```
+swift run Experiment list-clusters --profile main --region us-east-1
+swift run Experiment list-clusters --profile main --region eu-central-1
+```
+
+```
+swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-nonprod --filter broker-dev
+swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-nonprod --filter broker-qa
+swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-stg
+swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-sandbox
+swift run Experiment describe-cluster --profile main --region us-east-1 --cluster-name broker-prod
+swift run Experiment describe-cluster --profile main --region eu-central-1 --cluster-name broker-stg-eu
+swift run Experiment describe-cluster --profile main --region eu-central-1 --cluster-name broker-prod-eu
 ```
