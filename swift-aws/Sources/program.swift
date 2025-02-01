@@ -212,6 +212,7 @@ class Program {
                 let stackStatus = stack.stackStatus?.description ?? "<no status>"
                 let stackStatusReason = stack.stackStatusReason ?? "<no status reason>"
                 print("\(stackName), status: \(stackStatus), reason: \(stackStatusReason)")
+                // TODO also show cloudformation events, maybe filter to just errors and only for stacks that are rolling back or failed?
             }
         }
     }
