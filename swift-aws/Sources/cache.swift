@@ -8,10 +8,6 @@ protocol Cache<T> {
     func del(key: String) async throws
 }
 
-enum CacheError: Error {
-    case unknown(message: String)
-}
-
 struct ExpiringValue<T>: Codable where T: Codable {
     let value: T
     let expiresAt: Date
@@ -28,6 +24,7 @@ class FileSystemCache<T>: Cache where T: Codable {
     private var state: [String: ExpiringValue<T>]
 
     init(fileName: String) throws {
+        // TODO should be relative to exe location, or configurable
         self.fullPath =
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appending(
                 components: ".cache", "swift-aws-experiment", fileName
