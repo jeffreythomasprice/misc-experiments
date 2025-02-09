@@ -3,9 +3,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "experiment",
+    name: "Experiment",
     targets: [
-        .executableTarget(name: "experiment"),
-        .testTarget(name: "experiment-test", dependencies: ["experiment"]),
+        .target(
+            name: "Experiment"
+        ),
+        .testTarget(
+            name: "ExperimentTests",
+            dependencies: ["Experiment"],
+            path: "Tests"
+        ),
     ]
 )
