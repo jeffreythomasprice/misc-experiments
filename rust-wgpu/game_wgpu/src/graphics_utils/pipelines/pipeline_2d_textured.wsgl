@@ -1,0 +1,44 @@
+struct SceneUniforms {
+    projection_matrix: mat4x4<f32>,
+};
+@group(0) @binding(0)
+var<uniform> scene_uniforms: SceneUniforms;
+
+struct ModelUniforms {
+    modelview_matrix: mat4x4<f32>,
+};
+@group(1) @binding(0)
+var<uniform> model_uniforms: ModelUniforms;
+
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) texture_coordinate: vec2<f32>,
+    @location(2) color: vec4<f32>,
+};
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) texture_coordinate: vec2<f32>,
+    @location(1) color: vec4<f32>,
+};
+
+@vertex
+fn vs_main(
+    model: VertexInput,
+) -> VertexOutput {
+    var out: VertexOutput;
+    out.clip_position = scene_uniforms.projection_matrix * model_uniforms.modelview_matrix * vec4<f32>(model.position, 0.0, 1.0);
+    out.texture_coordinate = model.texture_coordinate;
+    out.color = model.color;
+    return out;
+}
+
+@group(2) @binding(0)
+var diffuse_texture: texture_2d<f32>;
+@group(2) @binding(1)
+var diffuse_sampler: sampler;
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(diffuse_texture, diffuse_sampler, in.texture_coordinate) * in.color;
+}
