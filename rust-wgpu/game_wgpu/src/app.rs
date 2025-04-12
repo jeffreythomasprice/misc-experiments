@@ -54,7 +54,7 @@ impl<R: Renderer> WindowState<R> {
     ) -> Result<Self> {
         let window_size = PhysicalSize::new(1024, 768);
         let mut window_attributes = WindowAttributes::default()
-            .with_title("RoboWar")
+            .with_title("Experiment")
             .with_inner_size(window_size);
         if let Some(monitor) = event_loop.primary_monitor() {
             let monitor_position = monitor.position();
