@@ -1,7 +1,8 @@
 use std::{process::exit, sync::Arc};
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
 use pixels::{Pixels, SurfaceTexture};
+use tiny_skia::{FillRule, Paint, PathBuilder, PixmapMut, Transform};
 use tracing::*;
 use winit::{
     application::ApplicationHandler,
@@ -43,6 +44,46 @@ impl WindowState {
         let pixels = Pixels::new(display_size.width, display_size.height, surface_texture)?;
 
         Ok(Self { window, pixels })
+    }
+
+    pub fn resize(&mut self, physical_size: PhysicalSize<u32>) -> Result<()> {
+        self.pixels
+            .resize_surface(physical_size.width, physical_size.height)?;
+        Ok(())
+    }
+
+    pub fn render(&mut self) -> Result<()> {
+        let width = self.pixels.texture().width();
+        let height = self.pixels.texture().height();
+        let pixels = self.pixels.frame_mut();
+
+        for (i, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+            let x = i % (width as usize);
+            let y = i / (width as usize);
+            let a = ((x as f64) / (width as f64) * 255.0) as u8;
+            let b = ((y as f64) / (height as f64) * 255.0) as u8;
+            pixel.copy_from_slice(&[a, b, a, 255]);
+        }
+
+        let mut pixmap = PixmapMut::from_bytes(pixels, width, height)
+            .ok_or(eyre!("error creating skia pixmap"))?;
+        let mut paint = Paint::default();
+        paint.set_color_rgba8(255, 0, 0, 255);
+        paint.anti_alias = true;
+        let circle = PathBuilder::from_circle((width as f32) * 0.5, (height as f32) * 0.5, 100.0)
+            .ok_or(eyre!("error creating path"))?;
+        pixmap.fill_path(
+            &circle,
+            &paint,
+            FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
+
+        self.pixels.render()?;
+        self.window.request_redraw();
+
+        Ok(())
     }
 }
 
@@ -99,10 +140,7 @@ impl ApplicationHandler for App {
 
             winit::event::WindowEvent::Resized(physical_size) => {
                 if let Some(window_state) = &mut self.window_state {
-                    if let Err(e) = window_state
-                        .pixels
-                        .resize_surface(physical_size.width, physical_size.height)
-                    {
+                    if let Err(e) = window_state.resize(physical_size) {
                         error!("error resizing: {e:?}");
                         exit(1);
                     }
@@ -111,22 +149,10 @@ impl ApplicationHandler for App {
 
             winit::event::WindowEvent::RedrawRequested => {
                 if let Some(window_state) = &mut self.window_state {
-                    let width = window_state.pixels.texture().width() as usize;
-                    let height = window_state.pixels.texture().height() as usize;
-                    let pixels = window_state.pixels.frame_mut();
-                    for (i, pixel) in pixels.chunks_exact_mut(4).enumerate() {
-                        let x = i % width;
-                        let y = i / width;
-                        let a = ((x as f64) / (width as f64) * 255.0) as u8;
-                        let b = ((y as f64) / (height as f64) * 255.0) as u8;
-                        pixel.copy_from_slice(&[a, b, a, 255]);
-                    }
-
-                    if let Err(e) = window_state.pixels.render() {
+                    if let Err(e) = window_state.render() {
                         error!("error rendering: {e:?}");
                         exit(1);
                     }
-                    window_state.window.request_redraw();
                 }
             }
 
