@@ -2,7 +2,7 @@ use std::{process::exit, sync::Arc};
 
 use color_eyre::eyre::{Result, eyre};
 use pixels::{Pixels, SurfaceTexture};
-use tiny_skia::{FillRule, Paint, PathBuilder, PixmapMut, Transform};
+use tiny_skia::{FillRule, Paint, PathBuilder, PixmapMut, Stroke, Transform};
 use tracing::*;
 use winit::{
     application::ApplicationHandler,
@@ -70,12 +70,22 @@ impl WindowState {
         let mut paint = Paint::default();
         paint.set_color_rgba8(255, 0, 0, 255);
         paint.anti_alias = true;
-        let circle = PathBuilder::from_circle((width as f32) * 0.5, (height as f32) * 0.5, 100.0)
-            .ok_or(eyre!("error creating path"))?;
         pixmap.fill_path(
-            &circle,
+            &PathBuilder::from_circle((width as f32) * 0.25, (height as f32) * 0.5, 100.0)
+                .ok_or(eyre!("error creating path"))?,
             &paint,
             FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
+        pixmap.stroke_path(
+            &PathBuilder::from_circle((width as f32) * 0.75, (height as f32) * 0.5, 100.0)
+                .ok_or(eyre!("error creating path"))?,
+            &paint,
+            &Stroke {
+                width: 5.0,
+                ..Default::default()
+            },
             Transform::identity(),
             None,
         );
