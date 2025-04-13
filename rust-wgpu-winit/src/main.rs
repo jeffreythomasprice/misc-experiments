@@ -136,9 +136,10 @@ impl Renderer for Demo {
     }
 
     fn render(&mut self, texture_view: TextureView) -> Result<()> {
-        let texture_font_layout = self
-            .texture_atlas_font
-            .layout(&format!("FPS: {}", self.fps.fps_pretty()))?;
+        let texture_font_layout = self.texture_atlas_font.layout(&format!(
+            "FPS: {}\nanother line, yjpqg",
+            self.fps.fps_pretty()
+        ))?;
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {

@@ -33,9 +33,8 @@ impl<'font> Font<'font> {
                     LumaA([0, 0]),
                 );
                 glyph.draw(|x, y, v| {
-                    let x = (x as i32) + glyph_bounding_box.min.x;
-                    let y = (y as i32) + glyph_bounding_box.min.y;
-                    let y = -y - 1;
+                    let x = x as i32;
+                    let y = -(y as i32) - glyph_bounding_box.min.y;
                     if x >= 0 && y >= 0 {
                         let x = x as u32;
                         let y = y as u32;
@@ -54,7 +53,7 @@ impl<'font> Font<'font> {
                     image: DynamicImage::ImageLumaA8(ImageBuffer::from_pixel(1, 1, LumaA([0, 0]))),
                     bounds: Rect {
                         min: Point { x: 0, y: 0 },
-                        max: Point { x: 1, y: 1 },
+                        max: Point { x: 0, y: 0 },
                     },
                     advance: glyph.unpositioned().h_metrics().advance_width,
                 }
@@ -64,23 +63,10 @@ impl<'font> Font<'font> {
                 image: DynamicImage::ImageLumaA8(ImageBuffer::from_pixel(1, 1, LumaA([0, 0]))),
                 bounds: Rect {
                     min: Point { x: 0, y: 0 },
-                    max: Point { x: 1, y: 1 },
+                    max: Point { x: 0, y: 0 },
                 },
                 advance: 0.0,
             }
         }
-    }
-}
-
-fn bounding_box_around_rects(a: &Rect<i32>, b: &Rect<i32>) -> Rect<i32> {
-    Rect {
-        min: Point {
-            x: a.min.x.min(b.min.x),
-            y: a.min.y.min(b.min.y),
-        },
-        max: Point {
-            x: a.max.x.max(b.max.x),
-            y: a.max.y.max(b.max.y),
-        },
     }
 }
