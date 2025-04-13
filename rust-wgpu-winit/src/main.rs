@@ -1,5 +1,6 @@
 mod app;
 mod graphics_utils;
+mod misc_utils;
 mod wgpu_utils;
 
 use std::cell::RefCell;
@@ -35,25 +36,24 @@ https://sotrh.github.io/learn-wgpu/beginner/tutorial7-instancing/
 */
 
 trait Renderable<Renderer> {
-    fn render(&self, renderer: &mut Renderer);
+    fn render(&self, renderer: &mut Renderer) -> Result<()>;
 }
 
 struct MeshAndUniforms<Vertex> {
     mesh: Arc<RefCell<Mesh<Vertex>>>,
     texture: Arc<RefCell<Texture>>,
-    uniform_buffer: pipeline_2d_textured::ModelUniform,
+    modelview_matrix: Mat4,
 }
 
 impl MeshAndUniforms<Vertex2DTextureCoordinateColor> {
     pub fn new(
-        pipeline: &Pipeline2DTextured,
         mesh: Arc<RefCell<Mesh<Vertex2DTextureCoordinateColor>>>,
         texture: Arc<RefCell<Texture>>,
     ) -> Self {
         Self {
             mesh,
             texture,
-            uniform_buffer: pipeline.new_model_uniform(),
+            modelview_matrix: Mat4::IDENTITY,
         }
     }
 }
@@ -61,12 +61,12 @@ impl MeshAndUniforms<Vertex2DTextureCoordinateColor> {
 impl Renderable<pipeline_2d_textured::Renderer<'_>>
     for MeshAndUniforms<Vertex2DTextureCoordinateColor>
 {
-    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) {
+    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) -> Result<()> {
         renderer.render(
             &self.texture.borrow(),
-            &self.uniform_buffer,
+            self.modelview_matrix,
             &self.mesh.borrow(),
-        );
+        )
     }
 }
 
@@ -111,17 +111,15 @@ struct Model {
 }
 
 impl Renderable<pipeline_2d_textured::Renderer<'_>> for Model {
-    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) {
-        self.renderable.render(renderer);
+    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) -> Result<()> {
+        self.renderable.render(renderer)
     }
 }
 
 impl Updatable for Model {
     fn update(&mut self, duration: Duration) -> Result<()> {
         self.transform.update(duration)?;
-        self.renderable
-            .uniform_buffer
-            .enqueue_update(self.transform.affine().into());
+        self.renderable.modelview_matrix = self.transform.affine().into();
         Ok(())
     }
 }
@@ -163,8 +161,7 @@ impl TextureFontRenderable {
                 BufferUsages::INDEX | BufferUsages::COPY_DST,
             ),
         )));
-        let mut renderable = MeshAndUniforms::new(pipeline, mesh.clone(), texture.clone());
-        renderable.uniform_buffer.enqueue_update(Mat4::IDENTITY);
+        let renderable = MeshAndUniforms::new(mesh.clone(), texture.clone());
         Ok(Self {
             device: pipeline.device().clone(),
             queue: pipeline.queue().clone(),
@@ -224,13 +221,13 @@ impl TextureFontRenderable {
     }
 
     pub fn set_affine2(&mut self, a: Affine2) {
-        self.renderable.uniform_buffer.enqueue_update(a.into());
+        self.renderable.modelview_matrix = a.into();
     }
 }
 
 impl Renderable<pipeline_2d_textured::Renderer<'_>> for TextureFontRenderable {
-    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) {
-        self.renderable.render(renderer);
+    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) -> Result<()> {
+        self.renderable.render(renderer)
     }
 }
 
@@ -308,11 +305,7 @@ impl Demo {
         for _ in 0..10 {
             let scale = rng.random_range(0.75..1.25);
             models.push(Model {
-                renderable: MeshAndUniforms::new(
-                    &pipeline_no_blending,
-                    mesh.clone(),
-                    texture.clone(),
-                ),
+                renderable: MeshAndUniforms::new(mesh.clone(), texture.clone()),
                 transform: MovingAffine2 {
                     scale: Vec2::new(scale, scale),
                     angle: rng.random_range(0.0..TAU),
@@ -383,12 +376,15 @@ impl Renderer for Demo {
                 .pipeline_no_blending
                 .render(render_pass, self.ortho, |r| {
                     for model in self.models.iter() {
-                        model.render(r);
+                        model.render(r)?;
                     }
-                });
-            self.pipeline_blending.render(render_pass, self.ortho, |r| {
-                self.font_string.render(r);
-            });
+                    Ok(())
+                })?;
+            self.pipeline_blending
+                .render(render_pass, self.ortho, |r| {
+                    self.font_string.render(r)?;
+                    Ok(())
+                })?;
         }
         self.queue.submit([encoder.finish()]);
 

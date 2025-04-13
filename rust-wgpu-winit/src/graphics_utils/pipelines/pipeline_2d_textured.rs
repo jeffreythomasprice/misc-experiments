@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
+use color_eyre::eyre::Result;
 use glam::Mat4;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, Device, FragmentState, FrontFace, IndexFormat,
@@ -11,6 +12,7 @@ use wgpu::{
 
 use crate::{
     graphics_utils::basic_types::{HasVertexBufferLayout, Vertex2DTextureCoordinateColor},
+    misc_utils::pool::{Arena, Pool},
     wgpu_utils::{
         mesh::Mesh,
         texture::{self, Texture, TextureBindings},
@@ -32,7 +34,7 @@ struct ModelUniformData {
     modelview_matrix: Mat4,
 }
 
-pub struct ModelUniform {
+struct ModelUniform {
     queue: Arc<Queue>,
     buffer: UniformBuffer<ModelUniformData>,
 }
@@ -45,6 +47,7 @@ impl ModelUniform {
 }
 
 pub struct Renderer<'a> {
+    model_uniform_arena: Arena<ModelUniform>,
     render_pass: RenderPass<'a>,
 }
 
@@ -52,11 +55,14 @@ impl<'a> Renderer<'a> {
     pub fn render(
         &mut self,
         texture: &Texture,
-        uniform: &ModelUniform,
+        modelview_matrix: Mat4,
         mesh: &Mesh<Vertex2DTextureCoordinateColor>,
-    ) {
+    ) -> Result<()> {
+        let model_uniform = self.model_uniform_arena.get_mut()?;
+        model_uniform.enqueue_update(modelview_matrix);
+
         self.render_pass
-            .set_bind_group(1, uniform.buffer.bind_group(), &[]);
+            .set_bind_group(1, model_uniform.buffer.bind_group(), &[]);
         self.render_pass
             .set_bind_group(2, texture.bind_group(), &[]);
         self.render_pass
@@ -65,6 +71,8 @@ impl<'a> Renderer<'a> {
             .set_index_buffer(mesh.index_buffer().buffer().slice(..), IndexFormat::Uint16);
         self.render_pass
             .draw_indexed(0..(mesh.index_buffer().len() as u32), 0, 0..1);
+
+        Ok(())
     }
 
     pub fn finish(self) -> RenderPass<'a> {
@@ -81,6 +89,7 @@ pub struct Pipeline2DTextured {
     queue: Arc<Queue>,
     scene_uniform: UniformBuffer<SceneUniformData>,
     render_pipeline: RenderPipeline,
+    model_uniform_pool: Pool<ModelUniform>,
 }
 
 impl Pipeline2DTextured {
@@ -154,21 +163,24 @@ impl Pipeline2DTextured {
         });
 
         Self {
-            device,
-            queue,
+            device: device.clone(),
+            queue: queue.clone(),
             scene_uniform,
             render_pipeline,
-        }
-    }
-
-    pub fn new_model_uniform(&self) -> ModelUniform {
-        ModelUniform {
-            queue: self.queue.clone(),
-            buffer: UniformBuffer::new_init(
-                &self.device,
-                Zeroable::zeroed(),
-                Self::MODEL_UNIFORM_BINDING,
-            ),
+            model_uniform_pool: {
+                let device = device.clone();
+                let queue = queue.clone();
+                Pool::new(move || {
+                    Ok(ModelUniform {
+                        queue: queue.clone(),
+                        buffer: UniformBuffer::new_init(
+                            &device,
+                            Zeroable::zeroed(),
+                            Self::MODEL_UNIFORM_BINDING,
+                        ),
+                    })
+                })
+            },
         }
     }
 
@@ -176,17 +188,20 @@ impl Pipeline2DTextured {
         &'b mut self,
         mut render_pass: RenderPass<'a>,
         projection_matrix: Mat4,
-        f: impl Fn(&mut Renderer<'a>),
-    ) -> RenderPass<'a> {
+        f: impl Fn(&mut Renderer<'a>) -> Result<()>,
+    ) -> Result<RenderPass<'a>> {
         self.scene_uniform
             .enqueue_update(&self.queue, SceneUniformData { projection_matrix });
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, self.scene_uniform.bind_group(), &[]);
 
-        let mut r = Renderer { render_pass };
-        f(&mut r);
-        r.finish()
+        let mut r = Renderer {
+            render_pass,
+            model_uniform_arena: self.model_uniform_pool.arena(),
+        };
+        f(&mut r)?;
+        Ok(r.finish())
     }
 }
 
