@@ -3,50 +3,26 @@ mod graphics_utils;
 mod misc_utils;
 mod wgpu_utils;
 
-use std::cell::RefCell;
 use std::time::Duration;
 use std::{f32::consts::TAU, sync::Arc};
 
 use app::{App, Renderer};
+use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2};
-use graphics_utils::basic_types::{Affine2, Color, Rect, Vertex2DTextureCoordinateColor};
+use graphics_utils::basic_types::{Affine2, Color, Rect};
+use graphics_utils::font::Font;
 use graphics_utils::fps::FPSCounter;
-use graphics_utils::mesh_builder::MeshBuilder;
-use graphics_utils::pipelines::pipeline_2d_textured::{
-    self, Pipeline2DTextured, Pipeline2DTexturedOptions,
-};
-use graphics_utils::pipelines::{HasDeviceAndQueue, HasTextureBindings};
-use graphics_utils::text::Text;
+use graphics_utils::simple_renderer::SimpleRenderer;
+use graphics_utils::texture_atlas_font::TextureAtlasFont;
 use rand::Rng;
 use tracing::*;
 use wgpu::{
-    BlendState, Device, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor,
-    StoreOp, SurfaceConfiguration, TextureView,
+    Device, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor, StoreOp,
+    SurfaceConfiguration, TextureView,
 };
-use wgpu_utils::font::Font;
-use wgpu_utils::mesh::Mesh;
 use wgpu_utils::texture::Texture;
 use winit::{dpi::PhysicalSize, event_loop::EventLoop};
-
-/*
-TODO more wgpu stuff
-https://sotrh.github.io/learn-wgpu/beginner/tutorial7-instancing/
-
-
-
-TODO simpler graphics system?
-
-renderer:
-- text
-- sprites
-- instanced sprites, draw the same texture a bunch of times?
-
-
-
-TODO texture atlas font
-https://docs.rs/binpack2d/latest/binpack2d/
-*/
 
 struct MovingAffine2 {
     scale: Vec2,
@@ -79,12 +55,10 @@ impl MovingAffine2 {
 struct Demo {
     device: Arc<Device>,
     queue: Arc<Queue>,
-    pipeline_no_blending: Pipeline2DTextured,
-    pipeline_blending: Pipeline2DTextured,
-    sprite_mesh: Mesh<Vertex2DTextureCoordinateColor>,
+    renderer: SimpleRenderer,
     sprite_texture: Texture,
     sprite_transforms: Vec<MovingAffine2>,
-    text: Text,
+    texture_atlas_font: TextureAtlasFont,
     ortho: Mat4,
     fps: FPSCounter,
 }
@@ -95,55 +69,18 @@ impl Demo {
         queue: Arc<Queue>,
         surface_configuration: &SurfaceConfiguration,
     ) -> Result<Self> {
-        let pipeline_no_blending = Pipeline2DTextured::new(
-            device.clone(),
-            queue.clone(),
-            surface_configuration,
-            Pipeline2DTexturedOptions {
-                blend_state: BlendState::REPLACE,
-            },
-        );
-        let pipeline_blending = Pipeline2DTextured::new(
-            device.clone(),
-            queue.clone(),
-            surface_configuration,
-            Pipeline2DTexturedOptions {
-                blend_state: BlendState::ALPHA_BLENDING,
-            },
-        );
+        let renderer = SimpleRenderer::new(device.clone(), queue.clone(), surface_configuration);
 
         let sprite_texture = Texture::from_image(
             device.clone(),
             queue.clone(),
-            Pipeline2DTextured::texture_binding(),
-            image::load_from_memory_with_format(
+            SimpleRenderer::texture_bindings(),
+            &image::load_from_memory_with_format(
                 include_bytes!("../assets/rustacean-flat-happy.png"),
                 image::ImageFormat::Png,
             )?,
         )?;
         info!("texture size: {:?}", sprite_texture.size());
-
-        let sprite_mesh = MeshBuilder::<Vertex2DTextureCoordinateColor>::new()
-            .rectangle(
-                Rect::from_origin_size(
-                    Vec2::new(
-                        -(sprite_texture.width() as f32 / 2.0),
-                        -(sprite_texture.height() as f32 / 2.0),
-                    ),
-                    Vec2::new(
-                        sprite_texture.width() as f32,
-                        sprite_texture.height() as f32,
-                    ),
-                ),
-                Rect::from_origin_size(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)),
-                Color {
-                    red: 1.0,
-                    green: 1.0,
-                    blue: 1.0,
-                    alpha: 1.0,
-                },
-            )
-            .create_mesh(&device);
 
         let mut rng = rand::rng();
         let mut sprite_transforms = Vec::new();
@@ -165,23 +102,21 @@ impl Demo {
             ))
             .ok_or(eyre!("failed to parse font"))?,
         ));
-        let text = Text::new(
+        let texture_atlas_font = TextureAtlasFont::new(
             device.clone(),
             queue.clone(),
-            Pipeline2DTextured::texture_binding(),
+            SimpleRenderer::texture_bindings(),
             font.clone(),
             40.0,
-        );
+        )?;
 
         Ok(Self {
             device,
             queue,
-            pipeline_no_blending,
-            pipeline_blending,
-            sprite_mesh,
+            renderer,
             sprite_texture,
             sprite_transforms,
-            text,
+            texture_atlas_font,
             ortho: Mat4::IDENTITY,
             fps: FPSCounter::new(),
         })
@@ -192,13 +127,18 @@ impl Renderer for Demo {
     fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         self.ortho =
             Mat4::orthographic_rh_gl(0.0, size.width as f32, size.height as f32, 0.0, -1.0, 1.0);
+        self.renderer.set_viewport(Rect::from_origin_size(
+            Vec2::zeroed(),
+            Vec2::new(size.width as f32, size.height as f32),
+        ));
 
         Ok(())
     }
 
     fn render(&mut self, texture_view: TextureView) -> Result<()> {
-        self.text
-            .update(&format!("FPS: {}", self.fps.fps_pretty()))?;
+        let texture_font_layout = self
+            .texture_atlas_font
+            .layout(&format!("FPS: {}", self.fps.fps_pretty()))?;
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
@@ -218,26 +158,53 @@ impl Renderer for Demo {
                 })],
                 ..Default::default()
             });
-            let render_pass = self
-                .pipeline_no_blending
-                .render(render_pass, self.ortho, |r| {
-                    for transform in self.sprite_transforms.iter() {
-                        r.render(
-                            &self.sprite_texture,
-                            transform.affine().into(),
-                            &self.sprite_mesh,
+            self.renderer.render(render_pass, |r| {
+                r.set_blend(false);
+                for transform in self.sprite_transforms.iter() {
+                    r.fill_rect_texture(
+                        transform.affine(),
+                        // TODO center texture at origin again
+                        Rect::from_origin_size(
+                            Vec2::zeroed(),
+                            Vec2::new(
+                                self.sprite_texture.width() as f32,
+                                self.sprite_texture.height() as f32,
+                            ),
+                        ),
+                        &self.sprite_texture,
+                        Rect::from_origin_size(Vec2::zeroed(), Vec2::new(1.0, 1.0)),
+                        Color {
+                            red: 1.0,
+                            green: 1.0,
+                            blue: 1.0,
+                            alpha: 1.0,
+                        },
+                    )?;
+                }
+
+                r.set_blend(true);
+                // TODO convenience for drawing texture font output
+                let font_transform: Affine2 =
+                    glam::Affine2::from_translation(Vec2::new(100.0, 50.0)).into();
+                for per_texture in texture_font_layout.layout.iter() {
+                    for glyph in per_texture.glyphs.iter() {
+                        r.fill_rect_texture(
+                            font_transform,
+                            glyph.pixel_bounds,
+                            &per_texture.texture,
+                            glyph.texture_coordinate_bounds,
+                            Color {
+                                red: 1.0,
+                                green: 1.0,
+                                blue: 1.0,
+                                alpha: 1.0,
+                            },
                         )?;
                     }
-                    Ok(())
-                })?;
-            self.pipeline_blending
-                .render(render_pass, self.ortho, |r| {
-                    let (mesh, texture) = self.text.get().ok_or(eyre!("failed to render text"))?;
-                    let transform: Affine2 =
-                        glam::Affine2::from_translation(Vec2::new(100.0, 50.0)).into();
-                    r.render(texture, transform.into(), mesh)?;
-                    Ok(())
-                })?;
+                }
+
+                Ok(())
+            })?;
         }
         self.queue.submit([encoder.finish()]);
 

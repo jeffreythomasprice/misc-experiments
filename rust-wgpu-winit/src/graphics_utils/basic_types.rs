@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2, Vec4};
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode, vertex_attr_array};
 
@@ -90,7 +91,7 @@ impl From<Affine2> for glam::Mat4 {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Zeroable)]
 pub struct Rect {
     pub min: Vec2,
     pub max: Vec2,
@@ -104,6 +105,27 @@ impl Rect {
             min: Vec2::new(p1.x.min(p2.x), p1.y.min(p2.y)),
             max: Vec2::new(p1.x.max(p2.x), p1.y.max(p2.y)),
         }
+    }
+
+    pub fn bounding_box(points: &[Vec2]) -> Result<Self> {
+        if points.is_empty() {
+            Err(eyre!("must provide at least one point"))?;
+        }
+        let mut min = points[0];
+        let mut max = points[0];
+        for p in points.iter().skip(1) {
+            min.x = min.x.min(p.x);
+            min.y = min.y.min(p.y);
+            max.x = max.x.max(p.x);
+            max.y = max.y.max(p.y);
+        }
+        Ok(Self { min, max })
+    }
+
+    pub fn bounding_box_around_other_rect(&self, other: &Rect) -> Rect {
+        Self::bounding_box(&[self.min, self.max, other.min, other.max])
+            // unwrap is safe because we know there is at least one point
+            .unwrap()
     }
 
     pub fn size(&self) -> Vec2 {

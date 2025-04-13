@@ -1,6 +1,12 @@
 use image::{DynamicImage, ImageBuffer, LumaA};
 use rusttype::{Point, Rect, Scale};
 
+pub struct FontLayoutGlyph {
+    pub image: DynamicImage,
+    pub bounds: Rect<i32>,
+    pub advance: f32,
+}
+
 pub struct Font<'font> {
     font: rusttype::Font<'font>,
 }
@@ -10,7 +16,7 @@ impl<'font> Font<'font> {
         Self { font }
     }
 
-    pub fn render_to_new_image(&self, s: &str, scale: f32) -> (DynamicImage, Rect<i32>) {
+    pub fn render_to_new_image(&self, s: &str, scale: f32) -> FontLayoutGlyph {
         let glyphs = self
             .font
             .layout(s, Scale::uniform(scale), Point { x: 0.0, y: 0.0 })
@@ -33,6 +39,7 @@ impl<'font> Font<'font> {
                 bounding_box.height() as u32,
                 LumaA([0, 0]),
             );
+            let mut max_advance = 0.0f32;
             for glyph in glyphs.iter() {
                 if let Some(glyph_bounding_box) = glyph.pixel_bounding_box() {
                     glyph.draw(|x, y, v| {
@@ -47,21 +54,28 @@ impl<'font> Font<'font> {
                             }
                         }
                     });
+                    max_advance = max_advance.max(
+                        glyph_bounding_box.max.y as f32
+                            + glyph.unpositioned().h_metrics().advance_width,
+                    );
                 }
             }
-            (DynamicImage::ImageLumaA8(image_buffer), bounding_box)
+            FontLayoutGlyph {
+                image: DynamicImage::ImageLumaA8(image_buffer),
+                bounds: bounding_box,
+                advance: max_advance,
+            }
         } else {
-            (
-                DynamicImage::ImageLumaA8(ImageBuffer::from_pixel(1, 1, LumaA([0, 0]))),
-                Rect {
+            FontLayoutGlyph {
+                image: DynamicImage::ImageLumaA8(ImageBuffer::from_pixel(1, 1, LumaA([0, 0]))),
+                bounds: Rect {
                     min: Point { x: 0, y: 0 },
                     max: Point { x: 0, y: 0 },
                 },
-            )
+                advance: 0.0,
+            }
         }
     }
-
-    // TODO create texture atlas
 }
 
 fn bounding_box_around_rects(a: &Rect<i32>, b: &Rect<i32>) -> Rect<i32> {

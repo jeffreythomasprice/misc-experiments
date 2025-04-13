@@ -42,8 +42,12 @@ impl Texture {
         device: Arc<Device>,
         queue: Arc<Queue>,
         bindings: TextureBindings,
-        image: DynamicImage,
+        image: &DynamicImage,
     ) -> Result<Self> {
+        let image_rgba8 = match image.as_rgba8() {
+            Some(x) => x,
+            None => &image.to_rgba8(),
+        };
         let width = image.width();
         let height = image.height();
         Self::with_init_callback(
@@ -55,12 +59,12 @@ impl Texture {
             |queue, texture, size| {
                 queue.write_texture(
                     TexelCopyTextureInfo {
-                        texture: &texture,
+                        texture,
                         mip_level: 0,
                         origin: Origin3d::ZERO,
                         aspect: TextureAspect::All,
                     },
-                    &image.into_rgba8(),
+                    &image_rgba8,
                     TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(4 * width),
@@ -89,7 +93,11 @@ impl Texture {
         &self.bind_group
     }
 
-    pub fn enqueue_update(&mut self, image: DynamicImage, origin: UVec2) {
+    pub fn enqueue_update(&mut self, image: &DynamicImage, origin: UVec2) {
+        let image_rgba8 = match image.as_rgba8() {
+            Some(x) => x,
+            None => &image.to_rgba8(),
+        };
         let image_width = image.width();
         let image_height = image.height();
         self.queue.write_texture(
@@ -103,7 +111,7 @@ impl Texture {
                 },
                 aspect: TextureAspect::All,
             },
-            &image.into_rgba8(),
+            image_rgba8,
             TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * image_width),

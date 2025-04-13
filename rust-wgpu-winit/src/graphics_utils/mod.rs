@@ -1,5 +1,7 @@
 pub mod basic_types;
+pub mod font;
 pub mod fps;
 pub mod mesh_builder;
-pub mod pipelines;
-pub mod text;
+pub mod simple_renderer;
+pub mod texture_atlas;
+pub mod texture_atlas_font;
