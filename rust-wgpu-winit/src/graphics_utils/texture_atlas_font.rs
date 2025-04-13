@@ -122,6 +122,7 @@ impl TextureAtlasFont {
             // next position in pixel space
             if c == '\n' {
                 cursor.x = 0.0;
+                // TODO advance using font's vmetrics
                 cursor.y += self.scale;
             } else {
                 cursor.x += extra_data.advance;
@@ -164,7 +165,13 @@ impl TextureAtlasFont {
         let mut images = HashMap::new();
         let mut image_bounds = HashMap::new();
         for c in chars {
-            let glyph = font.render_to_new_image(&format!("{c}"), scale);
+            let glyph = font.render_char_to_image(*c, scale);
+            tracing::info!(
+                "TODO glyph for c={}, bounds={:?}, advance={}",
+                c,
+                glyph.bounds,
+                glyph.advance
+            );
             images.insert(*c, glyph.image);
             image_bounds.insert(
                 *c,

@@ -16,61 +16,55 @@ impl<'font> Font<'font> {
         Self { font }
     }
 
-    pub fn render_to_new_image(&self, s: &str, scale: f32) -> FontLayoutGlyph {
-        let glyphs = self
+    pub fn render_char_to_image(&self, c: char, scale: f32) -> FontLayoutGlyph {
+        if let Some(glyph) = self
             .font
-            .layout(s, Scale::uniform(scale), Point { x: 0.0, y: 0.0 })
-            .collect::<Vec<_>>();
-
-        let bounding_box = glyphs
-            .iter()
-            .fold::<Option<Rect<i32>>, _>(None, |bbox, glyph| {
-                match (bbox, glyph.pixel_bounding_box()) {
-                    (Some(current), Some(this)) => Some(bounding_box_around_rects(&current, &this)),
-                    (Some(current), None) => Some(current),
-                    (None, Some(this)) => Some(this),
-                    (None, None) => None,
-                }
-            });
-
-        if let Some(bounding_box) = bounding_box {
-            let mut image_buffer = ImageBuffer::from_pixel(
-                bounding_box.width() as u32,
-                bounding_box.height() as u32,
-                LumaA([0, 0]),
-            );
-            let mut max_advance = 0.0f32;
-            for glyph in glyphs.iter() {
-                if let Some(glyph_bounding_box) = glyph.pixel_bounding_box() {
-                    glyph.draw(|x, y, v| {
-                        let x = (x as i32) + glyph_bounding_box.min.x - bounding_box.min.x;
-                        let y = (y as i32) + glyph_bounding_box.min.y - bounding_box.min.y;
-                        let y = bounding_box.height() - y - 1;
-                        if x >= 0 && y >= 0 {
-                            let x = x as u32;
-                            let y = y as u32;
-                            if x < image_buffer.width() && y < image_buffer.height() {
-                                image_buffer.put_pixel(x, y, LumaA([255, (v * 255.0) as u8]));
-                            }
+            .layout(
+                &format!("{}", c),
+                Scale::uniform(scale),
+                Point { x: 0.0, y: 0.0 },
+            )
+            .next()
+        {
+            if let Some(glyph_bounding_box) = glyph.pixel_bounding_box() {
+                let mut image_buffer = ImageBuffer::from_pixel(
+                    glyph_bounding_box.width() as u32 + 1,
+                    glyph_bounding_box.height() as u32 + 1,
+                    LumaA([0, 0]),
+                );
+                glyph.draw(|x, y, v| {
+                    let x = (x as i32) + glyph_bounding_box.min.x;
+                    let y = (y as i32) + glyph_bounding_box.min.y;
+                    let y = -y - 1;
+                    if x >= 0 && y >= 0 {
+                        let x = x as u32;
+                        let y = y as u32;
+                        if x < image_buffer.width() && y < image_buffer.height() {
+                            image_buffer.put_pixel(x, y, LumaA([255, (v * 255.0) as u8]));
                         }
-                    });
-                    max_advance = max_advance.max(
-                        glyph_bounding_box.max.y as f32
-                            + glyph.unpositioned().h_metrics().advance_width,
-                    );
+                    }
+                });
+                FontLayoutGlyph {
+                    image: DynamicImage::ImageLumaA8(image_buffer),
+                    bounds: glyph_bounding_box,
+                    advance: glyph.unpositioned().h_metrics().advance_width,
                 }
-            }
-            FontLayoutGlyph {
-                image: DynamicImage::ImageLumaA8(image_buffer),
-                bounds: bounding_box,
-                advance: max_advance,
+            } else {
+                FontLayoutGlyph {
+                    image: DynamicImage::ImageLumaA8(ImageBuffer::from_pixel(1, 1, LumaA([0, 0]))),
+                    bounds: Rect {
+                        min: Point { x: 0, y: 0 },
+                        max: Point { x: 1, y: 1 },
+                    },
+                    advance: glyph.unpositioned().h_metrics().advance_width,
+                }
             }
         } else {
             FontLayoutGlyph {
                 image: DynamicImage::ImageLumaA8(ImageBuffer::from_pixel(1, 1, LumaA([0, 0]))),
                 bounds: Rect {
                     min: Point { x: 0, y: 0 },
-                    max: Point { x: 0, y: 0 },
+                    max: Point { x: 1, y: 1 },
                 },
                 advance: 0.0,
             }
