@@ -21,57 +21,32 @@ use graphics_utils::text::Text;
 use rand::Rng;
 use tracing::*;
 use wgpu::{
-    BlendState, Device, LoadOp, Operations, Queue, RenderPassColorAttachment,
-    RenderPassDescriptor, StoreOp, SurfaceConfiguration, TextureView,
+    BlendState, Device, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    StoreOp, SurfaceConfiguration, TextureView,
 };
+use wgpu_utils::font::Font;
 use wgpu_utils::mesh::Mesh;
 use wgpu_utils::texture::Texture;
-use wgpu_utils::font::Font;
 use winit::{dpi::PhysicalSize, event_loop::EventLoop};
 
 /*
 TODO more wgpu stuff
 https://sotrh.github.io/learn-wgpu/beginner/tutorial7-instancing/
+
+
+
+TODO simpler graphics system?
+
+renderer:
+- text
+- sprites
+- instanced sprites, draw the same texture a bunch of times?
+
+
+
+TODO texture atlas font
+https://docs.rs/binpack2d/latest/binpack2d/
 */
-
-trait Renderable<Renderer> {
-    fn render(&self, renderer: &mut Renderer) -> Result<()>;
-}
-
-struct MeshAndUniforms<Vertex> {
-    mesh: Arc<RefCell<Mesh<Vertex>>>,
-    texture: Arc<RefCell<Texture>>,
-    modelview_matrix: Mat4,
-}
-
-impl MeshAndUniforms<Vertex2DTextureCoordinateColor> {
-    pub fn new(
-        mesh: Arc<RefCell<Mesh<Vertex2DTextureCoordinateColor>>>,
-        texture: Arc<RefCell<Texture>>,
-    ) -> Self {
-        Self {
-            mesh,
-            texture,
-            modelview_matrix: Mat4::IDENTITY,
-        }
-    }
-}
-
-impl Renderable<pipeline_2d_textured::Renderer<'_>>
-    for MeshAndUniforms<Vertex2DTextureCoordinateColor>
-{
-    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) -> Result<()> {
-        renderer.render(
-            &self.texture.borrow(),
-            self.modelview_matrix,
-            &self.mesh.borrow(),
-        )
-    }
-}
-
-trait Updatable {
-    fn update(&mut self, duration: Duration) -> Result<()>;
-}
 
 struct MovingAffine2 {
     scale: Vec2,
@@ -86,10 +61,8 @@ impl MovingAffine2 {
     pub fn affine(&self) -> Affine2 {
         glam::Affine2::from_scale_angle_translation(self.scale, self.angle, self.translation).into()
     }
-}
 
-impl Updatable for MovingAffine2 {
-    fn update(&mut self, duration: Duration) -> Result<()> {
+    pub fn update(&mut self, duration: Duration) {
         // TODO math helper for wrapping a value to inside range?
         let new_angle =
             (self.angle + self.angular_velocity * duration.as_secs_f32()) % std::f32::consts::TAU;
@@ -100,38 +73,6 @@ impl Updatable for MovingAffine2 {
         };
 
         self.translation += self.velocity * duration.as_secs_f32();
-        Ok(())
-    }
-}
-
-struct Model {
-    renderable: MeshAndUniforms<Vertex2DTextureCoordinateColor>,
-    transform: MovingAffine2,
-}
-
-impl Renderable<pipeline_2d_textured::Renderer<'_>> for Model {
-    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) -> Result<()> {
-        self.renderable.render(renderer)
-    }
-}
-
-impl Updatable for Model {
-    fn update(&mut self, duration: Duration) -> Result<()> {
-        self.transform.update(duration)?;
-        self.renderable.modelview_matrix = self.transform.affine().into();
-        Ok(())
-    }
-}
-
-struct PositionedText {
-    text: Text,
-    transform: Affine2,
-}
-
-impl Renderable<pipeline_2d_textured::Renderer<'_>> for PositionedText {
-    fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) -> Result<()> {
-        let (mesh, texture) = self.text.get().ok_or(eyre!("text hasn't been set yet"))?;
-        renderer.render(texture, self.transform.into(), mesh)
     }
 }
 
@@ -140,8 +81,10 @@ struct Demo {
     queue: Arc<Queue>,
     pipeline_no_blending: Pipeline2DTextured,
     pipeline_blending: Pipeline2DTextured,
-    models: Vec<Model>,
-    font_string: PositionedText,
+    sprite_mesh: Mesh<Vertex2DTextureCoordinateColor>,
+    sprite_texture: Texture,
+    sprite_transforms: Vec<MovingAffine2>,
+    text: Text,
     ortho: Mat4,
     fps: FPSCounter,
 }
@@ -169,7 +112,7 @@ impl Demo {
             },
         );
 
-        let texture = Arc::new(RefCell::new(Texture::new(
+        let sprite_texture = Texture::from_image(
             device.clone(),
             queue.clone(),
             Pipeline2DTextured::texture_binding(),
@@ -177,50 +120,42 @@ impl Demo {
                 include_bytes!("../assets/rustacean-flat-happy.png"),
                 image::ImageFormat::Png,
             )?,
-        )?));
-        info!("texture size: {:?}", texture.borrow().size());
+        )?;
+        info!("texture size: {:?}", sprite_texture.size());
 
-        let mesh = {
-            let texture = texture.borrow();
-            Arc::new(RefCell::new(
-                MeshBuilder::<Vertex2DTextureCoordinateColor>::new()
-                    .rectangle(
-                        Rect::from_origin_size(
-                            Vec2::new(
-                                -(texture.width() as f32 / 2.0),
-                                -(texture.height() as f32 / 2.0),
-                            ),
-                            Vec2::new(texture.width() as f32, texture.height() as f32),
-                        ),
-                        Rect::from_origin_size(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)),
-                        Color {
-                            red: 1.0,
-                            green: 1.0,
-                            blue: 1.0,
-                            alpha: 1.0,
-                        },
-                    )
-                    .create_mesh(&device),
-            ))
-        };
+        let sprite_mesh = MeshBuilder::<Vertex2DTextureCoordinateColor>::new()
+            .rectangle(
+                Rect::from_origin_size(
+                    Vec2::new(
+                        -(sprite_texture.width() as f32 / 2.0),
+                        -(sprite_texture.height() as f32 / 2.0),
+                    ),
+                    Vec2::new(
+                        sprite_texture.width() as f32,
+                        sprite_texture.height() as f32,
+                    ),
+                ),
+                Rect::from_origin_size(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)),
+                Color {
+                    red: 1.0,
+                    green: 1.0,
+                    blue: 1.0,
+                    alpha: 1.0,
+                },
+            )
+            .create_mesh(&device);
 
         let mut rng = rand::rng();
-        let mut models = Vec::new();
+        let mut sprite_transforms = Vec::new();
         for _ in 0..10 {
             let scale = rng.random_range(0.75..1.25);
-            models.push(Model {
-                renderable: MeshAndUniforms::new(mesh.clone(), texture.clone()),
-                transform: MovingAffine2 {
-                    scale: Vec2::new(scale, scale),
-                    angle: rng.random_range(0.0..TAU),
-                    translation: Vec2::new(
-                        rng.random_range(0.0..500.0),
-                        rng.random_range(0.0..500.0),
-                    ),
-                    angular_velocity: rng
-                        .random_range((-45.0f32.to_radians())..=(45.0f32.to_radians())),
-                    velocity: Vec2::ZERO,
-                },
+            sprite_transforms.push(MovingAffine2 {
+                scale: Vec2::new(scale, scale),
+                angle: rng.random_range(0.0..TAU),
+                translation: Vec2::new(rng.random_range(0.0..500.0), rng.random_range(0.0..500.0)),
+                angular_velocity: rng
+                    .random_range((-45.0f32.to_radians())..=(45.0f32.to_radians())),
+                velocity: Vec2::ZERO,
             });
         }
 
@@ -230,23 +165,23 @@ impl Demo {
             ))
             .ok_or(eyre!("failed to parse font"))?,
         ));
-        let font_string = PositionedText {
-            text: Text::new(
-                device.clone(),
-                queue.clone(),
-                Pipeline2DTextured::texture_binding(),
-                font.clone(),
-            ),
-            transform: glam::Affine2::from_translation(Vec2::new(50.0, 100.0)).into(),
-        };
+        let text = Text::new(
+            device.clone(),
+            queue.clone(),
+            Pipeline2DTextured::texture_binding(),
+            font.clone(),
+            40.0,
+        );
 
         Ok(Self {
             device,
             queue,
             pipeline_no_blending,
             pipeline_blending,
-            models,
-            font_string,
+            sprite_mesh,
+            sprite_texture,
+            sprite_transforms,
+            text,
             ortho: Mat4::IDENTITY,
             fps: FPSCounter::new(),
         })
@@ -262,9 +197,8 @@ impl Renderer for Demo {
     }
 
     fn render(&mut self, texture_view: TextureView) -> Result<()> {
-        self.font_string
-            .text
-            .update(&format!("FPS: {}", self.fps.fps_pretty()), 40.0)?;
+        self.text
+            .update(&format!("FPS: {}", self.fps.fps_pretty()))?;
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
@@ -287,14 +221,21 @@ impl Renderer for Demo {
             let render_pass = self
                 .pipeline_no_blending
                 .render(render_pass, self.ortho, |r| {
-                    for model in self.models.iter() {
-                        model.render(r)?;
+                    for transform in self.sprite_transforms.iter() {
+                        r.render(
+                            &self.sprite_texture,
+                            transform.affine().into(),
+                            &self.sprite_mesh,
+                        )?;
                     }
                     Ok(())
                 })?;
             self.pipeline_blending
                 .render(render_pass, self.ortho, |r| {
-                    self.font_string.render(r)?;
+                    let (mesh, texture) = self.text.get().ok_or(eyre!("failed to render text"))?;
+                    let transform: Affine2 =
+                        glam::Affine2::from_translation(Vec2::new(100.0, 50.0)).into();
+                    r.render(texture, transform.into(), mesh)?;
                     Ok(())
                 })?;
         }
@@ -306,8 +247,8 @@ impl Renderer for Demo {
     fn update(&mut self, duration: Duration) -> Result<()> {
         self.fps.tick(duration);
 
-        for model in self.models.iter_mut() {
-            model.update(duration)?;
+        for transform in self.sprite_transforms.iter_mut() {
+            transform.update(duration);
         }
 
         Ok(())

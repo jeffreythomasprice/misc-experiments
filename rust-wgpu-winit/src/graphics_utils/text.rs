@@ -21,6 +21,7 @@ pub struct Text {
     queue: Arc<Queue>,
     bindings: TextureBindings,
     font: Arc<Font<'static>>,
+    scale: f32,
     mesh: Option<Mesh<Vertex2DTextureCoordinateColor>>,
     texture: Option<Texture>,
 }
@@ -31,19 +32,21 @@ impl Text {
         queue: Arc<Queue>,
         bindings: TextureBindings,
         font: Arc<Font<'static>>,
+        scale: f32,
     ) -> Self {
         Self {
             device,
             queue,
             bindings,
             font,
+            scale,
             mesh: None,
             texture: None,
         }
     }
 
-    pub fn update(&mut self, s: &str, size: f32) -> Result<()> {
-        let (font_image, _font_bounding_box) = self.font.render_to_new_image(s, size);
+    pub fn update(&mut self, s: &str) -> Result<()> {
+        let (font_image, _) = self.font.render_to_new_image(s, self.scale);
 
         // update texture
         let font_image_width = font_image.width();
@@ -69,25 +72,11 @@ impl Text {
         };
 
         // update mesh
-        let mut mesh_builder = MeshBuilder::<Vertex2DTextureCoordinateColor>::new();
-        mesh_builder.rectangle(
-            Rect::from_origin_size(
-                Vec2::new(0.0, 0.0),
-                Vec2::new(texture_width as f32, texture_height as f32),
-            ),
-            Rect {
-                min: Vec2::new(0.0, 0.0),
-                max: Vec2::new(
-                    (font_image_width as f32) / (texture_width as f32),
-                    (font_image_height as f32) / (texture_height as f32),
-                ),
-            },
-            Color {
-                red: 1.0,
-                green: 1.0,
-                blue: 1.0,
-                alpha: 1.0,
-            },
+        let mesh_builder = self.create_mesh_builder(
+            font_image_width as f32,
+            font_image_height as f32,
+            texture_width as f32,
+            texture_height as f32,
         );
         if let Some(mesh) = &mut self.mesh {
             // update existing mesh
@@ -108,11 +97,41 @@ impl Text {
     }
 
     fn create_texture(&self, font_image: DynamicImage) -> Result<Texture> {
-        Texture::new(
+        Texture::from_image(
             self.device.clone(),
             self.queue.clone(),
             self.bindings,
             font_image,
         )
+    }
+
+    fn create_mesh_builder(
+        &self,
+        font_image_width: f32,
+        font_image_height: f32,
+        texture_width: f32,
+        texture_height: f32,
+    ) -> MeshBuilder<Vertex2DTextureCoordinateColor> {
+        let mut result = MeshBuilder::<Vertex2DTextureCoordinateColor>::new();
+        result.rectangle(
+            Rect::from_origin_size(
+                Vec2::new(0.0, 0.0),
+                Vec2::new(texture_width, texture_height),
+            ),
+            Rect {
+                min: Vec2::new(0.0, 0.0),
+                max: Vec2::new(
+                    font_image_width / texture_width,
+                    font_image_height / texture_height,
+                ),
+            },
+            Color {
+                red: 1.0,
+                green: 1.0,
+                blue: 1.0,
+                alpha: 1.0,
+            },
+        );
+        return result;
     }
 }

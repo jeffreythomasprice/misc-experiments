@@ -1,11 +1,6 @@
 use image::{DynamicImage, ImageBuffer, LumaA};
 use rusttype::{Point, Rect, Scale};
 
-/*
-TODO texture atlas font
-https://docs.rs/binpack2d/latest/binpack2d/
-*/
-
 pub struct Font<'font> {
     font: rusttype::Font<'font>,
 }
@@ -65,6 +60,8 @@ impl<'font> Font<'font> {
             )
         }
     }
+
+    // TODO create texture atlas
 }
 
 fn bounding_box_around_rects(a: &Rect<i32>, b: &Rect<i32>) -> Rect<i32> {

@@ -28,52 +28,49 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new(
+    pub fn with_size(
         device: Arc<Device>,
         queue: Arc<Queue>,
-        binding: TextureBindings,
+        bindings: TextureBindings,
+        width: u32,
+        height: u32,
+    ) -> Result<Self> {
+        Self::with_init_callback(device, queue, bindings, width, height, |_, _, _| Ok(()))
+    }
+
+    pub fn from_image(
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        bindings: TextureBindings,
         image: DynamicImage,
     ) -> Result<Self> {
-        let size = Extent3d {
-            width: image.width(),
-            height: image.height(),
-            depth_or_array_layers: 1,
-        };
-        let texture = device.create_texture(&TextureDescriptor {
-            label: None,
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8UnormSrgb,
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        queue.write_texture(
-            TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            &image.into_rgba8(),
-            TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * size.width),
-                rows_per_image: Some(size.height),
-            },
-            size,
-        );
-        let bind_group =
-            Self::create_bind_group_layout(&device, binding.texture, binding.sampler, &texture);
-        Ok(Self {
+        let width = image.width();
+        let height = image.height();
+        Self::with_init_callback(
             device,
             queue,
-            binding,
-            size,
-            texture,
-            bind_group,
-        })
+            bindings,
+            width,
+            height,
+            |queue, texture, size| {
+                queue.write_texture(
+                    TexelCopyTextureInfo {
+                        texture: &texture,
+                        mip_level: 0,
+                        origin: Origin3d::ZERO,
+                        aspect: TextureAspect::All,
+                    },
+                    &image.into_rgba8(),
+                    TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4 * width),
+                        rows_per_image: Some(height),
+                    },
+                    size,
+                );
+                Ok(())
+            },
+        )
     }
 
     pub fn size(&self) -> &Extent3d {
@@ -124,6 +121,42 @@ impl Texture {
             self.binding.sampler,
             &self.texture,
         );
+    }
+
+    fn with_init_callback(
+        device: Arc<Device>,
+        queue: Arc<Queue>,
+        bindings: TextureBindings,
+        width: u32,
+        height: u32,
+        f: impl FnOnce(&Queue, &wgpu::Texture, Extent3d) -> Result<()>,
+    ) -> Result<Self> {
+        let size = Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let texture = device.create_texture(&TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Rgba8UnormSrgb,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        f(&queue, &texture, size)?;
+        let bind_group =
+            Self::create_bind_group_layout(&device, bindings.texture, bindings.sampler, &texture);
+        Ok(Self {
+            device,
+            queue,
+            binding: bindings,
+            size,
+            texture,
+            bind_group,
+        })
     }
 
     fn create_bind_group_layout(
