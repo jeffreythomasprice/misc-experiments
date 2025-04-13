@@ -8,9 +8,8 @@ use std::time::Duration;
 use std::{f32::consts::TAU, sync::Arc};
 
 use app::{App, Renderer};
-use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
-use glam::{Mat4, UVec2, Vec2};
+use glam::{Mat4, Vec2};
 use graphics_utils::basic_types::{Affine2, Color, Rect, Vertex2DTextureCoordinateColor};
 use graphics_utils::fps::FPSCounter;
 use graphics_utils::mesh_builder::MeshBuilder;
@@ -18,16 +17,16 @@ use graphics_utils::pipelines::pipeline_2d_textured::{
     self, Pipeline2DTextured, Pipeline2DTexturedOptions,
 };
 use graphics_utils::pipelines::{HasDeviceAndQueue, HasTextureBindings};
-use image::ImageBuffer;
+use graphics_utils::text::Text;
 use rand::Rng;
 use tracing::*;
 use wgpu::{
-    BlendState, BufferUsages, Device, LoadOp, Operations, Queue, RenderPassColorAttachment,
+    BlendState, Device, LoadOp, Operations, Queue, RenderPassColorAttachment,
     RenderPassDescriptor, StoreOp, SurfaceConfiguration, TextureView,
 };
 use wgpu_utils::mesh::Mesh;
 use wgpu_utils::texture::Texture;
-use wgpu_utils::{buffer::Buffer, font::Font};
+use wgpu_utils::font::Font;
 use winit::{dpi::PhysicalSize, event_loop::EventLoop};
 
 /*
@@ -124,110 +123,15 @@ impl Updatable for Model {
     }
 }
 
-struct TextureFontRenderable {
-    device: Arc<Device>,
-    queue: Arc<Queue>,
-    font: Arc<Font<'static>>,
-    texture: Arc<RefCell<Texture>>,
-    mesh: Arc<RefCell<Mesh<Vertex2DTextureCoordinateColor>>>,
-    renderable: MeshAndUniforms<Vertex2DTextureCoordinateColor>,
+struct PositionedText {
+    text: Text,
+    transform: Affine2,
 }
 
-impl TextureFontRenderable {
-    pub fn new(pipeline: &Pipeline2DTextured, font: Arc<Font<'static>>) -> Result<Self> {
-        let texture = Arc::new(RefCell::new(Texture::new(
-            pipeline.device().clone(),
-            pipeline.queue().clone(),
-            Pipeline2DTextured::texture_binding(),
-            // initial contents don't matter, re'll be re-creating this as needed to make it big
-            image::DynamicImage::ImageRgba8(ImageBuffer::from_pixel(
-                1,
-                1,
-                image::Rgba([0, 0, 0, 0]),
-            )),
-        )?));
-        let mesh = Arc::new(RefCell::new(Mesh::new(
-            Buffer::new_init(
-                &pipeline.device(),
-                None,
-                // initial contents don't matter, just make sure it's big enough
-                &[Vertex2DTextureCoordinateColor::zeroed(); 4],
-                BufferUsages::VERTEX | BufferUsages::COPY_DST,
-            ),
-            Buffer::new_init(
-                &pipeline.device(),
-                None,
-                &[0, 1, 2, 2, 3, 0],
-                BufferUsages::INDEX | BufferUsages::COPY_DST,
-            ),
-        )));
-        let renderable = MeshAndUniforms::new(mesh.clone(), texture.clone());
-        Ok(Self {
-            device: pipeline.device().clone(),
-            queue: pipeline.queue().clone(),
-            font,
-            texture,
-            mesh,
-            renderable,
-        })
-    }
-
-    pub fn set_text(&mut self, s: &str) -> Result<()> {
-        let mut texture = self.texture.borrow_mut();
-        let mut mesh = self.mesh.borrow_mut();
-
-        let (font_image, _font_bounding_box) = self.font.render_to_new_image(s, 40.0);
-
-        // update texture
-        let font_image_width = font_image.width();
-        let font_image_height = font_image.height();
-        if font_image_width > texture.width() || font_image_height > texture.height() {
-            // texture is too small to fit image, recreate
-            *texture = Texture::new(
-                self.device.clone(),
-                self.queue.clone(),
-                Pipeline2DTextured::texture_binding(),
-                font_image,
-            )?;
-        } else {
-            // texture is big enough already, just copy the new image into it
-            texture.enqueue_update(font_image, UVec2::ZERO);
-        }
-
-        // update mesh
-        MeshBuilder::<Vertex2DTextureCoordinateColor>::rectangle(
-            &mut MeshBuilder::new(),
-            Rect::from_origin_size(
-                Vec2::new(0.0, 0.0),
-                Vec2::new(texture.width() as f32, texture.height() as f32),
-            ),
-            Rect {
-                min: Vec2::new(0.0, 0.0),
-                max: Vec2::new(
-                    (font_image_width as f32) / (texture.width() as f32),
-                    (font_image_height as f32) / (texture.height() as f32),
-                ),
-            },
-            Color {
-                red: 1.0,
-                green: 1.0,
-                blue: 1.0,
-                alpha: 1.0,
-            },
-        )
-        .enqueue_update(&self.queue, &mut mesh);
-
-        Ok(())
-    }
-
-    pub fn set_affine2(&mut self, a: Affine2) {
-        self.renderable.modelview_matrix = a.into();
-    }
-}
-
-impl Renderable<pipeline_2d_textured::Renderer<'_>> for TextureFontRenderable {
+impl Renderable<pipeline_2d_textured::Renderer<'_>> for PositionedText {
     fn render(&self, renderer: &mut pipeline_2d_textured::Renderer) -> Result<()> {
-        self.renderable.render(renderer)
+        let (mesh, texture) = self.text.get().ok_or(eyre!("text hasn't been set yet"))?;
+        renderer.render(texture, self.transform.into(), mesh)
     }
 }
 
@@ -237,7 +141,7 @@ struct Demo {
     pipeline_no_blending: Pipeline2DTextured,
     pipeline_blending: Pipeline2DTextured,
     models: Vec<Model>,
-    font_string: TextureFontRenderable,
+    font_string: PositionedText,
     ortho: Mat4,
     fps: FPSCounter,
 }
@@ -326,8 +230,15 @@ impl Demo {
             ))
             .ok_or(eyre!("failed to parse font"))?,
         ));
-        let mut font_string = TextureFontRenderable::new(&pipeline_blending, font.clone())?;
-        font_string.set_affine2(glam::Affine2::from_translation(Vec2::new(50.0, 100.0)).into());
+        let font_string = PositionedText {
+            text: Text::new(
+                device.clone(),
+                queue.clone(),
+                Pipeline2DTextured::texture_binding(),
+                font.clone(),
+            ),
+            transform: glam::Affine2::from_translation(Vec2::new(50.0, 100.0)).into(),
+        };
 
         Ok(Self {
             device,
@@ -352,7 +263,8 @@ impl Renderer for Demo {
 
     fn render(&mut self, texture_view: TextureView) -> Result<()> {
         self.font_string
-            .set_text(&format!("FPS: {}", self.fps.fps_pretty()))?;
+            .text
+            .update(&format!("FPS: {}", self.fps.fps_pretty()), 40.0)?;
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {

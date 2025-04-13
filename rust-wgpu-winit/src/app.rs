@@ -1,7 +1,6 @@
 use std::{
     process::exit,
     sync::Arc,
-    thread,
     time::{Duration, Instant},
 };
 
