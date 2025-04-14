@@ -1,10 +1,8 @@
 use bevy::{
-    core::FrameCount,
+    color::palettes::css::{GREEN, MEDIUM_VIOLET_RED},
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
-    ecs::system::assert_system_does_not_conflict,
-    math::VectorSpace,
     prelude::*,
-    render::camera::{ScalingMode, Viewport},
+    render::camera::ScalingMode,
     window::WindowResolution,
 };
 
@@ -20,7 +18,7 @@ fn main() {
             primary_window: Some(Window {
                 title: "Experiment".into(),
                 resizable: true,
-                resolution: WindowResolution::new(1024.0, 768.0),
+                resolution: WindowResolution::new(1024., 768.),
                 ..default()
             }),
             ..default()
@@ -37,7 +35,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
         Camera2d,
         OrthographicProjection {
             scaling_mode: ScalingMode::FixedHorizontal {
-                viewport_width: 500.0,
+                viewport_width: 500.,
             },
             ..OrthographicProjection::default_2d()
         },
@@ -53,7 +51,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let font = asset_server.load("calibri-font-family/calibri-regular.ttf");
     let text_font = TextFont {
         font: font.clone(),
-        font_size: 50.0,
+        font_size: 50.,
         ..default()
     };
     commands.spawn((
@@ -83,14 +81,13 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
         })
         .with_children(|builder| {
             builder.spawn((
-                Text::new("This is\ntext with\nline breaks\nin the top left."),
+                Text::new(""),
                 TextFont {
                     font: font.clone(),
-                    font_size: 25.0,
+                    font_size: 25.,
                     ..default()
                 },
-                // TODO JEFF bg color?
-                // BackgroundColor(background_color),
+                BackgroundColor(MEDIUM_VIOLET_RED.into()),
                 FPSCounterMarker,
             ));
         })
@@ -109,11 +106,10 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 Text::new("This is\ntext with\nline breaks\nin the top right."),
                 TextFont {
                     font: font.clone(),
-                    font_size: 25.0,
+                    font_size: 25.,
                     ..default()
                 },
-                // TODO JEFF bg color?
-                // BackgroundColor(background_color),
+                TextColor(GREEN.into()),
             ));
         })
         .id();
@@ -133,7 +129,7 @@ fn log_camera(
     >,
     window: Query<&Window>,
 ) {
-    let (camera, transform, mut projection) = camera_query.single_mut();
+    let (camera, transform, projection) = camera_query.single_mut();
     info!("TODO camera = {:?}", camera);
     info!("TODO transform = {:?}", transform);
     info!("TODO projection = {:?}", projection);
@@ -167,11 +163,8 @@ fn handle_input(
     mut app_exit_events: ResMut<Events<bevy::app::AppExit>>,
 ) {
     for key in keys.get_just_released() {
-        match key {
-            KeyCode::Escape => {
-                app_exit_events.send(AppExit::Success);
-            }
-            _ => (),
+        if key == &KeyCode::Escape {
+            app_exit_events.send(AppExit::Success);
         };
     }
 }
