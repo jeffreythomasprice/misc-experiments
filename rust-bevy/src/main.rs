@@ -12,6 +12,11 @@ struct CameraMarker;
 #[derive(Component)]
 struct FPSCounterMarker;
 
+#[derive(Component)]
+struct AnimatedSprite {
+    rotation_speed: f32,
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -43,8 +48,11 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 
     // TODO replace with moving sprites
-    commands.spawn(Sprite::from_image(
-        asset_server.load("rustacean-flat-happy.png"),
+    commands.spawn((
+        Sprite::from_image(asset_server.load("rustacean-flat-happy.png")),
+        AnimatedSprite {
+            rotation_speed: 90.0f32.to_radians(),
+        },
     ));
 
     // TODO put text in a corner to prove we know how ortho camera works
@@ -169,6 +177,8 @@ fn handle_input(
     }
 }
 
-fn update() {
-    // info!("TODO update");
+fn update(mut sprites: Query<(&mut Transform, &AnimatedSprite)>, time: Res<Time>) {
+    for (mut transform, anim) in &mut sprites {
+        transform.rotate_z(anim.rotation_speed * time.delta_secs());
+    }
 }
