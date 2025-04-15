@@ -6,6 +6,7 @@ use std::{
 use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
 use glam::Vec2;
+use rusttype::GlyphId;
 use wgpu::{Device, Queue};
 
 use crate::wgpu_utils::texture::{Texture, TextureBindings};
@@ -28,8 +29,15 @@ pub struct LayoutResults {
 }
 
 struct AtlasExtraData {
+    id: GlyphId,
     image_bounds: rusttype::Rect<i32>,
     advance: f32,
+}
+
+impl AtlasExtraData {
+    pub fn is_drawable(&self) -> bool {
+        self.id.0 != 0
+    }
 }
 
 pub struct TextureAtlasFont {
@@ -38,6 +46,7 @@ pub struct TextureAtlasFont {
     bindings: TextureBindings,
     font: Arc<Font<'static>>,
     scale: f32,
+    line_height: f32,
     all_chars: HashSet<char>,
     texture_atlas: TextureAtlas<char>,
     extra_data: HashMap<char, AtlasExtraData>,
@@ -59,12 +68,16 @@ impl TextureAtlasFont {
             scale,
             [].iter(),
         )?;
+        let v_metrics = font.v_metrics(scale);
         Ok(Self {
             device,
             queue,
             bindings,
             font,
             scale,
+            line_height: v_metrics.ascent.abs()
+                + v_metrics.descent.abs()
+                + v_metrics.line_gap.abs(),
             all_chars: HashSet::new(),
             texture_atlas,
             extra_data,
@@ -72,13 +85,13 @@ impl TextureAtlasFont {
     }
 
     pub fn layout(&mut self, s: &str) -> Result<LayoutResults> {
-        // TODO if we already have all characters in the texture atlas we shouldn't need to iterate over the string twice
-
-        let mut rebuild = false;
-        for c in s.chars() {
-            rebuild |= self.all_chars.insert(c);
-        }
-        if rebuild {
+        // try to render it assuming the current atlas holds all characters
+        if let Some(result) = self.try_layout(s)? {
+            // success
+            Ok(result)
+        } else {
+            // nope, rebuild the atlas to include the new stuff
+            // all_chars should have been already filled in by try_layout
             let (texture_atlas, extra_data) = Self::create_texture_atlas(
                 self.device.clone(),
                 self.queue.clone(),
@@ -89,13 +102,28 @@ impl TextureAtlasFont {
             )?;
             self.texture_atlas = texture_atlas;
             self.extra_data = extra_data;
+            self.try_layout(s)?.ok_or(eyre!("rebuilt atlas to include whole string, but still couldn't render the whole thing: {}", s))
         }
+    }
+
+    fn try_layout(&mut self, s: &str) -> Result<Option<LayoutResults>> {
+        // tracking whether we need to rebuild the texture atlas or not
+        let mut rebuild = false;
 
         let mut total_pixel_bounds = Rect::zeroed();
         let mut cursor = Vec2::zeroed();
         // capacity of 1 because we assume we have a single texture
         let mut layout = Vec::<LayoutPerTexture>::with_capacity(1);
+
         for c in s.chars() {
+            rebuild |= self.all_chars.insert(c);
+            // if we do, we can stop trying to place all the characters, we're going to have to start over with a new atlas anyway
+            if rebuild {
+                // but continue, because we want to make sure our full set of all possible characters includes this entire string
+                continue;
+            }
+
+            // we can try to place this character from the atlas
             // get the data for this glyph
             let (texture, texture_coordinate_bounds) = self
                 .texture_atlas
@@ -117,40 +145,46 @@ impl TextureAtlasFont {
             );
 
             // keep track of the total size
-            total_pixel_bounds = total_pixel_bounds.bounding_box_around_other_rect(&pixel_bounds);
+            total_pixel_bounds =
+                Rect::bounding_box_around_two_rects(&total_pixel_bounds, &pixel_bounds);
 
             // next position in pixel space
             if c == '\n' {
                 cursor.x = 0.0;
-                // TODO advance using font's vmetrics
-                cursor.y += self.scale;
+                cursor.y += self.line_height;
             } else {
                 cursor.x += extra_data.advance;
             }
 
-            // find the layout for this texture, or make a new one
-            let layout = if let Some(existing_layout) = layout
-                .iter_mut()
-                .find(|l| Arc::ptr_eq(&l.texture, &texture))
-            {
-                existing_layout
-            } else {
-                layout.push(LayoutPerTexture {
-                    texture: texture.clone(),
-                    glyphs: Vec::new(),
+            // is this even drawable?
+            if extra_data.is_drawable() {
+                // find the layout for this texture, or make a new one
+                let layout = if let Some(existing_layout) = layout
+                    .iter_mut()
+                    .find(|l| Arc::ptr_eq(&l.texture, &texture))
+                {
+                    existing_layout
+                } else {
+                    layout.push(LayoutPerTexture {
+                        texture: texture.clone(),
+                        glyphs: Vec::new(),
+                    });
+                    let i = layout.len() - 1;
+                    &mut layout[i]
+                };
+                layout.glyphs.push(LayedOutGlyph {
+                    texture_coordinate_bounds,
+                    pixel_bounds,
                 });
-                let i = layout.len() - 1;
-                &mut layout[i]
-            };
-            layout.glyphs.push(LayedOutGlyph {
-                texture_coordinate_bounds,
-                pixel_bounds,
-            });
+            }
         }
-
-        Ok(LayoutResults {
-            total_pixel_bounds,
-            layout,
+        Ok(if rebuild {
+            None
+        } else {
+            Some(LayoutResults {
+                total_pixel_bounds,
+                layout,
+            })
         })
     }
 
@@ -166,16 +200,11 @@ impl TextureAtlasFont {
         let mut image_bounds = HashMap::new();
         for c in chars {
             let glyph = font.render_char_to_image(*c, scale);
-            tracing::info!(
-                "TODO glyph for c={}, bounds={:?}, advance={}",
-                c,
-                glyph.bounds,
-                glyph.advance
-            );
             images.insert(*c, glyph.image);
             image_bounds.insert(
                 *c,
                 AtlasExtraData {
+                    id: glyph.id,
                     image_bounds: glyph.bounds,
                     advance: glyph.advance,
                 },

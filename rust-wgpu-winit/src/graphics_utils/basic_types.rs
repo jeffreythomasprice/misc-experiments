@@ -107,7 +107,7 @@ impl Rect {
         }
     }
 
-    pub fn bounding_box(points: &[Vec2]) -> Result<Self> {
+    pub fn bounding_box_around_points(points: &[Vec2]) -> Result<Self> {
         if points.is_empty() {
             Err(eyre!("must provide at least one point"))?;
         }
@@ -122,8 +122,8 @@ impl Rect {
         Ok(Self { min, max })
     }
 
-    pub fn bounding_box_around_other_rect(&self, other: &Rect) -> Rect {
-        Self::bounding_box(&[self.min, self.max, other.min, other.max])
+    pub fn bounding_box_around_two_rects(a: &Rect, b: &Rect) -> Self {
+        Self::bounding_box_around_points(&[a.min, a.max, b.min, b.max])
             // unwrap is safe because we know there is at least one point
             .unwrap()
     }

@@ -4,10 +4,11 @@ use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::Result;
 use glam::Mat4;
 use wgpu::{
-    BlendState, ColorTargetState, ColorWrites, Device, FragmentState, FrontFace, IndexFormat,
-    MultisampleState, PipelineCompilationOptions, PipelineLayoutDescriptor, PolygonMode,
-    PrimitiveState, PrimitiveTopology, Queue, RenderPipeline, RenderPipelineDescriptor,
-    ShaderModule, SurfaceConfiguration, VertexState, include_wgsl,
+    BlendState, ColorTargetState, ColorWrites, CommandEncoder, Device, FragmentState, FrontFace,
+    IndexFormat, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
+    PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, Queue,
+    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
+    ShaderModule, StoreOp, SurfaceConfiguration, TextureView, VertexState, include_wgsl,
 };
 
 use crate::{
@@ -38,7 +39,7 @@ struct ModelUniformData {
 
 pub struct RenderPass<'a> {
     queue: &'a Queue,
-    render_pass: wgpu::RenderPass<'a>,
+    render_pass: &'a mut wgpu::RenderPass<'static>,
     pipeline_no_blending: &'a RenderPipeline,
     pipeline_blending: &'a RenderPipeline,
     scene_uniform_buffer: &'a UniformBuffer<SceneUniformData>,
@@ -50,7 +51,7 @@ pub struct RenderPass<'a> {
 impl<'a> RenderPass<'a> {
     fn new(
         queue: &'a Queue,
-        render_pass: wgpu::RenderPass<'a>,
+        render_pass: &'a mut wgpu::RenderPass<'static>,
         pipeline_no_blending: &'a RenderPipeline,
         pipeline_blending: &'a RenderPipeline,
         scene_uniform_buffer: &'a UniformBuffer<SceneUniformData>,
@@ -115,10 +116,6 @@ impl<'a> RenderPass<'a> {
             .draw_indexed(0..(mesh.index_buffer().len() as u32), 0, 0..1);
 
         Ok(())
-    }
-
-    fn finish(self) -> wgpu::RenderPass<'a> {
-        self.render_pass
     }
 
     fn update_pipeline(&mut self) {
@@ -204,18 +201,17 @@ impl SimpleRenderer {
         }
     }
 
-    pub fn render<'a, 'b: 'a>(
-        &'b mut self,
-        render_pass: wgpu::RenderPass<'a>,
-        f: impl Fn(&mut RenderPass<'a>) -> Result<()>,
-    ) -> Result<wgpu::RenderPass<'a>> {
+    pub fn render_pass<'a>(
+        &'a mut self,
+        render_pass: &'a mut wgpu::RenderPass<'static>,
+    ) -> RenderPass<'a> {
         self.scene_uniform_buffer.enqueue_update(
             &self.queue,
             SceneUniformData {
                 projection_matrix: self.ortho,
             },
         );
-        let mut r = RenderPass::new(
+        RenderPass::new(
             &self.queue,
             render_pass,
             &self.pipeline_no_blending,
@@ -223,9 +219,7 @@ impl SimpleRenderer {
             &self.scene_uniform_buffer,
             self.model_uniform_buffer_pool.arena(),
             self.quad_mesh_pool.arena(),
-        );
-        f(&mut r)?;
-        Ok(r.finish())
+        )
     }
 
     pub fn viewport(&self) -> Rect {

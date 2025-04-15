@@ -143,37 +143,61 @@ impl Renderer for Demo {
 
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
-            let render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &texture_view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(wgpu::Color {
-                            r: 0.25,
-                            g: 0.25,
-                            b: 0.25,
-                            a: 1.0,
-                        }),
-                        store: StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
-            self.renderer.render(render_pass, |r| {
-                r.set_blend(false);
-                for transform in self.sprite_transforms.iter() {
-                    r.fill_rect_texture(
-                        transform.affine(),
-                        // TODO center texture at origin again
-                        Rect::from_origin_size(
-                            Vec2::zeroed(),
-                            Vec2::new(
-                                self.sprite_texture.width() as f32,
-                                self.sprite_texture.height() as f32,
-                            ),
+            let mut render_pass = encoder
+                .begin_render_pass(&RenderPassDescriptor {
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: &texture_view,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(wgpu::Color {
+                                r: 0.25,
+                                g: 0.25,
+                                b: 0.25,
+                                a: 1.0,
+                            }),
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                })
+                .forget_lifetime();
+
+            let mut r = self.renderer.render_pass(&mut render_pass);
+
+            r.set_blend(false);
+            for transform in self.sprite_transforms.iter() {
+                r.fill_rect_texture(
+                    transform.affine(),
+                    // TODO center texture at origin again
+                    Rect::from_origin_size(
+                        Vec2::zeroed(),
+                        Vec2::new(
+                            self.sprite_texture.width() as f32,
+                            self.sprite_texture.height() as f32,
                         ),
-                        &self.sprite_texture,
-                        Rect::from_origin_size(Vec2::zeroed(), Vec2::new(1.0, 1.0)),
+                    ),
+                    &self.sprite_texture,
+                    Rect::from_origin_size(Vec2::zeroed(), Vec2::new(1.0, 1.0)),
+                    Color {
+                        red: 1.0,
+                        green: 1.0,
+                        blue: 1.0,
+                        alpha: 1.0,
+                    },
+                )?;
+            }
+
+            r.set_blend(true);
+            // TODO convenience for drawing texture font output
+            let font_transform: Affine2 =
+                glam::Affine2::from_translation(Vec2::new(100.0, 50.0)).into();
+            for per_texture in texture_font_layout.layout.iter() {
+                for glyph in per_texture.glyphs.iter() {
+                    r.fill_rect_texture(
+                        font_transform,
+                        glyph.pixel_bounds,
+                        &per_texture.texture,
+                        glyph.texture_coordinate_bounds,
                         Color {
                             red: 1.0,
                             green: 1.0,
@@ -182,30 +206,7 @@ impl Renderer for Demo {
                         },
                     )?;
                 }
-
-                r.set_blend(true);
-                // TODO convenience for drawing texture font output
-                let font_transform: Affine2 =
-                    glam::Affine2::from_translation(Vec2::new(100.0, 50.0)).into();
-                for per_texture in texture_font_layout.layout.iter() {
-                    for glyph in per_texture.glyphs.iter() {
-                        r.fill_rect_texture(
-                            font_transform,
-                            glyph.pixel_bounds,
-                            &per_texture.texture,
-                            glyph.texture_coordinate_bounds,
-                            Color {
-                                red: 1.0,
-                                green: 1.0,
-                                blue: 1.0,
-                                alpha: 1.0,
-                            },
-                        )?;
-                    }
-                }
-
-                Ok(())
-            })?;
+            }
         }
         self.queue.submit([encoder.finish()]);
 
