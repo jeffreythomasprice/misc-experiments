@@ -1,4 +1,5 @@
 pub mod basic_types;
+pub mod colors;
 pub mod font;
 pub mod fps;
 pub mod mesh_builder;

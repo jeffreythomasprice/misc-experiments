@@ -10,7 +10,8 @@ use app::{App, Renderer};
 use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2};
-use graphics_utils::basic_types::{Affine2, Color, Rect};
+use graphics_utils::basic_types::{Affine2, Rect};
+use graphics_utils::colors::Color;
 use graphics_utils::font::Font;
 use graphics_utils::fps::FPSCounter;
 use graphics_utils::simple_renderer::SimpleRenderer;
@@ -136,11 +137,6 @@ impl Renderer for Demo {
     }
 
     fn render(&mut self, texture_view: TextureView) -> Result<()> {
-        let texture_font_layout = self.texture_atlas_font.layout(&format!(
-            "FPS: {}\nanother line, yjpqg",
-            self.fps.fps_pretty()
-        ))?;
-
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
             let mut render_pass = encoder
@@ -166,47 +162,27 @@ impl Renderer for Demo {
 
             r.set_blend(false);
             for transform in self.sprite_transforms.iter() {
+                let size = Vec2::new(
+                    self.sprite_texture.width() as f32,
+                    self.sprite_texture.height() as f32,
+                );
                 r.fill_rect_texture(
                     transform.affine(),
-                    // TODO center texture at origin again
-                    Rect::from_origin_size(
-                        Vec2::zeroed(),
-                        Vec2::new(
-                            self.sprite_texture.width() as f32,
-                            self.sprite_texture.height() as f32,
-                        ),
-                    ),
+                    Rect::from_origin_size(-size * 0.5, size),
                     &self.sprite_texture,
                     Rect::from_origin_size(Vec2::zeroed(), Vec2::new(1.0, 1.0)),
-                    Color {
-                        red: 1.0,
-                        green: 1.0,
-                        blue: 1.0,
-                        alpha: 1.0,
-                    },
+                    Color::WHITE,
                 )?;
             }
 
             r.set_blend(true);
-            // TODO convenience for drawing texture font output
-            let font_transform: Affine2 =
-                glam::Affine2::from_translation(Vec2::new(100.0, 50.0)).into();
-            for per_texture in texture_font_layout.layout.iter() {
-                for glyph in per_texture.glyphs.iter() {
-                    r.fill_rect_texture(
-                        font_transform,
-                        glyph.pixel_bounds,
-                        &per_texture.texture,
-                        glyph.texture_coordinate_bounds,
-                        Color {
-                            red: 1.0,
-                            green: 1.0,
-                            blue: 1.0,
-                            alpha: 1.0,
-                        },
-                    )?;
-                }
-            }
+            // TODO should allow drawing inside a rect, with alignmnet
+            r.draw_textured_string(
+                &mut self.texture_atlas_font,
+                &format!("FPS: {}\nanother line, yjpqg", self.fps.fps_pretty()),
+                glam::Affine2::from_translation(Vec2::new(100.0, 50.0)).into(),
+                Color::WHITE,
+            )?;
         }
         self.queue.submit([encoder.finish()]);
 

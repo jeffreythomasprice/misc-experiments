@@ -4,11 +4,10 @@ use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::Result;
 use glam::Mat4;
 use wgpu::{
-    BlendState, ColorTargetState, ColorWrites, CommandEncoder, Device, FragmentState, FrontFace,
-    IndexFormat, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
-    PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    ShaderModule, StoreOp, SurfaceConfiguration, TextureView, VertexState, include_wgsl,
+    BlendState, ColorTargetState, ColorWrites, Device, FragmentState, FrontFace,
+    IndexFormat, MultisampleState, PipelineCompilationOptions,
+    PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, Queue, RenderPipeline, RenderPipelineDescriptor,
+    ShaderModule, SurfaceConfiguration, VertexState, include_wgsl,
 };
 
 use crate::{
@@ -21,7 +20,8 @@ use crate::{
 };
 
 use super::{
-    basic_types::{Affine2, Color, HasVertexBufferLayout, Rect, Vertex2DTextureCoordinateColor},
+    basic_types::{Affine2, HasVertexBufferLayout, Rect, Vertex2DTextureCoordinateColor},
+    colors::Color,
     mesh_builder::MeshBuilder,
 };
 

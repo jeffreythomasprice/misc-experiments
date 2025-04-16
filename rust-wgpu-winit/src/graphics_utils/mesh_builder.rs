@@ -5,7 +5,10 @@ use wgpu::{BufferAddress, BufferUsages, Device, Queue};
 
 use crate::wgpu_utils::{buffer::Buffer, mesh::Mesh};
 
-use super::basic_types::{Color, Rect, Vertex2DColor, Vertex2DTextureCoordinateColor};
+use super::{
+    basic_types::{Rect, Vertex2DColor, Vertex2DTextureCoordinateColor},
+    colors::Color,
+};
 
 pub struct MeshBuilder<T> {
     vertices: Vec<T>,

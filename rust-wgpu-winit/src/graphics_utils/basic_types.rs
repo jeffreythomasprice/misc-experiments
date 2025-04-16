@@ -3,28 +3,10 @@ use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2, Vec4};
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode, vertex_attr_array};
 
+use super::colors::Color;
+
 pub trait HasVertexBufferLayout {
     fn vertex_buffer_layout() -> VertexBufferLayout<'static>;
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct Color {
-    pub red: f32,
-    pub green: f32,
-    pub blue: f32,
-    pub alpha: f32,
-}
-
-impl Color {
-    pub const fn new(red: f32, green: f32, blue: f32, alpha: f32) -> Self {
-        Self {
-            red,
-            green,
-            blue,
-            alpha,
-        }
-    }
 }
 
 #[repr(C)]

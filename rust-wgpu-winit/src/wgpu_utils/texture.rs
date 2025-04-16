@@ -64,7 +64,7 @@ impl Texture {
                         origin: Origin3d::ZERO,
                         aspect: TextureAspect::All,
                     },
-                    &image_rgba8,
+                    image_rgba8,
                     TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(4 * width),
