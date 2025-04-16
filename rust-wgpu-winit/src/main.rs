@@ -16,6 +16,7 @@ use graphics_utils::font::Font;
 use graphics_utils::fps::FPSCounter;
 use graphics_utils::simple_renderer::SimpleRenderer;
 use graphics_utils::texture_atlas_font::TextureAtlasFont;
+use misc_utils::math::wrap;
 use rand::Rng;
 use tracing::*;
 use wgpu::{
@@ -40,15 +41,11 @@ impl MovingAffine2 {
     }
 
     pub fn update(&mut self, duration: Duration) {
-        // TODO math helper for wrapping a value to inside range?
-        let new_angle =
-            (self.angle + self.angular_velocity * duration.as_secs_f32()) % std::f32::consts::TAU;
-        self.angle = if new_angle >= 0.0 {
-            new_angle
-        } else {
-            std::f32::consts::TAU - new_angle
-        };
-
+        self.angle = wrap(
+            self.angle + self.angular_velocity * duration.as_secs_f32(),
+            0.0,
+            std::f32::consts::TAU,
+        );
         self.translation += self.velocity * duration.as_secs_f32();
     }
 }

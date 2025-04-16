@@ -4,9 +4,9 @@ use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::Result;
 use glam::Mat4;
 use wgpu::{
-    BlendState, ColorTargetState, ColorWrites, Device, FragmentState, FrontFace,
-    IndexFormat, MultisampleState, PipelineCompilationOptions,
-    PipelineLayoutDescriptor, PolygonMode, PrimitiveState, PrimitiveTopology, Queue, RenderPipeline, RenderPipelineDescriptor,
+    BlendState, ColorTargetState, ColorWrites, Device, FragmentState, FrontFace, IndexFormat,
+    MultisampleState, PipelineCompilationOptions, PipelineLayoutDescriptor, PolygonMode,
+    PrimitiveState, PrimitiveTopology, Queue, RenderPipeline, RenderPipelineDescriptor,
     ShaderModule, SurfaceConfiguration, VertexState, include_wgsl,
 };
 
