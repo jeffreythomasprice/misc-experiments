@@ -17,6 +17,12 @@ pub struct MeshBuilder<T> {
     index_offset: u16,
 }
 
+impl<T> Default for MeshBuilder<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> MeshBuilder<T> {
     pub fn new() -> Self {
         Self::new_with_offsets(0, 0)

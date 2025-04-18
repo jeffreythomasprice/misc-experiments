@@ -15,6 +15,12 @@ pub struct FPSCounter {
     total_ticks: u64,
 }
 
+impl Default for FPSCounter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FPSCounter {
     pub fn new() -> Self {
         Self {
