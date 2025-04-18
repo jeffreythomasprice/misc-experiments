@@ -9,13 +9,9 @@ use glam::Vec2;
 use rusttype::GlyphId;
 use wgpu::{Device, Queue};
 
-use crate::wgpu_utils::texture::{Texture, TextureBindings};
+use crate::texture::{Texture, TextureBindings};
 
-use super::{
-    basic_types::Rect,
-    font::Font,
-    texture_atlas::TextureAtlas,
-};
+use super::{basic_types::Rect, font::Font, texture_atlas::TextureAtlas};
 
 pub struct LayedOutGlyph {
     pub texture_coordinate_bounds: Rect,

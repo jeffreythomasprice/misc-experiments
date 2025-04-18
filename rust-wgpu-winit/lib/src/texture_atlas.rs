@@ -5,7 +5,7 @@ use glam::{UVec2, Vec2};
 use image::DynamicImage;
 use wgpu::{Device, Queue};
 
-use crate::wgpu_utils::texture::{Texture, TextureBindings};
+use crate::texture::{Texture, TextureBindings};
 
 use super::basic_types::Rect;
 

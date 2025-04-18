@@ -128,13 +128,10 @@ impl<R: Renderer> WindowState<R> {
 
         let adapter = instance
             .request_adapter(&RequestAdapterOptions::default())
-            .await
-            .ok_or(eyre!("failed to get adapter"))?;
+            .await?;
         debug!("adapter: {:?}", adapter);
 
-        let (device, queue) = adapter
-            .request_device(&DeviceDescriptor::default(), None)
-            .await?;
+        let (device, queue) = adapter.request_device(&DeviceDescriptor::default()).await?;
         debug!("device: {:?}", device);
 
         let size = window.inner_size();

@@ -1,32 +1,26 @@
-mod app;
-mod graphics_utils;
-mod misc_utils;
-mod renderers;
-mod wgpu_utils;
-
 use std::sync::Mutex;
 use std::time::Duration;
 use std::{f32::consts::TAU, sync::Arc};
 
-use app::{App, Renderer};
 use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2};
-use graphics_utils::basic_types::{Affine2, Rect, Vertex2DTextureCoordinateColor};
-use graphics_utils::colors::Color;
-use graphics_utils::font::Font;
-use graphics_utils::fps::FPSCounter;
-use graphics_utils::mesh_builder::MeshBuilder;
-use graphics_utils::texture_atlas_font::TextureAtlasFont;
-use misc_utils::math::wrap;
+use lib::app::{App, Renderer};
+use lib::basic_types::{Affine2, Rect, Vertex2DTextureCoordinateColor};
+use lib::colors::Color;
+use lib::font::Font;
+use lib::fps::FPSCounter;
+use lib::math::wrap;
+use lib::mesh::Mesh;
+use lib::mesh_builder::MeshBuilder;
+use lib::renderers::renderer2d::{self, Renderer2d, Transform};
+use lib::texture::Texture;
+use lib::texture_atlas_font::TextureAtlasFont;
 use rand::Rng;
-use renderers::renderer2d::{self, Renderer2d, Transform};
 use wgpu::{
     BlendState, Device, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor,
     StoreOp, SurfaceConfiguration, TextureView,
 };
-use wgpu_utils::mesh::{Mesh};
-use wgpu_utils::texture::Texture;
 use winit::{dpi::PhysicalSize, event_loop::EventLoop};
 
 struct MovingAffine2 {

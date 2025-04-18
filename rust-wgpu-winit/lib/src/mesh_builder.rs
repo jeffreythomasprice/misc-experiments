@@ -3,7 +3,7 @@ use color_eyre::eyre::{Result, eyre};
 use glam::Vec2;
 use wgpu::{BufferAddress, BufferUsages, Device, Queue};
 
-use crate::wgpu_utils::{buffer::Buffer, mesh::Mesh};
+use crate::{buffer::Buffer, mesh::Mesh};
 
 use super::{
     basic_types::{Rect, Vertex2DColor, Vertex2DTextureCoordinateColor},

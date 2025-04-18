@@ -1,0 +1,16 @@
+[package]
+name = "lib"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+binpack2d = "1.0.1"
+bytemuck = { version = "1.22.0", features = ["derive"] }
+color-eyre = "0.6.3"
+futures = "0.3.31"
+glam = { version = "0.30.2", features = ["bytemuck"] }
+image = "0.25.6"
+rusttype = "0.9.3"
+tracing = "0.1.41"
+wgpu = "25.0.0"
+winit = "0.30.9"

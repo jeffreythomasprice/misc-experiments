@@ -7,12 +7,13 @@ use glam::Mat4;
 use wgpu::{
     BlendState, ColorTargetState, ColorWrites, Device, FragmentState, FrontFace, IndexFormat,
     MultisampleState, PipelineCompilationOptions, PipelineLayoutDescriptor, PolygonMode,
-    PrimitiveState, PrimitiveTopology, Queue, RenderPipeline, RenderPipelineDescriptor, SurfaceConfiguration, VertexState,
+    PrimitiveState, PrimitiveTopology, Queue, RenderPipeline, RenderPipelineDescriptor,
+    SurfaceConfiguration, VertexState,
 };
 
 use crate::{
-    graphics_utils::basic_types::{HasVertexBufferLayout, Vertex2DTextureCoordinateColor},
-    wgpu_utils::{
+    basic_types::{HasVertexBufferLayout, Vertex2DTextureCoordinateColor},
+    {
         mesh::Mesh,
         texture::{self, Texture, TextureBindings},
         uniform_buffer::{self, UniformBuffer},
