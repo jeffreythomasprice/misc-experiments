@@ -40,12 +40,14 @@ impl<T> MeshBuilder<T> {
                 "must provide at least 3 points to make a triangle fan"
             ))?;
         }
+        let vertex_offset = self.vertex_offset + self.vertices.len() as u16;
         self.vertices.extend_from_slice(vertices);
         self.indices.reserve((vertices.len() - 2) * 3);
         for i in 1..(vertices.len() as u16 - 1) {
-            let a = i + self.vertex_offset;
-            let b = a + 1;
-            self.indices.extend_from_slice(&[self.vertex_offset, a, b]);
+            let a = vertex_offset;
+            let b = i + vertex_offset;
+            let c = b + 1;
+            self.indices.extend_from_slice(&[a, b, c]);
         }
         Ok(self)
     }

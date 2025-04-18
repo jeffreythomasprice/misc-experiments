@@ -1,8 +1,10 @@
 mod app;
 mod graphics_utils;
 mod misc_utils;
+mod renderers;
 mod wgpu_utils;
 
+use std::sync::Mutex;
 use std::time::Duration;
 use std::{f32::consts::TAU, sync::Arc};
 
@@ -10,19 +12,20 @@ use app::{App, Renderer};
 use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2};
-use graphics_utils::basic_types::{Affine2, Rect};
+use graphics_utils::basic_types::{Affine2, Rect, Vertex2DTextureCoordinateColor};
 use graphics_utils::colors::Color;
 use graphics_utils::font::Font;
 use graphics_utils::fps::FPSCounter;
-use graphics_utils::simple_renderer::SimpleRenderer;
+use graphics_utils::mesh_builder::MeshBuilder;
 use graphics_utils::texture_atlas_font::TextureAtlasFont;
 use misc_utils::math::wrap;
 use rand::Rng;
-use tracing::*;
+use renderers::renderer2d::{self, Renderer2d, Transform};
 use wgpu::{
-    Device, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor, StoreOp,
-    SurfaceConfiguration, TextureView,
+    BlendState, Device, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    StoreOp, SurfaceConfiguration, TextureView,
 };
+use wgpu_utils::mesh::{Mesh};
 use wgpu_utils::texture::Texture;
 use winit::{dpi::PhysicalSize, event_loop::EventLoop};
 
@@ -50,13 +53,83 @@ impl MovingAffine2 {
     }
 }
 
+struct Sprite {
+    mesh: Arc<Mesh<Vertex2DTextureCoordinateColor>>,
+    texture: Arc<Texture>,
+    affine: MovingAffine2,
+    transform: renderer2d::Transform,
+}
+
+impl Sprite {
+    fn update(&mut self, queue: &Queue, duration: Duration) {
+        self.affine.update(duration);
+        self.transform
+            .enqueue_update(queue, self.affine.affine().into());
+    }
+
+    fn draw(&self, r: &mut renderer2d::RenderPass<'_>) {
+        r.draw(&self.mesh, &self.texture, &self.transform);
+    }
+}
+
+struct Text {
+    font: Arc<Mutex<TextureAtlasFont>>,
+    meshes_and_textures: Vec<(Mesh<Vertex2DTextureCoordinateColor>, Arc<Texture>)>,
+    transform: renderer2d::Transform,
+}
+
+impl Text {
+    pub fn new(device: &Device, font: Arc<Mutex<TextureAtlasFont>>) -> Self {
+        Self {
+            font,
+            meshes_and_textures: Vec::new(),
+            transform: Transform::new(device, Mat4::IDENTITY),
+        }
+    }
+
+    pub fn enqueue_text_update(&mut self, device: &Device, s: &str) -> Result<()> {
+        /*
+        TODO re-use existing meshes if possible instead of always creating new ones
+        TODO use a single mesh with different offsets for each texture?
+        */
+        let mut font = self.font.lock().unwrap();
+        let layout = font.layout(s)?;
+        self.meshes_and_textures.clear();
+        for per_texture in layout.layout.iter() {
+            let mut mesh_builder = MeshBuilder::<Vertex2DTextureCoordinateColor>::new();
+            for glyph in per_texture.glyphs.iter() {
+                mesh_builder.rectangle(
+                    glyph.pixel_bounds,
+                    glyph.texture_coordinate_bounds,
+                    Color::WHITE,
+                );
+            }
+            let mesh = mesh_builder.create_mesh(device);
+            self.meshes_and_textures
+                .push((mesh, per_texture.texture.clone()));
+        }
+
+        Ok(())
+    }
+
+    pub fn enqueue_transform_update(&mut self, queue: &Queue, affine: Affine2) {
+        self.transform.enqueue_update(queue, affine.into());
+    }
+
+    pub fn draw(&self, r: &mut renderer2d::RenderPass) {
+        for (mesh, texture) in self.meshes_and_textures.iter() {
+            r.draw(mesh, texture, &self.transform);
+        }
+    }
+}
+
 struct Demo {
     device: Arc<Device>,
     queue: Arc<Queue>,
-    renderer: SimpleRenderer,
-    sprite_texture: Texture,
-    sprite_transforms: Vec<MovingAffine2>,
-    texture_atlas_font: TextureAtlasFont,
+    renderer_no_blend: Renderer2d,
+    renderer_blend: Renderer2d,
+    sprites: Vec<Sprite>,
+    text: Text,
     ortho: Mat4,
     fps: FPSCounter,
 }
@@ -67,30 +140,49 @@ impl Demo {
         queue: Arc<Queue>,
         surface_configuration: &SurfaceConfiguration,
     ) -> Result<Self> {
-        let renderer = SimpleRenderer::new(device.clone(), queue.clone(), surface_configuration);
-
-        let sprite_texture = Texture::from_image(
+        let sprite_texture = Arc::new(Texture::from_image(
             device.clone(),
             queue.clone(),
-            SimpleRenderer::texture_bindings(),
+            Renderer2d::texture_bindings(),
             &image::load_from_memory_with_format(
                 include_bytes!("../assets/rustacean-flat-happy.png"),
                 image::ImageFormat::Png,
             )?,
-        )?;
-        info!("texture size: {:?}", sprite_texture.size());
+        )?);
+
+        let sprite_texture_size = Vec2::new(
+            sprite_texture.width() as f32,
+            sprite_texture.height() as f32,
+        );
+        let sprite_mesh = Arc::new(
+            MeshBuilder::<Vertex2DTextureCoordinateColor>::new()
+                .rectangle(
+                    Rect::from_origin_size(-sprite_texture_size * 0.5, sprite_texture_size),
+                    Rect::from_origin_size(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)),
+                    Color::WHITE,
+                )
+                .create_mesh(&device),
+        );
 
         let mut rng = rand::rng();
-        let mut sprite_transforms = Vec::new();
+        let mut sprites = Vec::new();
         for _ in 0..10 {
             let scale = rng.random_range(0.75..1.25);
-            sprite_transforms.push(MovingAffine2 {
-                scale: Vec2::new(scale, scale),
-                angle: rng.random_range(0.0..TAU),
-                translation: Vec2::new(rng.random_range(0.0..500.0), rng.random_range(0.0..500.0)),
-                angular_velocity: rng
-                    .random_range((-45.0f32.to_radians())..=(45.0f32.to_radians())),
-                velocity: Vec2::ZERO,
+            sprites.push(Sprite {
+                affine: MovingAffine2 {
+                    scale: Vec2::new(scale, scale),
+                    angle: rng.random_range(0.0..TAU),
+                    translation: Vec2::new(
+                        rng.random_range(0.0..500.0),
+                        rng.random_range(0.0..500.0),
+                    ),
+                    angular_velocity: rng
+                        .random_range((-45.0f32.to_radians())..=(45.0f32.to_radians())),
+                    velocity: Vec2::ZERO,
+                },
+                mesh: sprite_mesh.clone(),
+                texture: sprite_texture.clone(),
+                transform: renderer2d::Transform::new(&device, Mat4::zeroed()),
             });
         }
 
@@ -100,21 +192,37 @@ impl Demo {
             ))
             .ok_or(eyre!("failed to parse font"))?,
         ));
-        let texture_atlas_font = TextureAtlasFont::new(
+        let texture_atlas_font = Arc::new(Mutex::new(TextureAtlasFont::new(
             device.clone(),
             queue.clone(),
-            SimpleRenderer::texture_bindings(),
+            Renderer2d::texture_bindings(),
             font.clone(),
             40.0,
-        )?;
+        )?));
+
+        let mut text = Text::new(&device, texture_atlas_font.clone());
+        text.enqueue_transform_update(
+            &queue,
+            glam::Affine2::from_translation(Vec2::new(50.0, 50.0)).into(),
+        );
 
         Ok(Self {
-            device,
-            queue,
-            renderer,
-            sprite_texture,
-            sprite_transforms,
-            texture_atlas_font,
+            device: device.clone(),
+            queue: queue.clone(),
+            renderer_no_blend: Renderer2d::new(
+                device.clone(),
+                queue.clone(),
+                surface_configuration,
+                BlendState::REPLACE,
+            ),
+            renderer_blend: Renderer2d::new(
+                device.clone(),
+                queue.clone(),
+                surface_configuration,
+                BlendState::ALPHA_BLENDING,
+            ),
+            sprites,
+            text,
             ortho: Mat4::IDENTITY,
             fps: FPSCounter::new(),
         })
@@ -125,11 +233,6 @@ impl Renderer for Demo {
     fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         self.ortho =
             Mat4::orthographic_rh_gl(0.0, size.width as f32, size.height as f32, 0.0, -1.0, 1.0);
-        self.renderer.set_viewport(Rect::from_origin_size(
-            Vec2::zeroed(),
-            Vec2::new(size.width as f32, size.height as f32),
-        ));
-
         Ok(())
     }
 
@@ -142,12 +245,7 @@ impl Renderer for Demo {
                         view: &texture_view,
                         resolve_target: None,
                         ops: Operations {
-                            load: LoadOp::Clear(wgpu::Color {
-                                r: 0.25,
-                                g: 0.25,
-                                b: 0.25,
-                                a: 1.0,
-                            }),
+                            load: LoadOp::Clear(Color::CORNFLOWERBLUE.into()),
                             store: StoreOp::Store,
                         },
                     })],
@@ -155,31 +253,25 @@ impl Renderer for Demo {
                 })
                 .forget_lifetime();
 
-            let mut r = self.renderer.render_pass(&mut render_pass);
+            {
+                // TODO the sprite space should be the same aspect ratio as the screen, but some other coordinate system?
 
-            r.set_blend(false);
-            for transform in self.sprite_transforms.iter() {
-                let size = Vec2::new(
-                    self.sprite_texture.width() as f32,
-                    self.sprite_texture.height() as f32,
-                );
-                r.fill_rect_texture(
-                    transform.affine(),
-                    Rect::from_origin_size(-size * 0.5, size),
-                    &self.sprite_texture,
-                    Rect::from_origin_size(Vec2::zeroed(), Vec2::new(1.0, 1.0)),
-                    Color::WHITE,
-                )?;
+                let mut r = self
+                    .renderer_no_blend
+                    .render_pass(&mut render_pass, self.ortho);
+
+                for sprite in self.sprites.iter() {
+                    sprite.draw(&mut r);
+                }
             }
 
-            r.set_blend(true);
-            // TODO should allow drawing inside a rect, with alignmnet
-            r.draw_textured_string(
-                &mut self.texture_atlas_font,
-                &format!("FPS: {}\nanother line, yjpqg", self.fps.fps_pretty()),
-                glam::Affine2::from_translation(Vec2::new(100.0, 50.0)).into(),
-                Color::WHITE,
-            )?;
+            {
+                let mut r = self
+                    .renderer_blend
+                    .render_pass(&mut render_pass, self.ortho);
+
+                self.text.draw(&mut r);
+            }
         }
         self.queue.submit([encoder.finish()]);
 
@@ -189,9 +281,14 @@ impl Renderer for Demo {
     fn update(&mut self, duration: Duration) -> Result<()> {
         self.fps.tick(duration);
 
-        for transform in self.sprite_transforms.iter_mut() {
-            transform.update(duration);
+        for sprite in self.sprites.iter_mut() {
+            sprite.update(&self.queue, duration);
         }
+
+        self.text.enqueue_text_update(
+            &self.device,
+            &format!("FPS: {}\nanother line, yjpqg", self.fps.fps_pretty()),
+        )?;
 
         Ok(())
     }

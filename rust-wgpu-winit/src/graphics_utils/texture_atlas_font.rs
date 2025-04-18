@@ -12,10 +12,8 @@ use wgpu::{Device, Queue};
 use crate::wgpu_utils::texture::{Texture, TextureBindings};
 
 use super::{
-    basic_types::{Affine2, Rect},
-    colors::Color,
+    basic_types::Rect,
     font::Font,
-    simple_renderer::{self},
     texture_atlas::TextureAtlas,
 };
 
@@ -218,31 +216,5 @@ impl TextureAtlasFont {
         }
         let texture_atlas = TextureAtlas::new(device, queue, bindings, images)?;
         Ok((texture_atlas, image_bounds))
-    }
-}
-
-impl<'a> simple_renderer::RenderPass<'a> {
-    pub fn draw_textured_string(
-        &mut self,
-        font: &mut TextureAtlasFont,
-        s: &str,
-        transform: Affine2,
-        color: Color,
-    ) -> Result<()> {
-        let layout = font.layout(s)?;
-
-        for per_texture in layout.layout.iter() {
-            for glyph in per_texture.glyphs.iter() {
-                self.fill_rect_texture(
-                    transform,
-                    glyph.pixel_bounds,
-                    &per_texture.texture,
-                    glyph.texture_coordinate_bounds,
-                    color,
-                )?;
-            }
-        }
-
-        Ok(())
     }
 }

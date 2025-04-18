@@ -3,6 +3,5 @@ pub mod colors;
 pub mod font;
 pub mod fps;
 pub mod mesh_builder;
-pub mod simple_renderer;
 pub mod texture_atlas;
 pub mod texture_atlas_font;
