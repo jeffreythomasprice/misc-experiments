@@ -3,7 +3,7 @@ mod math;
 
 use std::time::{Duration, SystemTime};
 
-use color_eyre::eyre::{Result, eyre};
+use color_eyre::eyre::Result;
 use fps::FPSCounter;
 use math::wrap;
 use sdl3::{
@@ -12,8 +12,7 @@ use sdl3::{
     iostream::IOStream,
     keyboard::Keycode,
     pixels::Color,
-    rect::Point,
-    render::{Canvas, FPoint, FRect, RenderTarget, Texture, TextureCreator},
+    render::{Canvas, FPoint, FRect, RenderTarget, TextureCreator},
     ttf::Font,
     video::WindowContext,
 };
