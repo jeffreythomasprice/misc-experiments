@@ -1,9 +1,11 @@
 mod fps;
+mod math;
 
 use std::time::{Duration, SystemTime};
 
 use color_eyre::eyre::{Result, eyre};
 use fps::FPSCounter;
+use math::wrap;
 use sdl3::{
     event::Event,
     image::LoadTexture,
@@ -11,7 +13,7 @@ use sdl3::{
     keyboard::Keycode,
     pixels::Color,
     rect::Point,
-    render::{Canvas, FRect, RenderTarget, Texture, TextureCreator},
+    render::{Canvas, FPoint, FRect, RenderTarget, Texture, TextureCreator},
     ttf::Font,
     video::WindowContext,
 };
@@ -64,6 +66,7 @@ async fn main() -> Result<()> {
     let desired_duration_per_frame = Duration::from_secs_f64(1.0 / (DESIRED_FPS as f64));
     let mut fps = FPSCounter::new();
     let mut last_frame_start = None;
+    let mut rotation = 0.0;
 
     'running: loop {
         let start = SystemTime::now();
@@ -92,19 +95,32 @@ async fn main() -> Result<()> {
             HorizontalAlignment::Left,
             VerticalAlignment::Top,
         )?;
-        copy_aligned(
-            &mut canvas,
+        canvas.copy_ex(
             &texture,
             None,
-            FRect::new(0.0, 0.0, width as f32, height as f32),
-            HorizontalAlignment::Center,
-            VerticalAlignment::Center,
+            aligned_rect(
+                texture.width() as f32,
+                texture.height() as f32,
+                FRect::new(0.0, 0.0, width as f32, height as f32),
+                HorizontalAlignment::Center,
+                VerticalAlignment::Center,
+            ),
+            rotation,
+            FPoint::new(texture.width() as f32 * 0.5, texture.height() as f32 * 0.5),
+            false,
+            false,
         )?;
         canvas.present();
 
         if let Some(last_frame_start) = last_frame_start {
             let duration_between_frame_starts = start.duration_since(last_frame_start)?;
             fps.tick(duration_between_frame_starts);
+
+            rotation = wrap(
+                rotation + 45.0 * duration_between_frame_starts.as_secs_f64(),
+                0.0,
+                360.0,
+            );
         }
         last_frame_start = Some(start);
 
@@ -130,40 +146,24 @@ enum VerticalAlignment {
     Bottom,
 }
 
-fn copy_aligned<T: RenderTarget>(
-    canvas: &mut Canvas<T>,
-    texture: &Texture,
-    src: Option<FRect>,
+fn aligned_rect(
+    width: f32,
+    height: f32,
     dst: FRect,
     halign: HorizontalAlignment,
     valign: VerticalAlignment,
-) -> Result<()> {
-    let (src_width, src_height) = if let Some(src) = src {
-        (src.w, src.h)
-    } else {
-        (texture.width() as f32, texture.height() as f32)
-    };
+) -> FRect {
     let x = match halign {
         HorizontalAlignment::Left => dst.x,
-        HorizontalAlignment::Center => dst.x + (dst.w - src_width) * 0.5,
-        HorizontalAlignment::Right => dst.x + dst.w - src_width,
+        HorizontalAlignment::Center => dst.x + (dst.w - width) * 0.5,
+        HorizontalAlignment::Right => dst.x + dst.w - width,
     };
     let y = match valign {
         VerticalAlignment::Top => dst.y,
-        VerticalAlignment::Center => dst.y + (dst.h - src_height) * 0.5,
-        VerticalAlignment::Bottom => dst.y + dst.h - src_height,
+        VerticalAlignment::Center => dst.y + (dst.h - height) * 0.5,
+        VerticalAlignment::Bottom => dst.y + dst.h - height,
     };
-    canvas.copy(
-        texture,
-        src,
-        Some(FRect::new(
-            x,
-            y,
-            texture.width() as f32,
-            texture.height() as f32,
-        )),
-    )?;
-    Ok(())
+    FRect::new(x, y, width, height)
 }
 
 fn draw_string<T: RenderTarget>(
@@ -176,8 +176,17 @@ fn draw_string<T: RenderTarget>(
     halign: HorizontalAlignment,
     valign: VerticalAlignment,
 ) -> Result<()> {
-    let surface = font.render(s).blended(color)?;
-    let texture = texture_creator.create_texture_from_surface(surface)?;
-    copy_aligned(canvas, &texture, None, dst, halign, valign)?;
+    let texture = texture_creator.create_texture_from_surface(font.render(s).blended(color)?)?;
+    canvas.copy(
+        &texture,
+        None,
+        aligned_rect(
+            texture.width() as f32,
+            texture.height() as f32,
+            dst,
+            halign,
+            valign,
+        ),
+    )?;
     Ok(())
 }
