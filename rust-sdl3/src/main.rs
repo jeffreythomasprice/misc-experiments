@@ -6,11 +6,12 @@ use color_eyre::eyre::{Result, eyre};
 use fps::FPSCounter;
 use sdl3::{
     event::Event,
+    image::LoadTexture,
     iostream::IOStream,
     keyboard::Keycode,
     pixels::Color,
     rect::Point,
-    render::{Canvas, FRect, RenderTarget, TextureCreator},
+    render::{Canvas, FRect, RenderTarget, Texture, TextureCreator},
     ttf::Font,
     video::WindowContext,
 };
@@ -47,6 +48,9 @@ async fn main() -> Result<()> {
     )?;
     let texture_creator = canvas.texture_creator();
 
+    let texture =
+        texture_creator.load_texture_bytes(include_bytes!("../assets/rustacean-flat-happy.png"))?;
+
     let font = sdl_ttf_context.load_font_from_iostream(
         IOStream::from_bytes(include_bytes!(
             "../assets/calibri-font-family/calibri-regular.ttf"
@@ -76,14 +80,6 @@ async fn main() -> Result<()> {
         }
 
         let (width, height, _) = canvas.logical_size();
-        // for y in 0..height {
-        //     let b = ((y as f64) / (height as f64) * 255.0) as u8;
-        //     for x in 0..width {
-        //         let a = ((x as f64) / (width as f64) * 255.0) as u8;
-        //         canvas.set_draw_color(Color::RGB(a, b, a));
-        //         canvas.draw_point(Point::new(x as i32, y as i32))?;
-        //     }
-        // }
         canvas.set_draw_color(Color::RGB(64, 64, 64));
         canvas.clear();
         draw_string(
@@ -95,6 +91,14 @@ async fn main() -> Result<()> {
             FRect::new(0.0, 0.0, width as f32, height as f32),
             HorizontalAlignment::Left,
             VerticalAlignment::Top,
+        )?;
+        copy_aligned(
+            &mut canvas,
+            &texture,
+            None,
+            FRect::new(0.0, 0.0, width as f32, height as f32),
+            HorizontalAlignment::Center,
+            VerticalAlignment::Center,
         )?;
         canvas.present();
 
@@ -126,6 +130,42 @@ enum VerticalAlignment {
     Bottom,
 }
 
+fn copy_aligned<T: RenderTarget>(
+    canvas: &mut Canvas<T>,
+    texture: &Texture,
+    src: Option<FRect>,
+    dst: FRect,
+    halign: HorizontalAlignment,
+    valign: VerticalAlignment,
+) -> Result<()> {
+    let (src_width, src_height) = if let Some(src) = src {
+        (src.w, src.h)
+    } else {
+        (texture.width() as f32, texture.height() as f32)
+    };
+    let x = match halign {
+        HorizontalAlignment::Left => dst.x,
+        HorizontalAlignment::Center => dst.x + (dst.w - src_width) * 0.5,
+        HorizontalAlignment::Right => dst.x + dst.w - src_width,
+    };
+    let y = match valign {
+        VerticalAlignment::Top => dst.y,
+        VerticalAlignment::Center => dst.y + (dst.h - src_height) * 0.5,
+        VerticalAlignment::Bottom => dst.y + dst.h - src_height,
+    };
+    canvas.copy(
+        texture,
+        src,
+        Some(FRect::new(
+            x,
+            y,
+            texture.width() as f32,
+            texture.height() as f32,
+        )),
+    )?;
+    Ok(())
+}
+
 fn draw_string<T: RenderTarget>(
     canvas: &mut Canvas<T>,
     texture_creator: &TextureCreator<WindowContext>,
@@ -138,25 +178,6 @@ fn draw_string<T: RenderTarget>(
 ) -> Result<()> {
     let surface = font.render(s).blended(color)?;
     let texture = texture_creator.create_texture_from_surface(surface)?;
-    let x = match halign {
-        HorizontalAlignment::Left => dst.x,
-        HorizontalAlignment::Center => dst.x + (dst.w - texture.width() as f32) * 0.5,
-        HorizontalAlignment::Right => dst.x + dst.w - texture.width() as f32,
-    };
-    let y = match valign {
-        VerticalAlignment::Top => dst.y,
-        VerticalAlignment::Center => dst.y + (dst.h - texture.height() as f32) * 0.5,
-        VerticalAlignment::Bottom => dst.y + dst.h - texture.height() as f32,
-    };
-    canvas.copy(
-        &texture,
-        None,
-        Some(FRect::new(
-            x,
-            y,
-            texture.width() as f32,
-            texture.height() as f32,
-        )),
-    )?;
+    copy_aligned(canvas, &texture, None, dst, halign, valign)?;
     Ok(())
 }
