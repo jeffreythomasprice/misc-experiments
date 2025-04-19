@@ -17,8 +17,7 @@ use sdl3::{
     video::WindowContext,
 };
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     #[cfg(target_family = "wasm")]
     console_error_panic_hook::set_once();
 
