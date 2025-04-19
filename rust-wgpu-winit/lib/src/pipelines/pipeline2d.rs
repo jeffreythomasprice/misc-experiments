@@ -44,7 +44,7 @@ impl Transform {
                 ModelUniformData {
                     modelview_matrix: initial_value,
                 },
-                Renderer2d::MODEL_UNIFORM_BINDING,
+                Pipeline2d::MODEL_UNIFORM_BINDING,
             ),
         }
     }
@@ -84,14 +84,14 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-pub struct Renderer2d {
+pub struct Pipeline2d {
     device: Arc<Device>,
     queue: Arc<Queue>,
     pipeline: RenderPipeline,
     scene_uniform_buffer: UniformBuffer<SceneUniformData>,
 }
 
-impl Renderer2d {
+impl Pipeline2d {
     const SCENE_UNIFORM_BINDING: u32 = 0;
     const MODEL_UNIFORM_BINDING: u32 = 0;
     const TEXTURE_BINDING: u32 = 0;
@@ -110,7 +110,7 @@ impl Renderer2d {
         surface_configuration: &SurfaceConfiguration,
         blend_state: BlendState,
     ) -> Self {
-        let shader_module = device.create_shader_module(include_wgsl!("./renderer2d.wsgl"));
+        let shader_module = device.create_shader_module(include_wgsl!("./pipeline2d.wsgl"));
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: None,
             layout: Some(&device.create_pipeline_layout(&PipelineLayoutDescriptor {

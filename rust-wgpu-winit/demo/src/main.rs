@@ -1,3 +1,5 @@
+mod ui;
+
 use std::sync::Mutex;
 use std::time::Duration;
 use std::{f32::consts::TAU, sync::Arc};
@@ -13,9 +15,11 @@ use lib::fps::FPSCounter;
 use lib::math::wrap;
 use lib::mesh::Mesh;
 use lib::mesh_builder::MeshBuilder;
-use lib::renderers::renderer2d::{self, Renderer2d, Transform};
+use lib::pipelines::pipeline2d::{self, Pipeline2d, Transform};
 use lib::texture::Texture;
-use lib::texture_atlas_font::TextureAtlasFont;
+use lib::texture_atlas_font::{
+    Alignment, HorizontalAlignment, TextureAtlasFont, VerticalAlignment,
+};
 use rand::Rng;
 use wgpu::{
     BlendState, Device, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor,
@@ -51,7 +55,7 @@ struct Sprite {
     mesh: Arc<Mesh<Vertex2DTextureCoordinateColor>>,
     texture: Arc<Texture>,
     affine: MovingAffine2,
-    transform: renderer2d::Transform,
+    transform: pipeline2d::Transform,
 }
 
 impl Sprite {
@@ -61,69 +65,18 @@ impl Sprite {
             .enqueue_update(queue, self.affine.affine().into());
     }
 
-    fn draw(&self, r: &mut renderer2d::RenderPass<'_>) {
+    fn render(&self, r: &mut pipeline2d::RenderPass<'_>) {
         r.draw(&self.mesh, &self.texture, &self.transform);
-    }
-}
-
-struct Text {
-    font: Arc<Mutex<TextureAtlasFont>>,
-    meshes_and_textures: Vec<(Mesh<Vertex2DTextureCoordinateColor>, Arc<Texture>)>,
-    transform: renderer2d::Transform,
-}
-
-impl Text {
-    pub fn new(device: &Device, font: Arc<Mutex<TextureAtlasFont>>) -> Self {
-        Self {
-            font,
-            meshes_and_textures: Vec::new(),
-            transform: Transform::new(device, Mat4::IDENTITY),
-        }
-    }
-
-    pub fn enqueue_text_update(&mut self, device: &Device, s: &str) -> Result<()> {
-        /*
-        TODO re-use existing meshes if possible instead of always creating new ones
-        TODO use a single mesh with different offsets for each texture?
-        */
-        let mut font = self.font.lock().unwrap();
-        let layout = font.layout(s)?;
-        self.meshes_and_textures.clear();
-        for per_texture in layout.layout.iter() {
-            let mut mesh_builder = MeshBuilder::<Vertex2DTextureCoordinateColor>::new();
-            for glyph in per_texture.glyphs.iter() {
-                mesh_builder.rectangle(
-                    glyph.pixel_bounds,
-                    glyph.texture_coordinate_bounds,
-                    Color::WHITE,
-                );
-            }
-            let mesh = mesh_builder.create_mesh(device);
-            self.meshes_and_textures
-                .push((mesh, per_texture.texture.clone()));
-        }
-
-        Ok(())
-    }
-
-    pub fn enqueue_transform_update(&mut self, queue: &Queue, affine: Affine2) {
-        self.transform.enqueue_update(queue, affine.into());
-    }
-
-    pub fn draw(&self, r: &mut renderer2d::RenderPass) {
-        for (mesh, texture) in self.meshes_and_textures.iter() {
-            r.draw(mesh, texture, &self.transform);
-        }
     }
 }
 
 struct Demo {
     device: Arc<Device>,
     queue: Arc<Queue>,
-    renderer_no_blend: Renderer2d,
-    renderer_blend: Renderer2d,
+    pipeline_no_blend: Pipeline2d,
+    pipeline_blend: Pipeline2d,
     sprites: Vec<Sprite>,
-    text: Text,
+    text: ui::Text,
     ortho: Mat4,
     fps: FPSCounter,
 }
@@ -137,7 +90,7 @@ impl Demo {
         let sprite_texture = Arc::new(Texture::from_image(
             device.clone(),
             queue.clone(),
-            Renderer2d::texture_bindings(),
+            Pipeline2d::texture_bindings(),
             &image::load_from_memory_with_format(
                 include_bytes!("../assets/rustacean-flat-happy.png"),
                 image::ImageFormat::Png,
@@ -176,7 +129,7 @@ impl Demo {
                 },
                 mesh: sprite_mesh.clone(),
                 texture: sprite_texture.clone(),
-                transform: renderer2d::Transform::new(&device, Mat4::zeroed()),
+                transform: pipeline2d::Transform::new(&device, Mat4::zeroed()),
             });
         }
 
@@ -189,27 +142,35 @@ impl Demo {
         let texture_atlas_font = Arc::new(Mutex::new(TextureAtlasFont::new(
             device.clone(),
             queue.clone(),
-            Renderer2d::texture_bindings(),
+            Pipeline2d::texture_bindings(),
             font.clone(),
             40.0,
         )?));
 
-        let mut text = Text::new(&device, texture_atlas_font.clone());
-        text.enqueue_transform_update(
-            &queue,
-            glam::Affine2::from_translation(Vec2::new(50.0, 50.0)).into(),
+        let text = ui::Text::new(
+            device.clone(),
+            queue.clone(),
+            texture_atlas_font.clone(),
+            glam::Affine2::from_translation(Vec2::new(300.0, 300.0)).into(),
+            "".to_owned(),
+            // TODO test all the alignment options
+            Alignment {
+                bounds: Rect::from_origin_size(Vec2::new(-150.0, -150.0), Vec2::new(300.0, 300.0)),
+                horizontal: HorizontalAlignment::Center,
+                vertical: VerticalAlignment::Center,
+            },
         );
 
         Ok(Self {
             device: device.clone(),
             queue: queue.clone(),
-            renderer_no_blend: Renderer2d::new(
+            pipeline_no_blend: Pipeline2d::new(
                 device.clone(),
                 queue.clone(),
                 surface_configuration,
                 BlendState::REPLACE,
             ),
-            renderer_blend: Renderer2d::new(
+            pipeline_blend: Pipeline2d::new(
                 device.clone(),
                 queue.clone(),
                 surface_configuration,
@@ -251,20 +212,20 @@ impl Renderer for Demo {
                 // TODO the sprite space should be the same aspect ratio as the screen, but some other coordinate system?
 
                 let mut r = self
-                    .renderer_no_blend
+                    .pipeline_no_blend
                     .render_pass(&mut render_pass, self.ortho);
 
                 for sprite in self.sprites.iter() {
-                    sprite.draw(&mut r);
+                    sprite.render(&mut r);
                 }
             }
 
             {
                 let mut r = self
-                    .renderer_blend
+                    .pipeline_blend
                     .render_pass(&mut render_pass, self.ortho);
 
-                self.text.draw(&mut r);
+                self.text.render(&mut r)?;
             }
         }
         self.queue.submit([encoder.finish()]);
@@ -279,10 +240,13 @@ impl Renderer for Demo {
             sprite.update(&self.queue, duration);
         }
 
-        self.text.enqueue_text_update(
-            &self.device,
-            &format!("FPS: {}\nanother line, yjpqg", self.fps.fps_pretty()),
-        )?;
+        self.text.set_text(format!(
+            "FPS: {}\nanother line, yjpqg",
+            self.fps.fps_pretty()
+        ));
+        let mut a = *self.text.affine();
+        a.rotate(45.0f32.to_radians() * duration.as_secs_f32());
+        self.text.set_affine(a);
 
         Ok(())
     }

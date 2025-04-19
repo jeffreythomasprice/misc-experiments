@@ -13,6 +13,27 @@ use crate::texture::{Texture, TextureBindings};
 
 use super::{basic_types::Rect, font::Font, texture_atlas::TextureAtlas};
 
+#[derive(Debug, Clone)]
+pub enum HorizontalAlignment {
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Debug, Clone)]
+pub enum VerticalAlignment {
+    Top,
+    Center,
+    Bottom,
+}
+
+#[derive(Debug, Clone)]
+pub struct Alignment {
+    pub bounds: Rect,
+    pub horizontal: HorizontalAlignment,
+    pub vertical: VerticalAlignment,
+}
+
 pub struct LayedOutGlyph {
     pub texture_coordinate_bounds: Rect,
     pub pixel_bounds: Rect,
@@ -84,9 +105,9 @@ impl TextureAtlasFont {
         })
     }
 
-    pub fn layout(&mut self, s: &str) -> Result<LayoutResults> {
+    pub fn layout(&mut self, s: &str, alignment: &Alignment) -> Result<LayoutResults> {
         // try to render it assuming the current atlas holds all characters
-        if let Some(result) = self.try_layout(s)? {
+        if let Some(result) = self.try_layout(s, alignment)? {
             // success
             Ok(result)
         } else {
@@ -102,82 +123,117 @@ impl TextureAtlasFont {
             )?;
             self.texture_atlas = texture_atlas;
             self.extra_data = extra_data;
-            self.try_layout(s)?.ok_or(eyre!("rebuilt atlas to include whole string, but still couldn't render the whole thing: {}", s))
+            self.try_layout(s, alignment)?.ok_or(eyre!("rebuilt atlas to include whole string, but still couldn't render the whole thing: {}", s))
         }
     }
 
-    fn try_layout(&mut self, s: &str) -> Result<Option<LayoutResults>> {
+    fn try_layout(&mut self, s: &str, alignment: &Alignment) -> Result<Option<LayoutResults>> {
         // tracking whether we need to rebuild the texture atlas or not
         let mut rebuild = false;
 
+        let lines = s.split("\n").collect::<Vec<_>>();
+
+        // y position based on how many lines and vertical alignment
+        let total_height = lines.len() as f32 * self.line_height;
+        let mut cursor_y = match alignment.vertical {
+            VerticalAlignment::Top => alignment.bounds.min.y,
+            VerticalAlignment::Center => {
+                alignment.bounds.min.y + (alignment.bounds.height() - total_height) * 0.5
+            }
+            VerticalAlignment::Bottom => alignment.bounds.max.y - total_height,
+        };
+
         let mut total_pixel_bounds = Rect::zeroed();
-        let mut cursor = Vec2::zeroed();
         // capacity of 1 because we assume we have a single texture
         let mut layout = Vec::<LayoutPerTexture>::with_capacity(1);
 
-        for c in s.chars() {
-            rebuild |= self.all_chars.insert(c);
-            // if we do, we can stop trying to place all the characters, we're going to have to start over with a new atlas anyway
+        for line in lines.iter() {
+            // figure out how big this line is
+            let mut line_total_width = 0.0;
+            for c in line.chars() {
+                rebuild |= self.all_chars.insert(c);
+                // if we do, we can stop trying to place all the characters, we're going to have to start over with a new atlas anyway
+                if rebuild {
+                    // but continue, because we want to make sure our full set of all possible characters includes this entire string
+                    continue;
+                }
+
+                let extra_data = self
+                    .extra_data
+                    .get(&c)
+                    .ok_or(eyre!("extra data should already contain: {c}"))?;
+                line_total_width += extra_data.image_bounds.width() as f32;
+            }
+
+            // already going to rebuild the texture atlas, no need to do any more work
             if rebuild {
-                // but continue, because we want to make sure our full set of all possible characters includes this entire string
                 continue;
             }
 
-            // we can try to place this character from the atlas
-            // get the data for this glyph
-            let (texture, texture_coordinate_bounds) = self
-                .texture_atlas
-                .get(&c)
-                .ok_or(eyre!("texture atlas should already contain: {c}"))?;
-            let extra_data = self
-                .extra_data
-                .get(&c)
-                .ok_or(eyre!("extra data should already contain: {c}"))?;
-            let pixel_bounds = Rect::from_origin_size(
-                Vec2::new(
-                    extra_data.image_bounds.min.x as f32,
-                    extra_data.image_bounds.min.y as f32,
-                ) + cursor,
-                Vec2::new(
-                    extra_data.image_bounds.width() as f32,
-                    extra_data.image_bounds.height() as f32,
-                ),
-            );
+            // x position based on horizontal alignment
+            let mut cursor_x = match alignment.horizontal {
+                HorizontalAlignment::Left => alignment.bounds.min.x,
+                HorizontalAlignment::Center => {
+                    alignment.bounds.min.x + (alignment.bounds.width() - line_total_width) * 0.5
+                }
+                HorizontalAlignment::Right => alignment.bounds.max.x - line_total_width,
+            };
 
-            // keep track of the total size
-            total_pixel_bounds =
-                Rect::bounding_box_around_two_rects(&total_pixel_bounds, &pixel_bounds);
+            for c in line.chars() {
+                // we can try to place this character from the atlas
+                // get the data for this glyph
+                let (texture, texture_coordinate_bounds) = self
+                    .texture_atlas
+                    .get(&c)
+                    .ok_or(eyre!("texture atlas should already contain: {c}"))?;
+                let extra_data = self
+                    .extra_data
+                    .get(&c)
+                    .ok_or(eyre!("extra data should already contain: {c}"))?;
+                let pixel_bounds = Rect::from_origin_size(
+                    Vec2::new(
+                        extra_data.image_bounds.min.x as f32,
+                        extra_data.image_bounds.min.y as f32,
+                    ) + Vec2::new(cursor_x, cursor_y),
+                    Vec2::new(
+                        extra_data.image_bounds.width() as f32,
+                        extra_data.image_bounds.height() as f32,
+                    ),
+                );
 
-            // next position in pixel space
-            if c == '\n' {
-                cursor.x = 0.0;
-                cursor.y += self.line_height;
-            } else {
-                cursor.x += extra_data.advance;
-            }
+                // keep track of the total size
+                total_pixel_bounds =
+                    Rect::bounding_box_around_two_rects(&total_pixel_bounds, &pixel_bounds);
 
-            // is this even drawable?
-            if extra_data.is_drawable() {
-                // find the layout for this texture, or make a new one
-                let layout = if let Some(existing_layout) = layout
-                    .iter_mut()
-                    .find(|l| Arc::ptr_eq(&l.texture, &texture))
-                {
-                    existing_layout
-                } else {
-                    layout.push(LayoutPerTexture {
-                        texture: texture.clone(),
-                        glyphs: Vec::new(),
+                cursor_x += extra_data.advance;
+
+                // is this even drawable?
+                if extra_data.is_drawable() {
+                    // find the layout for this texture, or make a new one
+                    let layout = if let Some(existing_layout) = layout
+                        .iter_mut()
+                        .find(|l| Arc::ptr_eq(&l.texture, &texture))
+                    {
+                        existing_layout
+                    } else {
+                        layout.push(LayoutPerTexture {
+                            texture: texture.clone(),
+                            glyphs: Vec::new(),
+                        });
+                        let i = layout.len() - 1;
+                        &mut layout[i]
+                    };
+
+                    layout.glyphs.push(LayedOutGlyph {
+                        texture_coordinate_bounds,
+                        pixel_bounds,
                     });
-                    let i = layout.len() - 1;
-                    &mut layout[i]
-                };
-                layout.glyphs.push(LayedOutGlyph {
-                    texture_coordinate_bounds,
-                    pixel_bounds,
-                });
+                }
             }
+
+            cursor_y += self.line_height;
         }
+
         Ok(if rebuild {
             None
         } else {

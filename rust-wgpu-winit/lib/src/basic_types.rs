@@ -3,6 +3,8 @@ use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2, Vec4};
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode, vertex_attr_array};
 
+use crate::math::wrap;
+
 use super::colors::Color;
 
 pub trait HasVertexBufferLayout {
@@ -49,6 +51,30 @@ impl HasVertexBufferLayout for Vertex2DTextureCoordinateColor {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Affine2(glam::Affine2);
+
+impl Affine2 {
+    pub fn from_scale_angle_translation(scale: Vec2, angle: f32, translation: Vec2) -> Self {
+        Self(glam::Affine2::from_scale_angle_translation(
+            scale,
+            angle,
+            translation,
+        ))
+    }
+
+    pub fn to_scale_angle_translation(&self) -> (Vec2, f32, Vec2) {
+        self.0.to_scale_angle_translation()
+    }
+
+    pub fn rotate(&mut self, delta: f32) -> &mut Self {
+        let (scale, angle, translation) = self.to_scale_angle_translation();
+
+        let angle = wrap(angle + delta, 0.0, std::f32::consts::TAU);
+
+        *self = Self::from_scale_angle_translation(scale, angle, translation);
+
+        self
+    }
+}
 
 impl From<glam::Affine2> for Affine2 {
     fn from(value: glam::Affine2) -> Self {
