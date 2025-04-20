@@ -1,9 +1,5 @@
 mod ui;
 
-use std::sync::Mutex;
-use std::time::Duration;
-use std::{f32::consts::TAU, sync::Arc};
-
 use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2};
@@ -21,11 +17,18 @@ use lib::texture_atlas_font::{
     Alignment, HorizontalAlignment, TextureAtlasFont, VerticalAlignment,
 };
 use rand::Rng;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::{f32::consts::TAU, sync::Arc};
+use tracing::*;
 use wgpu::{
     BlendState, Device, LoadOp, Operations, Queue, RenderPassColorAttachment, RenderPassDescriptor,
     StoreOp, SurfaceConfiguration, TextureView,
 };
+use winit::dpi::LogicalSize;
 use winit::{dpi::PhysicalSize, event_loop::EventLoop};
+
+const SPRITE_SPACE_SIZE: f32 = 1000.0;
 
 struct MovingAffine2 {
     scale: Vec2,
@@ -78,7 +81,8 @@ struct Demo {
     sprites: Vec<Sprite>,
     text: ui::Text,
     text_affine: MovingAffine2,
-    ortho: Mat4,
+    ortho_window_size: Mat4,
+    ortho_sprites: Mat4,
     fps: FPSCounter,
 }
 
@@ -121,8 +125,8 @@ impl Demo {
                     scale: Vec2::new(scale, scale),
                     angle: rng.random_range(0.0..TAU),
                     translation: Vec2::new(
-                        rng.random_range(0.0..500.0),
-                        rng.random_range(0.0..500.0),
+                        rng.random_range(-(SPRITE_SPACE_SIZE * 0.5)..(SPRITE_SPACE_SIZE * 0.5)),
+                        rng.random_range(-(SPRITE_SPACE_SIZE * 0.5)..(SPRITE_SPACE_SIZE * 0.5)),
                     ),
                     angular_velocity: rng
                         .random_range((-45.0f32.to_radians())..=(45.0f32.to_radians())),
@@ -186,7 +190,8 @@ impl Demo {
             sprites,
             text,
             text_affine,
-            ortho: Mat4::IDENTITY,
+            ortho_window_size: Mat4::IDENTITY,
+            ortho_sprites: Mat4::IDENTITY,
             fps: FPSCounter::new(),
         })
     }
@@ -194,8 +199,28 @@ impl Demo {
 
 impl Renderer for Demo {
     fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
-        self.ortho =
+        // TODO more helpers for ortho stuff, e.g. exact size, fixed width with aspect ratio, fixed height with aspect ratio, centered on point
+
+        self.ortho_window_size =
             Mat4::orthographic_rh_gl(0.0, size.width as f32, size.height as f32, 0.0, -1.0, 1.0);
+
+        let sprite_space_size = LogicalSize::new(
+            SPRITE_SPACE_SIZE * (size.width as f32) / (size.height as f32),
+            SPRITE_SPACE_SIZE,
+        );
+        info!(
+            "resized to {:?}, sprite space size = {:?}",
+            size, sprite_space_size
+        );
+        self.ortho_sprites = Mat4::orthographic_rh_gl(
+            -sprite_space_size.width * 0.5,
+            sprite_space_size.width * 0.5,
+            sprite_space_size.height * 0.5,
+            -sprite_space_size.height * 0.5,
+            -1.0,
+            1.0,
+        );
+
         Ok(())
     }
 
@@ -217,11 +242,9 @@ impl Renderer for Demo {
                 .forget_lifetime();
 
             {
-                // TODO the sprite space should be the same aspect ratio as the screen, but some other coordinate system?
-
                 let mut r = self
                     .pipeline_no_blend
-                    .render_pass(&mut render_pass, self.ortho);
+                    .render_pass(&mut render_pass, self.ortho_sprites);
 
                 for sprite in self.sprites.iter() {
                     sprite.render(&mut r);
@@ -231,7 +254,7 @@ impl Renderer for Demo {
             {
                 let mut r = self
                     .pipeline_blend
-                    .render_pass(&mut render_pass, self.ortho);
+                    .render_pass(&mut render_pass, self.ortho_window_size);
 
                 self.text.render(&mut r)?;
             }
