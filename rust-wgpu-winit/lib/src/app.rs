@@ -1,4 +1,5 @@
 use std::{
+    cmp::Ordering,
     process::exit,
     sync::Arc,
     time::{Duration, Instant},
@@ -141,13 +142,32 @@ impl<R: Renderer> WindowState<R> {
 
         let capabilities = surface.get_capabilities(&adapter);
         debug!("surface capabilities: {:?}", capabilities);
-        let valid_formats = capabilities
+        let mut valid_formats = capabilities
             .formats
             .iter()
             .filter(|format| format.has_color_aspect())
             .collect::<Vec<_>>();
+        valid_formats.sort_by(|a, b| {
+            // rgba before bgra
+            let a_is_rgba = a.remove_srgb_suffix() == TextureFormat::Rgba8Unorm;
+            let b_is_rgba = b.remove_srgb_suffix() == TextureFormat::Rgba8Unorm;
+            if a_is_rgba && !b_is_rgba {
+                Ordering::Less
+            } else if !a_is_rgba && b_is_rgba {
+                Ordering::Greater
+            } else {
+                // srgb preferred
+                if a.is_srgb() && !b.is_srgb() {
+                    Ordering::Less
+                } else if !a.is_srgb() && b.is_srgb() {
+                    Ordering::Greater
+                } else {
+                    // backwards because more components should be at the front of the list
+                    b.components().cmp(&a.components())
+                }
+            }
+        });
         trace!("valid formats: {:?}", valid_formats);
-        // TODO pick a particular color format instead of just first?
         let surface_format = **valid_formats.first().ok_or(eyre!("no color formats"))?;
         debug!("format: {:?}", surface_format);
 

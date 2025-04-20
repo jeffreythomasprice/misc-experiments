@@ -67,6 +67,7 @@ pub struct TextureAtlasFont {
     bindings: TextureBindings,
     font: Arc<Font<'static>>,
     scale: f32,
+    max_ascent: f32,
     line_height: f32,
     all_chars: HashSet<char>,
     texture_atlas: TextureAtlas<char>,
@@ -96,6 +97,7 @@ impl TextureAtlasFont {
             bindings,
             font,
             scale,
+            max_ascent: v_metrics.ascent,
             line_height: v_metrics.ascent.abs()
                 + v_metrics.descent.abs()
                 + v_metrics.line_gap.abs(),
@@ -141,7 +143,7 @@ impl TextureAtlasFont {
                 alignment.bounds.min.y + (alignment.bounds.height() - total_height) * 0.5
             }
             VerticalAlignment::Bottom => alignment.bounds.max.y - total_height,
-        };
+        } + self.max_ascent;
 
         let mut total_pixel_bounds = Rect::zeroed();
         // capacity of 1 because we assume we have a single texture
@@ -162,7 +164,7 @@ impl TextureAtlasFont {
                     .extra_data
                     .get(&c)
                     .ok_or(eyre!("extra data should already contain: {c}"))?;
-                line_total_width += extra_data.image_bounds.width() as f32;
+                line_total_width += extra_data.advance;
             }
 
             // already going to rebuild the texture atlas, no need to do any more work

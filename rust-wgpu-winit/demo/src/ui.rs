@@ -97,7 +97,6 @@ impl Text {
         for per_texture in layout.layout.iter() {
             let mut mesh_builder = MeshBuilder::<Vertex2DTextureCoordinateColor>::new();
             for glyph in per_texture.glyphs.iter() {
-                // TODO adjust pixel_bounds based on alignment
                 mesh_builder.rectangle(
                     glyph.pixel_bounds,
                     glyph.texture_coordinate_bounds,

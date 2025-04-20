@@ -77,6 +77,7 @@ struct Demo {
     pipeline_blend: Pipeline2d,
     sprites: Vec<Sprite>,
     text: ui::Text,
+    text_affine: MovingAffine2,
     ortho: Mat4,
     fps: FPSCounter,
 }
@@ -153,13 +154,19 @@ impl Demo {
             texture_atlas_font.clone(),
             glam::Affine2::from_translation(Vec2::new(300.0, 300.0)).into(),
             "".to_owned(),
-            // TODO test all the alignment options
             Alignment {
                 bounds: Rect::from_origin_size(Vec2::new(-150.0, -150.0), Vec2::new(300.0, 300.0)),
                 horizontal: HorizontalAlignment::Center,
                 vertical: VerticalAlignment::Center,
             },
         );
+        let text_affine = MovingAffine2 {
+            scale: Vec2::new(1.0, 1.0),
+            angle: 0.0,
+            translation: Vec2::new(300.0, 300.0),
+            angular_velocity: 45.0f32.to_radians(),
+            velocity: Vec2::new(0.0, 0.0),
+        };
 
         Ok(Self {
             device: device.clone(),
@@ -178,6 +185,7 @@ impl Demo {
             ),
             sprites,
             text,
+            text_affine,
             ortho: Mat4::IDENTITY,
             fps: FPSCounter::new(),
         })
@@ -244,9 +252,8 @@ impl Renderer for Demo {
             "FPS: {}\nanother line, yjpqg",
             self.fps.fps_pretty()
         ));
-        let mut a = *self.text.affine();
-        a.rotate(45.0f32.to_radians() * duration.as_secs_f32());
-        self.text.set_affine(a);
+        self.text_affine.update(duration);
+        self.text.set_affine(self.text_affine.affine());
 
         Ok(())
     }
@@ -261,7 +268,7 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::fmt::fmt()
         .with_writer(std::io::stderr)
-        .with_env_filter("info,game=trace")
+        .with_env_filter("info,demo=trace,lib=trace")
         .init();
 
     let event_loop = EventLoop::new()?;
