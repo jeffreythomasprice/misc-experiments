@@ -3,7 +3,7 @@ mod ui;
 use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2};
-use lib::app::{App, Renderer};
+use lib::app::{App, Renderer, WindowOptions};
 use lib::basic_types::{Affine2, Rect, Vertex2DTextureCoordinateColor};
 use lib::colors::Color;
 use lib::font::Font;
@@ -296,7 +296,12 @@ async fn main() -> Result<()> {
 
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-    event_loop.run_app(&mut App::new(Demo::new))?;
+    event_loop.run_app(&mut App::new(WindowOptions {
+        renderer_factory: Demo::new,
+        title: "Experiment".to_string(),
+        size: PhysicalSize::new(1024, 768),
+        vsync: false,
+    }))?;
 
     Ok(())
 }
