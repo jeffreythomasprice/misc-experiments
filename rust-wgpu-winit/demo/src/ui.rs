@@ -6,7 +6,7 @@ use lib::{
     colors::Color,
     mesh::Mesh,
     mesh_builder::MeshBuilder,
-    pipelines::pipeline2d,
+    pipelines::pipeline2d_textured,
     texture::Texture,
     texture_atlas_font::{Alignment, TextureAtlasFont},
 };
@@ -19,7 +19,7 @@ pub struct Text {
     text: String,
     alignment: Alignment,
     affine: Affine2,
-    transform: pipeline2d::Transform,
+    transform: pipeline2d_textured::Transform,
     is_dirty: bool,
     meshes_and_textures: Vec<(Mesh<Vertex2DTextureCoordinateColor>, Arc<Texture>)>,
 }
@@ -40,7 +40,7 @@ impl Text {
             text,
             alignment,
             affine,
-            transform: pipeline2d::Transform::new(&device, affine.into()),
+            transform: pipeline2d_textured::Transform::new(&device, affine.into()),
             is_dirty: true,
             meshes_and_textures: Vec::new(),
         }
@@ -73,7 +73,7 @@ impl Text {
         self.is_dirty = true;
     }
 
-    pub fn render(&mut self, render_pass: &mut pipeline2d::RenderPass) -> Result<()> {
+    pub fn render(&mut self, render_pass: &mut pipeline2d_textured::RenderPass) -> Result<()> {
         if self.is_dirty {
             self.is_dirty = false;
             self.enqueue_updates()?;

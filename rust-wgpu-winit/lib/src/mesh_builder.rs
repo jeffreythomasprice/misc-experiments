@@ -198,32 +198,57 @@ impl MeshBuilder<Vertex2DTextureCoordinateColor> {
 }
 
 impl<V> MeshBuilder<V>
-// TODO no Debug
 where
-    V: std::fmt::Debug + Clone,
-    for<'a> &'a [V]: triangulate::Polygon<'a, Vertex = V, Index = usize>,
+    V: Clone,
 {
-    pub fn triangulate(&mut self, p: &[V]) -> Result<&mut Self> {
+    pub fn triangulate_polygon<'a, P>(&mut self, p: &'a P) -> Result<&mut Self>
+    where
+        P: triangulate::Polygon<'a, Vertex = V, Index = usize>,
+    {
         let mut indices = Vec::<[usize; 3]>::new();
-        let x = p.triangulate(
+        p.triangulate(
             triangulate::formats::IndexedListFormat::new(&mut indices).into_fan_format(),
         )?;
-        tracing::info!("TODO indices = {:?}", indices);
-        self.vertices.extend(p.iter().map(|v| v.clone()));
+        self.vertices.reserve(p.vertex_count());
+        for i in p.iter_indices() {
+            self.vertices.push(p.get_vertex(i).clone());
+        }
+        let vertex_offset = self.vertex_offset + self.vertices.len() as u16;
         for [a, b, c] in indices {
-            tracing::info!("TODO triangle indices = {}, {}, {}", a, b, c);
-            self.indices.push((a as u16) + self.vertex_offset);
-            self.indices.push((b as u16) + self.vertex_offset);
-            self.indices.push((c as u16) + self.vertex_offset);
-            let a = &p[a];
-            let b = &p[b];
-            let c = &p[c];
-            tracing::info!("TODO triangle vertices = {:?}, {:?}, {:?}", a, b, c);
+            self.indices.push((a as u16) + vertex_offset);
+            self.indices.push((b as u16) + vertex_offset);
+            self.indices.push((c as u16) + vertex_offset);
         }
         Ok(self)
     }
 
-    // TODO also PolygonList
+    pub fn triangulate_polygon_list<'a, P>(&mut self, p: &'a P) -> Result<&mut Self>
+    where
+        P: triangulate::PolygonList<'a, Vertex = V, Index = [usize; 2]>,
+    {
+        // TODO should be doing smart indices not just duplicating each vertex as many times as it shows up
+
+        let mut indices = Vec::<[[usize; 2]; 3]>::new();
+        p.triangulate(
+            triangulate::formats::IndexedListFormat::new(&mut indices).into_fan_format(),
+        )?;
+        // self.vertices.reserve(p.vertex_count());
+        // for i in p.iter_indices() {
+        //     self.vertices.push(p.get_vertex(i).clone());
+        // }
+        // let vertex_offset = self.vertex_offset + self.vertices.len() as u16;
+        for [a, b, c] in indices {
+            // self.indices.push((a as u16) + vertex_offset);
+            // self.indices.push((b as u16) + vertex_offset);
+            // self.indices.push((c as u16) + vertex_offset);
+            self.triangle(
+                p.get_vertex(a).clone(),
+                p.get_vertex(b).clone(),
+                p.get_vertex(c).clone(),
+            );
+        }
+        Ok(self)
+    }
 }
 
 impl triangulate::Vertex for Vertex2DColor {

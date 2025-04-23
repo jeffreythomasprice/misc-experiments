@@ -1,3 +1,4 @@
+mod shapes;
 mod ui;
 
 use bytemuck::Zeroable;
@@ -11,7 +12,8 @@ use lib::fps::FPSCounter;
 use lib::math::wrap;
 use lib::mesh::Mesh;
 use lib::mesh_builder::MeshBuilder;
-use lib::pipelines::pipeline2d::{self, Pipeline2d};
+use lib::pipelines::pipeline2d_textured::{self, Pipeline2dTextured};
+use lib::pipelines::pipeline2d_untextured::{self, Pipeline2dUntextured};
 use lib::texture::Texture;
 use lib::texture_atlas_font::{
     Alignment, HorizontalAlignment, TextureAtlasFont, VerticalAlignment,
@@ -54,31 +56,51 @@ impl MovingAffine2 {
     }
 }
 
-struct Sprite {
+struct TexturedSprite {
     mesh: Arc<Mesh<Vertex2DTextureCoordinateColor>>,
     texture: Arc<Texture>,
     affine: MovingAffine2,
-    transform: pipeline2d::Transform,
+    transform: pipeline2d_textured::Transform,
 }
 
-impl Sprite {
+impl TexturedSprite {
     fn update(&mut self, queue: &Queue, duration: Duration) {
         self.affine.update(duration);
         self.transform
             .enqueue_update(queue, self.affine.affine().into());
     }
 
-    fn render(&self, r: &mut pipeline2d::RenderPass<'_>) {
+    fn render(&self, r: &mut pipeline2d_textured::RenderPass<'_>) {
         r.draw(&self.mesh, &self.texture, &self.transform);
+    }
+}
+
+struct UntexturedSprite {
+    mesh: Arc<Mesh<Vertex2DColor>>,
+    affine: MovingAffine2,
+    transform: pipeline2d_untextured::Transform,
+}
+
+impl UntexturedSprite {
+    fn update(&mut self, queue: &Queue, duration: Duration) {
+        self.affine.update(duration);
+        self.transform
+            .enqueue_update(queue, self.affine.affine().into());
+    }
+
+    fn render(&self, r: &mut pipeline2d_untextured::RenderPass<'_>) {
+        r.draw(&self.mesh, &self.transform);
     }
 }
 
 struct Demo {
     device: Arc<Device>,
     queue: Arc<Queue>,
-    pipeline_no_blend: Pipeline2d,
-    pipeline_blend: Pipeline2d,
-    sprites: Vec<Sprite>,
+    pipeline_textured_no_blend: Pipeline2dTextured,
+    pipeline_textured_blend: Pipeline2dTextured,
+    pipeline_untextured_no_blend: Pipeline2dUntextured,
+    textured_sprites: Vec<TexturedSprite>,
+    untextured_sprites: Vec<UntexturedSprite>,
     text: ui::Text,
     text_affine: MovingAffine2,
     ortho_window_size: Mat4,
@@ -95,7 +117,7 @@ impl Demo {
         let sprite_texture = Arc::new(Texture::from_image(
             device.clone(),
             queue.clone(),
-            Pipeline2d::texture_bindings(),
+            Pipeline2dTextured::texture_bindings(),
             &image::load_from_memory_with_format(
                 include_bytes!("../assets/rustacean-flat-happy.png"),
                 image::ImageFormat::Png,
@@ -117,10 +139,10 @@ impl Demo {
         );
 
         let mut rng = rand::rng();
-        let mut sprites = Vec::new();
+        let mut textured_sprites = Vec::new();
         for _ in 0..10 {
             let scale = rng.random_range(0.75..1.25);
-            sprites.push(Sprite {
+            textured_sprites.push(TexturedSprite {
                 affine: MovingAffine2 {
                     scale: Vec2::new(scale, scale),
                     angle: rng.random_range(0.0..TAU),
@@ -134,31 +156,43 @@ impl Demo {
                 },
                 mesh: sprite_mesh.clone(),
                 texture: sprite_texture.clone(),
-                transform: pipeline2d::Transform::new(&device, Mat4::zeroed()),
+                transform: pipeline2d_textured::Transform::new(&device, Mat4::zeroed()),
             });
         }
 
-        // TODO triangulation? do something more complicated, something with curves and holes
-        let triangulated_mesh = MeshBuilder::<Vertex2DColor>::new()
-            .triangulate(&vec![
-                Vertex2DColor {
-                    position: Vec2::new(0.0, 0.0),
+        let triangulated_mesh = {
+            // TODO make a better api for complicated shapes?
+            let outer_circle = shapes::circle(Vec2::new(0.0, 0.0), 100.0)
+                .iter()
+                .map(|position| Vertex2DColor {
+                    position: *position,
                     color: Color::WHITE,
-                },
-                Vertex2DColor {
-                    position: Vec2::new(100.0, 0.0),
+                })
+                .collect::<Vec<_>>();
+            let inner_circle = shapes::circle(Vec2::new(0.0, 0.0), 80.0)
+                .iter()
+                .map(|position| Vertex2DColor {
+                    position: *position,
                     color: Color::WHITE,
-                },
-                Vertex2DColor {
-                    position: Vec2::new(100.0, 100.0),
-                    color: Color::WHITE,
-                },
-                Vertex2DColor {
-                    position: Vec2::new(0.0, 100.0),
-                    color: Color::WHITE,
-                },
-            ])?
-            .create_mesh(&device);
+                })
+                .collect::<Vec<_>>();
+            Arc::new(
+                MeshBuilder::<Vertex2DColor>::new()
+                    .triangulate_polygon_list(&vec![outer_circle, inner_circle])?
+                    .create_mesh(&device),
+            )
+        };
+        let untextured_sprites = vec![UntexturedSprite {
+            mesh: triangulated_mesh,
+            affine: MovingAffine2 {
+                scale: Vec2::new(1.0, 1.0),
+                angle: 0.0,
+                translation: Vec2::new(0.0, 0.0),
+                angular_velocity: 0.0,
+                velocity: Vec2::new(0.0, 0.0),
+            },
+            transform: pipeline2d_untextured::Transform::new(&device, Mat4::zeroed()),
+        }];
 
         let font = Arc::new(Font::new(
             rusttype::Font::try_from_bytes(include_bytes!(
@@ -169,7 +203,7 @@ impl Demo {
         let texture_atlas_font = Arc::new(Mutex::new(TextureAtlasFont::new(
             device.clone(),
             queue.clone(),
-            Pipeline2d::texture_bindings(),
+            Pipeline2dTextured::texture_bindings(),
             font.clone(),
             40.0,
         )?));
@@ -197,19 +231,26 @@ impl Demo {
         Ok(Self {
             device: device.clone(),
             queue: queue.clone(),
-            pipeline_no_blend: Pipeline2d::new(
+            pipeline_textured_no_blend: Pipeline2dTextured::new(
                 device.clone(),
                 queue.clone(),
                 surface_configuration,
                 BlendState::REPLACE,
             ),
-            pipeline_blend: Pipeline2d::new(
+            pipeline_textured_blend: Pipeline2dTextured::new(
                 device.clone(),
                 queue.clone(),
                 surface_configuration,
                 BlendState::ALPHA_BLENDING,
             ),
-            sprites,
+            pipeline_untextured_no_blend: Pipeline2dUntextured::new(
+                device.clone(),
+                queue.clone(),
+                surface_configuration,
+                BlendState::REPLACE,
+            ),
+            textured_sprites,
+            untextured_sprites,
             text,
             text_affine,
             ortho_window_size: Mat4::IDENTITY,
@@ -265,17 +306,27 @@ impl Renderer for Demo {
 
             {
                 let mut r = self
-                    .pipeline_no_blend
+                    .pipeline_textured_no_blend
                     .render_pass(&mut render_pass, self.ortho_sprites);
 
-                for sprite in self.sprites.iter() {
+                for sprite in self.textured_sprites.iter() {
                     sprite.render(&mut r);
                 }
             }
 
             {
                 let mut r = self
-                    .pipeline_blend
+                    .pipeline_untextured_no_blend
+                    .render_pass(&mut render_pass, self.ortho_sprites);
+
+                for sprite in self.untextured_sprites.iter() {
+                    sprite.render(&mut r);
+                }
+            }
+
+            {
+                let mut r = self
+                    .pipeline_textured_blend
                     .render_pass(&mut render_pass, self.ortho_window_size);
 
                 self.text.render(&mut r)?;
@@ -289,7 +340,11 @@ impl Renderer for Demo {
     fn update(&mut self, duration: Duration) -> Result<()> {
         self.fps.tick(duration);
 
-        for sprite in self.sprites.iter_mut() {
+        for sprite in self.textured_sprites.iter_mut() {
+            sprite.update(&self.queue, duration);
+        }
+
+        for sprite in self.untextured_sprites.iter_mut() {
             sprite.update(&self.queue, duration);
         }
 

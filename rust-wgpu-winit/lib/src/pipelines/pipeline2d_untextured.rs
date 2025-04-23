@@ -12,7 +12,7 @@ use wgpu::{
 };
 
 use crate::{
-    basic_types::{HasVertexBufferLayout, Vertex2DTextureCoordinateColor},
+    basic_types::{HasVertexBufferLayout, Vertex2DColor},
     {
         mesh::Mesh,
         texture::{self, Texture, TextureBindings},
@@ -44,7 +44,7 @@ impl Transform {
                 ModelUniformData {
                     modelview_matrix: initial_value,
                 },
-                Pipeline2d::MODEL_UNIFORM_BINDING,
+                Pipeline2dUntextured::MODEL_UNIFORM_BINDING,
             ),
         }
     }
@@ -65,16 +65,9 @@ pub struct RenderPass<'a> {
 }
 
 impl<'a> RenderPass<'a> {
-    pub fn draw(
-        &mut self,
-        mesh: &Mesh<Vertex2DTextureCoordinateColor>,
-        texture: &Texture,
-        transform: &Transform,
-    ) {
+    pub fn draw(&mut self, mesh: &Mesh<Vertex2DColor>, transform: &Transform) {
         self.render_pass
             .set_bind_group(1, transform.uniform_buffer.bind_group(), &[]);
-        self.render_pass
-            .set_bind_group(2, texture.bind_group(), &[]);
         self.render_pass
             .set_vertex_buffer(0, mesh.vertex_buffer().buffer().slice(..));
         self.render_pass
@@ -84,25 +77,16 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-pub struct Pipeline2d {
+pub struct Pipeline2dUntextured {
     device: Arc<Device>,
     queue: Arc<Queue>,
     pipeline: RenderPipeline,
     scene_uniform_buffer: UniformBuffer<SceneUniformData>,
 }
 
-impl Pipeline2d {
+impl Pipeline2dUntextured {
     const SCENE_UNIFORM_BINDING: u32 = 0;
     const MODEL_UNIFORM_BINDING: u32 = 0;
-    const TEXTURE_BINDING: u32 = 0;
-    const TEXTURE_SAMPLER_BINDING: u32 = 1;
-
-    pub fn texture_bindings() -> TextureBindings {
-        TextureBindings {
-            texture: Self::TEXTURE_BINDING,
-            sampler: Self::TEXTURE_SAMPLER_BINDING,
-        }
-    }
 
     pub fn new(
         device: Arc<Device>,
@@ -110,7 +94,8 @@ impl Pipeline2d {
         surface_configuration: &SurfaceConfiguration,
         blend_state: BlendState,
     ) -> Self {
-        let shader_module = device.create_shader_module(include_wgsl!("./pipeline2d.wsgl"));
+        let shader_module =
+            device.create_shader_module(include_wgsl!("./pipeline2d_untextured.wsgl"));
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: None,
             layout: Some(&device.create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -118,11 +103,6 @@ impl Pipeline2d {
                 bind_group_layouts: &[
                     &uniform_buffer::bind_group_layout(&device, Self::SCENE_UNIFORM_BINDING),
                     &uniform_buffer::bind_group_layout(&device, Self::MODEL_UNIFORM_BINDING),
-                    &texture::bind_group_layout(
-                        &device,
-                        Self::TEXTURE_BINDING,
-                        Self::TEXTURE_SAMPLER_BINDING,
-                    ),
                 ],
                 push_constant_ranges: &[],
             })),
@@ -130,7 +110,7 @@ impl Pipeline2d {
                 module: &shader_module,
                 entry_point: Some("vs_main"),
                 compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[Vertex2DTextureCoordinateColor::vertex_buffer_layout()],
+                buffers: &[Vertex2DColor::vertex_buffer_layout()],
             },
             fragment: Some(FragmentState {
                 module: &shader_module,
