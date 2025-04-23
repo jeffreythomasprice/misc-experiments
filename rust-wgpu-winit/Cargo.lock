@@ -1122,6 +1122,7 @@ dependencies = [
  "image",
  "rusttype",
  "tracing",
+ "triangulate",
  "wgpu",
  "winit",
 ]
@@ -1702,6 +1703,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba0b26cec2e24f08ed8bb31519a9333140a6599b867dac464bb150bdb796fd43"
 dependencies = [
  "libredox",
+]
+
+[[package]]
+name = "ordered-float"
+version = "2.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]
@@ -2670,6 +2680,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "triangulate"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f737ed9bcc496b67fd1e24f63c14eace0cb9216d14bca000fd5934fddc6af7f6"
+dependencies = [
+ "backtrace",
+ "num-traits",
+ "ordered-float 2.10.1",
+ "rand 0.8.5",
+ "smallvec",
+ "zot",
+]
+
+[[package]]
 name = "ttf-parser"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3076,7 +3100,7 @@ dependencies = [
  "naga",
  "ndk-sys 0.5.0+25.2.9519653",
  "objc",
- "ordered-float",
+ "ordered-float 4.6.0",
  "parking_lot",
  "portable-atomic",
  "profiling",
@@ -3578,6 +3602,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "zot"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12a5c04eac01d1f630aa1b7375984fbbc6c3b28b0975fc90bfa3e2c58caaa727"
 
 [[package]]
 name = "zune-core"

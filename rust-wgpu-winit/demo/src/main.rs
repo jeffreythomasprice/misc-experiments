@@ -4,14 +4,14 @@ use bytemuck::Zeroable;
 use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2};
 use lib::app::{App, Renderer, WindowOptions};
-use lib::basic_types::{Affine2, Rect, Vertex2DTextureCoordinateColor};
+use lib::basic_types::{Affine2, Rect, Vertex2DColor, Vertex2DTextureCoordinateColor};
 use lib::colors::Color;
 use lib::font::Font;
 use lib::fps::FPSCounter;
 use lib::math::wrap;
 use lib::mesh::Mesh;
 use lib::mesh_builder::MeshBuilder;
-use lib::pipelines::pipeline2d::{self, Pipeline2d, Transform};
+use lib::pipelines::pipeline2d::{self, Pipeline2d};
 use lib::texture::Texture;
 use lib::texture_atlas_font::{
     Alignment, HorizontalAlignment, TextureAtlasFont, VerticalAlignment,
@@ -137,6 +137,28 @@ impl Demo {
                 transform: pipeline2d::Transform::new(&device, Mat4::zeroed()),
             });
         }
+
+        // TODO triangulation? do something more complicated, something with curves and holes
+        let triangulated_mesh = MeshBuilder::<Vertex2DColor>::new()
+            .triangulate(&vec![
+                Vertex2DColor {
+                    position: Vec2::new(0.0, 0.0),
+                    color: Color::WHITE,
+                },
+                Vertex2DColor {
+                    position: Vec2::new(100.0, 0.0),
+                    color: Color::WHITE,
+                },
+                Vertex2DColor {
+                    position: Vec2::new(100.0, 100.0),
+                    color: Color::WHITE,
+                },
+                Vertex2DColor {
+                    position: Vec2::new(0.0, 100.0),
+                    color: Color::WHITE,
+                },
+            ])?
+            .create_mesh(&device);
 
         let font = Arc::new(Font::new(
             rusttype::Font::try_from_bytes(include_bytes!(

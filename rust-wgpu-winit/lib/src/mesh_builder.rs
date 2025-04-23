@@ -1,6 +1,7 @@
 use bytemuck::Pod;
 use color_eyre::eyre::{Result, eyre};
 use glam::Vec2;
+use triangulate::{ListFormat, Polygon};
 use wgpu::{BufferAddress, BufferUsages, Device, Queue};
 
 use crate::{buffer::Buffer, mesh::Mesh};
@@ -193,5 +194,58 @@ impl MeshBuilder<Vertex2DTextureCoordinateColor> {
                 color,
             },
         )
+    }
+}
+
+impl<V> MeshBuilder<V>
+// TODO no Debug
+where
+    V: std::fmt::Debug + Clone,
+    for<'a> &'a [V]: triangulate::Polygon<'a, Vertex = V, Index = usize>,
+{
+    pub fn triangulate(&mut self, p: &[V]) -> Result<&mut Self> {
+        let mut indices = Vec::<[usize; 3]>::new();
+        let x = p.triangulate(
+            triangulate::formats::IndexedListFormat::new(&mut indices).into_fan_format(),
+        )?;
+        tracing::info!("TODO indices = {:?}", indices);
+        self.vertices.extend(p.iter().map(|v| v.clone()));
+        for [a, b, c] in indices {
+            tracing::info!("TODO triangle indices = {}, {}, {}", a, b, c);
+            self.indices.push((a as u16) + self.vertex_offset);
+            self.indices.push((b as u16) + self.vertex_offset);
+            self.indices.push((c as u16) + self.vertex_offset);
+            let a = &p[a];
+            let b = &p[b];
+            let c = &p[c];
+            tracing::info!("TODO triangle vertices = {:?}, {:?}, {:?}", a, b, c);
+        }
+        Ok(self)
+    }
+
+    // TODO also PolygonList
+}
+
+impl triangulate::Vertex for Vertex2DColor {
+    type Coordinate = f32;
+
+    fn x(&self) -> Self::Coordinate {
+        self.position.x
+    }
+
+    fn y(&self) -> Self::Coordinate {
+        self.position.y
+    }
+}
+
+impl triangulate::Vertex for Vertex2DTextureCoordinateColor {
+    type Coordinate = f32;
+
+    fn x(&self) -> Self::Coordinate {
+        self.position.x
+    }
+
+    fn y(&self) -> Self::Coordinate {
+        self.position.y
     }
 }

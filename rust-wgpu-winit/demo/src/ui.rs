@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use color_eyre::eyre::Result;
 use lib::{
-    basic_types::{Affine2, Rect, Vertex2DTextureCoordinateColor},
+    basic_types::{Affine2, Vertex2DTextureCoordinateColor},
     colors::Color,
     mesh::Mesh,
     mesh_builder::MeshBuilder,
@@ -10,7 +10,7 @@ use lib::{
     texture::Texture,
     texture_atlas_font::{Alignment, TextureAtlasFont},
 };
-use wgpu::{BlendState, Device, Queue, RenderPass, SurfaceConfiguration};
+use wgpu::{Device, Queue};
 
 pub struct Text {
     device: Arc<Device>,
