@@ -30,18 +30,19 @@ fn main() {
                 title: "Experiment".into(),
                 resizable: true,
                 resolution: WindowResolution::new(1024.0, 768.0),
-                present_mode: PresentMode::AutoNoVsync,
+                present_mode: PresentMode::AutoVsync,
                 ..default()
             }),
             ..default()
         }))
         .add_plugins(FrameTimeDiagnosticsPlugin)
+        .add_plugins(bevy_framepace::FramepacePlugin)
         .add_systems(Startup, startup)
-        .add_systems(FixedUpdate, update_fps_counter)
-        .add_systems(FixedUpdate, animated_sprite_update)
-        .add_systems(FixedUpdate, camera::update)
-        .add_systems(FixedUpdate, update_player)
         .add_systems(Update, handle_input)
+        .add_systems(Update, update_fps_counter)
+        .add_systems(Update, animated_sprite_update)
+        .add_systems(Update, camera::update)
+        .add_systems(Update, update_player.after(handle_input))
         .run();
 }
 
