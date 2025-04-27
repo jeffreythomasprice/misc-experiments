@@ -52,6 +52,16 @@ public class Shader : IDisposable
 		gl.UseProgram(program);
 	}
 
+	public int GetUniformLocation(string name)
+	{
+		var result = gl.GetUniformLocation(program, name);
+		if (result < 0)
+		{
+			throw new Exception($"no such uniform: {name}");
+		}
+		return result;
+	}
+
 	private static uint CreateShader(GL gl, ShaderType type, string source)
 	{
 		var result = gl.CreateShader(type);

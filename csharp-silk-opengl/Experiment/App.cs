@@ -4,25 +4,42 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
-class AppStateTransition
+interface IWindowState
 {
-    private readonly Func<GL, Task<IAppState?>> factory;
+    Vector2D<int> Size { get; }
+}
 
-    public static AppStateTransition Exit => new AppStateTransition((gl) => Task.FromResult<IAppState?>(null));
+class WindowState : IWindowState
+{
+    private readonly IWindow window;
 
-    public AppStateTransition(Func<GL, IAppState?> factory)
+    public WindowState(IWindow window)
     {
-        this.factory = (gl) => Task.FromResult<IAppState?>(factory(gl));
+        this.window = window;
     }
 
-    public AppStateTransition(Func<GL, Task<IAppState?>> factory)
+    public Vector2D<int> Size => window.Size;
+}
+
+class AppStateTransition
+{
+    private readonly Func<GL, IWindowState, Task<IAppState?>> factory;
+
+    public static AppStateTransition Exit => new((gl, windowState) => Task.FromResult<IAppState?>(null));
+
+    public AppStateTransition(Func<GL, IWindowState, IAppState?> factory)
+    {
+        this.factory = (gl, windowState) => Task.FromResult<IAppState?>(factory(gl, windowState));
+    }
+
+    public AppStateTransition(Func<GL, IWindowState, Task<IAppState?>> factory)
     {
         this.factory = factory;
     }
 
-    public async Task<IAppState?> Get(GL gl)
+    public async Task<IAppState?> Get(GL gl, IWindowState windowState)
     {
-        return await factory(gl);
+        return await factory(gl, windowState);
     }
 }
 
@@ -42,17 +59,20 @@ class App : IDisposable
     private readonly Queue<Task<IAppState?>> stateTransitions;
     private AppStateTransition? initialState;
     private readonly IWindow window;
+    private readonly WindowState windowState;
     private GL? openGLContext;
 
     private IAppState? state;
 
+    public static Stream EmbeddedFileAsStream(string name)
+    {
+        return Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
+            ?? throw new Exception($"failed to find embedded file: {name}");
+    }
+
     public static string EmbeddedFileAsString(string name)
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name);
-        if (stream == null)
-        {
-            throw new Exception($"failed to find embedded file: {name}");
-        }
+        using var stream = EmbeddedFileAsStream(name);
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
@@ -70,6 +90,7 @@ class App : IDisposable
         window.FramebufferResize += Resize;
         window.Update += Update;
         window.Render += Render;
+        windowState = new WindowState(window);
         window.Run();
     }
 
@@ -163,7 +184,7 @@ class App : IDisposable
     {
         if (transition != null)
         {
-            stateTransitions.Enqueue(transition.Get(OpenGLContext));
+            stateTransitions.Enqueue(transition.Get(OpenGLContext, windowState));
         }
     }
 }
