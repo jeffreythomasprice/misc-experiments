@@ -10,7 +10,7 @@ pub struct Vec2u32 {
 }
 
 impl Vec2u32 {
-    pub fn new(x: u32, y: u32) -> Self {
+    pub const fn new(x: u32, y: u32) -> Self {
         Self { x, y }
     }
 }

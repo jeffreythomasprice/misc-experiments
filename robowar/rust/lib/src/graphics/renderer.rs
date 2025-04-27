@@ -14,7 +14,8 @@ pub trait Texture {
 
 pub struct Material<'a, Texture: self::Texture> {
     pub color: Option<RGBAf32>,
-    pub texture: Option<&'a Texture>,
+    pub texture: Option<&'a mut Texture>,
+    // TODO texture src rect
     pub blend: bool,
 }
 
@@ -36,8 +37,8 @@ pub trait Renderer {
         &mut self,
         rect: Rectf32,
         transform: Affine2f32,
-        material: &Material<'_, Self::Texture>,
+        material: &mut Material<'_, Self::Texture>,
     ) -> Result<()>;
 
-    fn present() -> Result<()>;
+    fn present(&mut self) -> Result<()>;
 }

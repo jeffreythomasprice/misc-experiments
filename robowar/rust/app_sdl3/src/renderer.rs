@@ -1,13 +1,31 @@
 use std::rc::Rc;
 
 use color_eyre::eyre::eyre;
-use lib::geom::Vec2u32;
+use lib::{
+    geom::{Rectf32, Vec2f32, Vec2u32},
+    graphics::color::RGBAu8,
+};
 
-struct Texture<'a> {
-    texture: sdl3::render::Texture<'a>,
+pub struct Texture {
+    texture: sdl3::render::Texture<'static>,
 }
 
-impl<'a> lib::graphics::renderer::Texture for Texture<'a> {
+impl Texture {
+    fn new<'a>(texture: sdl3::render::Texture<'a>) -> Self {
+        /*
+        sdl enforces a particular lifetime on the texdture but does all it's own management via unsafe stuff so just let me own it for as
+        long as I want
+        */
+        Self {
+            texture: unsafe {
+                // just to cast the lifetime
+                std::mem::transmute(texture)
+            },
+        }
+    }
+}
+
+impl lib::graphics::renderer::Texture for Texture {
     fn size(&self) -> lib::geom::Vec2u32 {
         Vec2u32::new(self.width(), self.height())
     }
@@ -40,7 +58,7 @@ impl<'a> lib::graphics::renderer::Texture for Texture<'a> {
     }
 }
 
-struct Renderer {
+pub struct Renderer {
     canvas: sdl3::render::Canvas<sdl3::video::Window>,
     texture_creator: sdl3::render::TextureCreator<sdl3::video::WindowContext>,
 }
@@ -53,13 +71,14 @@ impl Renderer {
             texture_creator,
         }
     }
+
+    pub fn canvas(&self) -> &sdl3::render::Canvas<sdl3::video::Window> {
+        &self.canvas
+    }
 }
 
-impl<'texture> lib::graphics::renderer::Renderer for Renderer {
-    type Texture
-        = self::Texture<'texture>
-    where
-        Self: 'texture;
+impl lib::graphics::renderer::Renderer for Renderer {
+    type Texture = self::Texture;
 
     fn create_texture_size(&mut self, size: Vec2u32) -> color_eyre::eyre::Result<Self::Texture> {
         let texture = self.texture_creator.create_texture(
@@ -68,7 +87,7 @@ impl<'texture> lib::graphics::renderer::Renderer for Renderer {
             size.x,
             size.y,
         )?;
-        Ok(Self::Texture { texture })
+        Ok(Self::Texture::new(texture))
     }
 
     fn create_texture_pixels(
@@ -84,14 +103,22 @@ impl<'texture> lib::graphics::renderer::Renderer for Renderer {
             rgba(),
         )?;
         let texture = self.texture_creator.create_texture_from_surface(surface)?;
-        Ok(Self::Texture { texture })
+        Ok(Self::Texture::new(texture))
     }
 
     fn clear_screen(
         &mut self,
         clear_color: lib::graphics::color::RGBAf32,
     ) -> color_eyre::eyre::Result<()> {
-        todo!()
+        let clear_color: lib::graphics::color::RGBAu8 = clear_color.into();
+        self.canvas.set_draw_color(sdl3::pixels::Color::RGBA(
+            clear_color.red,
+            clear_color.green,
+            clear_color.blue,
+            clear_color.alpha,
+        ));
+        self.canvas.clear();
+        Ok(())
     }
 
     fn set_ortho(&mut self, r: lib::geom::Rectf32) -> color_eyre::eyre::Result<()> {
@@ -102,13 +129,60 @@ impl<'texture> lib::graphics::renderer::Renderer for Renderer {
         &mut self,
         rect: lib::geom::Rectf32,
         transform: lib::geom::Affine2f32,
-        material: &lib::graphics::renderer::Material<'_, Self::Texture>,
+        material: &mut lib::graphics::renderer::Material<'_, Self::Texture>,
     ) -> color_eyre::eyre::Result<()> {
-        todo!()
+        if let Some(texture) = &mut material.texture {
+            texture.texture.set_blend_mode(if material.blend {
+                sdl3::render::BlendMode::Blend
+            } else {
+                sdl3::render::BlendMode::None
+            });
+            if let Some(color) = material.color {
+                let color: RGBAu8 = color.into();
+                texture
+                    .texture
+                    .set_color_mod(color.red, color.green, color.blue);
+                texture.texture.set_alpha_mod(color.alpha);
+            }
+            let scaled_rect = Rectf32::with_corners(
+                Vec2f32::new(
+                    rect.min().x * transform.scale.x,
+                    rect.min().y * transform.scale.y,
+                ),
+                Vec2f32::new(
+                    rect.max().x * transform.scale.x,
+                    rect.max().y * transform.scale.y,
+                ),
+            );
+            self.canvas.copy_ex(
+                &texture.texture,
+                // TODO texture src rect
+                None,
+                sdl3::render::FRect::new(
+                    scaled_rect.min().x,
+                    scaled_rect.min().y,
+                    scaled_rect.width(),
+                    scaled_rect.height(),
+                ),
+                transform.rotation as f64,
+                sdl3::render::FPoint::new(0.0, 0.0),
+                false,
+                false,
+            )?;
+            if material.color.is_some() {
+                texture.texture.set_color_mod(255, 255, 255);
+                texture.texture.set_alpha_mod(255);
+            }
+        } else {
+            // color only
+            todo!()
+        }
+        Ok(())
     }
 
-    fn present() -> color_eyre::eyre::Result<()> {
-        todo!()
+    fn present(&mut self) -> color_eyre::eyre::Result<()> {
+        self.canvas.present();
+        Ok(())
     }
 }
 
