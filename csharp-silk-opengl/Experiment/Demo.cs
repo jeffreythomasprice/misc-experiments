@@ -24,17 +24,20 @@ class Demo : IAppState
 
 		vertexArray = new VertexArray<Vector2D<float>>(
 			gl,
-			new([
-				new VertexAttributeSpecification<Vector2D<float>>(0, 2, VertexAttribPointerType.Float, false, 0),
-			]),
+			new(new Dictionary<uint, VertexAttributeSpecification<Vector2D<float>>>()
+			{
+				{0, new(2, VertexAttribPointerType.Float, false, 0) },
+			}),
 			[
 				new(-0.5f, -0.5f),
-				new(0.5f,-0.5f),
-				new(0.0f,0.5f),
+				new(-0.5f, 0.5f),
+				new(0.5f, 0.5f),
+				new(0.5f, -0.5f),
 			],
 			BufferUsageARB.StaticDraw,
 			[
 				0,1,2,
+				2,3,0,
 			],
 			BufferUsageARB.StaticDraw
 		);
@@ -86,7 +89,7 @@ class Demo : IAppState
 		shader.Use();
 		unsafe
 		{
-			gl.DrawElements(PrimitiveType.Triangles, 3, DrawElementsType.UnsignedShort, null);
+			gl.DrawElements(PrimitiveType.Triangles, (uint)vertexArray.IndicesLength, DrawElementsType.UnsignedShort, null);
 		}
 	}
 
