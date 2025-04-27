@@ -9,10 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Assets\Shaders\shader.vert" />
-  </ItemGroup>
-
-  <ItemGroup>
     <EmbeddedResource Include="Assets\Shaders\shader.vert" />
     <EmbeddedResource Include="Assets\Shaders\shader.frag" />
   </ItemGroup>
