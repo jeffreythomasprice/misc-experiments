@@ -1,16 +1,27 @@
-using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Reflection;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
+
+record struct Vertex
+{
+	public readonly Vector2D<float> Position;
+	public readonly Vector4D<float> Color;
+
+	public Vertex(Vector2D<float> position, Vector4D<float> color)
+	{
+		this.Position = position;
+		this.Color = color;
+	}
+
+	public Vertex(Vector2D<float> position, Color color) : this(position, new Vector4D<float>(color.R / 255.0f, color.G / 255.0f, color.B / 255.0f, color.A / 255.0f)) { }
+}
 
 class Demo : IAppState
 {
 	private readonly GL gl;
 	private readonly Shader shader;
-	private readonly VertexArray<Vector2D<float>> vertexArray;
+	private readonly VertexArray<Vertex> vertexArray;
 
 	public Demo(GL gl)
 	{
@@ -18,21 +29,22 @@ class Demo : IAppState
 
 		shader = new Shader(
 			gl,
-			EmbeddedFileAsString("Experiment.Assets.Shaders.shader.vert"),
-			EmbeddedFileAsString("Experiment.Assets.Shaders.shader.frag")
+			App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.vert"),
+			App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.frag")
 		);
 
-		vertexArray = new VertexArray<Vector2D<float>>(
+		vertexArray = new(
 			gl,
-			new(new Dictionary<uint, VertexAttributeSpecification<Vector2D<float>>>()
+			new(new Dictionary<uint, VertexAttributeSpecification<Vertex>>()
 			{
-				{0, new(2, VertexAttribPointerType.Float, false, 0) },
+				{ 0, new(2, VertexAttribPointerType.Float, false, nameof(Vertex.Position)) },
+				{ 1, new(4, VertexAttribPointerType.Float, false, nameof(Vertex.Color)) },
 			}),
 			[
-				new(-0.5f, -0.5f),
-				new(-0.5f, 0.5f),
-				new(0.5f, 0.5f),
-				new(0.5f, -0.5f),
+				new(new(-0.5f, -0.5f), Color.Teal),
+				new(new(-0.5f, 0.5f), Color.RebeccaPurple),
+				new(new(0.5f, 0.5f), Color.Wheat),
+				new(new(0.5f, -0.5f), Color.Goldenrod),
 			],
 			BufferUsageARB.StaticDraw,
 			[
@@ -77,7 +89,6 @@ class Demo : IAppState
 
 	public AppStateTransition? Update(TimeSpan delta)
 	{
-		// TODO animate stuff
 		return null;
 	}
 
@@ -91,17 +102,5 @@ class Demo : IAppState
 		{
 			gl.DrawElements(PrimitiveType.Triangles, (uint)vertexArray.IndicesLength, DrawElementsType.UnsignedShort, null);
 		}
-	}
-
-	// TODO move me?
-	private static string EmbeddedFileAsString(string name)
-	{
-		using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name);
-		if (stream == null)
-		{
-			throw new Exception($"failed to find embedded file: {name}");
-		}
-		using var reader = new StreamReader(stream);
-		return reader.ReadToEnd();
 	}
 }

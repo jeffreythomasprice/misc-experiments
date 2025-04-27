@@ -1,4 +1,5 @@
-﻿using Silk.NET.Input;
+﻿using System.Reflection;
+using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -44,6 +45,17 @@ class App : IDisposable
     private GL? openGLContext;
 
     private IAppState? state;
+
+    public static string EmbeddedFileAsString(string name)
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name);
+        if (stream == null)
+        {
+            throw new Exception($"failed to find embedded file: {name}");
+        }
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
 
     public App(AppStateTransition initialState)
     {
