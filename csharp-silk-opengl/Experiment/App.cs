@@ -2,15 +2,17 @@
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
-using System.Drawing;
-using System.Reflection;
 
-// TODO move me?
 class AppStateTransition
 {
     private readonly Func<GL, Task<IAppState?>> factory;
 
     public static AppStateTransition Exit => new AppStateTransition((gl) => Task.FromResult<IAppState?>(null));
+
+    public AppStateTransition(Func<GL, IAppState?> factory)
+    {
+        this.factory = (gl) => Task.FromResult<IAppState?>(factory(gl));
+    }
 
     public AppStateTransition(Func<GL, Task<IAppState?>> factory)
     {
@@ -23,7 +25,6 @@ class AppStateTransition
     }
 }
 
-// TODO move me?
 interface IAppState
 {
     void Load();

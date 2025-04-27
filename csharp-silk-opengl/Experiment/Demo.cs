@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Reflection;
 using Silk.NET.Input;
@@ -8,7 +10,7 @@ class Demo : IAppState
 {
 	private readonly GL gl;
 	private readonly Shader shader;
-	private readonly uint vertexArray;
+	private readonly VertexArray<Vector2D<float>> vertexArray;
 
 	public Demo(GL gl)
 	{
@@ -20,25 +22,22 @@ class Demo : IAppState
 			EmbeddedFileAsString("Experiment.Assets.Shaders.shader.frag")
 		);
 
-		vertexArray = gl.GenVertexArray();
-		gl.BindVertexArray(vertexArray);
-		var arrayBuffer = gl.GenBuffer();
-		gl.BindBuffer(BufferTargetARB.ArrayBuffer, arrayBuffer);
-		var vertices = new float[] {
-			-0.5f, -0.5f,
-			0.5f, -0.5f,
-			0.0f, 0.5f,
-		};
-		gl.BufferData<float>(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.StaticDraw);
-		var elementArrayBuffer = gl.GenBuffer();
-		gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, elementArrayBuffer);
-		var indices = new UInt16[] {
-			0, 1, 2
-		};
-		gl.BufferData<UInt16>(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
-
-		gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), 0);
-		gl.EnableVertexAttribArray(0);
+		vertexArray = new VertexArray<Vector2D<float>>(
+			gl,
+			new([
+				new VertexAttributeSpecification<Vector2D<float>>(0, 2, VertexAttribPointerType.Float, false, 0),
+			]),
+			[
+				new(-0.5f, -0.5f),
+				new(0.5f,-0.5f),
+				new(0.0f,0.5f),
+			],
+			BufferUsageARB.StaticDraw,
+			[
+				0,1,2,
+			],
+			BufferUsageARB.StaticDraw
+		);
 
 		gl.ClearColor(Color.CornflowerBlue);
 	}
@@ -50,7 +49,7 @@ class Demo : IAppState
 	public void Unload()
 	{
 		shader.Dispose();
-		// TODO buffers
+		vertexArray.Dispose();
 	}
 
 	public void Resize(Vector2D<int> size)
@@ -83,7 +82,7 @@ class Demo : IAppState
 	{
 		gl.Clear(ClearBufferMask.ColorBufferBit);
 
-		gl.BindVertexArray(vertexArray);
+		vertexArray.Bind();
 		shader.Use();
 		unsafe
 		{
@@ -101,73 +100,5 @@ class Demo : IAppState
 		}
 		using var reader = new StreamReader(stream);
 		return reader.ReadToEnd();
-	}
-}
-
-// TODO move me
-class Shader : IDisposable
-{
-	private readonly GL gl;
-	private readonly uint vertexShader;
-	private readonly uint fragmentShader;
-	private readonly uint program;
-
-	public Shader(GL gl, string vertexSource, string fragmentSource)
-	{
-		this.gl = gl;
-
-		vertexShader = CreateShader(gl, ShaderType.VertexShader, vertexSource);
-		try
-		{
-			fragmentShader = CreateShader(gl, ShaderType.FragmentShader, fragmentSource);
-			try
-			{
-				program = gl.CreateProgram();
-				gl.AttachShader(program, vertexShader);
-				gl.AttachShader(program, fragmentShader);
-				gl.LinkProgram(program);
-				if (gl.GetProgram(program, ProgramPropertyARB.LinkStatus) == 0)
-				{
-					var log = gl.GetProgramInfoLog(program);
-					gl.DeleteProgram(program);
-					throw new Exception($"error linking shader program: {log}");
-				}
-			}
-			catch
-			{
-				gl.DeleteShader(fragmentShader);
-			}
-		}
-		catch
-		{
-			gl.DeleteShader(vertexShader);
-			throw;
-		}
-	}
-
-	public void Dispose()
-	{
-		gl.DeleteShader(vertexShader);
-		gl.DeleteShader(fragmentShader);
-		gl.DeleteProgram(program);
-	}
-
-	public void Use()
-	{
-		gl.UseProgram(program);
-	}
-
-	private static uint CreateShader(GL gl, ShaderType type, string source)
-	{
-		var result = gl.CreateShader(type);
-		gl.ShaderSource(result, source);
-		gl.CompileShader(result);
-		if (gl.GetShader(result, ShaderParameterName.CompileStatus) == 0)
-		{
-			var log = gl.GetShaderInfoLog(result);
-			gl.DeleteShader(result);
-			throw new Exception($"compile error for shader of type {type}: {log}");
-		}
-		return result;
 	}
 }

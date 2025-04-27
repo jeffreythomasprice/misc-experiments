@@ -1,4 +1,1 @@
-﻿using var app = new App(new AppStateTransition(async (gl) =>
-{
-	return new Demo(gl);
-}));
+﻿using var app = new App(new AppStateTransition((gl) => new Demo(gl)));
