@@ -8,172 +8,27 @@ using System.Runtime.InteropServices;
 interface IWindowState
 {
     Vector2D<int> Size { get; }
-    WebGPU WebGPU { get; }
-    unsafe Surface* Surface { get; }
-    unsafe Device* Device { get; }
+    WebGPUState WebGPUState { get; }
 }
 
 unsafe class WindowState : IWindowState, IDisposable
 {
     private readonly IWindow window;
-    private readonly WebGPU webGPU;
-    private readonly Instance* instance;
-    private readonly Surface* surface;
-
-    private readonly Adapter* adapter;
-    private readonly Device* device;
+    private readonly WebGPUState webGPU;
 
     public WindowState(IWindow window)
     {
         this.window = window;
-
-        webGPU = CreateWebGPU();
-        instance = CreateInstance(webGPU);
-        surface = CreateSurface(window, webGPU, instance);
-        adapter = CreateAdapter(webGPU, instance, surface);
-        device = CreateDevice(webGPU, adapter);
-        ConfigureSurface(window, webGPU, surface, device);
-        ConfigureDebugCallback(webGPU, device);
+        webGPU = new(window);
     }
 
     public Vector2D<int> Size => window.Size;
 
-    public WebGPU WebGPU => webGPU;
-
-    public unsafe Surface* Surface => surface;
-
-    public unsafe Device* Device => device;
+    public WebGPUState WebGPUState => webGPU;
 
     public void Dispose()
     {
-        webGPU.DeviceDestroy(device);
-        webGPU.SurfaceRelease(surface);
-        webGPU.AdapterRelease(adapter);
-        webGPU.InstanceRelease(instance);
-        Console.WriteLine("webGPU resources released");
-    }
-
-    private static WebGPU CreateWebGPU()
-    {
-        return WebGPU.GetApi();
-    }
-
-    private static Instance* CreateInstance(WebGPU webGPU)
-    {
-        var descriptor = new InstanceDescriptor();
-        var result = webGPU.CreateInstance(ref descriptor);
-        Console.WriteLine("created instance");
-        return result;
-    }
-
-    private static Surface* CreateSurface(IWindow window, WebGPU webGPU, Instance* instance)
-    {
-        var result = window.CreateWebGPUSurface(webGPU, instance);
-        Console.WriteLine("created surface");
-        return result;
-    }
-
-    private static Adapter* CreateAdapter(WebGPU webGPU, Instance* instance, Surface* surface)
-    {
-        Adapter* result = null;
-        Exception? error = null;
-
-        var options = new RequestAdapterOptions
-        {
-            CompatibleSurface = surface,
-            BackendType = BackendType.Vulkan,
-            PowerPreference = PowerPreference.HighPerformance
-        };
-        var callback = PfnRequestAdapterCallback.From((status, adapter, msgPtr, userDataPtr) =>
-        {
-            if (status == RequestAdapterStatus.Success)
-            {
-                result = adapter;
-            }
-            else
-            {
-                error = new Exception($"error getting adapter: {Marshal.PtrToStringAnsi((IntPtr)msgPtr)}");
-            }
-        });
-        webGPU.InstanceRequestAdapter(instance, ref options, callback, null);
-
-        if (error != null)
-        {
-            throw error;
-        }
-        if (result == null)
-        {
-            throw new Exception($"didn't create adapter, completed without callback being invoked");
-        }
-
-        var adapterProperties = new AdapterProperties();
-        webGPU.AdapterGetProperties(result, ref adapterProperties);
-        Console.WriteLine($"adapter type: {adapterProperties.AdapterType}");
-        Console.WriteLine($"adapter architecture: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.Architecture)}");
-        Console.WriteLine($"adapter backend type: {adapterProperties.BackendType}");
-        Console.WriteLine($"adapter device ID: {adapterProperties.DeviceID}");
-        Console.WriteLine($"adapter driver description: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.DriverDescription)}");
-        Console.WriteLine($"adapter name: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.Name)}");
-        Console.WriteLine($"adapter vendor ID: {adapterProperties.VendorID}");
-        Console.WriteLine($"adapter vendor name: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.VendorName)}");
-
-        return result;
-    }
-
-    private static Device* CreateDevice(WebGPU webGPU, Adapter* adapter)
-    {
-        Device* result = null;
-        Exception? error = null;
-
-        var descriptor = new DeviceDescriptor();
-        var callback = PfnRequestDeviceCallback.From((status, device, msgPtr, userDataPtr) =>
-        {
-            if (status == RequestDeviceStatus.Success)
-            {
-                result = device;
-            }
-            else
-            {
-                error = new Exception($"error getting device: {Marshal.PtrToStringAnsi((IntPtr)msgPtr)}");
-            }
-        });
-        webGPU.AdapterRequestDevice(adapter, ref descriptor, callback, null);
-
-        if (error != null)
-        {
-            throw error;
-        }
-        if (result == null)
-        {
-            throw new Exception($"didn't create adapter, completed without callback being invoked");
-        }
-
-        Console.WriteLine("created device");
-
-        return result;
-    }
-
-    private static void ConfigureSurface(IWindow window, WebGPU webGPU, Surface* surface, Device* device)
-    {
-        var configuration = new SurfaceConfiguration()
-        {
-            Device = device,
-            Width = (uint)window.Size.X,
-            Height = (uint)window.Size.Y,
-            Format = TextureFormat.Bgra8Unorm,
-            PresentMode = PresentMode.Fifo,
-            Usage = TextureUsage.RenderAttachment,
-        };
-        webGPU.SurfaceConfigure(surface, ref configuration);
-    }
-
-    private static void ConfigureDebugCallback(WebGPU webGPU, Device* device)
-    {
-        var callback = PfnErrorCallback.From((type, msgPtr, userDataPtr) =>
-        {
-            Console.WriteLine($"unhandled WebGPU error: {Marshal.PtrToStringAnsi((IntPtr)msgPtr)}");
-        });
-        webGPU.DeviceSetUncapturedErrorCallback(device, callback, null);
+        webGPU.Dispose();
     }
 }
 

@@ -21,9 +21,11 @@ class Demo : IAppState
 	{
 		unsafe
 		{
-			var webGPU = windowState.WebGPU;
-			var surface = windowState.Surface;
-			var device = windowState.Device;
+			var webGPUState = windowState.WebGPUState;
+
+			var webGPU = webGPUState.WebGPU;
+			var surface = webGPUState.Surface;
+			var device = webGPUState.Device;
 
 			var queue = webGPU.DeviceGetQueue(device);
 
@@ -34,12 +36,11 @@ class Demo : IAppState
 
 			var surfaceTextureView = webGPU.TextureCreateView(surfaceTexture.Texture, null);
 
-			var clearColor = System.Drawing.Color.CornflowerBlue;
 			var colorAttachments = stackalloc RenderPassColorAttachment[] {
 				new() {
 					View = surfaceTextureView,
 					LoadOp = LoadOp.Clear,
-					ClearValue = new (clearColor.R/255.0, clearColor.G/255.0, clearColor.B/255.0, 1.0),
+					ClearValue = System.Drawing.Color.CornflowerBlue.ToWebGPU(),
 					StoreOp = StoreOp.Store,
 				}
 			};
@@ -84,5 +85,18 @@ class Demo : IAppState
 			return AppStateTransition.Exit;
 		}
 		return null;
+	}
+}
+
+public static class ColorExtensions
+{
+	public static Silk.NET.WebGPU.Color ToWebGPU(this System.Drawing.Color c)
+	{
+		return new(
+			c.R / 255.0,
+			c.G / 255.0,
+			c.B / 255.0,
+			c.A / 255.0
+		);
 	}
 }
