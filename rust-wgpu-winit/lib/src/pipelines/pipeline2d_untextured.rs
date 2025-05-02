@@ -28,12 +28,12 @@ struct SceneUniformData {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
-struct ModelUniformData {
+struct TransformUniformData {
     modelview_matrix: Mat4,
 }
 
 pub struct Transform {
-    uniform_buffer: UniformBuffer<ModelUniformData>,
+    uniform_buffer: UniformBuffer<TransformUniformData>,
 }
 
 impl Transform {
@@ -41,7 +41,7 @@ impl Transform {
         Self {
             uniform_buffer: UniformBuffer::new_init(
                 device,
-                ModelUniformData {
+                TransformUniformData {
                     modelview_matrix: initial_value,
                 },
                 Pipeline2dUntextured::MODEL_UNIFORM_BINDING,
@@ -52,7 +52,7 @@ impl Transform {
     pub fn enqueue_update(&mut self, queue: &Queue, m: Mat4) {
         self.uniform_buffer.enqueue_update(
             queue,
-            ModelUniformData {
+            TransformUniformData {
                 modelview_matrix: m,
             },
         );
