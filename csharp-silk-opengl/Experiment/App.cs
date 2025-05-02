@@ -23,9 +23,9 @@ class WindowState : IWindowState
 
 class AppStateTransition
 {
-    private readonly Func<GL, IWindowState, Task<IAppState?>> factory;
-
     public static AppStateTransition Exit => new((gl, windowState) => Task.FromResult<IAppState?>(null));
+
+    private readonly Func<GL, IWindowState, Task<IAppState?>> factory;
 
     public AppStateTransition(Func<GL, IWindowState, IAppState?> factory)
     {
