@@ -1,19 +1,39 @@
+using System;
+using System.ComponentModel.DataAnnotations;
 using System.Runtime.InteropServices;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 
+record struct Vertex(Vector2D<float> Position);
+
 class Demo : IAppState
 {
 	private readonly IWindowState windowState;
+	private readonly WebGPUVideoDriver videoDriver;
 
 	private readonly Pipeline pipeline;
+	private readonly Buffer<Vertex> buffer;
 
 	public Demo(IWindowState windowState)
 	{
 		this.windowState = windowState;
+		this.videoDriver = (WebGPUVideoDriver)windowState.VideoDriver;
 
-		pipeline = new Pipeline(windowState.WebGPUState, App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"));
+		unsafe
+		{
+			pipeline = new Pipeline(videoDriver.WebGPU, videoDriver.Device, App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"));
+			buffer = new(
+				videoDriver.WebGPU,
+				videoDriver.Device,
+				videoDriver.Queue,
+				[
+					new(new(-0.5f, -0.5f)),
+					new(new(0.5f, -0.5f)),
+					new(new(0.0f, 0.5f)),
+				]
+			);
+		}
 	}
 
 	public void Load() { }
@@ -29,9 +49,9 @@ class Demo : IAppState
 	{
 		unsafe
 		{
-			windowState.WebGPUState.RenderPass((renderPass) =>
+			videoDriver.RenderPass((renderPass) =>
 			{
-				pipeline.Render(renderPass.RenderPassEncoder);
+				pipeline.Render(renderPass.RenderPassEncoder, buffer);
 			});
 		}
 	}
@@ -63,10 +83,10 @@ unsafe class Pipeline : IDisposable
 	private readonly ShaderModule* shaderModule;
 	private readonly RenderPipeline* renderPipeline;
 
-	public Pipeline(WebGPUState webGPUState, string shaderSource)
+	public Pipeline(WebGPU webGPU, Device* device, string shaderSource)
 	{
-		this.webGPU = webGPUState.WebGPU;
-		this.device = webGPUState.Device;
+		this.webGPU = webGPU;
+		this.device = device;
 
 		var shaderSourcePtr = Marshal.StringToHGlobalAnsi(shaderSource);
 		var shaderModuleWGSLDescriptor = new ShaderModuleWGSLDescriptor()
@@ -84,11 +104,28 @@ unsafe class Pipeline : IDisposable
 		Marshal.FreeHGlobal(shaderSourcePtr);
 		Console.WriteLine("created shader");
 
+		// TODO vertex attributes should be based on some input to the pipeline
+		var vertexAttribute = stackalloc VertexAttribute[] {
+			new() {
+				Format = VertexFormat.Float32x2,
+				ShaderLocation = 0,
+				Offset = 0,
+			},
+		};
+		var vertexBufferLayout = new VertexBufferLayout()
+		{
+			Attributes = vertexAttribute,
+			ArrayStride = sizeof(float) * 2,
+			AttributeCount = 1,
+			StepMode = VertexStepMode.Vertex,
+		};
 		var vertexEntryPointPtr = Marshal.StringToHGlobalAnsi("vs_main");
 		var vertexState = new VertexState()
 		{
 			Module = shaderModule,
 			EntryPoint = (byte*)vertexEntryPointPtr,
+			Buffers = &vertexBufferLayout,
+			BufferCount = 1,
 		};
 		var blendState = stackalloc BlendState[] {
 			new()
@@ -154,11 +191,44 @@ unsafe class Pipeline : IDisposable
 		webGPU.ShaderModuleRelease(shaderModule);
 	}
 
-	public void Render(RenderPassEncoder* renderPassEncoder)
+	public void Render<T>(RenderPassEncoder* renderPassEncoder, Buffer<T> buffer) where T : unmanaged
 	{
 		webGPU.RenderPassEncoderSetPipeline(renderPassEncoder, renderPipeline);
-		webGPU.RenderPassEncoderDraw(renderPassEncoder, 3, 1, 0, 0);
+		webGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, buffer.Instance, 0, (ulong)buffer.SizeInBytes);
+		webGPU.RenderPassEncoderDraw(renderPassEncoder, (uint)buffer.Length, 1, 0, 0);
 	}
+}
+
+unsafe class Buffer<T> : IDisposable where T : unmanaged
+{
+	private WebGPU webGPU;
+	private int length;
+	private Silk.NET.WebGPU.Buffer* buffer;
+
+	public Buffer(WebGPU webGPU, Device* device, Queue* queue, ReadOnlySpan<T> data)
+	{
+		this.webGPU = webGPU;
+		this.length = data.Length;
+		var descriptor = new BufferDescriptor()
+		{
+			MappedAtCreation = false,
+			Size = (ulong)SizeInBytes,
+			Usage = BufferUsage.CopyDst | BufferUsage.Vertex,
+		};
+		buffer = webGPU.DeviceCreateBuffer(device, ref descriptor);
+		webGPU.QueueWriteBuffer<T>(queue, buffer, 0, data, (nuint)SizeInBytes);
+	}
+
+	public void Dispose()
+	{
+		webGPU.BufferRelease(buffer);
+	}
+
+	public int Length => length;
+
+	public int SizeInBytes => sizeof(T) * length;
+
+	public Silk.NET.WebGPU.Buffer* Instance => buffer;
 }
 
 unsafe class RenderPass
@@ -168,13 +238,12 @@ unsafe class RenderPass
 
 static class WebGPUExtensions
 {
-	public unsafe static void RenderPass(this WebGPUState webGPUState, Action<RenderPass> callback)
+	public unsafe static void RenderPass(this WebGPUVideoDriver videoDriver, Action<RenderPass> callback)
 	{
-		var webGPU = webGPUState.WebGPU;
-		var surface = webGPUState.Surface;
-		var device = webGPUState.Device;
-
-		var queue = webGPU.DeviceGetQueue(device);
+		var webGPU = videoDriver.WebGPU;
+		var surface = videoDriver.Surface;
+		var device = videoDriver.Device;
+		var queue = videoDriver.Queue;
 
 		var commandEncoder = webGPU.DeviceCreateCommandEncoder(device, null);
 
@@ -184,13 +253,13 @@ static class WebGPUExtensions
 		var surfaceTextureView = webGPU.TextureCreateView(surfaceTexture.Texture, null);
 
 		var colorAttachments = stackalloc RenderPassColorAttachment[] {
-				new() {
-					View = surfaceTextureView,
-					LoadOp = LoadOp.Clear,
-					ClearValue = System.Drawing.Color.CornflowerBlue.ToWebGPU(),
-					StoreOp = StoreOp.Store,
-				}
-			};
+			new() {
+				View = surfaceTextureView,
+				LoadOp = LoadOp.Clear,
+				ClearValue = System.Drawing.Color.CornflowerBlue.ToWebGPU(),
+				StoreOp = StoreOp.Store,
+			}
+		};
 		var renderPassDescriptor = new RenderPassDescriptor()
 		{
 			ColorAttachmentCount = 1,

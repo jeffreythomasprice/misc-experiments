@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using Silk.NET.WebGPU;
 using Silk.NET.Windowing;
 
-public unsafe class WebGPUState
+public unsafe class WebGPUVideoDriver : IVideoDriver
 {
 	private readonly WebGPU webGPU;
 	private readonly Instance* instance;
@@ -10,7 +10,7 @@ public unsafe class WebGPUState
 	private readonly Adapter* adapter;
 	private readonly Device* device;
 
-	public WebGPUState(IWindow window)
+	public WebGPUVideoDriver(IWindow window)
 	{
 		webGPU = CreateWebGPU();
 		instance = CreateInstance(webGPU);
@@ -26,6 +26,8 @@ public unsafe class WebGPUState
 	public Surface* Surface => surface;
 
 	public Device* Device => device;
+
+	public Queue* Queue => webGPU.DeviceGetQueue(device);
 
 	public void Dispose()
 	{

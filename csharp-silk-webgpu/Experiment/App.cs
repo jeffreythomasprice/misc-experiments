@@ -1,35 +1,30 @@
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.WebGPU;
 using Silk.NET.Windowing;
 using System.Reflection;
-using System.Runtime.InteropServices;
+
+interface IVideoDriver : IDisposable { }
 
 interface IWindowState
 {
     Vector2D<int> Size { get; }
-    WebGPUState WebGPUState { get; }
+    IVideoDriver VideoDriver { get; }
 }
 
-unsafe class WindowState : IWindowState, IDisposable
+unsafe class WindowState : IWindowState
 {
     private readonly IWindow window;
-    private readonly WebGPUState webGPU;
+    private readonly IVideoDriver videoDriver;
 
-    public WindowState(IWindow window)
+    public WindowState(IWindow window, IVideoDriver videoDriver)
     {
         this.window = window;
-        webGPU = new(window);
+        this.videoDriver = videoDriver;
     }
 
     public Vector2D<int> Size => window.Size;
 
-    public WebGPUState WebGPUState => webGPU;
-
-    public void Dispose()
-    {
-        webGPU.Dispose();
-    }
+    public IVideoDriver VideoDriver => videoDriver;
 }
 
 class AppStateTransition
@@ -69,6 +64,7 @@ class App : IDisposable
 {
     private readonly Queue<Task<IAppState?>> stateTransitions;
     private readonly IWindow window;
+    private readonly IVideoDriver videoDriver;
     private readonly WindowState windowState;
 
     private IAppState? state;
@@ -86,7 +82,7 @@ class App : IDisposable
         return reader.ReadToEnd();
     }
 
-    public App(AppStateTransition initialState)
+    public App(Func<IWindow, IVideoDriver> videoDriverFactory, AppStateTransition initialState)
     {
         stateTransitions = new();
 
@@ -105,7 +101,8 @@ class App : IDisposable
 
         window.Initialize();
 
-        windowState = new WindowState(window);
+        videoDriver = videoDriverFactory(window);
+        windowState = new WindowState(window, videoDriver);
 
         HandleTransition(initialState);
 
@@ -114,7 +111,7 @@ class App : IDisposable
 
     public void Dispose()
     {
-        windowState.Dispose();
+        videoDriver.Dispose();
         window.Dispose();
     }
 
