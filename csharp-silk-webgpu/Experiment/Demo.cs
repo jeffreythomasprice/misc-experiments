@@ -5,7 +5,10 @@ using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 
-record struct Vertex(Vector2D<float> Position);
+record struct Vertex(
+	Vector2D<float> Position,
+	Vector4D<float> Color
+);
 
 class Demo : IAppState
 {
@@ -28,9 +31,18 @@ class Demo : IAppState
 				videoDriver.Device,
 				videoDriver.Queue,
 				[
-					new(new(-0.5f, -0.5f)),
-					new(new(0.5f, -0.5f)),
-					new(new(0.0f, 0.5f)),
+					new(
+						new(-0.5f, -0.5f),
+						System.Drawing.Color.Red.ToVector()
+					),
+					new(
+						new(0.5f, -0.5f),
+						System.Drawing.Color.Green.ToVector()
+					),
+					new(
+						new(0.0f, 0.5f),
+						System.Drawing.Color.Blue.ToVector()
+					),
 				]
 			);
 		}
@@ -111,12 +123,19 @@ unsafe class Pipeline : IDisposable
 				ShaderLocation = 0,
 				Offset = 0,
 			},
+			new() {
+				Format = VertexFormat.Float32x4,
+				ShaderLocation = 1,
+				// TODO offsetof?
+				Offset = sizeof(float)*2,
+			},
 		};
 		var vertexBufferLayout = new VertexBufferLayout()
 		{
 			Attributes = vertexAttribute,
-			ArrayStride = sizeof(float) * 2,
-			AttributeCount = 1,
+			// TODO based on size of vertex
+			ArrayStride = sizeof(float) * 6,
+			AttributeCount = 2,
 			StepMode = VertexStepMode.Vertex,
 		};
 		var vertexEntryPointPtr = Marshal.StringToHGlobalAnsi("vs_main");
@@ -296,6 +315,16 @@ static class ColorExtensions
 			c.G / 255.0,
 			c.B / 255.0,
 			c.A / 255.0
+		);
+	}
+
+	public static Vector4D<float> ToVector(this System.Drawing.Color c)
+	{
+		return new(
+			c.R / 255.0f,
+			c.G / 255.0f,
+			c.B / 255.0f,
+			c.A / 255.0f
 		);
 	}
 }
