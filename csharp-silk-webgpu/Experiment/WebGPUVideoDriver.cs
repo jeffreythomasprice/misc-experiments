@@ -9,6 +9,7 @@ public unsafe class WebGPUVideoDriver : IVideoDriver
 	private readonly Surface* surface;
 	private readonly Adapter* adapter;
 	private readonly Device* device;
+	private readonly TextureFormat surfaceTextureFormat;
 
 	public WebGPUVideoDriver(IWindow window)
 	{
@@ -17,7 +18,7 @@ public unsafe class WebGPUVideoDriver : IVideoDriver
 		surface = CreateSurface(window, webGPU, instance);
 		adapter = CreateAdapter(webGPU, instance, surface);
 		device = CreateDevice(webGPU, adapter);
-		ConfigureSurface(window, webGPU, surface, device);
+		surfaceTextureFormat = ConfigureSurface(window, webGPU, surface, device);
 		ConfigureDebugCallback(webGPU, device);
 	}
 
@@ -26,6 +27,8 @@ public unsafe class WebGPUVideoDriver : IVideoDriver
 	public Surface* Surface => surface;
 
 	public Device* Device => device;
+
+	public TextureFormat SurfaceTextureFormat => surfaceTextureFormat;
 
 	public Queue* Queue => webGPU.DeviceGetQueue(device);
 
@@ -138,18 +141,20 @@ public unsafe class WebGPUVideoDriver : IVideoDriver
 		return result;
 	}
 
-	private static void ConfigureSurface(IWindow window, WebGPU webGPU, Surface* surface, Device* device)
+	private static TextureFormat ConfigureSurface(IWindow window, WebGPU webGPU, Surface* surface, Device* device)
 	{
+		var surfaceTextureFormat = TextureFormat.Bgra8Unorm;
 		var configuration = new SurfaceConfiguration()
 		{
 			Device = device,
 			Width = (uint)window.Size.X,
 			Height = (uint)window.Size.Y,
-			Format = TextureFormat.Bgra8Unorm,
+			Format = surfaceTextureFormat,
 			PresentMode = PresentMode.Fifo,
 			Usage = TextureUsage.RenderAttachment,
 		};
 		webGPU.SurfaceConfigure(surface, ref configuration);
+		return surfaceTextureFormat;
 	}
 
 	private static void ConfigureDebugCallback(WebGPU webGPU, Device* device)

@@ -45,6 +45,7 @@ class Demo : IAppState
 			pipeline = new Pipeline(
 				videoDriver.WebGPU,
 				videoDriver.Device,
+				videoDriver.SurfaceTextureFormat,
 				new()
 				{
 					ShaderDescription = new()
@@ -172,7 +173,7 @@ unsafe class Pipeline : IDisposable
 	private readonly ShaderModule* shaderModule;
 	private readonly RenderPipeline* renderPipeline;
 
-	public Pipeline(WebGPU webGPU, Device* device, PipelineDescription pipelineDescription)
+	public Pipeline(WebGPU webGPU, Device* device, TextureFormat surfaceTextureFormat, PipelineDescription pipelineDescription)
 	{
 		this.webGPU = webGPU;
 		this.device = device;
@@ -235,8 +236,7 @@ unsafe class Pipeline : IDisposable
 				new()
 				{
 					WriteMask = ColorWriteMask.All,
-					// TODO use surface texture format?
-					Format = TextureFormat.Bgra8Unorm,
+					Format = surfaceTextureFormat,
 					Blend = blendState,
 				},
 			};
