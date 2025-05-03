@@ -5,10 +5,17 @@ using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 
-record struct Vertex(
-	Vector2D<float> Position,
-	Vector4D<float> Color
-);
+struct Vertex
+{
+	public readonly Vector2D<float> Position;
+	public readonly Vector4D<float> Color;
+
+	public Vertex(Vector2D<float> position, Vector4D<float> color)
+	{
+		this.Position = position;
+		this.Color = color;
+	}
+}
 
 class Demo : IAppState
 {
@@ -25,7 +32,29 @@ class Demo : IAppState
 
 		unsafe
 		{
-			pipeline = new Pipeline(videoDriver.WebGPU, videoDriver.Device, App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"));
+			pipeline = new Pipeline(
+				videoDriver.WebGPU,
+				videoDriver.Device,
+				new()
+				{
+					ShaderSource = App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"),
+					ShaderVertexEntryPoint = "vs_main",
+					ShaderFragmentEntryPoint = "fs_main",
+					VertexStride = sizeof(Vertex),
+					VertexAttributes = [
+						new() {
+							Format = VertexFormat.Float32x2,
+							ShaderLocation = 0,
+							Offset = (ulong)Marshal.OffsetOf<Vertex>("Position")
+						},
+						new() {
+							Format = VertexFormat.Float32x4,
+							ShaderLocation = 1,
+							Offset = (ulong)Marshal.OffsetOf<Vertex>("Color")
+						},
+					]
+				}
+			);
 			buffer = new(
 				videoDriver.WebGPU,
 				videoDriver.Device,
@@ -88,6 +117,15 @@ class Demo : IAppState
 	}
 }
 
+class PipelineDescription
+{
+	public required string ShaderSource { get; init; }
+	public required string ShaderVertexEntryPoint { get; init; }
+	public required string ShaderFragmentEntryPoint { get; init; }
+	public required int VertexStride { get; init; }
+	public required VertexAttribute[] VertexAttributes { get; init; }
+}
+
 unsafe class Pipeline : IDisposable
 {
 	private readonly WebGPU webGPU;
@@ -95,18 +133,18 @@ unsafe class Pipeline : IDisposable
 	private readonly ShaderModule* shaderModule;
 	private readonly RenderPipeline* renderPipeline;
 
-	public Pipeline(WebGPU webGPU, Device* device, string shaderSource)
+	public Pipeline(WebGPU webGPU, Device* device, PipelineDescription pipelineDescription)
 	{
 		this.webGPU = webGPU;
 		this.device = device;
 
-		var shaderSourcePtr = Marshal.StringToHGlobalAnsi(shaderSource);
+		var shaderSourcePtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderSource);
 		var shaderModuleWGSLDescriptor = new ShaderModuleWGSLDescriptor()
 		{
 			Code = (byte*)shaderSourcePtr,
 			Chain = {
-				SType = SType.ShaderModuleWgslDescriptor,
-			},
+					SType = SType.ShaderModuleWgslDescriptor,
+				},
 		};
 		var descriptor = new ShaderModuleDescriptor()
 		{
@@ -116,29 +154,19 @@ unsafe class Pipeline : IDisposable
 		Marshal.FreeHGlobal(shaderSourcePtr);
 		Console.WriteLine("created shader");
 
-		// TODO vertex attributes should be based on some input to the pipeline
-		var vertexAttribute = stackalloc VertexAttribute[] {
-			new() {
-				Format = VertexFormat.Float32x2,
-				ShaderLocation = 0,
-				Offset = 0,
-			},
-			new() {
-				Format = VertexFormat.Float32x4,
-				ShaderLocation = 1,
-				// TODO offsetof?
-				Offset = sizeof(float)*2,
-			},
-		};
+		var vertexEntryPointPtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderVertexEntryPoint);
+		var vertexAttributes = stackalloc VertexAttribute[pipelineDescription.VertexAttributes.Length];
+		for (var i = 0; i < pipelineDescription.VertexAttributes.Length; i++)
+		{
+			vertexAttributes[i] = pipelineDescription.VertexAttributes[i];
+		}
 		var vertexBufferLayout = new VertexBufferLayout()
 		{
-			Attributes = vertexAttribute,
-			// TODO based on size of vertex
-			ArrayStride = sizeof(float) * 6,
-			AttributeCount = 2,
 			StepMode = VertexStepMode.Vertex,
+			ArrayStride = (ulong)pipelineDescription.VertexStride,
+			AttributeCount = (nuint)pipelineDescription.VertexAttributes.Length,
+			Attributes = vertexAttributes,
 		};
-		var vertexEntryPointPtr = Marshal.StringToHGlobalAnsi("vs_main");
 		var vertexState = new VertexState()
 		{
 			Module = shaderModule,
@@ -147,33 +175,33 @@ unsafe class Pipeline : IDisposable
 			BufferCount = 1,
 		};
 		var blendState = stackalloc BlendState[] {
-			new()
-			{
-				Color = new()
+				new()
 				{
-					SrcFactor = BlendFactor.One,
-					DstFactor = BlendFactor.OneMinusSrcAlpha,
-					Operation = BlendOperation.Add,
+					Color = new()
+					{
+						SrcFactor = BlendFactor.One,
+						DstFactor = BlendFactor.OneMinusSrcAlpha,
+						Operation = BlendOperation.Add,
+					},
+					Alpha = new()
+					{
+						SrcFactor = BlendFactor.One,
+						DstFactor = BlendFactor.OneMinusSrcAlpha,
+						Operation = BlendOperation.Add,
+					},
 				},
-				Alpha = new()
-				{
-					SrcFactor = BlendFactor.One,
-					DstFactor = BlendFactor.OneMinusSrcAlpha,
-					Operation = BlendOperation.Add,
-				},
-			},
-		};
+			};
 		var colorTargetState = stackalloc ColorTargetState[]
 		{
-			new()
-			{
-				WriteMask = ColorWriteMask.All,
-				// TODO use surface texture format?
-				Format = TextureFormat.Bgra8Unorm,
-				Blend = blendState,
-			},
-		};
-		var fragmentEntryPointPtr = Marshal.StringToHGlobalAnsi("fs_main");
+				new()
+				{
+					WriteMask = ColorWriteMask.All,
+					// TODO use surface texture format?
+					Format = TextureFormat.Bgra8Unorm,
+					Blend = blendState,
+				},
+			};
+		var fragmentEntryPointPtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderFragmentEntryPoint);
 		var fragmentState = new FragmentState()
 		{
 			Module = shaderModule,
