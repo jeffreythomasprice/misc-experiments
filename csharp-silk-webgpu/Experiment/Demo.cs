@@ -1,13 +1,23 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 
+[AttributeUsage(AttributeTargets.Field)]
+class VertexAttribute : Attribute
+{
+	public required VertexFormat Format { get; init; }
+	public required uint ShaderLocation { get; init; }
+}
+
 struct Vertex
 {
+	[VertexAttribute(Format = VertexFormat.Float32x2, ShaderLocation = 0)]
 	public readonly Vector2D<float> Position;
+	[VertexAttribute(Format = VertexFormat.Float32x4, ShaderLocation = 1)]
 	public readonly Vector4D<float> Color;
 
 	public Vertex(Vector2D<float> position, Vector4D<float> color)
@@ -37,22 +47,13 @@ class Demo : IAppState
 				videoDriver.Device,
 				new()
 				{
-					ShaderSource = App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"),
-					ShaderVertexEntryPoint = "vs_main",
-					ShaderFragmentEntryPoint = "fs_main",
-					VertexStride = sizeof(Vertex),
-					VertexAttributes = [
-						new() {
-							Format = VertexFormat.Float32x2,
-							ShaderLocation = 0,
-							Offset = (ulong)Marshal.OffsetOf<Vertex>("Position")
-						},
-						new() {
-							Format = VertexFormat.Float32x4,
-							ShaderLocation = 1,
-							Offset = (ulong)Marshal.OffsetOf<Vertex>("Color")
-						},
-					]
+					ShaderDescription = new()
+					{
+						Source = App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"),
+						VertexEntryPoint = "vs_main",
+						FragmentEntryPoint = "fs_main",
+					},
+					VertexBufferDescription = VertexBufferDescription<Vertex>.Create()
 				}
 			);
 			buffer = new(
@@ -117,13 +118,51 @@ class Demo : IAppState
 	}
 }
 
+class ShaderDescription
+{
+	public required string Source { get; init; }
+	public required string VertexEntryPoint { get; init; }
+	public required string FragmentEntryPoint { get; init; }
+}
+
+class VertexBufferDescription
+{
+	public required int Stride { get; init; }
+	public required Silk.NET.WebGPU.VertexAttribute[] Attributes { get; init; }
+}
+
+class VertexBufferDescription<T> : VertexBufferDescription where T : unmanaged
+{
+	unsafe static public VertexBufferDescription<T> Create()
+	{
+		var attributes = new List<Silk.NET.WebGPU.VertexAttribute>();
+		foreach (var field in typeof(T).GetFields())
+		{
+			var attr = field.GetCustomAttribute<VertexAttribute>();
+			if (attr != null)
+			{
+				var offset = Marshal.OffsetOf<T>(field.Name);
+				Console.WriteLine($"vertex attribute {field}, format={attr.Format}, offset={offset}, shaderLocation={attr.ShaderLocation}");
+				attributes.Add(new Silk.NET.WebGPU.VertexAttribute()
+				{
+					Format = attr.Format,
+					Offset = (ulong)offset,
+					ShaderLocation = attr.ShaderLocation,
+				});
+			}
+		}
+		return new()
+		{
+			Stride = sizeof(T),
+			Attributes = attributes.ToArray(),
+		};
+	}
+}
+
 class PipelineDescription
 {
-	public required string ShaderSource { get; init; }
-	public required string ShaderVertexEntryPoint { get; init; }
-	public required string ShaderFragmentEntryPoint { get; init; }
-	public required int VertexStride { get; init; }
-	public required VertexAttribute[] VertexAttributes { get; init; }
+	public required ShaderDescription ShaderDescription { get; init; }
+	public required VertexBufferDescription VertexBufferDescription { get; init; }
 }
 
 unsafe class Pipeline : IDisposable
@@ -138,7 +177,7 @@ unsafe class Pipeline : IDisposable
 		this.webGPU = webGPU;
 		this.device = device;
 
-		var shaderSourcePtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderSource);
+		var shaderSourcePtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderDescription.Source);
 		var shaderModuleWGSLDescriptor = new ShaderModuleWGSLDescriptor()
 		{
 			Code = (byte*)shaderSourcePtr,
@@ -154,17 +193,17 @@ unsafe class Pipeline : IDisposable
 		Marshal.FreeHGlobal(shaderSourcePtr);
 		Console.WriteLine("created shader");
 
-		var vertexEntryPointPtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderVertexEntryPoint);
-		var vertexAttributes = stackalloc VertexAttribute[pipelineDescription.VertexAttributes.Length];
-		for (var i = 0; i < pipelineDescription.VertexAttributes.Length; i++)
+		var vertexEntryPointPtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderDescription.VertexEntryPoint);
+		var vertexAttributes = stackalloc Silk.NET.WebGPU.VertexAttribute[pipelineDescription.VertexBufferDescription.Attributes.Length];
+		for (var i = 0; i < pipelineDescription.VertexBufferDescription.Attributes.Length; i++)
 		{
-			vertexAttributes[i] = pipelineDescription.VertexAttributes[i];
+			vertexAttributes[i] = pipelineDescription.VertexBufferDescription.Attributes[i];
 		}
 		var vertexBufferLayout = new VertexBufferLayout()
 		{
 			StepMode = VertexStepMode.Vertex,
-			ArrayStride = (ulong)pipelineDescription.VertexStride,
-			AttributeCount = (nuint)pipelineDescription.VertexAttributes.Length,
+			ArrayStride = (ulong)pipelineDescription.VertexBufferDescription.Stride,
+			AttributeCount = (nuint)pipelineDescription.VertexBufferDescription.Attributes.Length,
 			Attributes = vertexAttributes,
 		};
 		var vertexState = new VertexState()
@@ -201,7 +240,7 @@ unsafe class Pipeline : IDisposable
 					Blend = blendState,
 				},
 			};
-		var fragmentEntryPointPtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderFragmentEntryPoint);
+		var fragmentEntryPointPtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderDescription.FragmentEntryPoint);
 		var fragmentState = new FragmentState()
 		{
 			Module = shaderModule,
