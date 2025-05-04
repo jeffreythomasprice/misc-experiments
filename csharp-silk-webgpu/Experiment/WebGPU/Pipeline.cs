@@ -18,11 +18,38 @@ record class VertexDescription(int Stride, Silk.NET.WebGPU.VertexAttribute[] Att
 
 public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 {
+	public unsafe class ModelviewMatrix : IDisposable
+	{
+		private readonly VideoDriver videoDriver;
+		private readonly Buffer<Matrix4X4<float>> buffer;
+		private readonly BindGroup* bindGroup;
+
+		internal ModelviewMatrix(VideoDriver videoDriver, Buffer<Matrix4X4<float>> buffer, BindGroup* bindGroup)
+		{
+			this.videoDriver = videoDriver;
+			this.buffer = buffer;
+			this.bindGroup = bindGroup;
+		}
+
+		public void Dispose()
+		{
+			buffer.Dispose();
+			videoDriver.WebGPU.BindGroupRelease(bindGroup);
+		}
+
+		public void QueueWrite(Matrix4X4<float> m)
+		{
+			buffer.QueueWrite([m], 0);
+		}
+
+		internal BindGroup* BindGroup => bindGroup;
+	}
+
 	private readonly VideoDriver videoDriver;
 	private readonly Buffer<Matrix4X4<float>> projectionMatrixBuffer;
-	private readonly ShaderModule* shaderModule;
+	private readonly BindGroupLayout* modelviewMatrixBindGroupLayout;
 	private readonly RenderPipeline* renderPipeline;
-	private readonly BindGroup* bindGroup;
+	private readonly BindGroup* projectionMatrixBindGroup;
 
 	public Pipeline(VideoDriver videoDriver, ShaderDescription shaderDescription)
 	{
@@ -30,9 +57,8 @@ public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 
 		projectionMatrixBuffer = new Buffer<Matrix4X4<float>>(videoDriver, [Matrix4X4<float>.Identity], BufferUsage.Uniform);
 
-		shaderModule = CreateShader(videoDriver, shaderDescription);
-
-		var bindGroupLayout = CreateBindGroupLayout(
+		var shaderModule = CreateShader(videoDriver, shaderDescription);
+		var projectionMatrixBindGroupLayout = CreateBindGroupLayout(
 			videoDriver,
 			[
 				new()
@@ -46,13 +72,27 @@ public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 				},
 			]
 		);
-		var pipelineLayout = CreatePipelineLayout(videoDriver, [bindGroupLayout]);
+		modelviewMatrixBindGroupLayout = CreateBindGroupLayout(
+			videoDriver,
+			[
+				new()
+				{
+					Binding = 0,
+					Visibility = ShaderStage.Vertex,
+					Buffer = new()
+					{
+						Type = BufferBindingType.Uniform,
+					},
+				},
+			]
+		);
+		var pipelineLayout = CreatePipelineLayout(videoDriver, [projectionMatrixBindGroupLayout, modelviewMatrixBindGroupLayout]);
 		var vertexDescription = CreateVertexDescription();
 		renderPipeline = CreateRenderPipeline(videoDriver, shaderModule, shaderDescription.VertexEntryPoint, shaderDescription.FragmentEntryPoint, pipelineLayout, vertexDescription);
 
-		bindGroup = CreateBindGroup(
+		projectionMatrixBindGroup = CreateBindGroup(
 			videoDriver,
-			bindGroupLayout,
+			projectionMatrixBindGroupLayout,
 			[
 				new()
 				{
@@ -64,17 +104,16 @@ public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		);
 
 		videoDriver.WebGPU.PipelineLayoutRelease(pipelineLayout);
-		videoDriver.WebGPU.BindGroupLayoutRelease(bindGroupLayout);
-		// TODO free shader?
+		videoDriver.WebGPU.BindGroupLayoutRelease(projectionMatrixBindGroupLayout);
+		videoDriver.WebGPU.ShaderModuleRelease(shaderModule);
 	}
 
 	public void Dispose()
 	{
 		projectionMatrixBuffer.Dispose();
+		videoDriver.WebGPU.BindGroupLayoutRelease(modelviewMatrixBindGroupLayout);
 		videoDriver.WebGPU.RenderPipelineRelease(renderPipeline);
-		// TODO shouldn't need a ref to shader because pipeline should retain it?
-		videoDriver.WebGPU.ShaderModuleRelease(shaderModule);
-		videoDriver.WebGPU.BindGroupRelease(bindGroup);
+		videoDriver.WebGPU.BindGroupRelease(projectionMatrixBindGroup);
 	}
 
 	public void QueueWriteProjectionMatrix(Matrix4X4<float> m)
@@ -82,25 +121,47 @@ public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		projectionMatrixBuffer.QueueWrite([m], 0);
 	}
 
-	public void DrawBuffer(RenderPassEncoder* renderPassEncoder, Buffer<T> vertexBuffer, uint index, uint length)
+	public ModelviewMatrix CreateModelviewMatrix()
 	{
-		DrawCommon(renderPassEncoder);
+		var buffer = new Buffer<Matrix4X4<float>>(videoDriver, [Matrix4X4<float>.Identity], BufferUsage.Uniform);
+		return new ModelviewMatrix(
+			videoDriver,
+			buffer,
+			CreateBindGroup(
+				videoDriver,
+				modelviewMatrixBindGroupLayout,
+				[
+					new()
+					{
+						Binding = 0,
+						Buffer = buffer.Instance,
+						Size = (ulong)buffer.SizeInBytes,
+					},
+				]
+			)
+		);
+	}
+
+	public void DrawBuffer(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix, Buffer<T> vertexBuffer, uint index, uint length)
+	{
+		DrawCommon(renderPassEncoder, modelviewMatrix);
 		videoDriver.WebGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, vertexBuffer.Instance, (ulong)(index * vertexBuffer.Stride), (ulong)vertexBuffer.SizeInBytes);
 		videoDriver.WebGPU.RenderPassEncoderDraw(renderPassEncoder, length, 1, 0, 0);
 	}
 
-	public void DrawBuffers(RenderPassEncoder* renderPassEncoder, Buffer<T> vertexBuffer, Buffer<UInt16> indexBuffer, uint index, uint length)
+	public void DrawBuffers(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix, Buffer<T> vertexBuffer, Buffer<UInt16> indexBuffer, uint index, uint length)
 	{
-		DrawCommon(renderPassEncoder);
+		DrawCommon(renderPassEncoder, modelviewMatrix);
 		videoDriver.WebGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, vertexBuffer.Instance, 0, (ulong)vertexBuffer.SizeInBytes);
 		videoDriver.WebGPU.RenderPassEncoderSetIndexBuffer(renderPassEncoder, indexBuffer.Instance, IndexFormat.Uint16, 0, (ulong)indexBuffer.SizeInBytes);
 		videoDriver.WebGPU.RenderPassEncoderDrawIndexed(renderPassEncoder, length, 1, index, 0, 0);
 	}
 
-	private void DrawCommon(RenderPassEncoder* renderPassEncoder)
+	private void DrawCommon(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix)
 	{
 		videoDriver.WebGPU.RenderPassEncoderSetPipeline(renderPassEncoder, renderPipeline);
-		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(renderPassEncoder, 0, bindGroup, 0, null);
+		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(renderPassEncoder, 0, projectionMatrixBindGroup, 0, null);
+		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(renderPassEncoder, 1, modelviewMatrix.BindGroup, 0, null);
 	}
 
 	private static ShaderModule* CreateShader(VideoDriver videoDriver, ShaderDescription shaderDescription)

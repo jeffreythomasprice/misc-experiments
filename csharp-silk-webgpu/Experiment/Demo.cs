@@ -24,8 +24,11 @@ class Demo : IAppState
 	private readonly Experiment.WebGPU.VideoDriver videoDriver;
 
 	private readonly Pipeline<Vertex> pipeline;
+	private readonly Pipeline<Vertex>.ModelviewMatrix modelviewMatrix;
 	private readonly Buffer<Vertex> vertexBuffer;
 	private readonly Buffer<UInt16> indexBuffer;
+
+	private float rotation;
 
 	public Demo(IWindowState windowState)
 	{
@@ -34,6 +37,9 @@ class Demo : IAppState
 
 		unsafe
 		{
+			using var image = App.EmbeddedFileAsStream("Experiment.Assets.silknet.png");
+			Console.WriteLine($"TODO got image as stream");
+
 			pipeline = new(
 				videoDriver,
 				new()
@@ -44,26 +50,25 @@ class Demo : IAppState
 				}
 			);
 
-			using var image = App.EmbeddedFileAsStream("Experiment.Assets.silknet.png");
-			Console.WriteLine($"TODO got image as stream");
+			modelviewMatrix = pipeline.CreateModelviewMatrix();
 
 			vertexBuffer = new(
 				videoDriver,
 				[
 					new(
-						new(50.0f, 50.0f),
+						new(-150.0f, -150.0f),
 						System.Drawing.Color.Red.ToVector()
 					),
 					new(
-						new(300.0f, 50.0f),
+						new(150.0f, -150.0f),
 						System.Drawing.Color.Green.ToVector()
 					),
 					new(
-						new(300.0f, 300.0f),
+						new(150.0f, 150.0f),
 						System.Drawing.Color.Blue.ToVector()
 					),
 					new(
-						new(50.0f, 300.0f),
+						new(-150.0f, 150.0f),
 						System.Drawing.Color.Purple.ToVector()
 					),
 				],
@@ -80,11 +85,17 @@ class Demo : IAppState
 		}
 	}
 
-	public void Load() { }
+	public void Load()
+	{
+		rotation = 0;
+	}
 
 	public void Unload()
 	{
 		pipeline.Dispose();
+		modelviewMatrix.Dispose();
+		vertexBuffer.Dispose();
+		indexBuffer.Dispose();
 	}
 
 	public void Resize(Vector2D<int> size)
@@ -96,15 +107,21 @@ class Demo : IAppState
 	{
 		unsafe
 		{
+			modelviewMatrix.QueueWrite(
+				Matrix4X4.CreateRotationZ(rotation)
+				* Matrix4X4.CreateTranslation(windowState.Size.X * 0.5f, windowState.Size.Y * 0.5f, 0)
+			);
+
 			videoDriver.RenderPass((renderPass) =>
 			{
-				pipeline.DrawBuffers(renderPass.RenderPassEncoder, vertexBuffer, indexBuffer, 0, (uint)indexBuffer.Length);
+				pipeline.DrawBuffers(renderPass.RenderPassEncoder, modelviewMatrix, vertexBuffer, indexBuffer, 0, (uint)indexBuffer.Length);
 			});
 		}
 	}
 
 	public AppStateTransition? Update(TimeSpan delta)
 	{
+		rotation = (rotation + float.DegreesToRadians(90) * (float)delta.TotalSeconds) % float.Tau;
 		return null;
 	}
 
