@@ -4,7 +4,10 @@ using Silk.NET.Windowing;
 using System.Reflection;
 using System.Security.Principal;
 
-interface IVideoDriver : IDisposable { }
+interface IVideoDriver : IDisposable
+{
+    void Resize(Vector2D<int> size);
+}
 
 interface IWindowState
 {
@@ -135,6 +138,7 @@ class App : IDisposable
 
     private void Resize(Vector2D<int> size)
     {
+        videoDriver.Resize(size);
         state?.Resize(size);
     }
 

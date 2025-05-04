@@ -1,6 +1,7 @@
 namespace Experiment.WebGPU;
 
 using System.Runtime.InteropServices;
+using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 using Silk.NET.Windowing;
 
@@ -25,7 +26,7 @@ public unsafe class VideoDriver : IVideoDriver
 		surface = CreateSurface(window, webGPU, instance);
 		adapter = CreateAdapter(webGPU, instance, surface);
 		device = CreateDevice(webGPU, adapter);
-		surfaceTextureFormat = ConfigureSurface(window, webGPU, surface, device);
+		surfaceTextureFormat = ConfigureSurface(webGPU, surface, device, window.Size);
 		ConfigureDebugCallback(webGPU, device);
 	}
 
@@ -46,6 +47,11 @@ public unsafe class VideoDriver : IVideoDriver
 		webGPU.AdapterRelease(adapter);
 		webGPU.InstanceRelease(instance);
 		Console.WriteLine("webGPU resources released");
+	}
+
+	public void Resize(Vector2D<int> size)
+	{
+		ConfigureSurface(webGPU, surface, device, size);
 	}
 
 	public void RenderPass(Action<RenderPass> callback)
@@ -191,14 +197,14 @@ public unsafe class VideoDriver : IVideoDriver
 		return result;
 	}
 
-	private static TextureFormat ConfigureSurface(IWindow window, WebGPU webGPU, Surface* surface, Device* device)
+	private static TextureFormat ConfigureSurface(WebGPU webGPU, Surface* surface, Device* device, Vector2D<int> windowSize)
 	{
 		var surfaceTextureFormat = TextureFormat.Bgra8Unorm;
 		var configuration = new SurfaceConfiguration()
 		{
 			Device = device,
-			Width = (uint)window.Size.X,
-			Height = (uint)window.Size.Y,
+			Width = (uint)windowSize.X,
+			Height = (uint)windowSize.Y,
 			Format = surfaceTextureFormat,
 			PresentMode = PresentMode.Fifo,
 			Usage = TextureUsage.RenderAttachment,
