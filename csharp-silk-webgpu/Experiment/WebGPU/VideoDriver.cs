@@ -1,8 +1,15 @@
+namespace Experiment.WebGPU;
+
 using System.Runtime.InteropServices;
 using Silk.NET.WebGPU;
 using Silk.NET.Windowing;
 
-public unsafe class WebGPUVideoDriver : IVideoDriver
+public unsafe class RenderPass
+{
+	public required RenderPassEncoder* RenderPassEncoder { get; init; }
+}
+
+public unsafe class VideoDriver : IVideoDriver
 {
 	private readonly WebGPU webGPU;
 	private readonly Instance* instance;
@@ -11,7 +18,7 @@ public unsafe class WebGPUVideoDriver : IVideoDriver
 	private readonly Device* device;
 	private readonly TextureFormat surfaceTextureFormat;
 
-	public WebGPUVideoDriver(IWindow window)
+	public VideoDriver(IWindow window)
 	{
 		webGPU = CreateWebGPU();
 		instance = CreateInstance(webGPU);
@@ -39,6 +46,49 @@ public unsafe class WebGPUVideoDriver : IVideoDriver
 		webGPU.AdapterRelease(adapter);
 		webGPU.InstanceRelease(instance);
 		Console.WriteLine("webGPU resources released");
+	}
+
+	public void RenderPass(Action<RenderPass> callback)
+	{
+		var commandEncoder = webGPU.DeviceCreateCommandEncoder(device, null);
+
+		SurfaceTexture surfaceTexture = default;
+		webGPU.SurfaceGetCurrentTexture(surface, ref surfaceTexture);
+
+		var surfaceTextureView = webGPU.TextureCreateView(surfaceTexture.Texture, null);
+
+		var colorAttachments = stackalloc RenderPassColorAttachment[] {
+			new() {
+				View = surfaceTextureView,
+				LoadOp = LoadOp.Clear,
+				ClearValue = System.Drawing.Color.CornflowerBlue.ToWebGPU(),
+				StoreOp = StoreOp.Store,
+			}
+		};
+		var renderPassDescriptor = new RenderPassDescriptor()
+		{
+			ColorAttachmentCount = 1,
+			ColorAttachments = colorAttachments,
+		};
+		var renderPassEncoder = webGPU.CommandEncoderBeginRenderPass(commandEncoder, ref renderPassDescriptor);
+
+		callback(new()
+		{
+			RenderPassEncoder = renderPassEncoder,
+		});
+
+		webGPU.RenderPassEncoderEnd(renderPassEncoder);
+
+		var commandBuffer = webGPU.CommandEncoderFinish(commandEncoder, null);
+		webGPU.QueueSubmit(Queue, 1, &commandBuffer);
+
+		webGPU.SurfacePresent(surface);
+
+		webGPU.TextureViewRelease(surfaceTextureView);
+		webGPU.TextureRelease(surfaceTexture.Texture);
+		webGPU.RenderPassEncoderRelease(renderPassEncoder);
+		webGPU.CommandBufferRelease(commandBuffer);
+		webGPU.CommandEncoderRelease(commandEncoder);
 	}
 
 	private static WebGPU CreateWebGPU()

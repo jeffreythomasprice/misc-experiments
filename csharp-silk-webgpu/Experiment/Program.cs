@@ -1,4 +1,4 @@
 ﻿using var app = new App(
-	(window) => new WebGPUVideoDriver(window),
+	(window) => new Experiment.WebGPU.VideoDriver(window),
 	new AppStateTransition((windowState) => new Demo(windowState))
 );
