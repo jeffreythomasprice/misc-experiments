@@ -33,7 +33,8 @@ class Demo : IAppState
 	private readonly WebGPUVideoDriver videoDriver;
 
 	private readonly Pipeline pipeline;
-	private readonly Buffer<Vertex> buffer;
+	private readonly Buffer<Vertex> vertexBuffer;
+	private readonly Buffer<UInt16> indexBuffer;
 
 	public Demo(IWindowState windowState)
 	{
@@ -43,9 +44,7 @@ class Demo : IAppState
 		unsafe
 		{
 			pipeline = new Pipeline(
-				videoDriver.WebGPU,
-				videoDriver.Device,
-				videoDriver.SurfaceTextureFormat,
+				videoDriver,
 				new()
 				{
 					ShaderDescription = new()
@@ -57,10 +56,8 @@ class Demo : IAppState
 					VertexBufferDescription = VertexBufferDescription<Vertex>.Create()
 				}
 			);
-			buffer = new(
-				videoDriver.WebGPU,
-				videoDriver.Device,
-				videoDriver.Queue,
+			vertexBuffer = new(
+				videoDriver,
 				[
 					new(
 						new(-0.5f, -0.5f),
@@ -71,10 +68,23 @@ class Demo : IAppState
 						System.Drawing.Color.Green.ToVector()
 					),
 					new(
-						new(0.0f, 0.5f),
+						new(0.5f, 0.5f),
 						System.Drawing.Color.Blue.ToVector()
 					),
-				]
+					new(
+						new(-0.5f, 0.5f),
+						System.Drawing.Color.Purple.ToVector()
+					),
+				],
+				BufferUsage.Vertex
+			);
+			indexBuffer = new(
+				videoDriver,
+				[
+					0,1,2,
+					2,3,0,
+				],
+				BufferUsage.Index
 			);
 		}
 	}
@@ -94,7 +104,7 @@ class Demo : IAppState
 		{
 			videoDriver.RenderPass((renderPass) =>
 			{
-				pipeline.Render(renderPass.RenderPassEncoder, buffer);
+				pipeline.DrawBuffers(renderPass.RenderPassEncoder, vertexBuffer, indexBuffer, 0, (uint)indexBuffer.Length);
 			});
 		}
 	}
@@ -168,15 +178,13 @@ class PipelineDescription
 
 unsafe class Pipeline : IDisposable
 {
-	private readonly WebGPU webGPU;
-	private readonly Device* device;
+	private readonly WebGPUVideoDriver videoDriver;
 	private readonly ShaderModule* shaderModule;
 	private readonly RenderPipeline* renderPipeline;
 
-	public Pipeline(WebGPU webGPU, Device* device, TextureFormat surfaceTextureFormat, PipelineDescription pipelineDescription)
+	public Pipeline(WebGPUVideoDriver videoDriver, PipelineDescription pipelineDescription)
 	{
-		this.webGPU = webGPU;
-		this.device = device;
+		this.videoDriver = videoDriver;
 
 		var shaderSourcePtr = Marshal.StringToHGlobalAnsi(pipelineDescription.ShaderDescription.Source);
 		var shaderModuleWGSLDescriptor = new ShaderModuleWGSLDescriptor()
@@ -190,7 +198,7 @@ unsafe class Pipeline : IDisposable
 		{
 			NextInChain = (ChainedStruct*)&shaderModuleWGSLDescriptor,
 		};
-		shaderModule = webGPU.DeviceCreateShaderModule(device, ref descriptor);
+		shaderModule = videoDriver.WebGPU.DeviceCreateShaderModule(videoDriver.Device, ref descriptor);
 		Marshal.FreeHGlobal(shaderSourcePtr);
 		Console.WriteLine("created shader");
 
@@ -236,7 +244,7 @@ unsafe class Pipeline : IDisposable
 				new()
 				{
 					WriteMask = ColorWriteMask.All,
-					Format = surfaceTextureFormat,
+					Format = videoDriver.SurfaceTextureFormat,
 					Blend = blendState,
 				},
 			};
@@ -265,7 +273,7 @@ unsafe class Pipeline : IDisposable
 				Topology = PrimitiveTopology.TriangleList,
 			},
 		};
-		renderPipeline = webGPU.DeviceCreateRenderPipeline(device, ref renderPipelineDescriptor);
+		renderPipeline = videoDriver.WebGPU.DeviceCreateRenderPipeline(videoDriver.Device, ref renderPipelineDescriptor);
 		Marshal.FreeHGlobal(vertexEntryPointPtr);
 		Marshal.FreeHGlobal(fragmentEntryPointPtr);
 		Console.WriteLine("created render pipeline");
@@ -273,41 +281,73 @@ unsafe class Pipeline : IDisposable
 
 	public void Dispose()
 	{
-		webGPU.RenderPipelineRelease(renderPipeline);
-		webGPU.ShaderModuleRelease(shaderModule);
+		videoDriver.WebGPU.RenderPipelineRelease(renderPipeline);
+		videoDriver.WebGPU.ShaderModuleRelease(shaderModule);
 	}
 
-	public void Render<T>(RenderPassEncoder* renderPassEncoder, Buffer<T> buffer) where T : unmanaged
+	public void DrawBuffer<T>(RenderPassEncoder* renderPassEncoder, Buffer<T> vertexBuffer, uint index, uint length) where T : unmanaged
 	{
-		webGPU.RenderPassEncoderSetPipeline(renderPassEncoder, renderPipeline);
-		webGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, buffer.Instance, 0, (ulong)buffer.SizeInBytes);
-		webGPU.RenderPassEncoderDraw(renderPassEncoder, (uint)buffer.Length, 1, 0, 0);
+		videoDriver.WebGPU.RenderPassEncoderSetPipeline(renderPassEncoder, renderPipeline);
+		videoDriver.WebGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, vertexBuffer.Instance, (ulong)(index * sizeof(T)), (ulong)vertexBuffer.SizeInBytes);
+		videoDriver.WebGPU.RenderPassEncoderDraw(renderPassEncoder, length, 1, 0, 0);
+	}
+
+	public void DrawBuffers<T>(RenderPassEncoder* renderPassEncoder, Buffer<T> vertexBuffer, Buffer<UInt16> indexBuffer, uint index, uint length) where T : unmanaged
+	{
+		videoDriver.WebGPU.RenderPassEncoderSetPipeline(renderPassEncoder, renderPipeline);
+		videoDriver.WebGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, vertexBuffer.Instance, 0, (ulong)vertexBuffer.SizeInBytes);
+		videoDriver.WebGPU.RenderPassEncoderSetIndexBuffer(renderPassEncoder, indexBuffer.Instance, IndexFormat.Uint16, 0, (ulong)indexBuffer.SizeInBytes);
+		videoDriver.WebGPU.RenderPassEncoderDrawIndexed(renderPassEncoder, length, 1, index, 0, 0);
 	}
 }
 
 unsafe class Buffer<T> : IDisposable where T : unmanaged
 {
-	private WebGPU webGPU;
-	private int length;
-	private Silk.NET.WebGPU.Buffer* buffer;
+	private readonly WebGPUVideoDriver videoDriver;
+	private readonly int length;
+	private readonly int lengthInBytes;
+	private readonly int paddedLength;
+	private readonly int paddedLengthInBytes;
+	private readonly Silk.NET.WebGPU.Buffer* buffer;
 
-	public Buffer(WebGPU webGPU, Device* device, Queue* queue, ReadOnlySpan<T> data)
+	public Buffer(WebGPUVideoDriver videoDriver, ReadOnlySpan<T> data, BufferUsage usage)
 	{
-		this.webGPU = webGPU;
+		this.videoDriver = videoDriver;
 		this.length = data.Length;
+		this.lengthInBytes = this.length * sizeof(T);
+
+		// if you don't have the input data size be a multiple of COPY_BUFFER_ALIGNMENT you get
+		// Copy size 6 does not respect `COPY_BUFFER_ALIGNMENT`
+		// or whatever the input byte size is
+		var lengthInBytes = data.Length * sizeof(T);
+		if (lengthInBytes % 4 != 0)
+		{
+			while (lengthInBytes % 4 != 0)
+			{
+				lengthInBytes += sizeof(T);
+			}
+			var desiredLength = lengthInBytes / sizeof(T);
+			var newData = new T[desiredLength];
+			data.CopyTo(newData);
+			data = newData;
+		}
+		this.paddedLength = lengthInBytes / sizeof(T);
+		this.paddedLengthInBytes = lengthInBytes;
+
 		var descriptor = new BufferDescriptor()
 		{
 			MappedAtCreation = false,
-			Size = (ulong)SizeInBytes,
-			Usage = BufferUsage.CopyDst | BufferUsage.Vertex,
+			Size = (ulong)paddedLengthInBytes,
+			Usage = BufferUsage.CopyDst | usage,
 		};
-		buffer = webGPU.DeviceCreateBuffer(device, ref descriptor);
-		webGPU.QueueWriteBuffer<T>(queue, buffer, 0, data, (nuint)SizeInBytes);
+		buffer = videoDriver.WebGPU.DeviceCreateBuffer(videoDriver.Device, ref descriptor);
+
+		videoDriver.WebGPU.QueueWriteBuffer<T>(videoDriver.Queue, buffer, 0, data, (nuint)paddedLengthInBytes);
 	}
 
 	public void Dispose()
 	{
-		webGPU.BufferRelease(buffer);
+		videoDriver.WebGPU.BufferRelease(buffer);
 	}
 
 	public int Length => length;
@@ -319,7 +359,7 @@ unsafe class Buffer<T> : IDisposable where T : unmanaged
 
 unsafe class RenderPass
 {
-	public RenderPassEncoder* RenderPassEncoder { get; init; }
+	public required RenderPassEncoder* RenderPassEncoder { get; init; }
 }
 
 static class WebGPUExtensions
