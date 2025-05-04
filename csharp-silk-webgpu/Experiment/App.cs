@@ -2,6 +2,7 @@ using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 using System.Reflection;
+using System.Security.Principal;
 
 interface IVideoDriver : IDisposable { }
 
@@ -152,6 +153,7 @@ class App : IDisposable
             {
                 state?.Unload();
                 nextState.Load();
+                nextState.Resize(windowState.Size);
                 state = nextState;
             }
         }

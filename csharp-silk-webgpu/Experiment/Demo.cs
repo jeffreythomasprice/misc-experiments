@@ -23,7 +23,7 @@ class Demo : IAppState
 	private readonly IWindowState windowState;
 	private readonly Experiment.WebGPU.VideoDriver videoDriver;
 
-	private readonly Pipeline pipeline;
+	private readonly Pipeline<Vertex> pipeline;
 	private readonly Buffer<Vertex> vertexBuffer;
 	private readonly Buffer<UInt16> indexBuffer;
 
@@ -34,36 +34,36 @@ class Demo : IAppState
 
 		unsafe
 		{
-			pipeline = new Pipeline(
+			pipeline = new(
 				videoDriver,
 				new()
 				{
-					ShaderDescription = new()
-					{
-						Source = App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"),
-						VertexEntryPoint = "vs_main",
-						FragmentEntryPoint = "fs_main",
-					},
-					VertexBufferDescription = VertexBufferDescription<Vertex>.Create()
+					Source = App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"),
+					VertexEntryPoint = "vs_main",
+					FragmentEntryPoint = "fs_main",
 				}
 			);
+
+			using var image = App.EmbeddedFileAsStream("Experiment.Assets.silknet.png");
+			Console.WriteLine($"TODO got image as stream");
+
 			vertexBuffer = new(
 				videoDriver,
 				[
 					new(
-						new(-0.5f, -0.5f),
+						new(50.0f, 50.0f),
 						System.Drawing.Color.Red.ToVector()
 					),
 					new(
-						new(0.5f, -0.5f),
+						new(300.0f, 50.0f),
 						System.Drawing.Color.Green.ToVector()
 					),
 					new(
-						new(0.5f, 0.5f),
+						new(300.0f, 300.0f),
 						System.Drawing.Color.Blue.ToVector()
 					),
 					new(
-						new(-0.5f, 0.5f),
+						new(50.0f, 300.0f),
 						System.Drawing.Color.Purple.ToVector()
 					),
 				],
@@ -87,7 +87,10 @@ class Demo : IAppState
 		pipeline.Dispose();
 	}
 
-	public void Resize(Vector2D<int> size) { }
+	public void Resize(Vector2D<int> size)
+	{
+		pipeline.QueueWriteProjectionMatrix(Matrix4X4.CreateOrthographicOffCenter<float>(0, size.X, size.Y, 0, -1, 1));
+	}
 
 	public void Render()
 	{
