@@ -5,13 +5,13 @@ using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 using Silk.NET.Windowing;
 
-public unsafe class RenderPass
-{
-	public required RenderPassEncoder* RenderPassEncoder { get; init; }
-}
-
 public unsafe class VideoDriver : IVideoDriver
 {
+	public class RenderPassWrapper
+	{
+		public required RenderPassEncoder* RenderPassEncoder { get; init; }
+	}
+
 	private readonly WebGPU webGPU;
 	private readonly Instance* instance;
 	private readonly Surface* surface;
@@ -54,7 +54,7 @@ public unsafe class VideoDriver : IVideoDriver
 		ConfigureSurface(webGPU, surface, device, size);
 	}
 
-	public void RenderPass(Action<RenderPass> callback)
+	public void RenderPass(Action<RenderPassWrapper> callback)
 	{
 		var commandEncoder = webGPU.DeviceCreateCommandEncoder(device, null);
 

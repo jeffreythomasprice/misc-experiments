@@ -1,5 +1,6 @@
 namespace Experiment.WebGPU;
 
+using System.Reflection;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 
@@ -24,7 +25,7 @@ public unsafe class PipelineUntextured : Pipeline<PipelineUntextured.Vertex>
 		videoDriver,
 		new()
 		{
-			Source = App.EmbeddedFileAsString("Experiment.Assets.Shaders.shaderUntextured.wgsl"),
+			Source = Assembly.GetExecutingAssembly().AssertManifestResourceString("Experiment/Assets/Shaders/shaderUntextured.wgsl"),
 			VertexEntryPoint = "vs_main",
 			FragmentEntryPoint = "fs_main",
 		},

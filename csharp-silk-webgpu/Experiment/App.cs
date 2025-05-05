@@ -1,7 +1,7 @@
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security.Principal;
 
 interface IVideoDriver : IDisposable
@@ -72,19 +72,6 @@ class App : IDisposable
     private readonly WindowState windowState;
 
     private IAppState? state;
-
-    public static Stream EmbeddedFileAsStream(string name)
-    {
-        return Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
-            ?? throw new Exception($"failed to find embedded file: {name}");
-    }
-
-    public static string EmbeddedFileAsString(string name)
-    {
-        using var stream = EmbeddedFileAsStream(name);
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
-    }
 
     public App(Func<IWindow, IVideoDriver> videoDriverFactory, AppStateTransition initialState)
     {

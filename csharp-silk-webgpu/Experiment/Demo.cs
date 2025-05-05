@@ -1,8 +1,10 @@
 using System;
+using System.Reflection;
 using Experiment.WebGPU;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
+using SixLabors.Fonts;
 
 class Demo : IAppState
 {
@@ -12,7 +14,7 @@ class Demo : IAppState
 	private readonly PipelineUntextured pipelineUntextured;
 	private readonly PipelineTextured pipelineTextured;
 
-	private readonly PipelineTextured.Texture texture;
+	private readonly Experiment.WebGPU.Texture texture;
 
 	private readonly PipelineUntextured.ModelviewMatrix modelviewMatrixUntextured;
 	private readonly Buffer<PipelineUntextured.Vertex> vertexBufferUntextured;
@@ -34,7 +36,18 @@ class Demo : IAppState
 			pipelineUntextured = new(videoDriver);
 			pipelineTextured = new(videoDriver);
 
-			texture = pipelineTextured.CreateTextureFromEmbeddedFile("Experiment.Assets.silknet.png");
+			texture = pipelineTextured.CreateTextureFromManifestResource("Experiment/Assets/silknet.png");
+
+			var fontCollection = new FontCollection();
+			var fontStream = Assembly.GetExecutingAssembly().AssertManifestResourceStream("Experiment/Assets/calibri-font-family/calibri-regular.ttf");
+			var fontFamily = fontCollection.Add(fontStream);
+			var font = fontFamily.CreateFont(40.0f);
+			var textAdvance = TextMeasurer.MeasureAdvance("Hello, World!", new TextOptions(font));
+			var textBounds = TextMeasurer.MeasureBounds("Hello, World!", new TextOptions(font));
+			var textSize = TextMeasurer.MeasureSize("Hello, World!", new TextOptions(font));
+			Console.WriteLine($"TODO textAdvance: {textAdvance}");
+			Console.WriteLine($"TODO textBounds: {textBounds}");
+			Console.WriteLine($"TODO textSize: {textSize}");
 
 			modelviewMatrixUntextured = pipelineUntextured.CreateModelviewMatrix();
 			vertexBufferUntextured = new(
