@@ -7,28 +7,30 @@ using Silk.NET.WebGPU;
 using SixLabors.ImageSharp.Advanced;
 using SixLabors.ImageSharp.Processing;
 
-// TODO make inner struct of pipeline
-public struct VertexTextured
+public unsafe class PipelineTextured : Pipeline<PipelineTextured.Vertex>
 {
-	[Experiment.WebGPU.VertexAttribute(Format = VertexFormat.Float32x2, ShaderLocation = 0)]
-	public readonly Vector2D<float> Position;
-
-	[Experiment.WebGPU.VertexAttribute(Format = VertexFormat.Float32x4, ShaderLocation = 1)]
-	public readonly Vector2D<float> TextureCoordinate;
-
-	[Experiment.WebGPU.VertexAttribute(Format = VertexFormat.Float32x4, ShaderLocation = 2)]
-	public readonly Vector4D<float> Color;
-
-	public VertexTextured(Vector2D<float> position, Vector2D<float> textureCoordinate, Vector4D<float> color)
+	public struct Vertex
 	{
-		this.Position = position;
-		this.TextureCoordinate = textureCoordinate;
-		this.Color = color;
-	}
-}
+		[Experiment.WebGPU.VertexAttribute(Format = VertexFormat.Float32x2, ShaderLocation = 0)]
+		public readonly Vector2D<float> Position;
 
-public unsafe class PipelineTextured : Pipeline<VertexTextured>
-{
+		[Experiment.WebGPU.VertexAttribute(Format = VertexFormat.Float32x4, ShaderLocation = 1)]
+		public readonly Vector2D<float> TextureCoordinate;
+
+		[Experiment.WebGPU.VertexAttribute(Format = VertexFormat.Float32x4, ShaderLocation = 2)]
+		public readonly Vector4D<float> Color;
+
+		public Vertex(Vector2D<float> position, Vector2D<float> textureCoordinate, Vector4D<float> color)
+		{
+			this.Position = position;
+			this.TextureCoordinate = textureCoordinate;
+			this.Color = color;
+		}
+	}
+
+	private const int TextureBinding = 0;
+	private const int SamplerBinding = 1;
+
 	public class Texture : IDisposable
 	{
 		private readonly VideoDriver videoDriver;
@@ -41,7 +43,21 @@ public unsafe class PipelineTextured : Pipeline<VertexTextured>
 			this.videoDriver = videoDriver;
 			this.size = size;
 
-			texture = videoDriver.CreateTexture(size);
+			var textureDescriptor = new TextureDescriptor()
+			{
+				Size = new()
+				{
+					Width = (uint)size.X,
+					Height = (uint)size.Y,
+					DepthOrArrayLayers = 1,
+				},
+				MipLevelCount = 1,
+				SampleCount = 1,
+				Dimension = TextureDimension.Dimension2D,
+				Format = TextureFormat.Rgba8Unorm,
+				Usage = TextureUsage.TextureBinding | TextureUsage.CopyDst,
+			};
+			texture = videoDriver.WebGPU.DeviceCreateTexture(videoDriver.Device, ref textureDescriptor);
 
 			var textureViewDescriptor = new TextureViewDescriptor()
 			{
@@ -74,14 +90,12 @@ public unsafe class PipelineTextured : Pipeline<VertexTextured>
 				[
 					new()
 					{
-						// TODO use const
-						Binding = 0,
+						Binding = TextureBinding,
 						TextureView = textureView,
 					},
 					new()
 					{
-						// TODO use const
-						Binding = 1,
+						Binding = SamplerBinding,
 						Sampler = sampler,
 					},
 				]
@@ -191,14 +205,14 @@ public unsafe class PipelineTextured : Pipeline<VertexTextured>
 		return CreateTexture(stream);
 	}
 
-	public void DrawBuffer(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix, Texture texture, Buffer<VertexTextured> vertexBuffer, uint index, uint length)
+	public void DrawBuffer(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix, Texture texture, Buffer<Vertex> vertexBuffer, uint index, uint length)
 	{
 		DrawCommon(renderPassEncoder, modelviewMatrix, texture);
 		videoDriver.WebGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, vertexBuffer.Instance, (ulong)(index * vertexBuffer.Stride), (ulong)vertexBuffer.SizeInBytes);
 		videoDriver.WebGPU.RenderPassEncoderDraw(renderPassEncoder, length, 1, 0, 0);
 	}
 
-	public void DrawBuffers(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix, Texture texture, Buffer<VertexTextured> vertexBuffer, Buffer<UInt16> indexBuffer, uint index, uint length)
+	public void DrawBuffers(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix, Texture texture, Buffer<Vertex> vertexBuffer, Buffer<UInt16> indexBuffer, uint index, uint length)
 	{
 		DrawCommon(renderPassEncoder, modelviewMatrix, texture);
 		videoDriver.WebGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, vertexBuffer.Instance, 0, (ulong)vertexBuffer.SizeInBytes);
@@ -211,7 +225,6 @@ public unsafe class PipelineTextured : Pipeline<VertexTextured>
 		base.DrawCommon(renderPassEncoder, modelviewMatrix);
 		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(
 			renderPassEncoder,
-			// TODO use const
 			2,
 			texture.BindGroup,
 			0,
@@ -224,8 +237,7 @@ public unsafe class PipelineTextured : Pipeline<VertexTextured>
 		return videoDriver.CreateBindGroupLayout([
 			new BindGroupLayoutEntry()
 			{
-				// TODO use const
-				Binding = 0,
+				Binding = TextureBinding,
 				Visibility = ShaderStage.Fragment,
 				Texture = new()
 				{
@@ -236,8 +248,7 @@ public unsafe class PipelineTextured : Pipeline<VertexTextured>
 			},
 			new BindGroupLayoutEntry()
 			{
-				// TODO use const
-				Binding = 1,
+				Binding = SamplerBinding,
 				Visibility = ShaderStage.Fragment,
 				Sampler = new()
 				{

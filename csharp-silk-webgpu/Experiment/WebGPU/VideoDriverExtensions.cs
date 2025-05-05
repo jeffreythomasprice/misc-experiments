@@ -170,23 +170,4 @@ public unsafe static class VideoDriverExtensions
 			return videoDriver.WebGPU.DeviceCreateBindGroup(videoDriver.Device, ref bindGroupDescriptor);
 		}
 	}
-
-	public static Texture* CreateTexture(this VideoDriver videoDriver, Vector2D<int> size)
-	{
-		var descriptor = new TextureDescriptor()
-		{
-			Size = new()
-			{
-				Width = (uint)size.X,
-				Height = (uint)size.Y,
-				DepthOrArrayLayers = 1,
-			},
-			MipLevelCount = 1,
-			SampleCount = 1,
-			Dimension = TextureDimension.Dimension2D,
-			Format = TextureFormat.Rgba8Unorm,
-			Usage = TextureUsage.TextureBinding | TextureUsage.CopyDst,
-		};
-		return videoDriver.WebGPU.DeviceCreateTexture(videoDriver.Device, ref descriptor);
-	}
 }

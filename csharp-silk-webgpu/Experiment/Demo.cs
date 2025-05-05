@@ -14,12 +14,12 @@ class Demo : IAppState
 
 	private readonly PipelineTextured.Texture texture;
 
-	private readonly Pipeline<VertexUntextured>.ModelviewMatrix modelviewMatrixUntextured;
-	private readonly Buffer<VertexUntextured> vertexBufferUntextured;
+	private readonly PipelineUntextured.ModelviewMatrix modelviewMatrixUntextured;
+	private readonly Buffer<PipelineUntextured.Vertex> vertexBufferUntextured;
 	private readonly Buffer<UInt16> indexBufferUntextured;
 
-	private readonly Pipeline<VertexTextured>.ModelviewMatrix modelviewMatrixTextured;
-	private readonly Buffer<VertexTextured> vertexBufferTextured;
+	private readonly PipelineTextured.ModelviewMatrix modelviewMatrixTextured;
+	private readonly Buffer<PipelineTextured.Vertex> vertexBufferTextured;
 	private readonly Buffer<UInt16> indexBufferTextured;
 
 	private float rotation;

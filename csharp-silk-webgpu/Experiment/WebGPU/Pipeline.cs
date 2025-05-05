@@ -11,6 +11,9 @@ public class ShaderDescription
 
 public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 {
+	private const int ProjectionMatrixBinding = 0;
+	private const int ModelviewMatrixBinding = 0;
+
 	public unsafe class ModelviewMatrix : IDisposable
 	{
 		private readonly VideoDriver videoDriver;
@@ -54,8 +57,7 @@ public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		var projectionMatrixBindGroupLayout = videoDriver.CreateBindGroupLayout([
 			new()
 			{
-				// TODO use const
-				Binding = 0,
+				Binding = ProjectionMatrixBinding,
 				Visibility = ShaderStage.Vertex,
 				Buffer = new()
 				{
@@ -66,8 +68,7 @@ public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		modelviewMatrixBindGroupLayout = videoDriver.CreateBindGroupLayout([
 			new()
 			{
-				// TODO use const
-				Binding = 0,
+				Binding = ModelviewMatrixBinding,
 				Visibility = ShaderStage.Vertex,
 				Buffer = new()
 				{
@@ -95,8 +96,7 @@ public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 			[
 				new()
 				{
-					// TODO use const
-					Binding = 0,
+					Binding = ProjectionMatrixBinding,
 					Buffer = projectionMatrixBuffer.Instance,
 					Size = (ulong)projectionMatrixBuffer.SizeInBytes,
 				},
@@ -132,8 +132,7 @@ public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 				[
 					new()
 					{
-						// TODO use const
-						Binding = 0,
+						Binding = ModelviewMatrixBinding,
 						Buffer = buffer.Instance,
 						Size = (ulong)buffer.SizeInBytes,
 					},
@@ -147,7 +146,6 @@ public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		videoDriver.WebGPU.RenderPassEncoderSetPipeline(renderPassEncoder, renderPipeline);
 		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(
 			renderPassEncoder,
-			// TODO use const
 			0,
 			projectionMatrixBindGroup,
 			0,
@@ -155,7 +153,6 @@ public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		);
 		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(
 			renderPassEncoder,
-			// TODO use const
 			1,
 			modelviewMatrix.BindGroup,
 			0,
