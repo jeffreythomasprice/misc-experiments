@@ -1,11 +1,7 @@
 namespace Experiment.WebGPU;
 
-using System.Numerics;
-using System.Runtime.InteropServices;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
-using SixLabors.ImageSharp.Advanced;
-using SixLabors.ImageSharp.Processing;
 
 public unsafe class PipelineTextured : Pipeline<PipelineTextured.Vertex>
 {

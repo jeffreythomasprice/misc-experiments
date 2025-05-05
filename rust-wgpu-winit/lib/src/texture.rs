@@ -123,7 +123,7 @@ impl Texture {
                 depth_or_array_layers: 1,
             },
         );
-        self.bind_group = Self::create_bind_group_layout(
+        self.bind_group = Self::create_bind_group(
             &self.device,
             self.binding.texture,
             self.binding.sampler,
@@ -156,7 +156,7 @@ impl Texture {
         });
         f(&queue, &texture, size)?;
         let bind_group =
-            Self::create_bind_group_layout(&device, bindings.texture, bindings.sampler, &texture);
+            Self::create_bind_group(&device, bindings.texture, bindings.sampler, &texture);
         Ok(Self {
             device,
             queue,
@@ -167,7 +167,7 @@ impl Texture {
         })
     }
 
-    fn create_bind_group_layout(
+    fn create_bind_group(
         device: &Device,
         texture_binding: u32,
         sampler_binding: u32,

@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Experiment.WebGPU;
-using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 
 public unsafe static class VideoDriverExtensions
