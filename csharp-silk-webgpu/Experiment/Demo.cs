@@ -4,29 +4,23 @@ using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 
-struct Vertex
-{
-	[Experiment.WebGPU.VertexAttribute(Format = VertexFormat.Float32x2, ShaderLocation = 0)]
-	public readonly Vector2D<float> Position;
-	[Experiment.WebGPU.VertexAttribute(Format = VertexFormat.Float32x4, ShaderLocation = 1)]
-	public readonly Vector4D<float> Color;
-
-	public Vertex(Vector2D<float> position, Vector4D<float> color)
-	{
-		this.Position = position;
-		this.Color = color;
-	}
-}
-
 class Demo : IAppState
 {
 	private readonly IWindowState windowState;
 	private readonly Experiment.WebGPU.VideoDriver videoDriver;
 
-	private readonly Pipeline<Vertex> pipeline;
-	private readonly Pipeline<Vertex>.ModelviewMatrix modelviewMatrix;
-	private readonly Buffer<Vertex> vertexBuffer;
-	private readonly Buffer<UInt16> indexBuffer;
+	private readonly PipelineUntextured pipelineUntextured;
+	private readonly PipelineTextured pipelineTextured;
+
+	private readonly PipelineTextured.Texture texture;
+
+	private readonly Pipeline<VertexUntextured>.ModelviewMatrix modelviewMatrixUntextured;
+	private readonly Buffer<VertexUntextured> vertexBufferUntextured;
+	private readonly Buffer<UInt16> indexBufferUntextured;
+
+	private readonly Pipeline<VertexTextured>.ModelviewMatrix modelviewMatrixTextured;
+	private readonly Buffer<VertexTextured> vertexBufferTextured;
+	private readonly Buffer<UInt16> indexBufferTextured;
 
 	private float rotation;
 
@@ -37,22 +31,13 @@ class Demo : IAppState
 
 		unsafe
 		{
-			using var image = App.EmbeddedFileAsStream("Experiment.Assets.silknet.png");
-			Console.WriteLine($"TODO got image as stream");
+			pipelineUntextured = new(videoDriver);
+			pipelineTextured = new(videoDriver);
 
-			pipeline = new(
-				videoDriver,
-				new()
-				{
-					Source = App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.wgsl"),
-					VertexEntryPoint = "vs_main",
-					FragmentEntryPoint = "fs_main",
-				}
-			);
+			texture = pipelineTextured.CreateTextureFromEmbeddedFile("Experiment.Assets.silknet.png");
 
-			modelviewMatrix = pipeline.CreateModelviewMatrix();
-
-			vertexBuffer = new(
+			modelviewMatrixUntextured = pipelineUntextured.CreateModelviewMatrix();
+			vertexBufferUntextured = new(
 				videoDriver,
 				[
 					new(
@@ -74,7 +59,43 @@ class Demo : IAppState
 				],
 				BufferUsage.Vertex
 			);
-			indexBuffer = new(
+			indexBufferUntextured = new(
+				videoDriver,
+				[
+					0,1,2,
+					2,3,0,
+				],
+				BufferUsage.Index
+			);
+
+			modelviewMatrixTextured = pipelineTextured.CreateModelviewMatrix();
+			vertexBufferTextured = new(
+				videoDriver,
+				[
+					new(
+						new(0.0f,0.0f),
+						new(0.0f,0.0f),
+						System.Drawing.Color.White.ToVector()
+					),
+					new(
+						new(texture.Size.X,0.0f),
+						new(1.0f,0.0f),
+						System.Drawing.Color.White.ToVector()
+					),
+					new(
+						new(texture.Size.X,texture.Size.Y),
+						new(1.0f,1.0f),
+						System.Drawing.Color.White.ToVector()
+					),
+					new(
+						new(0.0f,texture.Size.Y),
+						new(0.0f,1.0f),
+						System.Drawing.Color.White.ToVector()
+					),
+				],
+				BufferUsage.Vertex
+			);
+			indexBufferTextured = new(
 				videoDriver,
 				[
 					0,1,2,
@@ -92,29 +113,50 @@ class Demo : IAppState
 
 	public void Unload()
 	{
-		pipeline.Dispose();
-		modelviewMatrix.Dispose();
-		vertexBuffer.Dispose();
-		indexBuffer.Dispose();
+		pipelineUntextured.Dispose();
+		pipelineTextured.Dispose();
+
+		texture.Dispose();
+
+		modelviewMatrixUntextured.Dispose();
+		vertexBufferUntextured.Dispose();
+		indexBufferUntextured.Dispose();
+
+		modelviewMatrixTextured.Dispose();
+		vertexBufferTextured.Dispose();
+		indexBufferTextured.Dispose();
 	}
 
 	public void Resize(Vector2D<int> size)
 	{
-		pipeline.QueueWriteProjectionMatrix(Matrix4X4.CreateOrthographicOffCenter<float>(0, size.X, size.Y, 0, -1, 1));
+		var ortho = Matrix4X4.CreateOrthographicOffCenter<float>(0, size.X, size.Y, 0, -1, 1);
+		pipelineUntextured.QueueWriteProjectionMatrix(ortho);
+		pipelineTextured.QueueWriteProjectionMatrix(ortho);
 	}
 
 	public void Render()
 	{
 		unsafe
 		{
-			modelviewMatrix.QueueWrite(
+			modelviewMatrixUntextured.QueueWrite(
 				Matrix4X4.CreateRotationZ(rotation)
 				* Matrix4X4.CreateTranslation(windowState.Size.X * 0.5f, windowState.Size.Y * 0.5f, 0)
 			);
 
+			modelviewMatrixTextured.QueueWrite(Matrix4X4<float>.Identity);
+
 			videoDriver.RenderPass((renderPass) =>
 			{
-				pipeline.DrawBuffers(renderPass.RenderPassEncoder, modelviewMatrix, vertexBuffer, indexBuffer, 0, (uint)indexBuffer.Length);
+				pipelineUntextured.DrawBuffers(renderPass.RenderPassEncoder, modelviewMatrixUntextured, vertexBufferUntextured, indexBufferUntextured, 0, (uint)indexBufferUntextured.Length);
+				pipelineTextured.DrawBuffers(
+					renderPass.RenderPassEncoder,
+					modelviewMatrixTextured,
+					texture,
+					vertexBufferTextured,
+					indexBufferTextured,
+					0,
+					(uint)indexBufferTextured.Length
+				);
 			});
 		}
 	}

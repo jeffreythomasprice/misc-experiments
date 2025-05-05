@@ -14,10 +14,12 @@
     <PackageReference Include="Silk.NET.WebGPU" Version="2.22.0" />
     <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" Version="2.22.0" />
     <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.8" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Assets/Shaders/shader.wgsl" />
+    <EmbeddedResource Include="Assets/Shaders/shaderTextured.wgsl" />
+    <EmbeddedResource Include="Assets/Shaders/shaderUntextured.wgsl" />
     <EmbeddedResource Include="Assets/silknet.png" />
   </ItemGroup>
 

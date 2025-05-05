@@ -1,9 +1,4 @@
 namespace Experiment.WebGPU;
-
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using Microsoft.VisualBasic;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
 
@@ -14,9 +9,7 @@ public class ShaderDescription
 	public required string FragmentEntryPoint { get; init; }
 }
 
-record class VertexDescription(int Stride, Silk.NET.WebGPU.VertexAttribute[] Attributes);
-
-public unsafe class Pipeline<T> : IDisposable where T : unmanaged
+public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 {
 	public unsafe class ModelviewMatrix : IDisposable
 	{
@@ -31,6 +24,8 @@ public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 			this.bindGroup = bindGroup;
 		}
 
+		internal BindGroup* BindGroup => bindGroup;
+
 		public void Dispose()
 		{
 			buffer.Dispose();
@@ -41,61 +36,66 @@ public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		{
 			buffer.QueueWrite([m], 0);
 		}
-
-		internal BindGroup* BindGroup => bindGroup;
 	}
 
-	private readonly VideoDriver videoDriver;
+	protected readonly VideoDriver videoDriver;
 	private readonly Buffer<Matrix4X4<float>> projectionMatrixBuffer;
 	private readonly BindGroupLayout* modelviewMatrixBindGroupLayout;
 	private readonly RenderPipeline* renderPipeline;
 	private readonly BindGroup* projectionMatrixBindGroup;
 
-	public Pipeline(VideoDriver videoDriver, ShaderDescription shaderDescription)
+	protected Pipeline(VideoDriver videoDriver, ShaderDescription shaderDescription, BindGroupLayout*[] extraBindLayouts)
 	{
 		this.videoDriver = videoDriver;
 
 		projectionMatrixBuffer = new Buffer<Matrix4X4<float>>(videoDriver, [Matrix4X4<float>.Identity], BufferUsage.Uniform);
 
-		var shaderModule = CreateShader(videoDriver, shaderDescription);
-		var projectionMatrixBindGroupLayout = CreateBindGroupLayout(
-			videoDriver,
-			[
-				new()
+		var shaderModule = videoDriver.CreateShader(shaderDescription);
+		var projectionMatrixBindGroupLayout = videoDriver.CreateBindGroupLayout([
+			new()
+			{
+				// TODO use const
+				Binding = 0,
+				Visibility = ShaderStage.Vertex,
+				Buffer = new()
 				{
-					Binding = 0,
-					Visibility = ShaderStage.Vertex,
-					Buffer = new()
-					{
-						Type = BufferBindingType.Uniform,
-					},
+					Type = BufferBindingType.Uniform,
 				},
-			]
-		);
-		modelviewMatrixBindGroupLayout = CreateBindGroupLayout(
-			videoDriver,
-			[
-				new()
+			},
+		]);
+		modelviewMatrixBindGroupLayout = videoDriver.CreateBindGroupLayout([
+			new()
+			{
+				// TODO use const
+				Binding = 0,
+				Visibility = ShaderStage.Vertex,
+				Buffer = new()
 				{
-					Binding = 0,
-					Visibility = ShaderStage.Vertex,
-					Buffer = new()
-					{
-						Type = BufferBindingType.Uniform,
-					},
+					Type = BufferBindingType.Uniform,
 				},
-			]
+			},
+		]);
+		var allLayouts = new BindGroupLayout*[2 + extraBindLayouts.Length];
+		allLayouts[0] = projectionMatrixBindGroupLayout;
+		allLayouts[1] = modelviewMatrixBindGroupLayout;
+		extraBindLayouts.CopyTo(allLayouts, 2);
+		var pipelineLayout = videoDriver.CreatePipelineLayout(allLayouts);
+		var vertexDescription = VertexDescription.Create<T>();
+		renderPipeline = videoDriver.CreateRenderPipeline(
+			GetType().FullName,
+			shaderModule,
+			shaderDescription.VertexEntryPoint,
+			shaderDescription.FragmentEntryPoint,
+			pipelineLayout,
+			vertexDescription
 		);
-		var pipelineLayout = CreatePipelineLayout(videoDriver, [projectionMatrixBindGroupLayout, modelviewMatrixBindGroupLayout]);
-		var vertexDescription = CreateVertexDescription();
-		renderPipeline = CreateRenderPipeline(videoDriver, shaderModule, shaderDescription.VertexEntryPoint, shaderDescription.FragmentEntryPoint, pipelineLayout, vertexDescription);
 
-		projectionMatrixBindGroup = CreateBindGroup(
-			videoDriver,
+		projectionMatrixBindGroup = videoDriver.CreateBindGroup(
 			projectionMatrixBindGroupLayout,
 			[
 				new()
 				{
+					// TODO use const
 					Binding = 0,
 					Buffer = projectionMatrixBuffer.Instance,
 					Size = (ulong)projectionMatrixBuffer.SizeInBytes,
@@ -127,12 +127,12 @@ public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		return new ModelviewMatrix(
 			videoDriver,
 			buffer,
-			CreateBindGroup(
-				videoDriver,
+			videoDriver.CreateBindGroup(
 				modelviewMatrixBindGroupLayout,
 				[
 					new()
 					{
+						// TODO use const
 						Binding = 0,
 						Buffer = buffer.Instance,
 						Size = (ulong)buffer.SizeInBytes,
@@ -142,196 +142,24 @@ public unsafe class Pipeline<T> : IDisposable where T : unmanaged
 		);
 	}
 
-	public void DrawBuffer(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix, Buffer<T> vertexBuffer, uint index, uint length)
-	{
-		DrawCommon(renderPassEncoder, modelviewMatrix);
-		videoDriver.WebGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, vertexBuffer.Instance, (ulong)(index * vertexBuffer.Stride), (ulong)vertexBuffer.SizeInBytes);
-		videoDriver.WebGPU.RenderPassEncoderDraw(renderPassEncoder, length, 1, 0, 0);
-	}
-
-	public void DrawBuffers(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix, Buffer<T> vertexBuffer, Buffer<UInt16> indexBuffer, uint index, uint length)
-	{
-		DrawCommon(renderPassEncoder, modelviewMatrix);
-		videoDriver.WebGPU.RenderPassEncoderSetVertexBuffer(renderPassEncoder, 0, vertexBuffer.Instance, 0, (ulong)vertexBuffer.SizeInBytes);
-		videoDriver.WebGPU.RenderPassEncoderSetIndexBuffer(renderPassEncoder, indexBuffer.Instance, IndexFormat.Uint16, 0, (ulong)indexBuffer.SizeInBytes);
-		videoDriver.WebGPU.RenderPassEncoderDrawIndexed(renderPassEncoder, length, 1, index, 0, 0);
-	}
-
-	private void DrawCommon(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix)
+	protected void DrawCommon(RenderPassEncoder* renderPassEncoder, ModelviewMatrix modelviewMatrix)
 	{
 		videoDriver.WebGPU.RenderPassEncoderSetPipeline(renderPassEncoder, renderPipeline);
-		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(renderPassEncoder, 0, projectionMatrixBindGroup, 0, null);
-		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(renderPassEncoder, 1, modelviewMatrix.BindGroup, 0, null);
-	}
-
-	private static ShaderModule* CreateShader(VideoDriver videoDriver, ShaderDescription shaderDescription)
-	{
-		var sourcePtr = Marshal.StringToHGlobalAnsi(shaderDescription.Source);
-		var shaderModuleWGSLDescriptor = new ShaderModuleWGSLDescriptor()
-		{
-			Code = (byte*)sourcePtr,
-			Chain = {
-					SType = SType.ShaderModuleWgslDescriptor,
-				},
-		};
-		var descriptor = new ShaderModuleDescriptor()
-		{
-			NextInChain = (ChainedStruct*)&shaderModuleWGSLDescriptor,
-		};
-		var result = videoDriver.WebGPU.DeviceCreateShaderModule(videoDriver.Device, ref descriptor);
-		Marshal.FreeHGlobal(sourcePtr);
-		Console.WriteLine("created shader");
-		return result;
-	}
-
-	private static BindGroupLayout* CreateBindGroupLayout(VideoDriver videoDriver, ReadOnlySpan<BindGroupLayoutEntry> entries)
-	{
-		fixed (BindGroupLayoutEntry* entryPtr = &entries[0])
-		{
-			var bindGroupLayoutDescriptor = new BindGroupLayoutDescriptor()
-			{
-				Entries = entryPtr,
-				EntryCount = 1,
-			};
-			return videoDriver.WebGPU.DeviceCreateBindGroupLayout(videoDriver.Device, ref bindGroupLayoutDescriptor);
-		}
-	}
-
-	private static PipelineLayout* CreatePipelineLayout(VideoDriver videoDriver, BindGroupLayout*[] layouts)
-	{
-		fixed (BindGroupLayout** layoutsPtr = &layouts[0])
-		{
-			var pipelineLayoutDescriptor = new PipelineLayoutDescriptor()
-			{
-				BindGroupLayouts = layoutsPtr,
-				BindGroupLayoutCount = (nuint)layouts.Length,
-			};
-			return videoDriver.WebGPU.DeviceCreatePipelineLayout(videoDriver.Device, ref pipelineLayoutDescriptor);
-		}
-	}
-
-	private static VertexDescription CreateVertexDescription()
-	{
-		var stride = Unsafe.SizeOf<T>();
-		Console.WriteLine($"vertex stride: {stride}");
-		var attributes = new List<Silk.NET.WebGPU.VertexAttribute>();
-		foreach (var field in typeof(T).GetFields())
-		{
-			var attr = field.GetCustomAttribute<VertexAttribute>();
-			if (attr != null)
-			{
-				var offset = Marshal.OffsetOf<T>(field.Name);
-				Console.WriteLine($"vertex attribute {field}, format={attr.Format}, offset={offset}, shaderLocation={attr.ShaderLocation}");
-				attributes.Add(new Silk.NET.WebGPU.VertexAttribute()
-				{
-					Format = attr.Format,
-					Offset = (ulong)offset,
-					ShaderLocation = attr.ShaderLocation,
-				});
-			}
-		}
-		return new(stride, attributes.ToArray());
-	}
-
-	private static RenderPipeline* CreateRenderPipeline(
-		VideoDriver videoDriver,
-		ShaderModule* shaderModule,
-		string vertexEntryPoint,
-		string fragmentEntryPoint,
-		PipelineLayout* pipelineLayout,
-		VertexDescription vertexDescription
-	)
-	{
-		fixed (Silk.NET.WebGPU.VertexAttribute* vertexAttributePtr = &vertexDescription.Attributes[0])
-		{
-			var vertexEntryPointPtr = Marshal.StringToHGlobalAnsi(vertexEntryPoint);
-			var vertexBufferLayout = new VertexBufferLayout()
-			{
-				StepMode = VertexStepMode.Vertex,
-				ArrayStride = (ulong)vertexDescription.Stride,
-				AttributeCount = (nuint)vertexDescription.Attributes.Length,
-				Attributes = vertexAttributePtr,
-			};
-			var vertexState = new VertexState()
-			{
-				Module = shaderModule,
-				EntryPoint = (byte*)vertexEntryPointPtr,
-				Buffers = &vertexBufferLayout,
-				BufferCount = 1,
-			};
-
-			var blendState = stackalloc BlendState[] {
-				new()
-				{
-					Color = new()
-					{
-						SrcFactor = BlendFactor.One,
-						DstFactor = BlendFactor.OneMinusSrcAlpha,
-						Operation = BlendOperation.Add,
-					},
-					Alpha = new()
-					{
-						SrcFactor = BlendFactor.One,
-						DstFactor = BlendFactor.OneMinusSrcAlpha,
-						Operation = BlendOperation.Add,
-					},
-				},
-			};
-			var colorTargetState = stackalloc ColorTargetState[]
-			{
-				new()
-				{
-					WriteMask = ColorWriteMask.All,
-					Format = videoDriver.SurfaceTextureFormat,
-					Blend = blendState,
-				},
-			};
-			var fragmentEntryPointPtr = Marshal.StringToHGlobalAnsi(fragmentEntryPoint);
-			var fragmentState = new FragmentState()
-			{
-				Module = shaderModule,
-				EntryPoint = (byte*)fragmentEntryPointPtr,
-				Targets = colorTargetState,
-				TargetCount = 1,
-			};
-
-			var renderPipelineDescriptor = new RenderPipelineDescriptor()
-			{
-				Layout = pipelineLayout,
-				Vertex = vertexState,
-				Fragment = &fragmentState,
-				Multisample = new()
-				{
-					Mask = 0xffffffff,
-					Count = 1,
-					AlphaToCoverageEnabled = false,
-				},
-				Primitive = new()
-				{
-					CullMode = CullMode.None,
-					FrontFace = FrontFace.Ccw,
-					Topology = PrimitiveTopology.TriangleList,
-				},
-			};
-			var result = videoDriver.WebGPU.DeviceCreateRenderPipeline(videoDriver.Device, ref renderPipelineDescriptor);
-			Marshal.FreeHGlobal(vertexEntryPointPtr);
-			Marshal.FreeHGlobal(fragmentEntryPointPtr);
-			Console.WriteLine("created render pipeline");
-			return result;
-		}
-	}
-
-	private static BindGroup* CreateBindGroup(VideoDriver videoDriver, BindGroupLayout* bindGroupLayout, ReadOnlySpan<BindGroupEntry> entries)
-	{
-		fixed (BindGroupEntry* entryPtr = &entries[0])
-		{
-			var bindGroupDescriptor = new BindGroupDescriptor()
-			{
-				Layout = bindGroupLayout,
-				Entries = entryPtr,
-				EntryCount = (nuint)entries.Length,
-			};
-			return videoDriver.WebGPU.DeviceCreateBindGroup(videoDriver.Device, ref bindGroupDescriptor);
-		}
+		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(
+			renderPassEncoder,
+			// TODO use const
+			0,
+			projectionMatrixBindGroup,
+			0,
+			null
+		);
+		videoDriver.WebGPU.RenderPassEncoderSetBindGroup(
+			renderPassEncoder,
+			// TODO use const
+			1,
+			modelviewMatrix.BindGroup,
+			0,
+			null
+		);
 	}
 }
