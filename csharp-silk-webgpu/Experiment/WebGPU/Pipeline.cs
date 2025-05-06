@@ -9,11 +9,8 @@ public class ShaderDescription
 	public required string FragmentEntryPoint { get; init; }
 }
 
-public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
+public abstract unsafe class Pipeline
 {
-	private const int ProjectionMatrixBinding = 0;
-	private const int ModelviewMatrixBinding = 0;
-
 	public unsafe class ModelviewMatrix : IDisposable
 	{
 		private readonly VideoDriver videoDriver;
@@ -40,6 +37,12 @@ public abstract unsafe class Pipeline<T> : IDisposable where T : unmanaged
 			buffer.QueueWrite([m], 0);
 		}
 	}
+}
+
+public abstract unsafe class Pipeline<T> : Pipeline, IDisposable where T : unmanaged
+{
+	private const int ProjectionMatrixBinding = 0;
+	private const int ModelviewMatrixBinding = 0;
 
 	protected readonly VideoDriver videoDriver;
 	private readonly Buffer<Matrix4X4<float>> projectionMatrixBuffer;

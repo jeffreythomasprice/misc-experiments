@@ -4,6 +4,8 @@ using System.Dynamic;
 using System.Reflection;
 using Silk.NET.Maths;
 using Silk.NET.WebGPU;
+using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.ImageSharp.Processing;
 
 public unsafe class Texture : IDisposable
 {
@@ -194,5 +196,21 @@ public static class TextureExtensions
 	public static Texture CreateTextureFromManifestResource(this Texture.IDescriptionSource source, string name)
 	{
 		return source.CreateTextureFromManifestResource(Assembly.GetExecutingAssembly(), name);
+	}
+
+	public static Texture CreateTextureFromString(this Texture.IDescriptionSource source, SixLabors.Fonts.Font font, string text)
+	{
+		var textBounds = SixLabors.Fonts.TextMeasurer.MeasureBounds(text, new SixLabors.Fonts.TextOptions(font));
+		var image = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>((int)Math.Ceiling(textBounds.Width), (int)Math.Ceiling(textBounds.Height));
+		image.Mutate(x =>
+		{
+			x.Clear(SixLabors.ImageSharp.Color.Transparent);
+			x.DrawText(
+				new RichTextOptions(font),
+				text,
+				SixLabors.ImageSharp.Color.White
+			);
+		});
+		return source.CreateTexture(image);
 	}
 }
