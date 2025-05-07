@@ -13,9 +13,8 @@ use wgpu::{
 
 use crate::{
     basic_types::{HasVertexBufferLayout, Vertex2DColor},
-    {
+    wgpu_utils::{
         mesh::Mesh,
-        texture::{self, Texture, TextureBindings},
         uniform_buffer::{self, UniformBuffer},
     },
 };

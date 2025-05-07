@@ -25,7 +25,7 @@ impl<'font> Font<'font> {
         if let Some(glyph) = self
             .font
             .layout(
-                &format!("{}", c),
+                &format!("{c}"),
                 Scale::uniform(scale),
                 Point { x: 0.0, y: 0.0 },
             )

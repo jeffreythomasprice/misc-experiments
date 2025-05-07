@@ -10,12 +10,12 @@ use lib::colors::Color;
 use lib::font::Font;
 use lib::fps::FPSCounter;
 use lib::math::wrap;
-use lib::mesh::Mesh;
-use lib::mesh_builder::MeshBuilder;
 use lib::pipelines::pipeline2d_textured::{self, Pipeline2dTextured};
 use lib::pipelines::pipeline2d_untextured::{self, Pipeline2dUntextured};
-use lib::texture::Texture;
-use lib::texture_atlas_font::{
+use lib::wgpu_utils::mesh::Mesh;
+use lib::wgpu_utils::mesh_builder::MeshBuilder;
+use lib::wgpu_utils::texture::Texture;
+use lib::wgpu_utils::texture_atlas_font::{
     Alignment, HorizontalAlignment, TextureAtlasFont, VerticalAlignment,
 };
 use rand::Rng;

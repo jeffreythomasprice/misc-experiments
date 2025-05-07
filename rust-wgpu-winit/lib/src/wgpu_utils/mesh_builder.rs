@@ -4,9 +4,9 @@ use glam::Vec2;
 use triangulate::{ListFormat, Polygon};
 use wgpu::{BufferAddress, BufferUsages, Device, Queue};
 
-use crate::{buffer::Buffer, mesh::Mesh};
+use crate::wgpu_utils::{buffer::Buffer, mesh::Mesh};
 
-use super::{
+use crate::{
     basic_types::{Rect, Vertex2DColor, Vertex2DTextureCoordinateColor},
     colors::Color,
 };

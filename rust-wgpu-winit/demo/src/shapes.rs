@@ -1,5 +1,4 @@
 use glam::Vec2;
-use lib::basic_types::Vertex2DColor;
 
 pub fn circle(center: Vec2, radius: f32) -> Vec<Vec2> {
     let num_points = 32;

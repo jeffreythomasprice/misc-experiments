@@ -4,11 +4,11 @@ use color_eyre::eyre::Result;
 use lib::{
     basic_types::{Affine2, Vertex2DTextureCoordinateColor},
     colors::Color,
-    mesh::Mesh,
-    mesh_builder::MeshBuilder,
     pipelines::pipeline2d_textured,
-    texture::Texture,
-    texture_atlas_font::{Alignment, TextureAtlasFont},
+    wgpu_utils::mesh::Mesh,
+    wgpu_utils::mesh_builder::MeshBuilder,
+    wgpu_utils::texture::Texture,
+    wgpu_utils::texture_atlas_font::{Alignment, TextureAtlasFont},
 };
 use wgpu::{Device, Queue};
 

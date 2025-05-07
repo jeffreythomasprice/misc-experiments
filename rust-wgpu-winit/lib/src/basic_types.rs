@@ -3,7 +3,6 @@ use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2, Vec4};
 use wgpu::{BufferAddress, VertexAttribute, VertexBufferLayout, VertexStepMode, vertex_attr_array};
 
-
 use super::colors::Color;
 
 pub trait HasVertexBufferLayout {

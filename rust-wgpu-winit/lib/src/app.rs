@@ -32,6 +32,7 @@ pub struct WindowOptions<
     pub vsync: bool,
 }
 
+// TODO rename? expand to include more event handler stuff?
 pub trait Renderer {
     fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()>;
     fn render(&mut self, texture_view: TextureView) -> Result<()>;
@@ -268,10 +269,12 @@ impl<R: Renderer + 'static> ApplicationHandler for App<R> {
         }
 
         match event {
+            // TODO pass events on to impl
             winit::event::WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
 
+            // TODO pass events on to impl
             winit::event::WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
