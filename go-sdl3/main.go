@@ -9,23 +9,32 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		panic(err)
+	}
+}
+
+func run() error {
 	defer binsdl.Load().Unload()
 	defer sdl.Quit()
 
 	if err := sdl.Init(sdl.INIT_VIDEO); err != nil {
-		panic(err)
+		return fmt.Errorf("error initializing sdl: %w", err)
 	}
 
-	window, renderer, err := sdl.CreateWindowAndRenderer("Hello world", 1024, 768, sdl.WINDOW_OPENGL)
+	window, renderer, err := sdl.CreateWindowAndRenderer(
+		"Experiment",
+		1024,
+		768,
+		sdl.WINDOW_OPENGL|sdl.WINDOW_RESIZABLE,
+	)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("error creating sdl window and renderer: %w", err)
 	}
 	defer renderer.Destroy()
 	defer window.Destroy()
 
-	renderer.SetDrawColor(255, 255, 255, 255)
-
-	sdl.RunLoop(func() error {
+	if err := sdl.RunLoop(func() error {
 		var event sdl.Event
 
 		for sdl.PollEvent(&event) {
@@ -39,7 +48,7 @@ func main() {
 
 		windowWidth, windowHeight, err := window.Size()
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("error getting window size: %w", err)
 		}
 
 		renderer.SetDrawColor(64, 64, 64, 255)
@@ -97,17 +106,22 @@ func main() {
 				32,
 			)
 			if err != nil {
-				panic(err)
+				return fmt.Errorf("error creating points for circle: %w", err)
 			}
 			vertices := createSolidColorUntexturedVerticesFromPoints(points, sdl.FColor{R: 0.75, G: 0.75, B: 0.75, A: 1})
 			renderer.RenderGeometry(nil, vertices, indices)
 		}
 
+		renderer.SetDrawColor(255, 255, 255, 255)
 		renderer.DebugText(50, 50, "Hello world")
 		renderer.Present()
 
 		return nil
-	})
+	}); err != nil {
+		return fmt.Errorf("error in sdl run loop: %w", err)
+	}
+
+	return nil
 }
 
 func createCircleTriangles(center sdl.FPoint, radius float32, numPoints int) ([]sdl.FPoint, []int32, error) {
