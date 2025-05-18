@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/Zyko0/go-sdl3/bin/binsdl"
 	"github.com/Zyko0/go-sdl3/sdl"
 )
@@ -84,9 +87,61 @@ func main() {
 			},
 		)
 
+		{
+			points, indices, err := createCircleTriangles(
+				sdl.FPoint{
+					X: float32(windowWidth) * 0.5,
+					Y: float32(windowHeight) * 0.5,
+				},
+				150.0,
+				32,
+			)
+			if err != nil {
+				panic(err)
+			}
+			vertices := createSolidColorUntexturedVerticesFromPoints(points, sdl.FColor{R: 0.75, G: 0.75, B: 0.75, A: 1})
+			renderer.RenderGeometry(nil, vertices, indices)
+		}
+
 		renderer.DebugText(50, 50, "Hello world")
 		renderer.Present()
 
 		return nil
 	})
+}
+
+func createCircleTriangles(center sdl.FPoint, radius float32, numPoints int) ([]sdl.FPoint, []int32, error) {
+	if numPoints < 3 {
+		return nil, nil, fmt.Errorf("must have at least 3 points on the edge of the circle, got %v", numPoints)
+	}
+	angleStep := math.Pi * 2 / float64(numPoints)
+	angle := 0.0
+	points := make([]sdl.FPoint, 0, numPoints+1)
+	indices := make([]int32, 0, 3*(numPoints-2))
+	points = append(points, center)
+	for range numPoints {
+		points = append(points, sdl.FPoint{
+			X: float32(math.Cos(angle))*radius + center.X,
+			Y: float32(math.Sin(angle))*radius + center.Y,
+		})
+		angle += angleStep
+	}
+	for i := range numPoints {
+		j := (i + 1) % numPoints
+		i++
+		j++
+		indices = append(indices, 0, int32(i), int32(j))
+	}
+	return points, indices, nil
+}
+
+func createSolidColorUntexturedVerticesFromPoints(points []sdl.FPoint, color sdl.FColor) []sdl.Vertex {
+	result := make([]sdl.Vertex, 0, len(points))
+	for _, p := range points {
+		result = append(result, sdl.Vertex{
+			Position: p,
+			Color:    color,
+		})
+	}
+	return result
 }
