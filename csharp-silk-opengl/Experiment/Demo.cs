@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Numerics;
+using System.Reflection;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -37,13 +38,13 @@ class Demo : IAppState
 		this.gl = gl;
 		this.windowState = windowState;
 
-		using var image = App.EmbeddedFileAsStream("Experiment.Assets.silknet.png");
+		using var image = Assembly.GetExecutingAssembly().AssertManifestResourceStream("Experiment.Assets.silknet.png");
 		texture = new Texture(gl, image);
 
 		shader = new Shader(
 			gl,
-			App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.vert"),
-			App.EmbeddedFileAsString("Experiment.Assets.Shaders.shader.frag")
+			Assembly.GetExecutingAssembly().AssertManifestResourceString("Experiment.Assets.Shaders.shader.vert"),
+			Assembly.GetExecutingAssembly().AssertManifestResourceString("Experiment.Assets.Shaders.shader.frag")
 		);
 
 		vertexArray = new(

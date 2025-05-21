@@ -64,19 +64,6 @@ class App : IDisposable
 
     private IAppState? state;
 
-    public static Stream EmbeddedFileAsStream(string name)
-    {
-        return Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
-            ?? throw new Exception($"failed to find embedded file: {name}");
-    }
-
-    public static string EmbeddedFileAsString(string name)
-    {
-        using var stream = EmbeddedFileAsStream(name);
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
-    }
-
     public App(AppStateTransition initialState)
     {
         stateTransitions = new();
@@ -144,6 +131,7 @@ class App : IDisposable
             {
                 state?.Unload();
                 nextState.Load();
+                nextState.Resize(windowState.Size);
                 state = nextState;
             }
         }

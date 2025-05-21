@@ -206,9 +206,10 @@ public static class TextureExtensions
 		{
 			x.Clear(SixLabors.ImageSharp.Color.Transparent);
 			x.DrawText(
-				new RichTextOptions(font),
 				text,
-				SixLabors.ImageSharp.Color.White
+				font,
+				SixLabors.ImageSharp.Color.White,
+				new SixLabors.ImageSharp.PointF(-textBounds.Left, -textBounds.Y)
 			);
 		});
 		return source.CreateTexture(image);
