@@ -136,6 +136,20 @@ type VertexArray<'T when 'T: unmanaged and 'T: (new: unit -> 'T) and 'T: struct 
 [<Struct; StructLayout(LayoutKind.Sequential)>]
 type Vertex =
     val mutable Position: Vector2D<float32>
+    val mutable Color: Vector4D<float32>
+
+    new(position: Vector2D<float32>, color: Vector4D<float32>) = { Position = position; Color = color }
+
+    new(position: Vector2D<float32>, color: System.Drawing.Color) =
+        let color =
+            new Vector4D<float32>(
+                (float32 color.R) / 255.0f,
+                (float32 color.G) / 255.0f,
+                (float32 color.B) / 255.0f,
+                (float32 color.A) / 255.0f
+            )
+
+        Vertex(position, color)
 
 type State(gl: GL) =
     let shader =
@@ -147,10 +161,10 @@ type State(gl: GL) =
 
                 layout (location = 0) in vec2 inPosition;
                 // layout (location = 1) in vec2 inTextureCoordinate;
-                // layout (location = 2) in vec4 inColor;
+                layout (location = 2) in vec4 inColor;
 
                 // out vec2 intermediateTextureCoordinate;
-                // out vec4 intermediateColor;
+                out vec4 intermediateColor;
 
                 // uniform mat4 projectionMatrixUniform;
 
@@ -159,14 +173,14 @@ type State(gl: GL) =
                     gl_Position = vec4(inPosition.x, inPosition.y, 0.0, 1.0);
                     // gl_Position = projectionMatrixUniform * vec4(inPosition.x, inPosition.y, 0.0, 1.0);
                     // intermediateTextureCoordinate = inTextureCoordinate;
-                    // intermediateColor = inColor;
+                    intermediateColor = inColor;
                 }
                 """
                 """
                 #version 330 core
 
                 // in vec2 intermediateTextureCoordinate;
-                // in vec4 intermediateColor;
+                in vec4 intermediateColor;
 
                 out vec4 outColor;
 
@@ -175,7 +189,7 @@ type State(gl: GL) =
                 void main()
                 {
                     // outColor = texture(samplerUniform, intermediateTextureCoordinate) * intermediateColor;
-                    outColor = vec4(1, 1, 1, 1);
+                    outColor = intermediateColor;
                 }
                 """
         with
@@ -187,14 +201,17 @@ type State(gl: GL) =
             gl,
             { Attributes =
                 [ uint32 0,
-                  VertexAttributeSpecification.FromFieldName<Vertex> 2 VertexAttribPointerType.Float false "Position" ]
+                  VertexAttributeSpecification.FromFieldName<Vertex> 2 VertexAttribPointerType.Float false "Position"
+                  uint32 2,
+                  VertexAttributeSpecification.FromFieldName<Vertex> 4 VertexAttribPointerType.Float false "Color" ]
                 |> Map.ofList },
             ReadOnlySpan
-                [| Vertex(Position = new Vector2D<float32>(-0.5f, -0.5f))
-                   Vertex(Position = new Vector2D<float32>(0.5f, -0.5f))
-                   Vertex(Position = new Vector2D<float32>(0.0f, 0.5f)) |],
+                [| Vertex(new Vector2D<float32>(-0.5f, -0.5f), System.Drawing.Color.Red)
+                   Vertex(new Vector2D<float32>(0.5f, -0.5f), System.Drawing.Color.Green)
+                   Vertex(new Vector2D<float32>(0.5f, 0.5f), System.Drawing.Color.Blue)
+                   Vertex(new Vector2D<float32>(-0.5f, 0.5f), System.Drawing.Color.Purple) |],
             BufferUsageARB.DynamicDraw,
-            (ReadOnlySpan [| uint16 0; uint16 1; uint16 2 |]),
+            (ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |]),
             BufferUsageARB.DynamicDraw
         )
 
@@ -214,7 +231,7 @@ type State(gl: GL) =
         shader.Use()
         vertexArray.Bind()
         // TODO use index array length for count
-        gl.DrawElements(PrimitiveType.Triangles, uint32 3, DrawElementsType.UnsignedShort, (nativeint 0).ToPointer())
+        gl.DrawElements(PrimitiveType.Triangles, uint32 6, DrawElementsType.UnsignedShort, (nativeint 0).ToPointer())
 
         ()
 
