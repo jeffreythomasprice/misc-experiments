@@ -52,6 +52,48 @@ let loadShaderFromManifestResources
     | Ok _, Error fragmentShaderError -> Error [ fragmentShaderError ]
     | Error vertexShaderError, Error fragmentShaderError -> Error [ vertexShaderError; fragmentShaderError ]
 
+type Shader2DTexturedColor =
+    { Shader: Shader
+      ProjectionMatrixUniform: int
+      SamplerUniform: int }
+
+    interface IDisposable with
+        override this.Dispose() : unit = (this.Shader :> IDisposable).Dispose()
+
+
+let createShader2DTexturedColor (gl: GL) =
+    match
+        loadShaderFromManifestResources
+            gl
+            (Assembly.GetExecutingAssembly())
+            "Experiment.Assets.Shaders.shader.vert"
+            "Experiment.Assets.Shaders.shader.frag"
+    with
+    | Ok shader ->
+        let projectionMatrixUniform =
+            shader.GetUniformLocation "projectionMatrixUniform"
+            |> Result.mapError (fun e -> [ e ])
+
+        let samplerUniform =
+            shader.GetUniformLocation "samplerUniform" |> Result.mapError (fun e -> [ e ])
+
+        match projectionMatrixUniform, samplerUniform with
+        | Ok projectionMatrixUniform, Ok samplerUniform ->
+            Ok
+                { Shader = shader
+                  ProjectionMatrixUniform = projectionMatrixUniform
+                  SamplerUniform = samplerUniform }
+        | Error e, Ok _ ->
+            (shader :> IDisposable).Dispose()
+            Error e
+        | Ok _, Error e ->
+            (shader :> IDisposable).Dispose()
+            Error e
+        | Error e1, Error e2 ->
+            (shader :> IDisposable).Dispose()
+            Error(List.concat [ e1; e2 ])
+    | Error e -> Error e
+
 let loadTextureFromManifestResource (gl: GL) (assembly: Assembly) (manifestResourceName: string) =
     match manifestResourceStream assembly manifestResourceName with
     | Ok stream ->
@@ -90,42 +132,18 @@ let matrix4x4ToArray<'T
        m.M44 |]
 
 type State
-    private
-    (
-        window: IWindow,
-        gl: GL,
-        texture: Texture,
-        shader: Shader,
-        projectionMatrixUniform: int,
-        samplerUniform: int,
-        vertexArray: VertexArray<Vertex>
-    ) =
+    private (window: IWindow, gl: GL, texture: Texture, shader: Shader2DTexturedColor, vertexArray: VertexArray<Vertex>)
+    =
     let mutable orthoMatrix = Matrix4X4<float32>.Identity
 
     static member New (window: IWindow) (gl: GL) =
         let texture =
             loadTextureFromManifestResource gl (Assembly.GetExecutingAssembly()) "Experiment.Assets.silknet.png"
 
-        let shader =
-            loadShaderFromManifestResources
-                gl
-                (Assembly.GetExecutingAssembly())
-                "Experiment.Assets.Shaders.shader.vert"
-                "Experiment.Assets.Shaders.shader.frag"
+        let shader = createShader2DTexturedColor gl
 
-        let projectionMatrixUniform =
-            shader
-            |> Result.bind (fun shader ->
-                shader.GetUniformLocation "projectionMatrixUniform"
-                |> Result.mapError (fun e -> [ e ]))
-
-        let samplerUniform =
-            shader
-            |> Result.bind (fun shader ->
-                shader.GetUniformLocation "samplerUniform" |> Result.mapError (fun e -> [ e ]))
-
-        match texture, shader, projectionMatrixUniform, samplerUniform with
-        | Ok texture, Ok shader, Ok projectionMatrixUniform, Ok samplerUniform ->
+        match texture, shader with
+        | Ok texture, Ok shader ->
             let vertexArray =
                 VertexArray.New(
                     gl,
@@ -175,7 +193,7 @@ type State
                     BufferUsageARB.DynamicDraw
                 )
 
-            Ok(new State(window, gl, texture, shader, projectionMatrixUniform, samplerUniform, vertexArray))
+            Ok(new State(window, gl, texture, shader, vertexArray))
         | _ ->
             let mutable errors = []
 
@@ -205,13 +223,13 @@ type State
         gl.ClearColor System.Drawing.Color.CornflowerBlue
         gl.Clear ClearBufferMask.ColorBufferBit
 
-        shader.Use()
+        shader.Shader.Use()
 
-        gl.UniformMatrix4(projectionMatrixUniform, false, ReadOnlySpan(matrix4x4ToArray orthoMatrix))
+        gl.UniformMatrix4(shader.ProjectionMatrixUniform, false, ReadOnlySpan(matrix4x4ToArray orthoMatrix))
 
         gl.ActiveTexture TextureUnit.Texture0
         texture.Bind()
-        gl.Uniform1(samplerUniform, 0)
+        gl.Uniform1(shader.SamplerUniform, 0)
 
         vertexArray.Bind()
 
