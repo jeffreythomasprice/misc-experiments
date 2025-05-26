@@ -1,11 +1,40 @@
 ﻿open System
+open System.Reflection
 open System.Runtime.InteropServices
-open System.Runtime.CompilerServices
 open Silk.NET.Maths
 open Silk.NET.Windowing
 open Silk.NET.OpenGL
 open Silk.NET.Input
 open Experiment.Graphics
+open System.IO
+
+let sanitizeName (name: string) =
+    name.Replace('/', '*').Replace('-', '*').Replace('_', '*').Replace('.', '*').ToLower()
+
+let sanitizeManifestResourceName (assembly: Assembly) (name: string) =
+    let sanitizedName = sanitizeName name
+
+    match
+        assembly.GetManifestResourceNames()
+        |> Array.filter (fun resourceName -> sanitizedName = sanitizeName resourceName)
+    with
+    | [||] -> Error $"no results for {name}"
+    | [| result |] -> Ok result
+    | _ -> Error $"multiple results for {name}"
+
+let manifestResourceStream (assembly: Assembly) (name: string) =
+    sanitizeManifestResourceName assembly name
+    |> Result.bind (fun name ->
+        match assembly.GetManifestResourceStream name with
+        | null -> Error $"failed to find embedded file: {name}"
+        | result -> Ok result)
+
+let manifestResourceString (assembly: Assembly) (name: string) =
+    manifestResourceStream assembly name
+    |> Result.bind (fun stream ->
+        use stream = stream
+        use reader = new StreamReader(stream)
+        Ok(reader.ReadToEnd()))
 
 [<Struct; StructLayout(LayoutKind.Sequential)>]
 type Vertex =
@@ -17,77 +46,73 @@ type Vertex =
     new(position: Vector2D<float32>, color: System.Drawing.Color) =
         let color =
             new Vector4D<float32>(
-                (float32 color.R) / 255.0f,
-                (float32 color.G) / 255.0f,
-                (float32 color.B) / 255.0f,
-                (float32 color.A) / 255.0f
+                float32 color.R / 255.0f,
+                float32 color.G / 255.0f,
+                float32 color.B / 255.0f,
+                float32 color.A / 255.0f
             )
 
         Vertex(position, color)
 
-type State(window: IWindow, gl: GL) =
-    let shader =
+let loadShaderFromManifestResources
+    (gl: GL)
+    (vertexShaderManifestResourceName: string)
+    (fragmentShaderManifestResourceName: string)
+    =
+    let vertexShaderSource =
+        manifestResourceString (Assembly.GetExecutingAssembly()) vertexShaderManifestResourceName
+        |> Result.mapError (fun e -> $"error loading vertex shader: {e}")
+
+    let fragmentShaderSource =
+        manifestResourceString (Assembly.GetExecutingAssembly()) fragmentShaderManifestResourceName
+        |> Result.mapError (fun e -> $"error loading fragment shader: {e}")
+
+    match vertexShaderSource, fragmentShaderSource with
+    | Ok vertexShaderSource, Ok fragmentShaderSource ->
+        Shader.New gl vertexShaderSource fragmentShaderSource
+        |> Result.mapError (fun e -> [ $"error creating shader: {e}" ])
+    | Error vertexShaderError, Ok _ -> Error [ vertexShaderError ]
+    | Ok _, Error fragmentShaderError -> Error [ fragmentShaderError ]
+    | Error vertexShaderError, Error fragmentShaderError -> Error [ vertexShaderError; fragmentShaderError ]
+
+type State private (window: IWindow, gl: GL, shader: Shader, vertexArray: VertexArray<Vertex>) =
+    static member New (window: IWindow) (gl: GL) =
         match
-            Shader.New
+            loadShaderFromManifestResources
                 gl
-                """
-                #version 330 core
-
-                layout (location = 0) in vec2 inPosition;
-                // layout (location = 1) in vec2 inTextureCoordinate;
-                layout (location = 2) in vec4 inColor;
-
-                // out vec2 intermediateTextureCoordinate;
-                out vec4 intermediateColor;
-
-                // uniform mat4 projectionMatrixUniform;
-
-                void main()
-                {
-                    gl_Position = vec4(inPosition.x, inPosition.y, 0.0, 1.0);
-                    // gl_Position = projectionMatrixUniform * vec4(inPosition.x, inPosition.y, 0.0, 1.0);
-                    // intermediateTextureCoordinate = inTextureCoordinate;
-                    intermediateColor = inColor;
-                }
-                """
-                """
-                #version 330 core
-
-                // in vec2 intermediateTextureCoordinate;
-                in vec4 intermediateColor;
-
-                out vec4 outColor;
-
-                // uniform sampler2D samplerUniform;
-
-                void main()
-                {
-                    // outColor = texture(samplerUniform, intermediateTextureCoordinate) * intermediateColor;
-                    outColor = intermediateColor;
-                }
-                """
+                "Experiment.Assets.Shaders.shader.vert"
+                "Experiment.Assets.Shaders.shader.frag"
         with
-        | Ok shader -> shader
-        | Error e -> failwith e
+        | Error e -> Error e
+        | Ok shader ->
+            let vertexArray =
+                VertexArray.New(
+                    gl,
+                    { Attributes =
+                        [ uint32 0,
+                          VertexAttributeSpecification.FromFieldName<Vertex>
+                              2
+                              VertexAttribPointerType.Float
+                              false
+                              "Position"
+                          uint32 2,
+                          VertexAttributeSpecification.FromFieldName<Vertex>
+                              4
+                              VertexAttribPointerType.Float
+                              false
+                              "Color" ]
+                        |> Map.ofList },
+                    ReadOnlySpan
+                        [| Vertex(new Vector2D<float32>(-0.5f, -0.5f), System.Drawing.Color.Red)
+                           Vertex(new Vector2D<float32>(0.5f, -0.5f), System.Drawing.Color.Green)
+                           Vertex(new Vector2D<float32>(0.5f, 0.5f), System.Drawing.Color.Blue)
+                           Vertex(new Vector2D<float32>(-0.5f, 0.5f), System.Drawing.Color.Purple) |],
+                    BufferUsageARB.DynamicDraw,
+                    (ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |]),
+                    BufferUsageARB.DynamicDraw
+                )
 
-    let vertexArray =
-        VertexArray.New(
-            gl,
-            { Attributes =
-                [ uint32 0,
-                  VertexAttributeSpecification.FromFieldName<Vertex> 2 VertexAttribPointerType.Float false "Position"
-                  uint32 2,
-                  VertexAttributeSpecification.FromFieldName<Vertex> 4 VertexAttribPointerType.Float false "Color" ]
-                |> Map.ofList },
-            ReadOnlySpan
-                [| Vertex(new Vector2D<float32>(-0.5f, -0.5f), System.Drawing.Color.Red)
-                   Vertex(new Vector2D<float32>(0.5f, -0.5f), System.Drawing.Color.Green)
-                   Vertex(new Vector2D<float32>(0.5f, 0.5f), System.Drawing.Color.Blue)
-                   Vertex(new Vector2D<float32>(-0.5f, 0.5f), System.Drawing.Color.Purple) |],
-            BufferUsageARB.DynamicDraw,
-            (ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |]),
-            BufferUsageARB.DynamicDraw
-        )
+            Ok(new State(window, gl, shader, vertexArray))
 
     interface IDisposable with
         member this.Dispose() : unit =
@@ -129,7 +154,17 @@ let mutable state = None
 
 window.add_Load (fun () ->
     let gl = GL.GetApi window
-    state <- Some(new State(window, gl))
+
+    state <-
+        Some(
+            match State.New window gl with
+            | Ok state -> state
+            | Error e ->
+                for e in e do
+                    printfn "init error: %s" e
+
+                failwith "error initializing"
+        )
 
     let input = window.CreateInput()
 
