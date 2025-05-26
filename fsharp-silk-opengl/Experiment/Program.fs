@@ -4,6 +4,7 @@ open System.Runtime.CompilerServices
 open Silk.NET.Maths
 open Silk.NET.Windowing
 open Silk.NET.OpenGL
+open Silk.NET.Input
 
 type Shader private (gl: GL, program: uint32, vertexShader: uint32, fragmentShader: uint32) =
     interface IDisposable with
@@ -74,7 +75,16 @@ type VertexSpecification<'T> =
     member this.Stride = uint32 (Unsafe.SizeOf<'T>())
 
 type VertexArray<'T when 'T: unmanaged and 'T: (new: unit -> 'T) and 'T: struct and 'T :> ValueType>
-    private (gl: GL, vertexArray: uint32, arrayBuffer: uint32, elementArrayBuffer: uint32) =
+    private
+    (
+        gl: GL,
+        vertexSpecification: VertexSpecification<'T>,
+        vertexArray: uint32,
+        arrayBuffer: uint32,
+        elementArrayBuffer: uint32,
+        verticesLength: int,
+        indicesLength: int
+    ) =
     static member New
         (
             gl: GL,
@@ -104,18 +114,17 @@ type VertexArray<'T when 'T: unmanaged and 'T: (new: unit -> 'T) and 'T: struct 
                 attribute.Offset
             )
 
-            gl.EnableVertexAttribArray index
+            gl.EnableVertexAttribArray index)
 
-            printfn
-                "TODO enabled index %A, size = %A, type = %A, normalized = %A, stride = %A, offset = %A"
-                index
-                attribute.Size
-                attribute.Type
-                attribute.Normalized
-                vertexSpecification.Stride
-                attribute.Offset)
-
-        new VertexArray<'T>(gl, vertexArray, arrayBuffer, elementArrayBuffer)
+        new VertexArray<'T>(
+            gl,
+            vertexSpecification,
+            vertexArray,
+            arrayBuffer,
+            elementArrayBuffer,
+            vertices.Length,
+            indices.Length
+        )
 
     interface IDisposable with
         member this.Dispose() : unit =
@@ -125,13 +134,11 @@ type VertexArray<'T when 'T: unmanaged and 'T: (new: unit -> 'T) and 'T: struct 
 
     member this.Bind() = gl.BindVertexArray vertexArray
 
-// TODO rset of VertexArray
+    member this.Stride = vertexSpecification.Stride
 
-// public uint Stride => vertexSpecification.Stride;
+    member this.VerticesLength = verticesLength
 
-// public int VerticesLength => verticesLength;
-
-// public int IndicesLength => indicesLength;
+    member this.IndicesLength = indicesLength
 
 [<Struct; StructLayout(LayoutKind.Sequential)>]
 type Vertex =
@@ -151,7 +158,7 @@ type Vertex =
 
         Vertex(position, color)
 
-type State(gl: GL) =
+type State(window: IWindow, gl: GL) =
     let shader =
         match
             Shader.New
@@ -230,10 +237,20 @@ type State(gl: GL) =
 
         shader.Use()
         vertexArray.Bind()
-        // TODO use index array length for count
-        gl.DrawElements(PrimitiveType.Triangles, uint32 6, DrawElementsType.UnsignedShort, (nativeint 0).ToPointer())
 
-        ()
+        gl.DrawElements(
+            PrimitiveType.Triangles,
+            uint32 vertexArray.IndicesLength,
+            DrawElementsType.UnsignedShort,
+            (nativeint 0).ToPointer()
+        )
+
+    member this.KeyDown(key: Key) = ()
+
+    member this.KeyUp(key: Key) =
+        match key with
+        | Key.Escape -> window.Close()
+        | _ -> ()
 
 let mutable windowOptions = WindowOptions.Default
 windowOptions.Title <- "Experiment"
@@ -245,7 +262,20 @@ let mutable state = None
 
 window.add_Load (fun () ->
     let gl = GL.GetApi window
-    state <- Some(new State(gl)))
+    state <- Some(new State(window, gl))
+
+    let input = window.CreateInput()
+
+    for keyboard in input.Keyboards do
+        keyboard.add_KeyDown (fun keyboard key unknown ->
+            match state with
+            | None -> ()
+            | Some state -> state.KeyDown key)
+
+        keyboard.add_KeyUp (fun keyboard key unknown ->
+            match state with
+            | None -> ()
+            | Some state -> state.KeyUp key))
 
 window.add_Closing (fun () ->
     match state with
