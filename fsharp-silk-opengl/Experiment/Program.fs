@@ -11,11 +11,15 @@ open Experiment.ManifestResources
 [<Struct; StructLayout(LayoutKind.Sequential)>]
 type Vertex =
     val mutable Position: Vector2D<float32>
+    val mutable TextureCoordinate: Vector2D<float32>
     val mutable Color: Vector4D<float32>
 
-    new(position: Vector2D<float32>, color: Vector4D<float32>) = { Position = position; Color = color }
+    new(position: Vector2D<float32>, textureCoordinate: Vector2D<float32>, color: Vector4D<float32>) =
+        { Position = position
+          TextureCoordinate = textureCoordinate
+          Color = color }
 
-    new(position: Vector2D<float32>, color: System.Drawing.Color) =
+    new(position: Vector2D<float32>, textureCoordinate: Vector2D<float32>, color: System.Drawing.Color) =
         let color =
             new Vector4D<float32>(
                 float32 color.R / 255.0f,
@@ -24,7 +28,7 @@ type Vertex =
                 float32 color.A / 255.0f
             )
 
-        Vertex(position, color)
+        Vertex(position, textureCoordinate, color)
 
 let loadShaderFromManifestResources
     (gl: GL)
@@ -93,6 +97,7 @@ type State
         texture: Texture,
         shader: Shader,
         projectionMatrixUniform: int,
+        samplerUniform: int,
         vertexArray: VertexArray<Vertex>
     ) =
     let mutable orthoMatrix = Matrix4X4<float32>.Identity
@@ -114,32 +119,63 @@ type State
                 shader.GetUniformLocation "projectionMatrixUniform"
                 |> Result.mapError (fun e -> [ e ]))
 
-        let vertexArray =
-            VertexArray.New(
-                gl,
-                { Attributes =
-                    [ uint32 0,
-                      VertexAttributeSpecification.FromFieldName<Vertex>
-                          2
-                          VertexAttribPointerType.Float
-                          false
-                          "Position"
-                      uint32 2,
-                      VertexAttributeSpecification.FromFieldName<Vertex> 4 VertexAttribPointerType.Float false "Color" ]
-                    |> Map.ofList },
-                ReadOnlySpan
-                    [| Vertex(new Vector2D<float32>(50.0f, 50.0f), System.Drawing.Color.Red)
-                       Vertex(new Vector2D<float32>(300.0f, 50.0f), System.Drawing.Color.Green)
-                       Vertex(new Vector2D<float32>(300.0f, 300.0f), System.Drawing.Color.Blue)
-                       Vertex(new Vector2D<float32>(50.0f, 300.0f), System.Drawing.Color.Purple) |],
-                BufferUsageARB.DynamicDraw,
-                ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |],
-                BufferUsageARB.DynamicDraw
-            )
+        let samplerUniform =
+            shader
+            |> Result.bind (fun shader ->
+                shader.GetUniformLocation "samplerUniform" |> Result.mapError (fun e -> [ e ]))
 
-        match texture, shader, projectionMatrixUniform with
-        | Ok texture, Ok shader, Ok projectionMatrixUniform ->
-            Ok(new State(window, gl, texture, shader, projectionMatrixUniform, vertexArray))
+        match texture, shader, projectionMatrixUniform, samplerUniform with
+        | Ok texture, Ok shader, Ok projectionMatrixUniform, Ok samplerUniform ->
+            let vertexArray =
+                VertexArray.New(
+                    gl,
+                    { Attributes =
+                        [ uint32 0,
+                          VertexAttributeSpecification.FromFieldName<Vertex>
+                              2
+                              VertexAttribPointerType.Float
+                              false
+                              "Position"
+                          uint32 1,
+                          VertexAttributeSpecification.FromFieldName<Vertex>
+                              2
+                              VertexAttribPointerType.Float
+                              false
+                              "TextureCoordinate"
+                          uint32 2,
+                          VertexAttributeSpecification.FromFieldName<Vertex>
+                              4
+                              VertexAttribPointerType.Float
+                              false
+                              "Color" ]
+                        |> Map.ofList },
+                    ReadOnlySpan
+                        [| Vertex(
+                               new Vector2D<float32>(0.0f, 0.0f),
+                               new Vector2D<float32>(0.0f, 0.0f),
+                               System.Drawing.Color.Red
+                           )
+                           Vertex(
+                               new Vector2D<float32>(float32 texture.Width, 0.0f),
+                               new Vector2D<float32>(1.0f, 0.0f),
+                               System.Drawing.Color.Green
+                           )
+                           Vertex(
+                               new Vector2D<float32>(float32 texture.Width, float32 texture.Height),
+                               new Vector2D<float32>(1.0f, 1.0f),
+                               System.Drawing.Color.Blue
+                           )
+                           Vertex(
+                               new Vector2D<float32>(0.0f, float32 texture.Height),
+                               new Vector2D<float32>(0.0f, 1.0f),
+                               System.Drawing.Color.Purple
+                           ) |],
+                    BufferUsageARB.DynamicDraw,
+                    ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |],
+                    BufferUsageARB.DynamicDraw
+                )
+
+            Ok(new State(window, gl, texture, shader, projectionMatrixUniform, samplerUniform, vertexArray))
         | _ ->
             let mutable errors = []
 
@@ -173,10 +209,9 @@ type State
 
         gl.UniformMatrix4(projectionMatrixUniform, false, ReadOnlySpan(matrix4x4ToArray orthoMatrix))
 
-        // TODO textures
-        // gl.ActiveTexture(TextureUnit.Texture0);
-        // texture.Bind();
-        // gl.Uniform1(shader.GetUniformLocation("samplerUniform"), 0);
+        gl.ActiveTexture TextureUnit.Texture0
+        texture.Bind()
+        gl.Uniform1(samplerUniform, 0)
 
         vertexArray.Bind()
 
