@@ -30,28 +30,6 @@ type Vertex =
 
         Vertex(position, textureCoordinate, color)
 
-let loadShaderFromManifestResources
-    (gl: GL)
-    (assembly: Assembly)
-    (vertexShaderManifestResourceName: string)
-    (fragmentShaderManifestResourceName: string)
-    =
-    let vertexShaderSource =
-        manifestResourceString assembly vertexShaderManifestResourceName
-        |> Result.mapError (fun e -> $"error loading vertex shader: {e}")
-
-    let fragmentShaderSource =
-        manifestResourceString assembly fragmentShaderManifestResourceName
-        |> Result.mapError (fun e -> $"error loading fragment shader: {e}")
-
-    match vertexShaderSource, fragmentShaderSource with
-    | Ok vertexShaderSource, Ok fragmentShaderSource ->
-        Shader.New gl vertexShaderSource fragmentShaderSource
-        |> Result.mapError (fun e -> [ $"error creating shader: {e}" ])
-    | Error vertexShaderError, Ok _ -> Error [ vertexShaderError ]
-    | Ok _, Error fragmentShaderError -> Error [ fragmentShaderError ]
-    | Error vertexShaderError, Error fragmentShaderError -> Error [ vertexShaderError; fragmentShaderError ]
-
 type Shader2DTexturedColor =
     { Shader: Shader
       ProjectionMatrixUniform: int
@@ -93,13 +71,6 @@ let createShader2DTexturedColor (gl: GL) =
             (shader :> IDisposable).Dispose()
             Error(List.concat [ e1; e2 ])
     | Error e -> Error e
-
-let loadTextureFromManifestResource (gl: GL) (assembly: Assembly) (manifestResourceName: string) =
-    match manifestResourceStream assembly manifestResourceName with
-    | Ok stream ->
-        use stream = stream
-        Ok(Texture.NewFromStream gl stream)
-    | Error e -> Error $"error loading texture: {e}"
 
 let createOrthoMatrix (size: Vector2D<int>) =
     Matrix4X4.CreateOrthographicOffCenter(0.0f, float32 size.X, float32 size.Y, 0.0f, -1.0f, 1.0f)
