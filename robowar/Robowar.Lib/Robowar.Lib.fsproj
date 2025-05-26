@@ -2,12 +2,11 @@
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <RootNamespace>Parser</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Lib.fs" />
+    <Compile Include="Parsers.fs" />
   </ItemGroup>
 
 </Project>

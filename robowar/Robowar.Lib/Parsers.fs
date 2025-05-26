@@ -1,7 +1,16 @@
-﻿namespace Parser
+﻿namespace Robowar.Lib
 
 module Parsers =
     type Parser<'T> = string -> Result<'T * string, string>
+
+    let Map (p: Parser<'T>) (f: 'T -> 'R) (input: string) =
+        input |> p |> Result.bind (fun (result, remainder) -> Ok(f result, remainder))
+
+    let Optional (p: Parser<'T>) (input: string) : Result<'T option * string, string> =
+        match p input with
+        | Ok(result, remainder) -> Ok(Some result, remainder)
+        | Error _ -> Ok(None, input)
+
 
     let Literal (literal: string) (input: string) =
         if input.StartsWith(literal) then
@@ -41,15 +50,3 @@ module Parsers =
             | Ok(r3, remainder) -> Ok((r1, r2, r3), remainder)
             | Error _ -> Error originalInput
         | Error _ -> Error originalInput
-
-    let Map (f: 'T -> 'R) (p: Parser<'T>) (input: string) =
-        input |> p |> Result.bind (fun (result, remainder) -> Ok(f result, remainder))
-
-    let Optional (p: Parser<'T>) (input: string) : Result<'T option * string, string> =
-        match p input with
-        | Ok(result, remainder) -> Ok(Some result, remainder)
-        | Error _ -> Ok(None, input)
-
-// TODO at least number
-// TODO at most number
-// TODO range
