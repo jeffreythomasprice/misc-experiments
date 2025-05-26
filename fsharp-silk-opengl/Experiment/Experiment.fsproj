@@ -6,7 +6,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Graphics/Shader.fs" />
+    <Compile Include="Graphics/VertexArray.fs" />
     <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Shaders\shader.vert" />
+    <EmbeddedResource Include="Assets\Shaders\shader.frag" />
+    <EmbeddedResource Include="Assets\silknet.png" />
   </ItemGroup>
 
   <ItemGroup>
