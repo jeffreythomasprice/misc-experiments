@@ -46,3 +46,8 @@ type Shader private (gl: GL, program: uint32, vertexShader: uint32, fragmentShad
             Ok result
 
     member this.Use() = gl.UseProgram program
+
+    member this.GetUniformLocation(name: string) =
+        match gl.GetUniformLocation(program, name) with
+        | result when result < 0 -> Error $"no such uniform: {name}"
+        | result -> Ok result

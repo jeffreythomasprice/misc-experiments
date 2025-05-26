@@ -55,48 +55,103 @@ let loadTextureFromManifestResource (gl: GL) (assembly: Assembly) (manifestResou
         Ok(Texture.NewFromStream gl stream)
     | Error e -> Error $"error loading texture: {e}"
 
-type State private (window: IWindow, gl: GL, texture: Texture, shader: Shader, vertexArray: VertexArray<Vertex>) =
-    static member New (window: IWindow) (gl: GL) =
-        match loadTextureFromManifestResource gl (Assembly.GetExecutingAssembly()) "Experiment.Assets.silknet.png" with
-        | Error e -> Error [ e ]
-        | Ok texture ->
-            match
-                loadShaderFromManifestResources
-                    gl
-                    (Assembly.GetExecutingAssembly())
-                    "Experiment.Assets.Shaders.shader.vert"
-                    "Experiment.Assets.Shaders.shader.frag"
-            with
-            | Error e -> Error e
-            | Ok shader ->
-                let vertexArray =
-                    VertexArray.New(
-                        gl,
-                        { Attributes =
-                            [ uint32 0,
-                              VertexAttributeSpecification.FromFieldName<Vertex>
-                                  2
-                                  VertexAttribPointerType.Float
-                                  false
-                                  "Position"
-                              uint32 2,
-                              VertexAttributeSpecification.FromFieldName<Vertex>
-                                  4
-                                  VertexAttribPointerType.Float
-                                  false
-                                  "Color" ]
-                            |> Map.ofList },
-                        ReadOnlySpan
-                            [| Vertex(new Vector2D<float32>(-0.5f, -0.5f), System.Drawing.Color.Red)
-                               Vertex(new Vector2D<float32>(0.5f, -0.5f), System.Drawing.Color.Green)
-                               Vertex(new Vector2D<float32>(0.5f, 0.5f), System.Drawing.Color.Blue)
-                               Vertex(new Vector2D<float32>(-0.5f, 0.5f), System.Drawing.Color.Purple) |],
-                        BufferUsageARB.DynamicDraw,
-                        (ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |]),
-                        BufferUsageARB.DynamicDraw
-                    )
+let createOrthoMatrix (size: Vector2D<int>) =
+    Matrix4X4.CreateOrthographicOffCenter(0.0f, float32 size.X, float32 size.Y, 0.0f, -1.0f, 1.0f)
 
-                Ok(new State(window, gl, texture, shader, vertexArray))
+let matrix4x4ToArray<'T
+    when 'T: unmanaged
+    and 'T: (new: unit -> 'T)
+    and 'T: struct
+    and 'T :> ValueType
+    and 'T :> IFormattable
+    and 'T :> IEquatable<'T>
+    and 'T :> IComparable<'T>>
+    (m: Matrix4X4<'T>)
+    =
+    [| m.M11
+       m.M12
+       m.M13
+       m.M14
+       m.M21
+       m.M22
+       m.M23
+       m.M24
+       m.M31
+       m.M32
+       m.M33
+       m.M34
+       m.M41
+       m.M42
+       m.M43
+       m.M44 |]
+
+type State
+    private
+    (
+        window: IWindow,
+        gl: GL,
+        texture: Texture,
+        shader: Shader,
+        projectionMatrixUniform: int,
+        vertexArray: VertexArray<Vertex>
+    ) =
+    let mutable orthoMatrix = Matrix4X4<float32>.Identity
+
+    static member New (window: IWindow) (gl: GL) =
+        let texture =
+            loadTextureFromManifestResource gl (Assembly.GetExecutingAssembly()) "Experiment.Assets.silknet.png"
+
+        let shader =
+            loadShaderFromManifestResources
+                gl
+                (Assembly.GetExecutingAssembly())
+                "Experiment.Assets.Shaders.shader.vert"
+                "Experiment.Assets.Shaders.shader.frag"
+
+        let projectionMatrixUniform =
+            shader
+            |> Result.bind (fun shader ->
+                shader.GetUniformLocation "projectionMatrixUniform"
+                |> Result.mapError (fun e -> [ e ]))
+
+        let vertexArray =
+            VertexArray.New(
+                gl,
+                { Attributes =
+                    [ uint32 0,
+                      VertexAttributeSpecification.FromFieldName<Vertex>
+                          2
+                          VertexAttribPointerType.Float
+                          false
+                          "Position"
+                      uint32 2,
+                      VertexAttributeSpecification.FromFieldName<Vertex> 4 VertexAttribPointerType.Float false "Color" ]
+                    |> Map.ofList },
+                ReadOnlySpan
+                    [| Vertex(new Vector2D<float32>(50.0f, 50.0f), System.Drawing.Color.Red)
+                       Vertex(new Vector2D<float32>(300.0f, 50.0f), System.Drawing.Color.Green)
+                       Vertex(new Vector2D<float32>(300.0f, 300.0f), System.Drawing.Color.Blue)
+                       Vertex(new Vector2D<float32>(50.0f, 300.0f), System.Drawing.Color.Purple) |],
+                BufferUsageARB.DynamicDraw,
+                ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |],
+                BufferUsageARB.DynamicDraw
+            )
+
+        match texture, shader, projectionMatrixUniform with
+        | Ok texture, Ok shader, Ok projectionMatrixUniform ->
+            Ok(new State(window, gl, texture, shader, projectionMatrixUniform, vertexArray))
+        | _ ->
+            let mutable errors = []
+
+            match texture with
+            | Ok texture -> (texture :> IDisposable).Dispose()
+            | Error e -> errors <- e :: errors
+
+            match shader with
+            | Ok shader -> (shader :> IDisposable).Dispose()
+            | Error e -> errors <- List.concat [ e; errors ]
+
+            Error errors
 
     interface IDisposable with
         member this.Dispose() : unit =
@@ -104,7 +159,9 @@ type State private (window: IWindow, gl: GL, texture: Texture, shader: Shader, v
             (shader :> IDisposable).Dispose()
             (vertexArray :> IDisposable).Dispose()
 
-    member this.Resize(size: Vector2D<int>) = gl.Viewport size
+    member this.Resize(size: Vector2D<int>) =
+        gl.Viewport size
+        orthoMatrix <- createOrthoMatrix size
 
     member this.Update(time: TimeSpan) = ()
 
@@ -113,6 +170,14 @@ type State private (window: IWindow, gl: GL, texture: Texture, shader: Shader, v
         gl.Clear ClearBufferMask.ColorBufferBit
 
         shader.Use()
+
+        gl.UniformMatrix4(projectionMatrixUniform, false, ReadOnlySpan(matrix4x4ToArray orthoMatrix))
+
+        // TODO textures
+        // gl.ActiveTexture(TextureUnit.Texture0);
+        // texture.Bind();
+        // gl.Uniform1(shader.GetUniformLocation("samplerUniform"), 0);
+
         vertexArray.Bind()
 
         gl.DrawElements(
@@ -143,7 +208,9 @@ window.add_Load (fun () ->
     state <-
         Some(
             match State.New window gl with
-            | Ok state -> state
+            | Ok state ->
+                state.Resize window.Size
+                state
             | Error e ->
                 for e in e do
                     printfn "init error: %s" e
