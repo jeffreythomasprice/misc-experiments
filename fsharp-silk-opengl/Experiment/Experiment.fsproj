@@ -9,6 +9,8 @@
   <ItemGroup>
     <Compile Include="Graphics/Shader.fs" />
     <Compile Include="Graphics/VertexArray.fs" />
+    <Compile Include="Graphics/Texture.fs" />
+    <Compile Include="ManifestResources.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

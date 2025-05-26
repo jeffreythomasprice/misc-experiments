@@ -1,40 +1,12 @@
 ﻿open System
-open System.Reflection
 open System.Runtime.InteropServices
+open System.Reflection
 open Silk.NET.Maths
 open Silk.NET.Windowing
 open Silk.NET.OpenGL
 open Silk.NET.Input
 open Experiment.Graphics
-open System.IO
-
-let sanitizeName (name: string) =
-    name.Replace('/', '*').Replace('-', '*').Replace('_', '*').Replace('.', '*').ToLower()
-
-let sanitizeManifestResourceName (assembly: Assembly) (name: string) =
-    let sanitizedName = sanitizeName name
-
-    match
-        assembly.GetManifestResourceNames()
-        |> Array.filter (fun resourceName -> sanitizedName = sanitizeName resourceName)
-    with
-    | [||] -> Error $"no results for {name}"
-    | [| result |] -> Ok result
-    | _ -> Error $"multiple results for {name}"
-
-let manifestResourceStream (assembly: Assembly) (name: string) =
-    sanitizeManifestResourceName assembly name
-    |> Result.bind (fun name ->
-        match assembly.GetManifestResourceStream name with
-        | null -> Error $"failed to find embedded file: {name}"
-        | result -> Ok result)
-
-let manifestResourceString (assembly: Assembly) (name: string) =
-    manifestResourceStream assembly name
-    |> Result.bind (fun stream ->
-        use stream = stream
-        use reader = new StreamReader(stream)
-        Ok(reader.ReadToEnd()))
+open Experiment.ManifestResources
 
 [<Struct; StructLayout(LayoutKind.Sequential)>]
 type Vertex =
@@ -56,15 +28,16 @@ type Vertex =
 
 let loadShaderFromManifestResources
     (gl: GL)
+    (assembly: Assembly)
     (vertexShaderManifestResourceName: string)
     (fragmentShaderManifestResourceName: string)
     =
     let vertexShaderSource =
-        manifestResourceString (Assembly.GetExecutingAssembly()) vertexShaderManifestResourceName
+        manifestResourceString assembly vertexShaderManifestResourceName
         |> Result.mapError (fun e -> $"error loading vertex shader: {e}")
 
     let fragmentShaderSource =
-        manifestResourceString (Assembly.GetExecutingAssembly()) fragmentShaderManifestResourceName
+        manifestResourceString assembly fragmentShaderManifestResourceName
         |> Result.mapError (fun e -> $"error loading fragment shader: {e}")
 
     match vertexShaderSource, fragmentShaderSource with
@@ -75,47 +48,59 @@ let loadShaderFromManifestResources
     | Ok _, Error fragmentShaderError -> Error [ fragmentShaderError ]
     | Error vertexShaderError, Error fragmentShaderError -> Error [ vertexShaderError; fragmentShaderError ]
 
-type State private (window: IWindow, gl: GL, shader: Shader, vertexArray: VertexArray<Vertex>) =
-    static member New (window: IWindow) (gl: GL) =
-        match
-            loadShaderFromManifestResources
-                gl
-                "Experiment.Assets.Shaders.shader.vert"
-                "Experiment.Assets.Shaders.shader.frag"
-        with
-        | Error e -> Error e
-        | Ok shader ->
-            let vertexArray =
-                VertexArray.New(
-                    gl,
-                    { Attributes =
-                        [ uint32 0,
-                          VertexAttributeSpecification.FromFieldName<Vertex>
-                              2
-                              VertexAttribPointerType.Float
-                              false
-                              "Position"
-                          uint32 2,
-                          VertexAttributeSpecification.FromFieldName<Vertex>
-                              4
-                              VertexAttribPointerType.Float
-                              false
-                              "Color" ]
-                        |> Map.ofList },
-                    ReadOnlySpan
-                        [| Vertex(new Vector2D<float32>(-0.5f, -0.5f), System.Drawing.Color.Red)
-                           Vertex(new Vector2D<float32>(0.5f, -0.5f), System.Drawing.Color.Green)
-                           Vertex(new Vector2D<float32>(0.5f, 0.5f), System.Drawing.Color.Blue)
-                           Vertex(new Vector2D<float32>(-0.5f, 0.5f), System.Drawing.Color.Purple) |],
-                    BufferUsageARB.DynamicDraw,
-                    (ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |]),
-                    BufferUsageARB.DynamicDraw
-                )
+let loadTextureFromManifestResource (gl: GL) (assembly: Assembly) (manifestResourceName: string) =
+    match manifestResourceStream assembly manifestResourceName with
+    | Ok stream ->
+        use stream = stream
+        Ok(Texture.NewFromStream gl stream)
+    | Error e -> Error $"error loading texture: {e}"
 
-            Ok(new State(window, gl, shader, vertexArray))
+type State private (window: IWindow, gl: GL, texture: Texture, shader: Shader, vertexArray: VertexArray<Vertex>) =
+    static member New (window: IWindow) (gl: GL) =
+        match loadTextureFromManifestResource gl (Assembly.GetExecutingAssembly()) "Experiment.Assets.silknet.png" with
+        | Error e -> Error [ e ]
+        | Ok texture ->
+            match
+                loadShaderFromManifestResources
+                    gl
+                    (Assembly.GetExecutingAssembly())
+                    "Experiment.Assets.Shaders.shader.vert"
+                    "Experiment.Assets.Shaders.shader.frag"
+            with
+            | Error e -> Error e
+            | Ok shader ->
+                let vertexArray =
+                    VertexArray.New(
+                        gl,
+                        { Attributes =
+                            [ uint32 0,
+                              VertexAttributeSpecification.FromFieldName<Vertex>
+                                  2
+                                  VertexAttribPointerType.Float
+                                  false
+                                  "Position"
+                              uint32 2,
+                              VertexAttributeSpecification.FromFieldName<Vertex>
+                                  4
+                                  VertexAttribPointerType.Float
+                                  false
+                                  "Color" ]
+                            |> Map.ofList },
+                        ReadOnlySpan
+                            [| Vertex(new Vector2D<float32>(-0.5f, -0.5f), System.Drawing.Color.Red)
+                               Vertex(new Vector2D<float32>(0.5f, -0.5f), System.Drawing.Color.Green)
+                               Vertex(new Vector2D<float32>(0.5f, 0.5f), System.Drawing.Color.Blue)
+                               Vertex(new Vector2D<float32>(-0.5f, 0.5f), System.Drawing.Color.Purple) |],
+                        BufferUsageARB.DynamicDraw,
+                        (ReadOnlySpan [| uint16 0; uint16 1; uint16 2; uint16 2; uint16 3; uint16 0 |]),
+                        BufferUsageARB.DynamicDraw
+                    )
+
+                Ok(new State(window, gl, texture, shader, vertexArray))
 
     interface IDisposable with
         member this.Dispose() : unit =
+            (texture :> IDisposable).Dispose()
             (shader :> IDisposable).Dispose()
             (vertexArray :> IDisposable).Dispose()
 
