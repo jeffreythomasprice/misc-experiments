@@ -118,9 +118,14 @@ let OneOf<'T> (matchers: Matcher<'T> list) : Matcher<'T> =
                 { Expected = sprintf "one of %A" messages
                   Remainder = input }
 
+type RepeatOptions =
+    | AtLeast of Min: int
+    | AtMost of Max: int
+    | Range of Min: int * Max: int
+
+let Repeat<'T> (m: Matcher<'T>) (options: RepeatOptions) : Matcher<'T list> = failwith "TODO impl"
 
 (*
-TODO repeats
 TODO zeroOrMore
 TODO oneOrMore
 TODO optional
