@@ -141,21 +141,68 @@ fn parse_label<'a>(input: &InputString<'a>) -> Result<'a, Option<&'a str>> {
 }
 
 fn parse_i32<'a>(input: &InputString<'a>) -> Result<'a, i32> {
+    // TODO hex? octal? binary?
     static R: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\-?[0-9_]+").unwrap());
-    if let Ok(Success { result, remainder }) = parse_regex(input, &R) {
-        if let Ok(result) = result.parse() {
-            return Ok(Success { result, remainder });
-        }
-    }
-    Err(Error {
+    let Success { result, remainder } = parse_regex(input, &R).map_err(|_| Error {
         message: "expected i32".to_string(),
         location: input.location,
-    })
+    })?;
+    let result = result.parse().map_err(|e| Error {
+        message: format!("error parsing number as i32: {:?}", e),
+        location: input.location,
+    })?;
+    Ok(Success { result, remainder })
 }
 
 // TODO more number types?
-// TODO parse_number
-// TODO parse_argument = identifier | number
+
+#[derive(Debug, Clone, PartialEq)]
+enum Number {
+    I32(i32),
+}
+
+fn parse_number<'a>(input: &InputString<'a>) -> Result<'a, Number> {
+    if let Ok(Success { result, remainder }) = parse_i32(input) {
+        Ok(Success {
+            result: Number::I32(result),
+            remainder,
+        })
+    } else {
+        Err(Error {
+            message: "expected number".to_string(),
+            location: input.location,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum Argument<'a> {
+    Identifier(&'a str),
+    Number(Number),
+}
+
+fn parse_argument<'a>(input: &InputString<'a>) -> Result<'a, Argument<'a>> {
+    if let Ok(Success { result, remainder }) = parse_number(input) {
+        Ok(Success {
+            result: Argument::Number(result),
+            remainder,
+        })
+    } else if let Ok(Success { result, remainder }) = parse_identifier(input) {
+        Ok(Success {
+            result: Argument::Identifier(result),
+            remainder,
+        })
+    } else {
+        Err(Error {
+            message: "expected argument".to_string(),
+            location: input.location,
+        })
+    }
+}
+
+fn parse_argument_list<'a>(input: &InputString<'a>) -> Result<'a, Vec<Argument<'a>>> {
+    todo!()
+}
 
 #[cfg(test)]
 mod tests {
@@ -426,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_i32_failure() {
+    fn parse_i32_failure_not_a_number() {
         let result = parse_i32(&InputString {
             input: "foo bar",
             location: Location { line: 0, column: 0 },
@@ -439,4 +486,107 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn parse_i32_failure_out_of_range() {
+        let result = parse_i32(&InputString {
+            input: "2147483648 bar",
+            location: Location { line: 0, column: 0 },
+        });
+        assert_eq!(
+            result,
+            Err(Error {
+                message: "error parsing number as i32: ParseIntError { kind: PosOverflow }".to_string(),
+                location: Location { line: 0, column: 0 },
+            })
+        );
+    }
+
+    #[test]
+    fn parse_number_i32() {
+        let result = parse_number(&InputString {
+            input: "123 bar",
+            location: Location { line: 0, column: 0 },
+        });
+        assert_eq!(
+            result,
+            Ok(Success {
+                result: Number::I32(123),
+                remainder: InputString {
+                    input: " bar",
+                    location: Location { line: 0, column: 3 }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn parse_number_failure() {
+        let result = parse_number(&InputString {
+            input: "foo bar",
+            location: Location { line: 0, column: 0 },
+        });
+        assert_eq!(
+            result,
+            Err(Error {
+                message: "expected number".to_string(),
+                location: Location { line: 0, column: 0 }
+            })
+        );
+    }
+
+    #[test]
+    fn parse_argument_identifier() {
+        let result = parse_argument(&InputString {
+            input: "foo bar",
+            location: Location { line: 0, column: 0 },
+        });
+        assert_eq!(
+            result,
+            Ok(Success {
+                result: Argument::Identifier("foo"),
+                remainder: InputString {
+                    input: " bar",
+                    location: Location { line: 0, column: 3 }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn parse_argument_number() {
+        let result = parse_argument(&InputString {
+            input: "123 bar",
+            location: Location { line: 0, column: 0 },
+        });
+        assert_eq!(
+            result,
+            Ok(Success {
+                result: Argument::Number(Number::I32(123)),
+                remainder: InputString {
+                    input: " bar",
+                    location: Location { line: 0, column: 3 }
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn parse_argument_failure() {
+        let result = parse_argument(&InputString {
+            input: "~~~ bar",
+            location: Location { line: 0, column: 0 },
+        });
+        assert_eq!(
+            result,
+            Err(Error {
+                message: "expected argument".to_string(),
+                location: Location { line: 0, column: 0 }
+            })
+        );
+    }
+
+    // TODO parse_argument_list_0
+    // TODO parse_argument_list_1
+    // TODO parse_argument_list_2
 }
