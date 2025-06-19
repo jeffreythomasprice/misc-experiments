@@ -138,6 +138,99 @@ let ``oneOf data``: obj array list =
 [<MemberData(nameof (``oneOf data``))>]
 let ``oneOf test`` matcher input expected = commonTest matcher input expected
 
-(*
-TODO repeat tests
-*)
+let ``repeat data``: obj array list =
+    [ [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (AtLeast 1)
+         InputString.FromString "123 456 789 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 "; "456 "; "789 " ]
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 12 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (AtLeast 2)
+         InputString.FromString "123 foobar"
+         MatchResult<string list>.Error
+             { Expected = "[0-9]+ "
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 4 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (AtLeast 2)
+         InputString.FromString "123 456 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 "; "456 " ]
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 8 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (AtLeast 3)
+         InputString.FromString "123 456 789 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 "; "456 "; "789 " ]
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 12 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (AtMost 0)
+         InputString.FromString "foobar"
+         MatchResult<string list>.Ok
+             { Result = []
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 0 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (AtMost 1)
+         InputString.FromString "123 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 " ]
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 4 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (AtMost 2)
+         InputString.FromString "123 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 " ]
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 4 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (AtMost 2)
+         InputString.FromString "123 456 789 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 "; "456 " ]
+               Remainder =
+                 { Input = "789 foobar"
+                   Location = { Line = 0; Column = 8 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (Range(2, 4))
+         InputString.FromString "123 foobar"
+         MatchResult<string list>.Error
+             { Expected = "[0-9]+ "
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 4 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (Range(2, 4))
+         InputString.FromString "123 456 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 "; "456 " ]
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 8 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (Range(2, 4))
+         InputString.FromString "123 456 789 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 "; "456 "; "789 " ]
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 12 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (Range(2, 4))
+         InputString.FromString "123 456 789 111 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 "; "456 "; "789 "; "111 " ]
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 16 } } } |]
+      [| Repeat (RegularExpression(new Regex "[0-9]+ ")) (Range(2, 4))
+         InputString.FromString "123 456 789 111 222 foobar"
+         MatchResult<string list>.Ok
+             { Result = [ "123 "; "456 "; "789 "; "111 " ]
+               Remainder =
+                 { Input = "222 foobar"
+                   Location = { Line = 0; Column = 16 } } } |] ]
+
+[<Theory>]
+[<MemberData(nameof (``repeat data``))>]
+let ``repeat test`` matcher input expected = commonTest matcher input expected

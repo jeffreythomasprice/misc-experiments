@@ -123,10 +123,44 @@ type RepeatOptions =
     | AtMost of Max: int
     | Range of Min: int * Max: int
 
-let Repeat<'T> (m: Matcher<'T>) (options: RepeatOptions) : Matcher<'T list> = failwith "TODO impl"
+let Repeat<'T> (m: Matcher<'T>) (options: RepeatOptions) : Matcher<'T list> =
+    let isValidNumberOfRepetitions x =
+        match options with
+        | AtLeast min -> x >= min
+        | AtMost max -> x <= max
+        | Range(min, max) -> x >= min && x <= max
+
+    let rec next results input =
+        let curLen = List.length results
+
+        // if one more result would break it we can abort
+        if
+            isValidNumberOfRepetitions curLen
+            && not (isValidNumberOfRepetitions (curLen + 1))
+        then
+            Ok { Result = results; Remainder = input }
+        else
+            // try to match another result
+            match m input with
+            // if we succeed we can append this result to our list and recurse
+            | Ok { Result = result
+                   Remainder = remainder } -> next (result :: results) remainder
+            // if we fail we can abort with either a success or a failure depending on whether the current number of matches is good
+            | Error errorValue ->
+                if isValidNumberOfRepetitions curLen then
+                    Ok { Result = results; Remainder = input }
+                else
+                    Error errorValue
+
+    fun (input: InputString) ->
+        next [] input
+        |> Result.map
+            (fun
+                { Result = results
+                  Remainder = remainder } ->
+                { Result = List.rev results
+                  Remainder = remainder })
 
 (*
-TODO zeroOrMore
-TODO oneOrMore
 TODO optional
 *)
