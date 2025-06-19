@@ -254,3 +254,35 @@ let ``optional data``: obj array list =
 [<Theory>]
 [<MemberData(nameof (``optional data``))>]
 let ``optional test`` matcher input expected = commonTest matcher input expected
+
+let parseInt32 (s: string) : Result<Int32, string> =
+    match Int32.TryParse s with
+    | true, result -> Ok result
+    | _ -> Error(sprintf "failed to parse as int32: %s" s)
+
+let ``map data``: obj array list =
+    [ [| RegularExpression(new Regex "[0-9]+") |> Map parseInt32
+         InputString.FromString "123foobar"
+         MatchResult<Int32>.Ok
+             { Result = 123
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 3 } } } |]
+      [| RegularExpression(new Regex "[0-9]+") |> Map parseInt32
+         InputString.FromString "999999999999999foobar"
+         MatchResult<Int32>.Error
+             { Expected = "map failure: \"failed to parse as int32: 999999999999999\""
+               Remainder =
+                 { Input = "999999999999999foobar"
+                   Location = { Line = 0; Column = 0 } } } |]
+      [| RegularExpression(new Regex "[0-9]+") |> Map parseInt32
+         InputString.FromString "foobar"
+         MatchResult<Int32>.Error
+             { Expected = "[0-9]+"
+               Remainder =
+                 { Input = "foobar"
+                   Location = { Line = 0; Column = 0 } } } |] ]
+
+[<Theory>]
+[<MemberData(nameof (``map data``))>]
+let ``map test`` matcher input expected = commonTest matcher input expected

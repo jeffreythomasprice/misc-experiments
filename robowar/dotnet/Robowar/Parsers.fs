@@ -170,3 +170,19 @@ let Optional<'T> (m: Matcher<'T>) : Matcher<'T option> =
                 { Result = Some result
                   Remainder = remainder }
         | Error _ -> Ok { Result = None; Remainder = input }
+
+let Map<'T, 'R, 'E> (f: 'T -> Result<'R, 'E>) (m: Matcher<'T>) : Matcher<'R> =
+    fun (input: InputString) ->
+        match m input with
+        | Ok { Result = result
+               Remainder = remainder } ->
+            match f result with
+            | Ok result ->
+                Ok
+                    { Result = result
+                      Remainder = remainder }
+            | Error e ->
+                Error
+                    { Expected = sprintf "map failure: %A" e
+                      Remainder = input }
+        | Error e -> Error e
