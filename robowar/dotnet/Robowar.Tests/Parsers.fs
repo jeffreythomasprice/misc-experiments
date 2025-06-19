@@ -234,3 +234,23 @@ let ``repeat data``: obj array list =
 [<Theory>]
 [<MemberData(nameof (``repeat data``))>]
 let ``repeat test`` matcher input expected = commonTest matcher input expected
+
+let ``optional data``: obj array list =
+    [ [| Optional(LiteralString "foo")
+         InputString.FromString "foobar"
+         MatchResult<string option>.Ok
+             { Result = Some "foo"
+               Remainder =
+                 { Input = "bar"
+                   Location = { Line = 0; Column = 3 } } } |]
+      [| Optional(LiteralString "foo")
+         InputString.FromString "bar"
+         MatchResult<string option>.Ok
+             { Result = None
+               Remainder =
+                 { Input = "bar"
+                   Location = { Line = 0; Column = 0 } } } |] ]
+
+[<Theory>]
+[<MemberData(nameof (``optional data``))>]
+let ``optional test`` matcher input expected = commonTest matcher input expected

@@ -161,6 +161,12 @@ let Repeat<'T> (m: Matcher<'T>) (options: RepeatOptions) : Matcher<'T list> =
                 { Result = List.rev results
                   Remainder = remainder })
 
-(*
-TODO optional
-*)
+let Optional<'T> (m: Matcher<'T>) : Matcher<'T option> =
+    fun (input: InputString) ->
+        match m input with
+        | Ok { Result = result
+               Remainder = remainder } ->
+            Ok
+                { Result = Some result
+                  Remainder = remainder }
+        | Error _ -> Ok { Result = None; Remainder = input }
