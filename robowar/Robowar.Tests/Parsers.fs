@@ -1,14 +1,10 @@
-﻿module Tests
+﻿module Robowar.Tests.Parsers
 
+open Robowar.Tests.Common
 open System
 open System.Text.RegularExpressions
 open Xunit
 open Robowar.Parsers
-
-let commonTest<'T when 'T: equality> (matcher: Matcher<'T>) (input: InputString) (expected: MatchResult<'T>) =
-    let actual = matcher input
-    let message = sprintf "actual != expected\nactual: %A\nexpected: %A" actual expected
-    Assert.True(actual.Equals expected, message)
 
 let ``literal string data``: obj array list =
     [ [| LiteralString "foo"
