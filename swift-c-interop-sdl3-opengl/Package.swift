@@ -3,16 +3,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "swift-c-interop",
+    name: "Experiment",
     products: [
         .executable(
-            name: "swift-c-interop",
-            targets: ["swift-c-interop"],
+            name: "Experiment",
+            targets: ["Experiment"],
         )
     ],
     targets: [
         .executableTarget(
-            name: "swift-c-interop",
+            name: "Experiment",
             dependencies: [
                 "CLib",
                 "CSDL",
@@ -20,9 +20,9 @@ let package = Package(
             ],
         ),
         .testTarget(
-            name: "swift-c-interopTests",
+            name: "ExperimentTests",
             dependencies: [
-                "swift-c-interop"
+                "Experiment"
             ]
         ),
         .target(
