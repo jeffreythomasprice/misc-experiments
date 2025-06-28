@@ -33,7 +33,11 @@ let package = Package(
             name: "CSDL",
             publicHeadersPath: ".",
             cSettings: [
-                .unsafeFlags(["-L."])
+                // .headerSearchPath("-I../../.deps/SDL3/SDL3-3.2.16/include"),
+                // .unsafeFlags([
+                //     "-I../../.deps/SDL3/SDL3-3.2.16/include",
+                //     "-L../../.deps/SDL3/SDL3-3.2.16/lib/x64",
+                // ]),
             ],
         ),
         .target(
