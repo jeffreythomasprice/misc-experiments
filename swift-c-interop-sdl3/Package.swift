@@ -16,6 +16,7 @@ let package = Package(
             dependencies: [
                 "CLib",
                 "CSDL",
+                "COpenGL",
             ],
         ),
         .testTarget(
@@ -27,24 +28,17 @@ let package = Package(
         .target(
             name: "CLib",
             publicHeadersPath: "./",
-            // sources: [
-            //     "./"
-            // ],
-            // cSettings: [
-            //     .headerSearchPath("./")
-            // ],
         ),
         .target(
             name: "CSDL",
             publicHeadersPath: ".",
-            // sources: [
-            //     "./"
-            // ],
             cSettings: [
-                // .headerSearchPath("src")
-                // .unsafeFlags(["-I."])
                 .unsafeFlags(["-L."])
             ],
+        ),
+        .target(
+            name: "COpenGL",
+            publicHeadersPath: ".",
         ),
     ]
 )

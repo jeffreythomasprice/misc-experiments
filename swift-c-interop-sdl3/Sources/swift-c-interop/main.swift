@@ -1,4 +1,5 @@
 import CLib
+import COpenGL
 import CSDL
 
 print("add result = \(add(1,2))")
@@ -14,7 +15,8 @@ defer {
 
 print("SDL version = \(SDL_GetVersion())")
 
-let window = SDL_CreateWindow("Experiment", 1024, 768, 0)
+let SDL_WINDOW_OPENGL = SDL_WindowFlags(0x0000_0000_0000_0002)
+let window = SDL_CreateWindow("Experiment", 1024, 768, SDL_WINDOW_OPENGL)
 if window == nil {
 	let error = String(cString: SDL_GetError())
 	print("failed to create SDL window: \(error)")
@@ -24,10 +26,10 @@ defer {
 	SDL_DestroyWindow(window)
 }
 
-let renderer = SDL_CreateRenderer(window, nil)
-defer {
-	SDL_DestroyRenderer(renderer)
-}
+let glContext = SDL_GL_CreateContext(window)
+
+let framesPerSecond = 60
+let delayBetweenFrames = 1000 / framesPerSecond
 
 var exiting = false
 while !exiting {
@@ -51,9 +53,9 @@ while !exiting {
 		}
 	}
 
-	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255)
-	SDL_RenderClear(renderer)
-	SDL_RenderPresent(renderer)
+	glClearColor(0.25, 0.5, 1, 1)
+	glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
+	SDL_GL_SwapWindow(window)
 
-	SDL_Delay(20)
+	SDL_Delay(Uint32(delayBetweenFrames))
 }

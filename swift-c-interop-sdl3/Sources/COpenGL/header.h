@@ -2,4 +2,4 @@
 #include <windows.h>
 #endif
 
-#include <SDL3/SDL.h>
+#include <GL/GL.h>
