@@ -1,0 +1,22 @@
+{
+	"configurations": [
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:swift-c-interop}",
+			"name": "Debug swift-c-interop",
+			"program": "${workspaceFolder:swift-c-interop}/.build/debug/swift-c-interop",
+			"preLaunchTask": "swift: Build Debug swift-c-interop"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:swift-c-interop}",
+			"name": "Release swift-c-interop",
+			"program": "${workspaceFolder:swift-c-interop}/.build/release/swift-c-interop",
+			"preLaunchTask": "swift: Build Release swift-c-interop"
+		}
+	]
+}
