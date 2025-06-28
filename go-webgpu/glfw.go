@@ -1,3 +1,5 @@
+//go:build !js
+
 package main
 
 import (
@@ -16,7 +18,7 @@ func main() {
 	defer glfw.Terminate()
 
 	glfw.WindowHint(glfw.ClientAPI, glfw.NoAPI)
-	window, err := glfw.CreateWindow(640, 480, "go-webgpu with glfw", nil, nil)
+	window, err := glfw.CreateWindow(1024, 768, "Experiment", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -51,7 +53,7 @@ func main() {
 
 		err := s.Render()
 		if err != nil {
-			fmt.Println("error occurred while rendering:", err)
+			fmt.Println("error occurred while rendering: %v", err)
 
 			errstr := err.Error()
 			switch {
