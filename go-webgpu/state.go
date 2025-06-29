@@ -33,6 +33,11 @@ func init() {
 //go:embed shader.wgsl
 var shader string
 
+type Vertex struct {
+	X float32
+	Y float32
+}
+
 type State struct {
 	instance *wgpu.Instance
 	adapter  *wgpu.Adapter
@@ -40,50 +45,51 @@ type State struct {
 	device   *wgpu.Device
 	queue    *wgpu.Queue
 	config   *wgpu.SurfaceConfiguration
+	buffer   *Buffer[Vertex]
 	pipeline *wgpu.RenderPipeline
 }
 
-func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDescriptor) (s *State, err error) {
+func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDescriptor) (result *State, err error) {
 	defer func() {
 		if err != nil {
-			s.Destroy()
-			s = nil
+			result.Destroy()
+			result = nil
 		}
 	}()
-	s = &State{}
+	result = &State{}
 
-	s.instance = wgpu.CreateInstance(nil)
+	result.instance = wgpu.CreateInstance(nil)
 
-	s.surface = s.instance.CreateSurface(sd)
+	result.surface = result.instance.CreateSurface(sd)
 
-	s.adapter, err = s.instance.RequestAdapter(&wgpu.RequestAdapterOptions{
+	result.adapter, err = result.instance.RequestAdapter(&wgpu.RequestAdapterOptions{
 		ForceFallbackAdapter: forceFallbackAdapter,
-		CompatibleSurface:    s.surface,
+		CompatibleSurface:    result.surface,
 	})
 	if err != nil {
-		return s, err
+		return result, err
 	}
-	defer s.adapter.Release()
+	defer result.adapter.Release()
 
-	s.device, err = s.adapter.RequestDevice(nil)
+	result.device, err = result.adapter.RequestDevice(nil)
 	if err != nil {
-		return s, err
+		return result, err
 	}
-	s.queue = s.device.GetQueue()
+	result.queue = result.device.GetQueue()
 
-	shader, err := s.device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
+	shader, err := result.device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
 		Label:          "shader.wgsl",
 		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{Code: shader},
 	})
 	if err != nil {
-		return s, err
+		return result, err
 	}
 	defer shader.Release()
 
-	caps := s.surface.GetCapabilities(s.adapter)
+	caps := result.surface.GetCapabilities(result.adapter)
 
 	width, height := window.GetSize()
-	s.config = &wgpu.SurfaceConfiguration{
+	result.config = &wgpu.SurfaceConfiguration{
 		Usage:       wgpu.TextureUsageRenderAttachment,
 		Format:      caps.Formats[0],
 		Width:       uint32(width),
@@ -92,13 +98,46 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 		AlphaMode:   caps.AlphaModes[0],
 	}
 
-	s.surface.Configure(s.adapter, s.device, s.config)
+	result.surface.Configure(result.adapter, result.device, result.config)
 
-	s.pipeline, err = s.device.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
+	result.buffer, err = NewBufferInit(
+		result.device,
+		[]Vertex{
+			Vertex{
+				X: -0.5,
+				Y: -0.5,
+			}, Vertex{
+				X: 0.5,
+				Y: -0.5,
+			}, Vertex{
+				X: 0.0,
+				Y: 0.5,
+			},
+		},
+		wgpu.BufferUsageVertex,
+	)
+	if err != nil {
+		return result, err
+	}
+
+	result.pipeline, err = result.device.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
 		Label: "Render Pipeline",
 		Vertex: wgpu.VertexState{
 			Module:     shader,
 			EntryPoint: "vs_main",
+			Buffers: []wgpu.VertexBufferLayout{
+				wgpu.VertexBufferLayout{
+					StepMode:    wgpu.VertexStepModeVertex,
+					ArrayStride: uint64(result.buffer.StrideInBytes),
+					Attributes: []wgpu.VertexAttribute{
+						wgpu.VertexAttribute{
+							Format:         wgpu.VertexFormatFloat32x2,
+							Offset:         0,
+							ShaderLocation: 0,
+						},
+					},
+				},
+			},
 		},
 		Primitive: wgpu.PrimitiveState{
 			Topology:         wgpu.PrimitiveTopologyTriangleList,
@@ -116,7 +155,7 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 			EntryPoint: "fs_main",
 			Targets: []wgpu.ColorTargetState{
 				{
-					Format:    s.config.Format,
+					Format:    result.config.Format,
 					Blend:     &wgpu.BlendStateReplace,
 					WriteMask: wgpu.ColorWriteMaskAll,
 				},
@@ -124,10 +163,10 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 		},
 	})
 	if err != nil {
-		return s, err
+		return result, err
 	}
 
-	return s, nil
+	return result, nil
 }
 
 func (s *State) Resize(width, height int) {
@@ -161,16 +200,32 @@ func (s *State) Render() error {
 	renderPass := encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
 		ColorAttachments: []wgpu.RenderPassColorAttachment{
 			{
-				View:       view,
-				LoadOp:     wgpu.LoadOpClear,
-				StoreOp:    wgpu.StoreOpStore,
-				ClearValue: wgpu.ColorGreen,
+				View:    view,
+				LoadOp:  wgpu.LoadOpClear,
+				StoreOp: wgpu.StoreOpStore,
+				ClearValue: wgpu.Color{
+					R: 0.25,
+					G: 0.5,
+					B: 1,
+					A: 1,
+				},
 			},
 		},
 	})
 
 	renderPass.SetPipeline(s.pipeline)
-	renderPass.Draw(3, 1, 0, 0)
+	renderPass.SetVertexBuffer(
+		0,
+		s.buffer.Buffer,
+		uint64(s.buffer.StrideInBytes),
+		uint64(s.buffer.StrideInBytes)*uint64(s.buffer.Length),
+	)
+	renderPass.Draw(
+		uint32(s.buffer.Length),
+		1,
+		0,
+		0,
+	)
 	renderPass.End()
 	renderPass.Release() // must release
 
@@ -209,5 +264,9 @@ func (s *State) Destroy() {
 	if s.instance != nil {
 		s.instance.Release()
 		s.instance = nil
+	}
+	if s.buffer != nil {
+		s.buffer.Destroy()
+		s.buffer = nil
 	}
 }
