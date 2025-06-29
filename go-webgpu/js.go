@@ -32,6 +32,7 @@ func main() {
 		panic(err)
 	}
 	defer s.Destroy()
+	// TODO requestAnimFrame
 	ticker := time.NewTicker(time.Second / 30)
 	for range ticker.C {
 		s.Render()
