@@ -17,17 +17,25 @@ use chumsky::prelude::*;
 //     })
 // }
 
+#[derive(Debug)]
 enum Argument<'a> {
     Identifier(&'a str),
     U32(u32),
 }
 
 fn argument<'a>() -> impl Parser<'a, &'a str, Argument<'a>> {
-    let identifier = regex("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    // let identifier = regex("^[a-zA-Z_][a-zA-Z0-9_]*$").try_map(|x: &str, span| Ok(x));
+
+    // let number_u32 = regex("^[0-9]+$").try_map(|x: &str, span| match x.parse() {
+    //     Ok(result) => Ok(result),
+    //     Err(e) => Err(<EmptyErr as std::default::Default>::default()),
+    // });
+
+    let identifier = regex("^[a-zA-Z_][a-zA-Z0-9_]*$").try_map(|x: &str, span| Ok(x));
 
     let number_u32 = regex("^[0-9]+$").try_map(|x: &str, span| match x.parse() {
         Ok(result) => Ok(result),
-        Err(e) => Err(Rich::custom(span, format!("{e:?}"))),
+        Err(e) => Err(Rich::custom(span, e)),
     });
 
     choice((
@@ -37,7 +45,7 @@ fn argument<'a>() -> impl Parser<'a, &'a str, Argument<'a>> {
 }
 
 fn main() {
-    let input = "foobar";
+    let input = "99999999999999";
     let parser = argument();
     let result = parser.parse(input);
     println!("{:?}", result);
