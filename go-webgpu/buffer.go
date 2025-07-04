@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
@@ -14,12 +15,8 @@ type Buffer[T any] struct {
 
 func NewBufferInit[T any](device *wgpu.Device, data []T, usage wgpu.BufferUsage) (*Buffer[T], error) {
 	result, err := device.CreateBufferInit(&wgpu.BufferInitDescriptor{
-		Contents: toByteSlice([]float32{
-			-0.5, -0.5,
-			0.5, -0.5,
-			0.0, 0.5,
-		}),
-		Usage: usage | wgpu.BufferUsageCopyDst,
+		Contents: toByteSlice(data),
+		Usage:    usage | wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
 		return nil, err
@@ -37,5 +34,6 @@ func (b *Buffer[T]) Destroy() {
 }
 
 func toByteSlice[T any](in []T) []byte {
+	fmt.Printf("TODO toByteSlice: %v, len=%v, sizeof[0]=%v", in, len(in), unsafe.Sizeof(in[0]))
 	return unsafe.Slice((*byte)(unsafe.Pointer(&in[0])), uintptr(len(in))*unsafe.Sizeof(in[0]))
 }

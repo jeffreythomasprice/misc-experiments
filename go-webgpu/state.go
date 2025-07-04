@@ -103,13 +103,13 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 	result.buffer, err = NewBufferInit(
 		result.device,
 		[]Vertex{
-			Vertex{
+			{
 				X: -0.5,
 				Y: -0.5,
-			}, Vertex{
+			}, {
 				X: 0.5,
 				Y: -0.5,
-			}, Vertex{
+			}, {
 				X: 0.0,
 				Y: 0.5,
 			},
@@ -126,11 +126,11 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 			Module:     shader,
 			EntryPoint: "vs_main",
 			Buffers: []wgpu.VertexBufferLayout{
-				wgpu.VertexBufferLayout{
+				{
 					StepMode:    wgpu.VertexStepModeVertex,
 					ArrayStride: uint64(result.buffer.StrideInBytes),
 					Attributes: []wgpu.VertexAttribute{
-						wgpu.VertexAttribute{
+						{
 							Format:         wgpu.VertexFormatFloat32x2,
 							Offset:         0,
 							ShaderLocation: 0,

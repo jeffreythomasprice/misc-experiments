@@ -197,11 +197,8 @@ type State private (window: IWindow, webgpu: WebGPU, surface: nativeptr<Surface>
         | Key.Escape -> window.Close()
         | _ -> ()
 
-let mutable windowOptions = WindowOptions.Default
-windowOptions.Title <- "Experiment"
-windowOptions.Size <- new Vector2D<int>(1024, 768)
-
-let window = Window.Create(windowOptions)
+let window =
+    Window.Create(new WindowOptions(Title = "Experiment", Size = new Vector2D<int>(1024, 768)))
 
 let mutable state = None
 
