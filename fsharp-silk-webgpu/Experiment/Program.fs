@@ -5,7 +5,6 @@ open Silk.NET.Maths
 open Silk.NET.Input
 open Silk.NET.WebGPU
 open System.Runtime.InteropServices
-open Microsoft.FSharp.NativeInterop
 
 let createInstance (webgpu: WebGPU) =
     let descriptor = new InstanceDescriptor()
@@ -33,47 +32,107 @@ let createAdapter (webgpu: WebGPU) (instance: nativeptr<Instance>) (surface: nat
             if status = RequestAdapterStatus.Success then
                 result <- Some(Ok adapter)
             else
-                let msg = Marshal.PtrToStringAnsi(NativePtr.toNativeInt msgPtr)
-                result <- Some(Error(new Exception($"error getting adapter: {msg}"))))
+                result <-
+                    Some(
+                        Error(
+                            new Exception $"error getting adapter: {Marshalling.AnsiStringMarshaller.ConvertToManaged msgPtr}"
+                        )
+                    ))
 
-    webgpu.InstanceRequestAdapter(instance, &options, callback, null)
+    webgpu.InstanceRequestAdapter(instance, &options, callback, IntPtr.Zero.ToPointer())
 
-    // 	webGPU.InstanceRequestAdapter(instance, ref options, callback, null);
+    match result with
+    | None -> Error(new Exception "expected adapter via callback by this point")
+    | Some(Error e) -> Error e
+    | Some(Ok result) ->
+        let adapterProperties = new AdapterProperties()
+        webgpu.AdapterGetProperties(result, ref adapterProperties)
+        printfn $"adapter type: {adapterProperties.AdapterType}"
 
-    // 	if (error != null)
-    // 	{
-    // 		throw error;
-    // 	}
-    // 	if (result == null)
-    // 	{
-    // 		throw new Exception($"didn't create adapter, completed without callback being invoked");
-    // 	}
+        printfn
+            $"adapter architecture: {Marshalling.AnsiStringMarshaller.ConvertToManaged adapterProperties.Architecture}"
 
-    // 	var adapterProperties = new AdapterProperties();
-    // 	webGPU.AdapterGetProperties(result, ref adapterProperties);
-    // 	Console.WriteLine($"adapter type: {adapterProperties.AdapterType}");
-    // 	Console.WriteLine($"adapter architecture: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.Architecture)}");
-    // 	Console.WriteLine($"adapter backend type: {adapterProperties.BackendType}");
-    // 	Console.WriteLine($"adapter device ID: {adapterProperties.DeviceID}");
-    // 	Console.WriteLine($"adapter driver description: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.DriverDescription)}");
-    // 	Console.WriteLine($"adapter name: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.Name)}");
-    // 	Console.WriteLine($"adapter vendor ID: {adapterProperties.VendorID}");
-    // 	Console.WriteLine($"adapter vendor name: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.VendorName)}");
+        printfn $"adapter backend type: {adapterProperties.BackendType}"
+        printfn $"adapter device ID: {adapterProperties.DeviceID}"
 
-    // 	return result;
-    ()
+        printfn
+            $"adapter driver description: {Marshalling.AnsiStringMarshaller.ConvertToManaged adapterProperties.DriverDescription}"
 
-type State private (window: IWindow) =
+        printfn $"adapter name: {Marshalling.AnsiStringMarshaller.ConvertToManaged adapterProperties.Name}"
+        printfn $"adapter vendor ID: {adapterProperties.VendorID}"
+        printfn $"adapter vendor name: {Marshalling.AnsiStringMarshaller.ConvertToManaged adapterProperties.VendorName}"
+
+        Ok result
+
+let createDevice (webgpu: WebGPU) (adapter: nativeptr<Adapter>) =
+    let descriptor = new DeviceDescriptor()
+
+    let mutable result = None
+
+    let callback =
+        PfnRequestDeviceCallback.From(fun status device msgPtr userDataPtr ->
+            if status = RequestDeviceStatus.Success then
+                result <- Some(Ok device)
+            else
+                result <-
+                    Some(
+                        Error(
+                            new Exception $"error getting device: {Marshalling.AnsiStringMarshaller.ConvertToManaged msgPtr}"
+                        )
+                    ))
+
+    webgpu.AdapterRequestDevice(adapter, &descriptor, callback, IntPtr.Zero.ToPointer())
+
+    match result with
+    | None -> Error(new Exception "expected adapter via callback by this point")
+    | Some(Error e) -> Error e
+    | Some(Ok result) ->
+        printfn "created device"
+        Ok result
+
+let configureSurface
+    (webgpu: WebGPU)
+    (surface: nativeptr<Surface>)
+    (device: nativeptr<Device>)
+    (windowSize: Vector2D<int>)
+    =
+    let surfaceTextureFormat = TextureFormat.Bgra8Unorm
+
+    let configuration =
+        new SurfaceConfiguration(
+            Device = device,
+            Width = uint32 windowSize.X,
+            Height = uint32 windowSize.Y,
+            Format = surfaceTextureFormat,
+            PresentMode = PresentMode.Fifo,
+            Usage = TextureUsage.RenderAttachment
+        )
+
+    webgpu.SurfaceConfigure(surface, &configuration)
+
+    surfaceTextureFormat
+
+let configureDebugCallback (webgpu: WebGPU) (device: nativeptr<Device>) =
+    let callback =
+        PfnErrorCallback.From(fun errorType msgPtr userDataPtr ->
+            printfn "unhandled WebGPU error: {Marshalling.AnsiStringMarshaller.ConvertToManaged msgPtr}")
+
+    webgpu.DeviceSetUncapturedErrorCallback(device, callback, IntPtr.Zero.ToPointer())
+
+type State private (window: IWindow, webgpu: WebGPU, surface: nativeptr<Surface>, device: nativeptr<Device>) =
     static member New(window: IWindow) =
         let webgpu = WebGPU.GetApi()
         let instance = createInstance webgpu
         let surface = createSurface window webgpu instance
-        let adapter = createAdapter webgpu instance surface
-        // device = CreateDevice(webGPU, adapter);
-        // surfaceTextureFormat = ConfigureSurface(webGPU, surface, device, window.Size);
-        // ConfigureDebugCallback(webGPU, device);
 
-        Ok(new State(window))
+        createAdapter webgpu instance surface
+        |> Result.bind (fun adapter -> createDevice webgpu adapter)
+        |> Result.map (fun device ->
+            let surfaceTextureFormat = configureSurface webgpu surface device window.Size
+
+            configureDebugCallback webgpu device
+
+            new State(window, webgpu, surface, device))
 
     interface IDisposable with
         member this.Dispose() : unit = ()
@@ -82,7 +141,54 @@ type State private (window: IWindow) =
 
     member this.Update(time: TimeSpan) = ()
 
-    member this.Render() = ()
+    member this.Render() =
+        // TODO wrap in dispsoables so we can 'use' them?
+        let commandEncoder =
+            webgpu.DeviceCreateCommandEncoder(device, Span<CommandEncoderDescriptor>.Empty)
+
+        let mutable surfaceTexture = SurfaceTexture()
+        webgpu.SurfaceGetCurrentTexture(surface, &surfaceTexture)
+
+        let surfaceTextureView =
+            webgpu.TextureCreateView(surfaceTexture.Texture, Span<TextureViewDescriptor>.Empty)
+
+        let mutable colorAttachments: RenderPassColorAttachment nativeptr =
+            Microsoft.FSharp.NativeInterop.NativePtr.stackalloc 1
+
+        let colorAttachmentsSpan =
+            Span<RenderPassColorAttachment>(colorAttachments |> NativeInterop.NativePtr.toVoidPtr, 1)
+
+        colorAttachmentsSpan[0] <-
+            new RenderPassColorAttachment(
+                View = surfaceTextureView,
+                LoadOp = LoadOp.Clear,
+                ClearValue = new Color(0.25, 0.5, 1.0, 1.0),
+                StoreOp = StoreOp.Store
+            )
+
+        let renderPassDescriptor =
+            new RenderPassDescriptor(colorAttachmentCount = unativeint 1, colorAttachments = colorAttachments)
+
+        let renderPassEncoder =
+            webgpu.CommandEncoderBeginRenderPass(commandEncoder, &renderPassDescriptor)
+
+        // TODO do some actual drawing
+
+        webgpu.RenderPassEncoderEnd renderPassEncoder
+
+        let commandBuffer =
+            webgpu.CommandEncoderFinish(commandEncoder, Span<CommandBufferDescriptor>.Empty)
+
+        let queue = webgpu.DeviceGetQueue device
+        webgpu.QueueSubmit(queue, unativeint 1, ref commandBuffer)
+
+        webgpu.SurfacePresent surface
+
+        webgpu.CommandBufferRelease commandBuffer
+        webgpu.RenderPassEncoderRelease renderPassEncoder
+        webgpu.TextureViewRelease surfaceTextureView
+        webgpu.TextureRelease surfaceTexture.Texture
+        webgpu.CommandEncoderRelease commandEncoder
 
     member this.KeyDown(key: Key) = ()
 
@@ -106,11 +212,7 @@ window.add_Load (fun () ->
             | Ok state ->
                 state.Resize window.Size
                 state
-            | Error e ->
-                for e in e do
-                    printfn "init error: %s" e
-
-                failwith "error initializing"
+            | Error e -> failwith (sprintf "error initializing: %A" e)
         )
 
     let input = window.CreateInput()
