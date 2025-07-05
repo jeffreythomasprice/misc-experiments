@@ -57,22 +57,41 @@ func createWGPUAdapter(wgpuInstance: WGPUInstance, wgpuSurface: WGPUSurface) -> 
 	adapterOptions.powerPreference = WGPUPowerPreference_HighPerformance
 	adapterOptions.backendType = WGPUBackendType_Vulkan
 	adapterOptions.compatibleSurface = wgpuSurface
+
 	var callbackInfo = WGPURequestAdapterCallbackInfo()
 	var result: WGPUAdapter? = nil
-	callbackInfo.callback = { status, adapter, message, userdata1, userdata2 in
-		print("adapter callback: ", String.fromWGPUStringView(other: message))
-		result = adapter
+	withUnsafeMutablePointer(to: &result) {
+		callbackInfo.userdata1 = UnsafeMutableRawPointer($0)
+		callbackInfo.callback = { status, adapter, message, userdata1, userdata2 in
+			let message = String.fromWGPUStringView(other: message)
+			if !message.isEmpty {
+				print("adapter callback: \(message)")
+			}
+			UnsafeMutablePointer<WGPUAdapter?>(.init(userdata1))?.pointee = adapter
+		}
+
+		// trying to wait for future results in rust not implemented error
+		wgpuInstanceRequestAdapter(wgpuInstance, &adapterOptions, callbackInfo)
+		// let future = wgpuInstanceRequestAdapter(wgpuInstance, &adapterOptions, callbackInfo)
+		// var futureWaitInfo = [WGPUFutureWaitInfo(future: future, completed: 0)]
+		// assert(wgpuInstanceWaitAny(wgpuInstance, 1, &futureWaitInfo, 5000) == WGPUWaitStatus_Success)
 	}
 
-	// trying to wait for future results in rust not implemented error
-	wgpuInstanceRequestAdapter(wgpuInstance, &adapterOptions, callbackInfo)
-	// let future = wgpuInstanceRequestAdapter(wgpuInstance, &adapterOptions, callbackInfo)
-	// var futureWaitInfo = [WGPUFutureWaitInfo(future: future, completed: 0)]
-	// assert(wgpuInstanceWaitAny(wgpuInstance, 1, &futureWaitInfo, 5000) == WGPUWaitStatus_Success)
-
 	assert(result != nil)
+	print("created wgpu adapter")
 
 	// TODO print adapter info
+	var adapterInfo = WGPUAdapterInfo()
+	assert(wgpuAdapterGetInfo(result!, &adapterInfo) == WGPUStatus_Success)
+	print("adapter type: \(adapterInfo.adapterType)")
+	// Console.WriteLine($"adapter type: {adapterProperties.AdapterType}");
+	// 	Console.WriteLine($"adapter architecture: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.Architecture)}");
+	// 	Console.WriteLine($"adapter backend type: {adapterProperties.BackendType}");
+	// 	Console.WriteLine($"adapter device ID: {adapterProperties.DeviceID}");
+	// 	Console.WriteLine($"adapter driver description: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.DriverDescription)}");
+	// 	Console.WriteLine($"adapter name: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.Name)}");
+	// 	Console.WriteLine($"adapter vendor ID: {adapterProperties.VendorID}");
+	// 	Console.WriteLine($"adapter vendor name: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.VendorName)}");
 
 	return result!
 }

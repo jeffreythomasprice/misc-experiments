@@ -22,18 +22,18 @@
 			"type": "swift",
 			"request": "launch",
 			"args": [],
-			"cwd": "${workspaceFolder:swift-c-interop-sdl3-opengl}",
+			"cwd": "${workspaceFolder:swift-c-interop-sdl3-wgpu}",
 			"name": "Debug Experiment",
-			"program": "${workspaceFolder:swift-c-interop-sdl3-opengl}/.build/debug/Experiment",
+			"program": "${workspaceFolder:swift-c-interop-sdl3-wgpu}/.build/debug/Experiment",
 			"preLaunchTask": "swift: Build Debug Experiment"
 		},
 		{
 			"type": "swift",
 			"request": "launch",
 			"args": [],
-			"cwd": "${workspaceFolder:swift-c-interop-sdl3-opengl}",
+			"cwd": "${workspaceFolder:swift-c-interop-sdl3-wgpu}",
 			"name": "Release Experiment",
-			"program": "${workspaceFolder:swift-c-interop-sdl3-opengl}/.build/release/Experiment",
+			"program": "${workspaceFolder:swift-c-interop-sdl3-wgpu}/.build/release/Experiment",
 			"preLaunchTask": "swift: Build Release Experiment"
 		}
 	]
