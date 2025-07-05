@@ -43,7 +43,7 @@ pub fn program<'a>() -> impl Parser<'a, &'a str, Program<'a>, Err<Rich<'a, char>
     statement()
         .repeated()
         .collect::<Vec<_>>()
-        .map(|instructions| {
+        .validate(|instructions, e, emitter| {
             let mut valid_instruction_count = 0;
             let mut labels = HashMap::new();
             let instructions = instructions
@@ -58,8 +58,12 @@ pub fn program<'a>() -> impl Parser<'a, &'a str, Program<'a>, Err<Rich<'a, char>
                         arguments: _,
                     }) => None,
                     Statement::Label(label) => {
-                        // TODO fail if duplicate label
-                        labels.insert(label, valid_instruction_count);
+                        if labels.insert(label, valid_instruction_count).is_some() {
+                            emitter.emit(Rich::custom(
+                                e.span(),
+                                format!("duplicate label: {}", label),
+                            ));
+                        }
                         None
                     }
                 })

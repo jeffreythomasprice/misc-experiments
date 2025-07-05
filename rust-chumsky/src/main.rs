@@ -1,4 +1,7 @@
-use crate::parser::program;
+use crate::{
+    emulator::{Emulator, StepResult},
+    parser::program,
+};
 use chumsky::prelude::*;
 
 mod emulator;
@@ -17,13 +20,12 @@ fn main() {
 
     let parser = program();
 
-    match parser.parse(&input).into_result() {
-        Ok(result) => {
-            // for statement in result.iter() {
-            //     println!("statement: {:?}", statement);
-            // }
-            println!("program: {:?}", result);
-        }
-        Result::Err(e) => println!("failed: {:?}", e),
-    };
+    let program = parser.parse(&input).into_result().unwrap();
+    println!("program: {:?}", program);
+
+    let mut emulator = Emulator::new(program);
+    println!("before execution: {:?}", emulator);
+    while emulator.step() != StepResult::Halted {
+        println!("after stepping: {:?}", emulator);
+    }
 }

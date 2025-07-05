@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum Register32 {
     R1,
     R2,
@@ -12,7 +12,7 @@ pub enum Register32 {
     R8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum Register64 {
     R12,
     R34,
@@ -20,21 +20,21 @@ pub enum Register64 {
     R78,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RegisterOrLiteral32 {
     Register(Register32),
     U32(u32),
     I32(i32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RegisterOrLiteral64 {
     Register(Register64),
     U64(u64),
     I64(i64),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Instruction {
     Add32 {
         destination: Register32,
