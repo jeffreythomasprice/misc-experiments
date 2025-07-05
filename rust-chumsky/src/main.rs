@@ -132,12 +132,50 @@ fn instruction<'a>() -> impl Parser<'a, &'a str, Instruction<'a>, Err<Rich<'a, c
         })
 }
 
+fn label<'a>() -> impl Parser<'a, &'a str, &'a str, Err<Rich<'a, char>>> {
+    identifier()
+        .then(just(":"))
+        .map(|(result, _)| result)
+        .padded()
+}
+
+#[derive(Debug)]
+enum Statement<'a> {
+    Instruction(Instruction<'a>),
+    Label(&'a str),
+}
+
+fn statement<'a>() -> impl Parser<'a, &'a str, Statement<'a>, Err<Rich<'a, char>>> {
+    choice((
+        label().map(Statement::Label),
+        instruction().map(Statement::Instruction),
+    ))
+}
+
+fn program<'a>() -> impl Parser<'a, &'a str, Vec<Statement<'a>>, Err<Rich<'a, char>>> {
+    statement().repeated().collect()
+}
+
 fn main() {
-    let input = "foo  1 ,  foo, -42i64".to_string();
+    let input = r"
+        main:
+            foo  1 ,  foo, -42i64
 
-    let parser = instruction();
+        loop:
+            add x, x, 1
+            cmp x, 42
+            jne loop
+    "
+    .to_string();
 
-    let result = parser.parse(&input);
+    let parser = program();
 
-    println!("{:?}", result);
+    match parser.parse(&input).into_result() {
+        Ok(result) => {
+            for statement in result.iter() {
+                println!("statement: {:?}", statement);
+            }
+        }
+        Result::Err(e) => println!("failed: {:?}", e),
+    };
 }
