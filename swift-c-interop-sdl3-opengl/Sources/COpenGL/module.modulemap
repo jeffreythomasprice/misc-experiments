@@ -1,5 +1,0 @@
-module COpenGL [system] [extern_c] {
-	header "header.h"
-	link "OpenGL32"
-	export *
-}

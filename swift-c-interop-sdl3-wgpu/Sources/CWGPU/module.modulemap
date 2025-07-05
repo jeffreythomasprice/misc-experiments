@@ -1,0 +1,9 @@
+module CWGPU [system] [extern_c] {
+	header "header.h"
+	link "wgpu_native"
+	link "Ntdll"
+	link "Opengl32"
+	link "d3dcompiler"
+	link "Propsys"
+	export *
+}
