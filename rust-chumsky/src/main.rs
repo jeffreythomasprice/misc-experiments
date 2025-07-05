@@ -1,70 +1,68 @@
-use std::num::ParseIntError;
+use std::{num::ParseIntError, str::FromStr};
 
-use chumsky::prelude::*;
+use chumsky::{
+    error::RichReason,
+    extra::{Err, Full, ParserExtra},
+    prelude::*,
+};
 
-// fn identifier<'a>() -> impl Parser<'a, &'a str, &'a str> {
-//     regex("^[a-zA-Z_][a-zA-Z0-9_]*$")
-// }
+fn identifier<'a>() -> impl Parser<'a, &'a str, &'a str, Err<Rich<'a, char>>> {
+    regex("^[a-zA-Z_][a-zA-Z0-9_]*$")
+}
 
-// fn number_u32<'a>() -> impl Parser<'a, &'a str, u32, extra::Full<Rich<'a, &'a str>>> {
-//     // regex("^[0-9]+$").map(|x: &str| x.parse())
+#[derive(Debug)]
+struct NumberLiteral<T> {
+    value: T,
+    had_type_suffix: bool,
+}
 
-//     // regex("^[0-9]+$").validate(|fs: &str, _, emitter| fs.parse())
-
-//     regex("^[0-9]+$").try_map(|x: &str, span| match x.parse() {
-//         Ok(result) => Ok(result),
-//         Err(e) => Err(Rich::custom(span, format!("{e:?}"))),
-//     })
-// }
+fn unsigned_integer<'a, T>(
+    suffix: String,
+) -> impl Parser<'a, &'a str, NumberLiteral<T>, Err<Rich<'a, char>>>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    regex(format!("^[0-9]+({})?$", suffix).as_str()).try_map(move |x: &str, span| {
+        let (input, had_type_suffix) = if x.ends_with(&suffix) {
+            (x.trim_end_matches(&suffix), true)
+        } else {
+            (x, false)
+        };
+        match input.parse() {
+            Ok(result) => Ok(NumberLiteral {
+                value: result,
+                had_type_suffix,
+            }),
+            Err(e) => Err(Rich::custom(span, e)),
+        }
+    })
+}
 
 #[derive(Debug)]
 enum Argument<'a> {
     Identifier(&'a str),
-    U32(u32),
+    U64(NumberLiteral<u64>),
+    U32(NumberLiteral<u32>),
 }
 
-fn argument<'a>() -> impl Parser<'a, &'a str, Argument<'a>> {
-    // let identifier = regex("^[a-zA-Z_][a-zA-Z0-9_]*$").try_map(|x: &str, span| Ok(x));
-
-    // let number_u32 = regex("^[0-9]+$").try_map(|x: &str, span| match x.parse() {
-    //     Ok(result) => Ok(result),
-    //     Err(e) => Err(<EmptyErr as std::default::Default>::default()),
-    // });
-
-    let identifier = regex("^[a-zA-Z_][a-zA-Z0-9_]*$").try_map(|x: &str, span| Ok(x));
-
-    let number_u32 = regex("^[0-9]+$").try_map(|x: &str, span| match x.parse() {
-        Ok(result) => Ok(result),
-        Err(e) => Err(Rich::custom(span, e)),
-    });
-
+fn argument<'a>() -> impl Parser<'a, &'a str, Argument<'a>, Err<Rich<'a, char>>> {
     choice((
-        identifier.map(Argument::Identifier),
-        number_u32.map(Argument::U32),
+        identifier().map(Argument::Identifier),
+        unsigned_integer("u32".to_owned()).map(Argument::U32),
+        unsigned_integer("u64".to_owned()).map(Argument::U64),
     ))
 }
 
 fn main() {
-    let input = "99999999999999";
+    // let input = format!("{}", u64::MAX);
+    // let input = "123u32".to_string();
+    let input = "123u64".to_string();
+    // let input = "123".to_string();
+
     let parser = argument();
-    let result = parser.parse(input);
+
+    let result = parser.parse(&input);
+
     println!("{:?}", result);
 }
-
-// # use chumsky::{prelude::*, error::Simple};
-// #[derive(Debug, PartialEq)]
-// enum Token { Word(String), Num(u64) }
-//
-// let word = any::<_, extra::Err<Simple<char>>>()
-//     .filter(|c: &char| c.is_alphabetic())
-//     .repeated().at_least(1)
-//     .collect::<String>()
-//     .map(Token::Word);
-//
-// let num = any::<_, extra::Err<Simple<char>>>()
-//     .filter(|c: &char| c.is_ascii_digit())
-//     .repeated().at_least(1)
-//     .collect::<String>()
-//     .map(|s| Token::Num(s.parse().unwrap()));
-//
-// let token = word.or(num);
