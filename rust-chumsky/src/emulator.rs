@@ -5,8 +5,7 @@ use crate::instruction_set::{
 };
 
 pub struct Emulator<'a> {
-    registers_32: HashMap<Register32, u32>,
-    registers_64: HashMap<Register64, u64>,
+    registers: [u32; 8],
     program: Program<'a>,
     program_counter: usize,
 }
@@ -20,8 +19,7 @@ pub enum StepResult {
 impl<'a> Emulator<'a> {
     pub fn new(program: Program<'a>) -> Self {
         Self {
-            registers_32: HashMap::new(),
-            registers_64: HashMap::new(),
+            registers: [0; 8],
             program,
             program_counter: 0,
         }
@@ -34,7 +32,7 @@ impl<'a> Emulator<'a> {
                 left,
                 right,
             }) => {
-                self.registers_32.insert(
+                self.set_register_32(
                     destination,
                     self.get_register_or_literal_32(&left)
                         + self.get_register_or_literal_32(&right),
@@ -45,7 +43,7 @@ impl<'a> Emulator<'a> {
                 left,
                 right,
             }) => {
-                self.registers_64.insert(
+                self.set_register_64(
                     destination,
                     self.get_register_or_literal_64(&left)
                         + self.get_register_or_literal_64(&right),
@@ -57,11 +55,24 @@ impl<'a> Emulator<'a> {
     }
 
     fn get_register_32(&self, r: Register32) -> u32 {
-        *self.registers_32.get(&r).unwrap_or(&0)
+        self.registers[register_32_to_index(r)]
+    }
+
+    fn set_register_32(&mut self, r: Register32, value: u32) {
+        self.registers[register_32_to_index(r)] = value;
     }
 
     fn get_register_64(&self, r: Register64) -> u64 {
-        *self.registers_64.get(&r).unwrap_or(&0)
+        let low = self.get_register_32(r.low()) as u64;
+        let high = self.get_register_32(r.high()) as u64;
+        (high << 32) | low
+    }
+
+    fn set_register_64(&mut self, r: Register64, value: u64) {
+        let low = (value & 0xffffffff) as u32;
+        let high = (value >> 32) as u32;
+        self.set_register_32(r.low(), low);
+        self.set_register_32(r.high(), high);
     }
 
     fn get_register_or_literal_32(&self, value: &RegisterOrLiteral32) -> u32 {
@@ -93,10 +104,21 @@ impl<'a> Debug for Emulator<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // TODO better debug for emulator?
         f.debug_struct("Emulator")
-            .field("registers_32", &self.registers_32)
-            .field("registers_64", &self.registers_64)
-            // .field("program", &self.program)
+            .field("registers", &self.registers)
             .field("program_counter", &self.program_counter)
             .finish()
+    }
+}
+
+fn register_32_to_index(r: Register32) -> usize {
+    match r {
+        Register32::R1 => 0,
+        Register32::R2 => 1,
+        Register32::R3 => 2,
+        Register32::R4 => 3,
+        Register32::R5 => 4,
+        Register32::R6 => 5,
+        Register32::R7 => 6,
+        Register32::R8 => 7,
     }
 }

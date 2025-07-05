@@ -54,6 +54,26 @@ pub struct Program<'a> {
     pub instructions: Vec<Instruction>,
 }
 
+impl Register64 {
+    pub fn low(self) -> Register32 {
+        match self {
+            Register64::R12 => Register32::R2,
+            Register64::R34 => Register32::R4,
+            Register64::R56 => Register32::R6,
+            Register64::R78 => Register32::R8,
+        }
+    }
+
+    pub fn high(self) -> Register32 {
+        match self {
+            Register64::R12 => Register32::R1,
+            Register64::R34 => Register32::R3,
+            Register64::R56 => Register32::R5,
+            Register64::R78 => Register32::R7,
+        }
+    }
+}
+
 impl<'a> FromStr for Register32 {
     type Err = String;
 
