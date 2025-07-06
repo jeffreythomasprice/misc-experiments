@@ -302,17 +302,36 @@ impl Robot {
     }
 
     fn read_next_instruction(&mut self) -> Option<Instruction> {
-        // let result = self.program.get(self.program_counter).to_owned();
-        // result
-        todo!()
+        self.program.get(self.program_counter).map(|result| {
+            self.program_counter.advance();
+            result.clone()
+        })
     }
 
     fn resolve_source_u64(&self, source: SourceU64) -> ResolvedValue<u64> {
-        todo!()
+        match source {
+            SourceU64::Register(r) => ResolvedValue {
+                value: self.read_register_u64(r),
+                clock_cost: ClockTime(2),
+            },
+            SourceU64::Literal(value) => ResolvedValue {
+                value,
+                clock_cost: ClockTime(1),
+            },
+        }
     }
 
     fn resolve_source_f64(&self, source: SourceF64) -> ResolvedValue<f64> {
-        todo!()
+        match source {
+            SourceF64::Register(r) => ResolvedValue {
+                value: self.read_register_f64(r),
+                clock_cost: ClockTime(4),
+            },
+            SourceF64::Literal(value) => ResolvedValue {
+                value,
+                clock_cost: ClockTime(2),
+            },
+        }
     }
 
     fn write_destination_u64(&mut self, destination: DestinationU64, value: u64) {
