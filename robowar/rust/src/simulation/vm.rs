@@ -1,10 +1,17 @@
 use std::{
+    cell::RefCell,
     num::TryFromIntError,
     ops::{Add, AddAssign},
     rc::Rc,
 };
 
-use crate::{math::*, simulation::language::*};
+use crate::{
+    math::*,
+    simulation::{
+        language::*,
+        physics::{Actor, Environment},
+    },
+};
 
 #[derive(Debug, Clone, Copy)]
 struct ClockTime(u64);
@@ -19,17 +26,16 @@ pub enum StepError {
     TryFromIntError(TryFromIntError),
 }
 
-pub struct Robot {
+pub struct VirtualMachine {
     program: Rc<Program>,
+    environment: Rc<Environment>,
+    actor: Rc<RefCell<Actor>>,
+
     program_counter: ProgramPointer,
     clock: ClockTime,
 
     health: f64,
     energy: f64,
-    position: Vec2<f64>,
-    velocity: Vec2<f64>,
-    turret_angle: f64,
-    turret_angular_velocity: f64,
 
     register_general_purpose_u64: [u64; 8],
     register_general_purpose_f64: [f64; 8],
@@ -49,10 +55,17 @@ impl AddAssign for ClockTime {
     }
 }
 
-impl Robot {
-    pub fn new(program: Rc<Program>) -> Self {
+impl VirtualMachine {
+    pub fn new(
+        program: Rc<Program>,
+        environment: Rc<Environment>,
+        actor: Rc<RefCell<Actor>>,
+    ) -> Self {
         Self {
             program,
+            environment,
+            actor,
+
             program_counter: 0.into(),
             clock: ClockTime(0),
 
@@ -60,12 +73,6 @@ impl Robot {
             health: 100.0,
             // TODO energy should be configurable?
             energy: 100.0,
-            // TODO initial position should be random based on the level? grid size?
-            position: Vec2::new(0., 0.),
-            velocity: Vec2::new(0., 0.),
-            // TODO initial turrent position should be random?
-            turret_angle: 0.,
-            turret_angular_velocity: 0.,
 
             register_general_purpose_u64: [0; 8],
             register_general_purpose_f64: [0.; 8],
@@ -374,13 +381,15 @@ impl Robot {
 
     fn read_register_f64(&self, r: ReadableRegisterF64) -> f64 {
         match r {
-            ReadableRegisterF64::PositionX => self.position.x,
-            ReadableRegisterF64::PositionY => self.position.y,
-            ReadableRegisterF64::VelocityX => self.velocity.x,
-            ReadableRegisterF64::VelocityY => self.velocity.y,
-            ReadableRegisterF64::TurretAngle => self.turret_angle,
-            ReadableRegisterF64::TurretAngularVelocity => self.turret_angular_velocity,
-            ReadableRegisterF64::ScannerDistance => todo!(),
+            ReadableRegisterF64::PositionX => self.actor.borrow().position().x,
+            ReadableRegisterF64::PositionY => self.actor.borrow().position().y,
+            ReadableRegisterF64::VelocityX => self.actor.borrow().velocity().x,
+            ReadableRegisterF64::VelocityY => self.actor.borrow().velocity().y,
+            ReadableRegisterF64::TurretAngle => self.actor.borrow().turret_angle(),
+            ReadableRegisterF64::TurretAngularVelocity => {
+                self.actor.borrow().turret_angular_velocity()
+            }
+            ReadableRegisterF64::ScannerDistance => self.environment.actor_scan(self.actor.clone()),
             ReadableRegisterF64::Health => self.health,
             ReadableRegisterF64::Energy => self.energy,
             ReadableRegisterF64::GeneralPurpose1 => self.register_general_purpose_f64[0],
@@ -396,9 +405,23 @@ impl Robot {
 
     fn write_register_f64(&mut self, r: WritableRegisterF64, value: f64) {
         *match r {
-            WritableRegisterF64::VelocityX => &mut self.velocity.x,
-            WritableRegisterF64::VelocityY => &mut self.velocity.y,
-            WritableRegisterF64::TurretAngularVelocity => &mut self.turret_angular_velocity,
+            WritableRegisterF64::VelocityX => {
+                let mut actor = self.actor.borrow_mut();
+                let value = Vec2::new(value, actor.position().y);
+                actor.set_position(value);
+                return;
+            }
+            WritableRegisterF64::VelocityY => {
+                let mut actor = self.actor.borrow_mut();
+                let value = Vec2::new(actor.position().x, value);
+                actor.set_position(value);
+                return;
+            }
+            WritableRegisterF64::TurretAngularVelocity => {
+                let mut actor = self.actor.borrow_mut();
+                actor.set_turret_angular_velocity(value);
+                return;
+            }
             WritableRegisterF64::GeneralPurpose1 => &mut self.register_general_purpose_f64[0],
             WritableRegisterF64::GeneralPurpose2 => &mut self.register_general_purpose_f64[1],
             WritableRegisterF64::GeneralPurpose3 => &mut self.register_general_purpose_f64[2],
