@@ -21,9 +21,8 @@ pub struct Circle {
 pub struct Actor {
     collider: Circle,
     velocity: Vec2<f64>,
-    // TODO newtype for radians?
-    turret_angle: f64,
-    turret_angular_velocity: f64,
+    turret_angle: Radians<f64>,
+    turret_angular_velocity: Radians<f64>,
 }
 
 pub struct Environment {
@@ -40,8 +39,8 @@ impl Actor {
                 radius: 0.,
             },
             velocity: Vec2::new(0., 0.),
-            turret_angle: 0.,
-            turret_angular_velocity: 0.,
+            turret_angle: Radians::radians(0.),
+            turret_angular_velocity: Radians::radians(0.),
         }
     }
 
@@ -61,19 +60,19 @@ impl Actor {
         self.velocity = value;
     }
 
-    pub fn turret_angle(&self) -> f64 {
+    pub fn turret_angle(&self) -> Radians<f64> {
         self.turret_angle
     }
 
-    pub fn set_turret_angle(&mut self, value: f64) {
+    pub fn set_turret_angle(&mut self, value: Radians<f64>) {
         self.turret_angle = value;
     }
 
-    pub fn turret_angular_velocity(&self) -> f64 {
+    pub fn turret_angular_velocity(&self) -> Radians<f64> {
         self.turret_angular_velocity
     }
 
-    pub fn set_turret_angular_velocity(&mut self, value: f64) {
+    pub fn set_turret_angular_velocity(&mut self, value: Radians<f64>) {
         self.turret_angular_velocity = value;
     }
 }
@@ -148,9 +147,9 @@ impl Environment {
 
         let velocity = Vec2::new(0., 0.);
 
-        let turret_angle = rand::rng().random_range((0.)..std::f64::consts::TAU);
+        let turret_angle = Radians::degrees(rand::rng().random_range((0.)..(360.0)));
 
-        let turret_angular_velocity = 0.;
+        let turret_angular_velocity = Radians::degrees(0.);
 
         Rc::new(RefCell::new(Actor {
             collider: Circle {
