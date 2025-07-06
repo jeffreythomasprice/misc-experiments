@@ -7,10 +7,7 @@ use std::{
 
 use crate::{
     math::*,
-    simulation::{
-        language::*,
-        physics::{Actor, Environment},
-    },
+    simulation::{language::*, physics},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -28,8 +25,8 @@ pub enum StepError {
 
 pub struct VirtualMachine {
     program: Rc<Program>,
-    environment: Rc<Environment>,
-    actor: Rc<RefCell<Actor>>,
+    environment: Rc<physics::Environment>,
+    actor: Rc<RefCell<physics::Actor>>,
 
     program_counter: ProgramPointer,
     clock: ClockTime,
@@ -58,8 +55,8 @@ impl AddAssign for ClockTime {
 impl VirtualMachine {
     pub fn new(
         program: Rc<Program>,
-        environment: Rc<Environment>,
-        actor: Rc<RefCell<Actor>>,
+        environment: Rc<physics::Environment>,
+        actor: Rc<RefCell<physics::Actor>>,
     ) -> Self {
         Self {
             program,
@@ -80,7 +77,6 @@ impl VirtualMachine {
     }
 
     pub fn step(&mut self) -> Result<(), StepError> {
-        // TODO execute next instruction, advance clock
         match self.read_next_instruction() {
             Some(Instruction::AddU64 {
                 destination,
@@ -385,9 +381,9 @@ impl VirtualMachine {
             ReadableRegisterF64::PositionY => self.actor.borrow().position().y,
             ReadableRegisterF64::VelocityX => self.actor.borrow().velocity().x,
             ReadableRegisterF64::VelocityY => self.actor.borrow().velocity().y,
-            ReadableRegisterF64::TurretAngle => self.actor.borrow().turret_angle(),
+            ReadableRegisterF64::TurretAngle => self.actor.borrow().turret_angle().0,
             ReadableRegisterF64::TurretAngularVelocity => {
-                self.actor.borrow().turret_angular_velocity()
+                self.actor.borrow().turret_angular_velocity().0
             }
             ReadableRegisterF64::ScannerDistance => self.environment.actor_scan(self.actor.clone()),
             ReadableRegisterF64::Health => self.health,
@@ -419,7 +415,7 @@ impl VirtualMachine {
             }
             WritableRegisterF64::TurretAngularVelocity => {
                 let mut actor = self.actor.borrow_mut();
-                actor.set_turret_angular_velocity(value);
+                actor.set_turret_angular_velocity(Radians::from_radians(value));
                 return;
             }
             WritableRegisterF64::GeneralPurpose1 => &mut self.register_general_purpose_f64[0],

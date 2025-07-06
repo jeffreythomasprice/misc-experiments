@@ -1,25 +1,11 @@
-use std::{
-    cell::RefCell,
-    ops::{RangeBounds, RangeInclusive},
-    rc::Rc,
-};
+use std::{cell::RefCell, ops::RangeInclusive, rc::Rc};
 
 use rand::Rng;
 
 use crate::math::*;
 
-pub struct LineSegment {
-    a: Vec2<f64>,
-    b: Vec2<f64>,
-}
-
-pub struct Circle {
-    center: Vec2<f64>,
-    radius: f64,
-}
-
 pub struct Actor {
-    collider: Circle,
+    collider: Circle<f64>,
     velocity: Vec2<f64>,
     turret_angle: Radians<f64>,
     turret_angular_velocity: Radians<f64>,
@@ -27,29 +13,17 @@ pub struct Actor {
 
 pub struct Environment {
     bounding_box: Rect<f64>,
-    static_line_segments: Vec<LineSegment>,
+    static_line_segments: Vec<Ray2<f64>>,
     actors: Vec<Rc<RefCell<Actor>>>,
 }
 
 impl Actor {
-    pub fn zero() -> Self {
-        Self {
-            collider: Circle {
-                center: Vec2::new(0., 0.),
-                radius: 0.,
-            },
-            velocity: Vec2::new(0., 0.),
-            turret_angle: Radians::radians(0.),
-            turret_angular_velocity: Radians::radians(0.),
-        }
-    }
-
     pub fn position(&self) -> Vec2<f64> {
-        self.collider.center
+        *self.collider.center()
     }
 
     pub fn set_position(&mut self, value: Vec2<f64>) {
-        self.collider.center = value;
+        self.collider = Circle::new(value, *self.collider.radius())
     }
 
     pub fn velocity(&self) -> Vec2<f64> {
@@ -86,22 +60,22 @@ impl Environment {
         let mut result = Self {
             bounding_box,
             static_line_segments: vec![
-                LineSegment {
-                    a: Vec2::new(bounding_box.minimum().x, bounding_box.minimum().y),
-                    b: Vec2::new(bounding_box.maximum().x, bounding_box.minimum().y),
-                },
-                LineSegment {
-                    a: Vec2::new(bounding_box.maximum().x, bounding_box.minimum().y),
-                    b: Vec2::new(bounding_box.maximum().x, bounding_box.maximum().y),
-                },
-                LineSegment {
-                    a: Vec2::new(bounding_box.maximum().x, bounding_box.maximum().y),
-                    b: Vec2::new(bounding_box.minimum().x, bounding_box.maximum().y),
-                },
-                LineSegment {
-                    a: Vec2::new(bounding_box.minimum().x, bounding_box.maximum().y),
-                    b: Vec2::new(bounding_box.minimum().x, bounding_box.minimum().y),
-                },
+                Ray2::new_between_points(
+                    Vec2::new(bounding_box.minimum().x, bounding_box.minimum().y),
+                    Vec2::new(bounding_box.maximum().x, bounding_box.minimum().y),
+                ),
+                Ray2::new_between_points(
+                    Vec2::new(bounding_box.maximum().x, bounding_box.minimum().y),
+                    Vec2::new(bounding_box.maximum().x, bounding_box.maximum().y),
+                ),
+                Ray2::new_between_points(
+                    Vec2::new(bounding_box.maximum().x, bounding_box.maximum().y),
+                    Vec2::new(bounding_box.minimum().x, bounding_box.maximum().y),
+                ),
+                Ray2::new_between_points(
+                    Vec2::new(bounding_box.minimum().x, bounding_box.maximum().y),
+                    Vec2::new(bounding_box.minimum().x, bounding_box.minimum().y),
+                ),
             ],
             actors: Vec::with_capacity(num_actors),
         };
@@ -127,6 +101,10 @@ impl Environment {
 
         if no such intersections exist, return float max
         */
+
+        let actor = starting_actor.borrow();
+        let scan_ray = Ray2::new(actor.position(), actor.turret_angle().cos_sin_vec2());
+
         todo!()
     }
 
@@ -147,15 +125,12 @@ impl Environment {
 
         let velocity = Vec2::new(0., 0.);
 
-        let turret_angle = Radians::degrees(rand::rng().random_range((0.)..(360.0)));
+        let turret_angle = Radians::from_degrees(rand::rng().random_range((0.)..(360.0)));
 
-        let turret_angular_velocity = Radians::degrees(0.);
+        let turret_angular_velocity = Radians::from_degrees(0.);
 
         Rc::new(RefCell::new(Actor {
-            collider: Circle {
-                center: position,
-                radius,
-            },
+            collider: Circle::new(position, radius),
             velocity,
             turret_angle,
             turret_angular_velocity,
