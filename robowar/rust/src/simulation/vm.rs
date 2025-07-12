@@ -10,7 +10,21 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy)]
-struct ClockTime(u64);
+pub struct ClockTime(u64);
+
+impl Add for ClockTime {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for ClockTime {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
 
 struct ResolvedValue<T> {
     value: T,
@@ -40,20 +54,6 @@ pub struct VirtualMachine {
     register_general_purpose_f64: [f64; 8],
 }
 
-impl Add for ClockTime {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
-    }
-}
-
-impl AddAssign for ClockTime {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
-}
-
 impl VirtualMachine {
     pub fn new(program: Rc<Program>) -> Self {
         Self {
@@ -77,18 +77,25 @@ impl VirtualMachine {
         }
     }
 
+    pub fn update_to_match_actor(&mut self, actor: &physics::Actor) {
+        self.position = actor.position();
+        self.velocity = actor.velocity();
+        self.turret_angle = actor.turret_angle();
+        self.turrent_angular_velocity = actor.turret_angular_velocity();
+    }
+
     pub fn step(
         &mut self,
         environment: &physics::Environment,
         actor: &physics::Actor,
-    ) -> Result<(), StepError> {
+    ) -> Result<ClockTime, StepError> {
         match self.read_next_instruction() {
             Some(Instruction::AddU64 {
                 destination,
                 left,
                 right,
             }) => self
-                .binary_operator_common_u64(destination, left, right, |left, right| left + right),
+                .binary_operator_common_u64(destination, left, right, |left, right| left + right)?,
             Some(Instruction::AddF64 {
                 destination,
                 left,
@@ -100,13 +107,13 @@ impl VirtualMachine {
                 |left, right| left + right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::SubU64 {
                 destination,
                 left,
                 right,
             }) => self
-                .binary_operator_common_u64(destination, left, right, |left, right| left - right),
+                .binary_operator_common_u64(destination, left, right, |left, right| left - right)?,
             Some(Instruction::SubF64 {
                 destination,
                 left,
@@ -118,13 +125,13 @@ impl VirtualMachine {
                 |left, right| left - right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::MulU64 {
                 destination,
                 left,
                 right,
             }) => self
-                .binary_operator_common_u64(destination, left, right, |left, right| left * right),
+                .binary_operator_common_u64(destination, left, right, |left, right| left * right)?,
             Some(Instruction::MulF64 {
                 destination,
                 left,
@@ -136,13 +143,13 @@ impl VirtualMachine {
                 |left, right| left * right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::DivU64 {
                 destination,
                 left,
                 right,
             }) => self
-                .binary_operator_common_u64(destination, left, right, |left, right| left / right),
+                .binary_operator_common_u64(destination, left, right, |left, right| left / right)?,
             Some(Instruction::DivF64 {
                 destination,
                 left,
@@ -154,7 +161,7 @@ impl VirtualMachine {
                 |left, right| left / right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::Jump { address }) => {
                 let address = self.resolve_source_u64(address);
                 self.program_counter = address
@@ -162,13 +169,12 @@ impl VirtualMachine {
                     .try_into()
                     .map_err(StepError::TryFromIntError)?;
                 self.clock += address.clock_cost;
-                Ok(())
             }
             Some(Instruction::JumpEqualU64 {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_u64(address, left, right, |left, right| left == right),
+            }) => self.jump_comparison_u64(address, left, right, |left, right| left == right)?,
             Some(Instruction::JumpEqualF64 {
                 address,
                 left,
@@ -180,12 +186,12 @@ impl VirtualMachine {
                 |left, right| left != right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::JumpNotEqualU64 {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_u64(address, left, right, |left, right| left != right),
+            }) => self.jump_comparison_u64(address, left, right, |left, right| left != right)?,
             Some(Instruction::JumpNotEqualF64 {
                 address,
                 left,
@@ -197,12 +203,12 @@ impl VirtualMachine {
                 |left, right| left != right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::JumpLessThanU64 {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_u64(address, left, right, |left, right| left < right),
+            }) => self.jump_comparison_u64(address, left, right, |left, right| left < right)?,
             Some(Instruction::JumpLessThanF64 {
                 address,
                 left,
@@ -214,12 +220,12 @@ impl VirtualMachine {
                 |left, right| left < right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::JumpLessThanOrEqualToU64 {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_u64(address, left, right, |left, right| left <= right),
+            }) => self.jump_comparison_u64(address, left, right, |left, right| left <= right)?,
             Some(Instruction::JumpLessThanOrEqualToF64 {
                 address,
                 left,
@@ -231,12 +237,12 @@ impl VirtualMachine {
                 |left, right| left <= right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::JumpGreaterThanU64 {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_u64(address, left, right, |left, right| left > right),
+            }) => self.jump_comparison_u64(address, left, right, |left, right| left > right)?,
             Some(Instruction::JumpGreaterThanF64 {
                 address,
                 left,
@@ -248,12 +254,12 @@ impl VirtualMachine {
                 |left, right| left > right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::JumpGreaterThanOrEqualToU64 {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_u64(address, left, right, |left, right| left >= right),
+            }) => self.jump_comparison_u64(address, left, right, |left, right| left >= right)?,
             Some(Instruction::JumpGreaterThanOrEqualToF64 {
                 address,
                 left,
@@ -265,17 +271,18 @@ impl VirtualMachine {
                 |left, right| left >= right,
                 environment,
                 actor,
-            ),
+            )?,
             Some(Instruction::ShiftLeft {
                 destination,
                 source,
-            }) => self.unary_operator_common_u64(destination, source, |source| source << 1),
+            }) => self.unary_operator_common_u64(destination, source, |source| source << 1)?,
             Some(Instruction::ShiftRight {
                 destination,
                 source,
-            }) => self.unary_operator_common_u64(destination, source, |source| source >> 1),
-            None => Err(StepError::Halted),
-        }
+            }) => self.unary_operator_common_u64(destination, source, |source| source >> 1)?,
+            None => Err(StepError::Halted)?,
+        };
+        Ok(self.clock)
     }
 
     fn unary_operator_common_u64<F>(

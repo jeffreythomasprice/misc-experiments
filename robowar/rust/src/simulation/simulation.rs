@@ -1,6 +1,10 @@
 use std::{cell::RefCell, ops::RangeInclusive, rc::Rc};
 
-use crate::simulation::{language::Program, physics, vm::VirtualMachine};
+use crate::simulation::{
+    language::Program,
+    physics,
+    vm::{StepError, VirtualMachine},
+};
 
 struct Robots {
     actor: Rc<RefCell<physics::Actor>>,
@@ -36,7 +40,33 @@ impl Simulation {
     // TODO some way to get current state for display
 
     pub fn step(&mut self) {
-        // TODO step simulation
+        /*
+        TODO how step should really work
+
+        get current clock of every vm
+        find all the ones tied for lowest clock
+        step all those robots
+        find the lowest clock out of those, and take the different between the old value
+        step physics that amount
+        */
+
+        // TODO how much time to step each physics simulation?
+        self.physics_environment.step(1.);
+
+        for robot in self.robots.iter_mut() {
+            let actor = robot.actor.borrow();
+            robot.vm.update_to_match_actor(&actor);
+            match robot.vm.step(&self.physics_environment, &actor) {
+                Ok(new_clock) => {
+                    // TODO what to do with new_clock?
+                }
+                Err(StepError::Halted) => {
+                    // TODO what to do about halted robot?
+                }
+                _ => (),
+            }
+        }
+
         // TODO step each robot
     }
 }
