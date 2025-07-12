@@ -1,4 +1,5 @@
 mod math;
+mod parser;
 mod simulation;
 
 use std::{num::NonZero, process::exit, sync::Arc};
