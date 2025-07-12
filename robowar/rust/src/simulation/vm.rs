@@ -5,7 +5,10 @@ use std::{
     rc::Rc,
 };
 
-use crate::{math::*, simulation::language::*};
+use crate::{
+    math::*,
+    simulation::{language::*, physics},
+};
 
 #[derive(Debug, Clone, Copy)]
 struct ClockTime(u64);
@@ -75,7 +78,11 @@ impl VirtualMachine {
         }
     }
 
-    pub fn step(&mut self) -> Result<(), StepError> {
+    pub fn step(
+        &mut self,
+        environment: &physics::Environment,
+        actor: &physics::Actor,
+    ) -> Result<(), StepError> {
         match self.read_next_instruction() {
             Some(Instruction::AddU64 {
                 destination,
@@ -87,8 +94,14 @@ impl VirtualMachine {
                 destination,
                 left,
                 right,
-            }) => self
-                .binary_operator_common_f64(destination, left, right, |left, right| left + right),
+            }) => self.binary_operator_common_f64(
+                destination,
+                left,
+                right,
+                |left, right| left + right,
+                environment,
+                actor,
+            ),
             Some(Instruction::SubU64 {
                 destination,
                 left,
@@ -99,8 +112,14 @@ impl VirtualMachine {
                 destination,
                 left,
                 right,
-            }) => self
-                .binary_operator_common_f64(destination, left, right, |left, right| left - right),
+            }) => self.binary_operator_common_f64(
+                destination,
+                left,
+                right,
+                |left, right| left - right,
+                environment,
+                actor,
+            ),
             Some(Instruction::MulU64 {
                 destination,
                 left,
@@ -111,8 +130,14 @@ impl VirtualMachine {
                 destination,
                 left,
                 right,
-            }) => self
-                .binary_operator_common_f64(destination, left, right, |left, right| left * right),
+            }) => self.binary_operator_common_f64(
+                destination,
+                left,
+                right,
+                |left, right| left * right,
+                environment,
+                actor,
+            ),
             Some(Instruction::DivU64 {
                 destination,
                 left,
@@ -123,8 +148,14 @@ impl VirtualMachine {
                 destination,
                 left,
                 right,
-            }) => self
-                .binary_operator_common_f64(destination, left, right, |left, right| left / right),
+            }) => self.binary_operator_common_f64(
+                destination,
+                left,
+                right,
+                |left, right| left / right,
+                environment,
+                actor,
+            ),
             Some(Instruction::Jump { address }) => {
                 let address = self.resolve_source_u64(address);
                 self.program_counter = address
@@ -143,7 +174,14 @@ impl VirtualMachine {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_f64(address, left, right, |left, right| left != right),
+            }) => self.jump_comparison_f64(
+                address,
+                left,
+                right,
+                |left, right| left != right,
+                environment,
+                actor,
+            ),
             Some(Instruction::JumpNotEqualU64 {
                 address,
                 left,
@@ -153,7 +191,14 @@ impl VirtualMachine {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_f64(address, left, right, |left, right| left != right),
+            }) => self.jump_comparison_f64(
+                address,
+                left,
+                right,
+                |left, right| left != right,
+                environment,
+                actor,
+            ),
             Some(Instruction::JumpLessThanU64 {
                 address,
                 left,
@@ -163,7 +208,14 @@ impl VirtualMachine {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_f64(address, left, right, |left, right| left < right),
+            }) => self.jump_comparison_f64(
+                address,
+                left,
+                right,
+                |left, right| left < right,
+                environment,
+                actor,
+            ),
             Some(Instruction::JumpLessThanOrEqualToU64 {
                 address,
                 left,
@@ -173,7 +225,14 @@ impl VirtualMachine {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_f64(address, left, right, |left, right| left <= right),
+            }) => self.jump_comparison_f64(
+                address,
+                left,
+                right,
+                |left, right| left <= right,
+                environment,
+                actor,
+            ),
             Some(Instruction::JumpGreaterThanU64 {
                 address,
                 left,
@@ -183,7 +242,14 @@ impl VirtualMachine {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_f64(address, left, right, |left, right| left > right),
+            }) => self.jump_comparison_f64(
+                address,
+                left,
+                right,
+                |left, right| left > right,
+                environment,
+                actor,
+            ),
             Some(Instruction::JumpGreaterThanOrEqualToU64 {
                 address,
                 left,
@@ -193,7 +259,14 @@ impl VirtualMachine {
                 address,
                 left,
                 right,
-            }) => self.jump_comparison_f64(address, left, right, |left, right| left >= right),
+            }) => self.jump_comparison_f64(
+                address,
+                left,
+                right,
+                |left, right| left >= right,
+                environment,
+                actor,
+            ),
             Some(Instruction::ShiftLeft {
                 destination,
                 source,
@@ -244,12 +317,14 @@ impl VirtualMachine {
         left: SourceF64,
         right: SourceF64,
         f: F,
+        environment: &physics::Environment,
+        actor: &physics::Actor,
     ) -> Result<(), StepError>
     where
         F: FnOnce(f64, f64) -> f64,
     {
-        let left = self.resolve_source_f64(left);
-        let right = self.resolve_source_f64(right);
+        let left = self.resolve_source_f64(left, environment, actor);
+        let right = self.resolve_source_f64(right, environment, actor);
         self.write_destination_f64(destination, f(left.value, right.value));
         self.clock += left.clock_cost + right.clock_cost;
         Ok(())
@@ -285,12 +360,14 @@ impl VirtualMachine {
         left: SourceF64,
         right: SourceF64,
         f: F,
+        environment: &physics::Environment,
+        actor: &physics::Actor,
     ) -> Result<(), StepError>
     where
         F: FnOnce(f64, f64) -> bool,
     {
-        let left = self.resolve_source_f64(left);
-        let right = self.resolve_source_f64(right);
+        let left = self.resolve_source_f64(left, environment, actor);
+        let right = self.resolve_source_f64(right, environment, actor);
         if f(left.value, right.value) {
             let address = self.resolve_source_u64(address);
             self.program_counter = address
@@ -323,10 +400,15 @@ impl VirtualMachine {
         }
     }
 
-    fn resolve_source_f64(&self, source: SourceF64) -> ResolvedValue<f64> {
+    fn resolve_source_f64(
+        &self,
+        source: SourceF64,
+        environment: &physics::Environment,
+        actor: &physics::Actor,
+    ) -> ResolvedValue<f64> {
         match source {
             SourceF64::Register(r) => ResolvedValue {
-                value: self.read_register_f64(r),
+                value: self.read_register_f64(r, environment, actor),
                 clock_cost: ClockTime(4),
             },
             SourceF64::Literal(value) => ResolvedValue {
@@ -374,7 +456,12 @@ impl VirtualMachine {
         } = value;
     }
 
-    fn read_register_f64(&self, r: ReadableRegisterF64) -> f64 {
+    fn read_register_f64(
+        &self,
+        r: ReadableRegisterF64,
+        environment: &physics::Environment,
+        actor: &physics::Actor,
+    ) -> f64 {
         match r {
             ReadableRegisterF64::PositionX => self.position.x,
             ReadableRegisterF64::PositionY => self.position.y,
@@ -382,7 +469,7 @@ impl VirtualMachine {
             ReadableRegisterF64::VelocityY => self.velocity.y,
             ReadableRegisterF64::TurretAngle => self.turret_angle.0,
             ReadableRegisterF64::TurretAngularVelocity => self.turrent_angular_velocity.0,
-            ReadableRegisterF64::ScannerDistance => todo!(),
+            ReadableRegisterF64::ScannerDistance => environment.actor_scan(actor),
             ReadableRegisterF64::Health => self.health,
             ReadableRegisterF64::Energy => self.energy,
             ReadableRegisterF64::GeneralPurpose1 => self.register_general_purpose_f64[0],

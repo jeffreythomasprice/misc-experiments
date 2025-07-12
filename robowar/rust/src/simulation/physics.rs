@@ -88,12 +88,18 @@ impl Environment {
     }
 
     pub fn step(&mut self, time: f64) {
+        /*
+        TODO step
+
+        move all actors according to their velocity and turret angle
+        slide along walls, don't update velocity
+        */
         todo!()
     }
 
     /// Finds the first intersection with another actor or the world, starting from the actor's position and extending in the direction of
     /// the actor's turret.
-    pub fn actor_scan(&self, starting_actor: Rc<RefCell<Actor>>) -> f64 {
+    pub fn actor_scan(&self, starting_actor: &Actor) -> f64 {
         /*
         TODO actor scan
 
@@ -106,8 +112,10 @@ impl Environment {
         if no such intersections exist, return float max
         */
 
-        let actor = starting_actor.borrow();
-        let scan_ray = Ray2::new(actor.position(), actor.turret_angle().cos_sin_vec2());
+        let scan_ray = Ray2::new(
+            starting_actor.position(),
+            starting_actor.turret_angle().cos_sin_vec2(),
+        );
 
         todo!()
     }
