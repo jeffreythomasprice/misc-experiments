@@ -32,7 +32,7 @@ impl WindowState {
         event_loop: &winit::event_loop::ActiveEventLoop,
         size: LogicalSize<u32>,
     ) -> Result<Self> {
-        let window_size = PhysicalSize::new(DESIRED_SIZE.width, DESIRED_SIZE.height);
+        let window_size = PhysicalSize::new(size.width, size.height);
         let mut window_attributes = WindowAttributes::default()
             .with_title("Experiment")
             .with_inner_size(window_size);

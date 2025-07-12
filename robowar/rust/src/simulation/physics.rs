@@ -52,12 +52,8 @@ impl Actor {
 }
 
 impl Environment {
-    pub fn new_standard_rectangle(
-        bounding_box: Rect<f64>,
-        num_actors: usize,
-        actor_size: RangeInclusive<f64>,
-    ) -> Self {
-        let mut result = Self {
+    pub fn new_standard_rectangle(bounding_box: Rect<f64>) -> Self {
+        Self {
             bounding_box,
             static_line_segments: vec![
                 Ray2::new_between_points(
@@ -77,14 +73,50 @@ impl Environment {
                     Vec2::new(bounding_box.minimum().x, bounding_box.minimum().y),
                 ),
             ],
-            actors: Vec::with_capacity(num_actors),
-        };
-        for _ in 0..num_actors {
-            result
-                .actors
-                .push(result.create_random_actor(actor_size.clone()));
+            actors: Vec::new(),
         }
-        return result;
+    }
+
+    pub fn get_actors(&self) -> &Vec<Rc<RefCell<Actor>>> {
+        &self.actors
+    }
+
+    pub fn clear_actors(&mut self) {
+        self.actors.clear();
+    }
+
+    /// Creates a new actor with a random position and radius within the bounding box.
+    ///
+    /// Adds actor to the internal list and also returns a reference to it.
+    pub fn add_random_actor(&mut self, actor_size: RangeInclusive<f64>) -> Rc<RefCell<Actor>> {
+        // TODO pick a position and radius such that we don't initially collide
+
+        let radius = rand::rng().random_range(actor_size);
+
+        // find a random location by sampling within the bounding box
+        let x1 = self.bounding_box.minimum().x + radius;
+        let y1 = self.bounding_box.minimum().y + radius;
+        let x2 = self.bounding_box.maximum().x - radius;
+        let y2 = self.bounding_box.maximum().y - radius;
+        let position = Vec2::new(
+            rand::rng().random_range(x1..=x2),
+            rand::rng().random_range(y1..=y2),
+        );
+
+        let velocity = Vec2::new(0., 0.);
+
+        let turret_angle = Radians::from_degrees(rand::rng().random_range((0.)..(360.0)));
+
+        let turret_angular_velocity = Radians::from_degrees(0.);
+
+        let result = Rc::new(RefCell::new(Actor {
+            collider: Circle::new(position, radius),
+            velocity,
+            turret_angle,
+            turret_angular_velocity,
+        }));
+        self.actors.push(result.clone());
+        result
     }
 
     pub fn step(&mut self, time: f64) {
@@ -118,34 +150,5 @@ impl Environment {
         );
 
         todo!()
-    }
-
-    fn create_random_actor(&self, actor_size: RangeInclusive<f64>) -> Rc<RefCell<Actor>> {
-        // TODO pick a position and radius such that we don't initially collide
-
-        let radius = rand::rng().random_range(actor_size);
-
-        // find a random location by sampling within the bounding box
-        let x1 = self.bounding_box.minimum().x + radius;
-        let y1 = self.bounding_box.minimum().y + radius;
-        let x2 = self.bounding_box.maximum().x - radius;
-        let y2 = self.bounding_box.maximum().y - radius;
-        let position = Vec2::new(
-            rand::rng().random_range(x1..=x2),
-            rand::rng().random_range(y1..=y2),
-        );
-
-        let velocity = Vec2::new(0., 0.);
-
-        let turret_angle = Radians::from_degrees(rand::rng().random_range((0.)..(360.0)));
-
-        let turret_angular_velocity = Radians::from_degrees(0.);
-
-        Rc::new(RefCell::new(Actor {
-            collider: Circle::new(position, radius),
-            velocity,
-            turret_angle,
-            turret_angular_velocity,
-        }))
     }
 }
