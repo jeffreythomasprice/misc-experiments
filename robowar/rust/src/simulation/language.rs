@@ -309,7 +309,7 @@ pub enum Instruction {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ProgramPointer(usize);
+pub struct ProgramPointer(pub usize);
 
 impl ProgramPointer {
     pub fn advance(&mut self) -> &mut Self {

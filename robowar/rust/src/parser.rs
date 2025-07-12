@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use chumsky::{
     container::Seq,
     error::RichReason,
     extra::{Err, Full, ParserExtra},
     prelude::*,
     regex::Regex,
+    text::ascii::ident,
 };
 use tracing::*;
 
@@ -20,21 +23,6 @@ pub enum NumberLiteral {
 pub enum Argument {
     Identifier(String),
     Number(NumberLiteral),
-}
-
-#[derive(Debug, Clone)]
-pub struct Instruction {
-    pub instruction: String,
-    pub arguments: Vec<Argument>,
-}
-
-#[derive(Debug, Clone)]
-pub enum ParsedInstruction {
-    Valid(language::Instruction),
-    Invalid {
-        instruction: Instruction,
-        error: String,
-    },
 }
 
 impl TryInto<language::SourceU64> for Argument {
@@ -101,12 +89,27 @@ impl TryInto<language::DestinationF64> for Argument {
     }
 }
 
-impl ParsedInstruction {
+#[derive(Debug, Clone)]
+pub struct UnvalidatedInstruction {
+    pub instruction: String,
+    pub arguments: Vec<Argument>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ValidInstruction {
+    Valid(language::Instruction),
+    Invalid {
+        instruction: UnvalidatedInstruction,
+        error: String,
+    },
+}
+
+impl ValidInstruction {
     fn new(
-        Instruction {
+        UnvalidatedInstruction {
             instruction,
             arguments,
-        }: Instruction,
+        }: UnvalidatedInstruction,
     ) -> Self {
         match instruction.to_lowercase().as_str() {
             "add" => match arguments.as_slice() {
@@ -115,7 +118,7 @@ impl ParsedInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ParsedInstruction::Valid(language::Instruction::AddU64 {
+                        ValidInstruction::Valid(language::Instruction::AddU64 {
                             destination,
                             left,
                             right,
@@ -124,14 +127,14 @@ impl ParsedInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ParsedInstruction::Valid(language::Instruction::AddF64 {
+                        ValidInstruction::Valid(language::Instruction::AddF64 {
                             destination,
                             left,
                             right,
                         })
                     } else {
-                        ParsedInstruction::Invalid {
-                            instruction: Instruction {
+                        ValidInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
                             },
@@ -145,8 +148,8 @@ impl ParsedInstruction {
                         }
                     }
                 }
-                _ => ParsedInstruction::Invalid {
-                    instruction: Instruction {
+                _ => ValidInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
                     },
@@ -164,7 +167,7 @@ impl ParsedInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ParsedInstruction::Valid(language::Instruction::SubU64 {
+                        ValidInstruction::Valid(language::Instruction::SubU64 {
                             destination,
                             left,
                             right,
@@ -173,14 +176,14 @@ impl ParsedInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ParsedInstruction::Valid(language::Instruction::SubF64 {
+                        ValidInstruction::Valid(language::Instruction::SubF64 {
                             destination,
                             left,
                             right,
                         })
                     } else {
-                        ParsedInstruction::Invalid {
-                            instruction: Instruction {
+                        ValidInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
                             },
@@ -194,8 +197,8 @@ impl ParsedInstruction {
                         }
                     }
                 }
-                _ => ParsedInstruction::Invalid {
-                    instruction: Instruction {
+                _ => ValidInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
                     },
@@ -213,7 +216,7 @@ impl ParsedInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ParsedInstruction::Valid(language::Instruction::MulU64 {
+                        ValidInstruction::Valid(language::Instruction::MulU64 {
                             destination,
                             left,
                             right,
@@ -222,14 +225,14 @@ impl ParsedInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ParsedInstruction::Valid(language::Instruction::MulF64 {
+                        ValidInstruction::Valid(language::Instruction::MulF64 {
                             destination,
                             left,
                             right,
                         })
                     } else {
-                        ParsedInstruction::Invalid {
-                            instruction: Instruction {
+                        ValidInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
                             },
@@ -243,8 +246,8 @@ impl ParsedInstruction {
                         }
                     }
                 }
-                _ => ParsedInstruction::Invalid {
-                    instruction: Instruction {
+                _ => ValidInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
                     },
@@ -262,7 +265,7 @@ impl ParsedInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ParsedInstruction::Valid(language::Instruction::DivU64 {
+                        ValidInstruction::Valid(language::Instruction::DivU64 {
                             destination,
                             left,
                             right,
@@ -271,14 +274,14 @@ impl ParsedInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ParsedInstruction::Valid(language::Instruction::DivF64 {
+                        ValidInstruction::Valid(language::Instruction::DivF64 {
                             destination,
                             left,
                             right,
                         })
                     } else {
-                        ParsedInstruction::Invalid {
-                            instruction: Instruction {
+                        ValidInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
                             },
@@ -292,8 +295,8 @@ impl ParsedInstruction {
                         }
                     }
                 }
-                _ => ParsedInstruction::Invalid {
-                    instruction: Instruction {
+                _ => ValidInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
                     },
@@ -308,10 +311,10 @@ impl ParsedInstruction {
             "jmp" => match arguments.as_slice() {
                 [address] => {
                     if let Ok(address) = address.clone().try_into() {
-                        ParsedInstruction::Valid(language::Instruction::Jump { address })
+                        ValidInstruction::Valid(language::Instruction::Jump { address })
                     } else {
-                        ParsedInstruction::Invalid {
-                            instruction: Instruction {
+                        ValidInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
                             },
@@ -323,8 +326,8 @@ impl ParsedInstruction {
                         }
                     }
                 }
-                _ => ParsedInstruction::Invalid {
-                    instruction: Instruction {
+                _ => ValidInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
                     },
@@ -408,8 +411,8 @@ impl ParsedInstruction {
                 source: SourceU64,
             },
             */
-            _ => ParsedInstruction::Invalid {
-                instruction: Instruction {
+            _ => ValidInstruction::Invalid {
+                instruction: UnvalidatedInstruction {
                     instruction: instruction.clone(),
                     arguments,
                 },
@@ -419,10 +422,47 @@ impl ParsedInstruction {
     }
 }
 
+#[derive(Debug, Clone)]
+enum LabelOrInstruction {
+    Instruction(language::Instruction),
+    Label(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub labels: HashMap<String, language::ProgramPointer>,
+    pub instructions: Vec<language::Instruction>,
+}
+
+impl Program {
+    fn new(content: Vec<LabelOrInstruction>) -> Self {
+        let mut labels = HashMap::new();
+        let mut instructions = Vec::new();
+        let mut next_address = language::ProgramPointer(0);
+
+        for item in content {
+            match item {
+                LabelOrInstruction::Instruction(instruction) => {
+                    instructions.push(instruction);
+                    next_address.advance();
+                }
+                LabelOrInstruction::Label(label) => {
+                    labels.insert(label, next_address);
+                }
+            }
+        }
+
+        Program {
+            labels,
+            instructions,
+        }
+    }
+}
+
 // TODO actually return a full program
-pub fn parse(input: &str) -> Result<(), Vec<Rich<char>>> {
+pub fn parse(input: &str) -> Result<Program, Vec<Rich<char>>> {
     let identifier: Regex<&_, Err<Rich<char>>> = regex("[a-zA-Z_][a-zA-Z0-9_]*");
-    let identifier = identifier.map(|s: &str| s.to_string()).padded();
+    let identifier = identifier.map(|s: &str| s.to_string());
 
     let number_i64 = regex(r"-?[0-9]+").try_map(|input: &str, span| match input.parse() {
         Ok(result) => Ok(NumberLiteral::I64(result)),
@@ -434,7 +474,7 @@ pub fn parse(input: &str) -> Result<(), Vec<Rich<char>>> {
     });
     // TODO hex, binary, octal
     // TODO floats
-    let number = choice((number_i64, number_u64)).padded();
+    let number = choice((number_i64, number_u64));
 
     let argument = choice((
         identifier
@@ -443,32 +483,69 @@ pub fn parse(input: &str) -> Result<(), Vec<Rich<char>>> {
         number.map(Argument::Number),
     ));
 
-    let argument_list = argument.separated_by(just(',')).collect();
+    let argument_list = argument.padded().separated_by(just(',')).collect();
 
-    let instruction = identifier
-        .then(argument_list)
-        .map(|(instruction, arguments)| Instruction {
-            instruction: instruction.to_string(),
+    // either a Some(valid instruction) or None
+    let instruction = identifier.clone().padded().then(argument_list).validate(
+        |(instruction, arguments), e, emitter| match ValidInstruction::new(UnvalidatedInstruction {
+            instruction,
             arguments,
-        })
-        .validate(|instruction, e, emitter| {
-            let result = ParsedInstruction::new(instruction);
-            if let ParsedInstruction::Invalid {
+        }) {
+            ValidInstruction::Valid(instruction) => Some(instruction),
+            ValidInstruction::Invalid {
                 instruction: _,
                 error,
-            } = &result
-            {
+            } => {
                 emitter.emit(Rich::custom(e.span(), error));
+                None
             }
-            result
-        });
+        },
+    );
 
-    let program = instruction.repeated().collect::<Vec<_>>();
+    // a list of either valid instructions or labels, or None that represents places where invalid instructions were validated and rejected
+    let instruction = instruction.map(|x| x.map(LabelOrInstruction::Instruction));
+    let label = identifier
+        .then(just(':'))
+        .padded()
+        .map(|(name, _)| Some(LabelOrInstruction::Label(name)));
 
-    let result = program.parse(input).into_result()?;
-    for instruction in result.iter() {
-        info!("TODO parsed instruction: {:?}", instruction);
+    let program = choice((label, instruction)).repeated().collect::<Vec<_>>();
+
+    Ok(Program::new(
+        program
+            .parse(input)
+            .into_result()?
+            .into_iter()
+            .flatten()
+            .collect(),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parser::parse;
+
+    // TODO actual tests
+    #[test]
+    fn test_parse() {
+        let input = r"
+        main:
+            add r0, r0, r0
+
+        foo:
+        bar:
+            add r0, r1, r2
+        ";
+        let result = parse(input);
+        match &result {
+            Ok(result) => {
+                println!("TODO labels: {:?}", result.labels);
+                for instruction in result.instructions.iter() {
+                    println!("TODO instruction: {:?}", instruction);
+                }
+            }
+            Err(e) => println!("TODO error parsing: {:?}", e),
+        }
+        assert!(result.is_ok());
     }
-
-    Ok(())
 }
