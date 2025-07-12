@@ -1,7 +1,35 @@
 use std::num::TryFromIntError;
 
+const GENERAL_PURPOSE_REGISTER_U64_0: &str = "r0";
+const GENERAL_PURPOSE_REGISTER_U64_1: &str = "r1";
+const GENERAL_PURPOSE_REGISTER_U64_2: &str = "r2";
+const GENERAL_PURPOSE_REGISTER_U64_3: &str = "r3";
+const GENERAL_PURPOSE_REGISTER_U64_4: &str = "r4";
+const GENERAL_PURPOSE_REGISTER_U64_5: &str = "r5";
+const GENERAL_PURPOSE_REGISTER_U64_6: &str = "r6";
+const GENERAL_PURPOSE_REGISTER_U64_7: &str = "r7";
+
+const POSITION_X_REGISTER_F64: &str = "position_x";
+const POSITION_Y_REGISTER_F64: &str = "position_y";
+const VELOCITY_X_REGISTER_F64: &str = "velocity_x";
+const VELOCITY_Y_REGISTER_F64: &str = "velocity_y";
+const TURRET_ANGLE_REGISTER_F64: &str = "turret_angle";
+const TURRET_ANGULAR_VELOCITY_REGISTER_F64: &str = "turret_angular_velocity";
+const SCANNER_DISTANCE_REGISTER_F64: &str = "scanner_distance";
+const HEALTH_REGISTER_F64: &str = "health";
+const ENERGY_REGISTER_F64: &str = "energy";
+const GENERAL_PURPOSE_REGISTER_F64_0: &str = "f0";
+const GENERAL_PURPOSE_REGISTER_F64_1: &str = "f1";
+const GENERAL_PURPOSE_REGISTER_F64_2: &str = "f2";
+const GENERAL_PURPOSE_REGISTER_F64_3: &str = "f3";
+const GENERAL_PURPOSE_REGISTER_F64_4: &str = "f4";
+const GENERAL_PURPOSE_REGISTER_F64_5: &str = "f5";
+const GENERAL_PURPOSE_REGISTER_F64_6: &str = "f6";
+const GENERAL_PURPOSE_REGISTER_F64_7: &str = "f7";
+
 #[derive(Debug, Clone)]
 pub enum ReadableRegisterU64 {
+    GeneralPurpose0,
     GeneralPurpose1,
     GeneralPurpose2,
     GeneralPurpose3,
@@ -9,11 +37,29 @@ pub enum ReadableRegisterU64 {
     GeneralPurpose5,
     GeneralPurpose6,
     GeneralPurpose7,
-    GeneralPurpose8,
+}
+
+impl TryFrom<&str> for ReadableRegisterU64 {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            GENERAL_PURPOSE_REGISTER_U64_0 => Ok(ReadableRegisterU64::GeneralPurpose0),
+            GENERAL_PURPOSE_REGISTER_U64_1 => Ok(ReadableRegisterU64::GeneralPurpose1),
+            GENERAL_PURPOSE_REGISTER_U64_2 => Ok(ReadableRegisterU64::GeneralPurpose2),
+            GENERAL_PURPOSE_REGISTER_U64_3 => Ok(ReadableRegisterU64::GeneralPurpose3),
+            GENERAL_PURPOSE_REGISTER_U64_4 => Ok(ReadableRegisterU64::GeneralPurpose4),
+            GENERAL_PURPOSE_REGISTER_U64_5 => Ok(ReadableRegisterU64::GeneralPurpose5),
+            GENERAL_PURPOSE_REGISTER_U64_6 => Ok(ReadableRegisterU64::GeneralPurpose6),
+            GENERAL_PURPOSE_REGISTER_U64_7 => Ok(ReadableRegisterU64::GeneralPurpose7),
+            _ => Err(format!("Invalid register: {}", value)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum WritableRegisterU64 {
+    GeneralPurpose0,
     GeneralPurpose1,
     GeneralPurpose2,
     GeneralPurpose3,
@@ -21,7 +67,24 @@ pub enum WritableRegisterU64 {
     GeneralPurpose5,
     GeneralPurpose6,
     GeneralPurpose7,
-    GeneralPurpose8,
+}
+
+impl TryFrom<&str> for WritableRegisterU64 {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            GENERAL_PURPOSE_REGISTER_U64_0 => Ok(WritableRegisterU64::GeneralPurpose0),
+            GENERAL_PURPOSE_REGISTER_U64_1 => Ok(WritableRegisterU64::GeneralPurpose1),
+            GENERAL_PURPOSE_REGISTER_U64_2 => Ok(WritableRegisterU64::GeneralPurpose2),
+            GENERAL_PURPOSE_REGISTER_U64_3 => Ok(WritableRegisterU64::GeneralPurpose3),
+            GENERAL_PURPOSE_REGISTER_U64_4 => Ok(WritableRegisterU64::GeneralPurpose4),
+            GENERAL_PURPOSE_REGISTER_U64_5 => Ok(WritableRegisterU64::GeneralPurpose5),
+            GENERAL_PURPOSE_REGISTER_U64_6 => Ok(WritableRegisterU64::GeneralPurpose6),
+            GENERAL_PURPOSE_REGISTER_U64_7 => Ok(WritableRegisterU64::GeneralPurpose7),
+            _ => Err(format!("Invalid register: {}", value)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +98,7 @@ pub enum ReadableRegisterF64 {
     ScannerDistance,
     Health,
     Energy,
+    GeneralPurpose0,
     GeneralPurpose1,
     GeneralPurpose2,
     GeneralPurpose3,
@@ -42,7 +106,33 @@ pub enum ReadableRegisterF64 {
     GeneralPurpose5,
     GeneralPurpose6,
     GeneralPurpose7,
-    GeneralPurpose8,
+}
+
+impl TryFrom<&str> for ReadableRegisterF64 {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            POSITION_X_REGISTER_F64 => Ok(ReadableRegisterF64::PositionX),
+            POSITION_Y_REGISTER_F64 => Ok(ReadableRegisterF64::PositionY),
+            VELOCITY_X_REGISTER_F64 => Ok(ReadableRegisterF64::VelocityX),
+            VELOCITY_Y_REGISTER_F64 => Ok(ReadableRegisterF64::VelocityY),
+            TURRET_ANGLE_REGISTER_F64 => Ok(ReadableRegisterF64::TurretAngle),
+            TURRET_ANGULAR_VELOCITY_REGISTER_F64 => Ok(ReadableRegisterF64::TurretAngularVelocity),
+            SCANNER_DISTANCE_REGISTER_F64 => Ok(ReadableRegisterF64::ScannerDistance),
+            HEALTH_REGISTER_F64 => Ok(ReadableRegisterF64::Health),
+            ENERGY_REGISTER_F64 => Ok(ReadableRegisterF64::Energy),
+            GENERAL_PURPOSE_REGISTER_F64_0 => Ok(ReadableRegisterF64::GeneralPurpose0),
+            GENERAL_PURPOSE_REGISTER_F64_1 => Ok(ReadableRegisterF64::GeneralPurpose1),
+            GENERAL_PURPOSE_REGISTER_F64_2 => Ok(ReadableRegisterF64::GeneralPurpose2),
+            GENERAL_PURPOSE_REGISTER_F64_3 => Ok(ReadableRegisterF64::GeneralPurpose3),
+            GENERAL_PURPOSE_REGISTER_F64_4 => Ok(ReadableRegisterF64::GeneralPurpose4),
+            GENERAL_PURPOSE_REGISTER_F64_5 => Ok(ReadableRegisterF64::GeneralPurpose5),
+            GENERAL_PURPOSE_REGISTER_F64_6 => Ok(ReadableRegisterF64::GeneralPurpose6),
+            GENERAL_PURPOSE_REGISTER_F64_7 => Ok(ReadableRegisterF64::GeneralPurpose7),
+            _ => Err(format!("Invalid register: {}", value)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +140,7 @@ pub enum WritableRegisterF64 {
     VelocityX,
     VelocityY,
     TurretAngularVelocity,
+    GeneralPurpose0,
     GeneralPurpose1,
     GeneralPurpose2,
     GeneralPurpose3,
@@ -57,7 +148,27 @@ pub enum WritableRegisterF64 {
     GeneralPurpose5,
     GeneralPurpose6,
     GeneralPurpose7,
-    GeneralPurpose8,
+}
+
+impl TryFrom<&str> for WritableRegisterF64 {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            VELOCITY_X_REGISTER_F64 => Ok(WritableRegisterF64::VelocityX),
+            VELOCITY_Y_REGISTER_F64 => Ok(WritableRegisterF64::VelocityY),
+            TURRET_ANGULAR_VELOCITY_REGISTER_F64 => Ok(WritableRegisterF64::TurretAngularVelocity),
+            GENERAL_PURPOSE_REGISTER_F64_0 => Ok(WritableRegisterF64::GeneralPurpose0),
+            GENERAL_PURPOSE_REGISTER_F64_1 => Ok(WritableRegisterF64::GeneralPurpose1),
+            GENERAL_PURPOSE_REGISTER_F64_2 => Ok(WritableRegisterF64::GeneralPurpose2),
+            GENERAL_PURPOSE_REGISTER_F64_3 => Ok(WritableRegisterF64::GeneralPurpose3),
+            GENERAL_PURPOSE_REGISTER_F64_4 => Ok(WritableRegisterF64::GeneralPurpose4),
+            GENERAL_PURPOSE_REGISTER_F64_5 => Ok(WritableRegisterF64::GeneralPurpose5),
+            GENERAL_PURPOSE_REGISTER_F64_6 => Ok(WritableRegisterF64::GeneralPurpose6),
+            GENERAL_PURPOSE_REGISTER_F64_7 => Ok(WritableRegisterF64::GeneralPurpose7),
+            _ => Err(format!("Invalid register: {}", value)),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -200,10 +311,6 @@ pub enum Instruction {
 #[derive(Debug, Clone, Copy)]
 pub struct ProgramPointer(usize);
 
-pub struct Program {
-    instructions: Vec<Instruction>,
-}
-
 impl ProgramPointer {
     pub fn advance(&mut self) -> &mut Self {
         self.0 += 1;
@@ -231,6 +338,10 @@ impl TryFrom<u64> for ProgramPointer {
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         value.try_into().map(Self)
     }
+}
+
+pub struct Program {
+    instructions: Vec<Instruction>,
 }
 
 impl Program {

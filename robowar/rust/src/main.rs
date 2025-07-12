@@ -47,7 +47,6 @@ impl WindowState {
         }
         let window = Arc::new(event_loop.create_window(window_attributes)?);
 
-        // TODO softbuffer context initialization would go here
         let context = Context::new(window.clone())
             .map_err(|e| eyre!("failed to make softbuffer context: {e:?}"))?;
         let surface = Surface::new(&context, window.clone())

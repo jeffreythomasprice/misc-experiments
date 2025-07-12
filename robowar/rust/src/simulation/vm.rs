@@ -432,27 +432,27 @@ impl VirtualMachine {
 
     fn read_register_u64(&self, r: ReadableRegisterU64) -> u64 {
         match r {
-            ReadableRegisterU64::GeneralPurpose1 => self.register_general_purpose_u64[0],
-            ReadableRegisterU64::GeneralPurpose2 => self.register_general_purpose_u64[1],
-            ReadableRegisterU64::GeneralPurpose3 => self.register_general_purpose_u64[2],
-            ReadableRegisterU64::GeneralPurpose4 => self.register_general_purpose_u64[3],
-            ReadableRegisterU64::GeneralPurpose5 => self.register_general_purpose_u64[4],
-            ReadableRegisterU64::GeneralPurpose6 => self.register_general_purpose_u64[5],
-            ReadableRegisterU64::GeneralPurpose7 => self.register_general_purpose_u64[6],
-            ReadableRegisterU64::GeneralPurpose8 => self.register_general_purpose_u64[7],
+            ReadableRegisterU64::GeneralPurpose0 => self.register_general_purpose_u64[0],
+            ReadableRegisterU64::GeneralPurpose1 => self.register_general_purpose_u64[1],
+            ReadableRegisterU64::GeneralPurpose2 => self.register_general_purpose_u64[2],
+            ReadableRegisterU64::GeneralPurpose3 => self.register_general_purpose_u64[3],
+            ReadableRegisterU64::GeneralPurpose4 => self.register_general_purpose_u64[4],
+            ReadableRegisterU64::GeneralPurpose5 => self.register_general_purpose_u64[5],
+            ReadableRegisterU64::GeneralPurpose6 => self.register_general_purpose_u64[6],
+            ReadableRegisterU64::GeneralPurpose7 => self.register_general_purpose_u64[7],
         }
     }
 
     fn write_register_u64(&mut self, r: WritableRegisterU64, value: u64) {
         *match r {
-            WritableRegisterU64::GeneralPurpose1 => &mut self.register_general_purpose_u64[0],
-            WritableRegisterU64::GeneralPurpose2 => &mut self.register_general_purpose_u64[1],
-            WritableRegisterU64::GeneralPurpose3 => &mut self.register_general_purpose_u64[2],
-            WritableRegisterU64::GeneralPurpose4 => &mut self.register_general_purpose_u64[3],
-            WritableRegisterU64::GeneralPurpose5 => &mut self.register_general_purpose_u64[4],
-            WritableRegisterU64::GeneralPurpose6 => &mut self.register_general_purpose_u64[5],
-            WritableRegisterU64::GeneralPurpose7 => &mut self.register_general_purpose_u64[6],
-            WritableRegisterU64::GeneralPurpose8 => &mut self.register_general_purpose_u64[7],
+            WritableRegisterU64::GeneralPurpose0 => &mut self.register_general_purpose_u64[0],
+            WritableRegisterU64::GeneralPurpose1 => &mut self.register_general_purpose_u64[1],
+            WritableRegisterU64::GeneralPurpose2 => &mut self.register_general_purpose_u64[2],
+            WritableRegisterU64::GeneralPurpose3 => &mut self.register_general_purpose_u64[3],
+            WritableRegisterU64::GeneralPurpose4 => &mut self.register_general_purpose_u64[4],
+            WritableRegisterU64::GeneralPurpose5 => &mut self.register_general_purpose_u64[5],
+            WritableRegisterU64::GeneralPurpose6 => &mut self.register_general_purpose_u64[6],
+            WritableRegisterU64::GeneralPurpose7 => &mut self.register_general_purpose_u64[7],
         } = value;
     }
 
@@ -472,14 +472,14 @@ impl VirtualMachine {
             ReadableRegisterF64::ScannerDistance => environment.actor_scan(actor),
             ReadableRegisterF64::Health => self.health,
             ReadableRegisterF64::Energy => self.energy,
-            ReadableRegisterF64::GeneralPurpose1 => self.register_general_purpose_f64[0],
-            ReadableRegisterF64::GeneralPurpose2 => self.register_general_purpose_f64[1],
-            ReadableRegisterF64::GeneralPurpose3 => self.register_general_purpose_f64[2],
-            ReadableRegisterF64::GeneralPurpose4 => self.register_general_purpose_f64[3],
-            ReadableRegisterF64::GeneralPurpose5 => self.register_general_purpose_f64[4],
-            ReadableRegisterF64::GeneralPurpose6 => self.register_general_purpose_f64[5],
-            ReadableRegisterF64::GeneralPurpose7 => self.register_general_purpose_f64[6],
-            ReadableRegisterF64::GeneralPurpose8 => self.register_general_purpose_f64[7],
+            ReadableRegisterF64::GeneralPurpose0 => self.register_general_purpose_f64[0],
+            ReadableRegisterF64::GeneralPurpose1 => self.register_general_purpose_f64[1],
+            ReadableRegisterF64::GeneralPurpose2 => self.register_general_purpose_f64[2],
+            ReadableRegisterF64::GeneralPurpose3 => self.register_general_purpose_f64[3],
+            ReadableRegisterF64::GeneralPurpose4 => self.register_general_purpose_f64[4],
+            ReadableRegisterF64::GeneralPurpose5 => self.register_general_purpose_f64[5],
+            ReadableRegisterF64::GeneralPurpose6 => self.register_general_purpose_f64[6],
+            ReadableRegisterF64::GeneralPurpose7 => self.register_general_purpose_f64[7],
         }
     }
 
@@ -497,14 +497,14 @@ impl VirtualMachine {
                 self.turrent_angular_velocity = Radians::from_radians(value);
                 return;
             }
-            WritableRegisterF64::GeneralPurpose1 => &mut self.register_general_purpose_f64[0],
-            WritableRegisterF64::GeneralPurpose2 => &mut self.register_general_purpose_f64[1],
-            WritableRegisterF64::GeneralPurpose3 => &mut self.register_general_purpose_f64[2],
-            WritableRegisterF64::GeneralPurpose4 => &mut self.register_general_purpose_f64[3],
-            WritableRegisterF64::GeneralPurpose5 => &mut self.register_general_purpose_f64[4],
-            WritableRegisterF64::GeneralPurpose6 => &mut self.register_general_purpose_f64[5],
-            WritableRegisterF64::GeneralPurpose7 => &mut self.register_general_purpose_f64[6],
-            WritableRegisterF64::GeneralPurpose8 => &mut self.register_general_purpose_f64[7],
+            WritableRegisterF64::GeneralPurpose0 => &mut self.register_general_purpose_f64[0],
+            WritableRegisterF64::GeneralPurpose1 => &mut self.register_general_purpose_f64[1],
+            WritableRegisterF64::GeneralPurpose2 => &mut self.register_general_purpose_f64[2],
+            WritableRegisterF64::GeneralPurpose3 => &mut self.register_general_purpose_f64[3],
+            WritableRegisterF64::GeneralPurpose4 => &mut self.register_general_purpose_f64[4],
+            WritableRegisterF64::GeneralPurpose5 => &mut self.register_general_purpose_f64[5],
+            WritableRegisterF64::GeneralPurpose6 => &mut self.register_general_purpose_f64[6],
+            WritableRegisterF64::GeneralPurpose7 => &mut self.register_general_purpose_f64[7],
         } = value;
     }
 }

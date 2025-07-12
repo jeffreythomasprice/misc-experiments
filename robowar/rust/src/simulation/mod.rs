@@ -1,4 +1,4 @@
-mod language;
-mod physics;
-mod simulation;
-mod vm;
+pub mod language;
+pub mod physics;
+pub mod simulation;
+pub mod vm;
