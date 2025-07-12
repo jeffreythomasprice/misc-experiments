@@ -56,16 +56,13 @@ impl WindowState {
     }
 
     pub fn resize(&mut self, physical_size: PhysicalSize<u32>) -> Result<()> {
-        match (
+        if let (Some(width), Some(height)) = (
             NonZero::new(physical_size.width),
             NonZero::new(physical_size.height),
         ) {
-            (Some(width), Some(height)) => {
-                self.surface
-                    .resize(width, height)
-                    .map_err(|e| eyre!("failed to resize softbuffer surface: {e:?}"))?;
-            }
-            _ => (),
+            self.surface
+                .resize(width, height)
+                .map_err(|e| eyre!("failed to resize softbuffer surface: {e:?}"))?;
         }
         Ok(())
     }
@@ -144,21 +141,19 @@ impl ApplicationHandler for App {
             }
 
             winit::event::WindowEvent::Resized(physical_size) => {
-                if let Some(window_state) = &mut self.window_state {
-                    if let Err(e) = window_state.resize(physical_size) {
+                if let Some(window_state) = &mut self.window_state
+                    && let Err(e) = window_state.resize(physical_size) {
                         error!("error resizing: {e:?}");
                         exit(1);
                     }
-                }
             }
 
             winit::event::WindowEvent::RedrawRequested => {
-                if let Some(window_state) = &mut self.window_state {
-                    if let Err(e) = window_state.render() {
+                if let Some(window_state) = &mut self.window_state
+                    && let Err(e) = window_state.render() {
                         error!("error rendering: {e:?}");
                         exit(1);
                     }
-                }
             }
 
             _ => (),

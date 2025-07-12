@@ -105,7 +105,7 @@ impl Environment {
 
         let velocity = Vec2::new(0., 0.);
 
-        let turret_angle = Radians::from_degrees(rand::rng().random_range((0.)..(360.0)));
+        let turret_angle = Radians::from_degrees(rand::rng().random_range((0.)..360.0));
 
         let turret_angular_velocity = Radians::from_degrees(0.);
 

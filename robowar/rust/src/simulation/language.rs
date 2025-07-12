@@ -52,7 +52,7 @@ impl TryFrom<&str> for ReadableRegisterU64 {
             GENERAL_PURPOSE_REGISTER_U64_5 => Ok(ReadableRegisterU64::GeneralPurpose5),
             GENERAL_PURPOSE_REGISTER_U64_6 => Ok(ReadableRegisterU64::GeneralPurpose6),
             GENERAL_PURPOSE_REGISTER_U64_7 => Ok(ReadableRegisterU64::GeneralPurpose7),
-            _ => Err(format!("Invalid register: {}", value)),
+            _ => Err(format!("Invalid register: {value}")),
         }
     }
 }
@@ -82,7 +82,7 @@ impl TryFrom<&str> for WritableRegisterU64 {
             GENERAL_PURPOSE_REGISTER_U64_5 => Ok(WritableRegisterU64::GeneralPurpose5),
             GENERAL_PURPOSE_REGISTER_U64_6 => Ok(WritableRegisterU64::GeneralPurpose6),
             GENERAL_PURPOSE_REGISTER_U64_7 => Ok(WritableRegisterU64::GeneralPurpose7),
-            _ => Err(format!("Invalid register: {}", value)),
+            _ => Err(format!("Invalid register: {value}")),
         }
     }
 }
@@ -130,7 +130,7 @@ impl TryFrom<&str> for ReadableRegisterF64 {
             GENERAL_PURPOSE_REGISTER_F64_5 => Ok(ReadableRegisterF64::GeneralPurpose5),
             GENERAL_PURPOSE_REGISTER_F64_6 => Ok(ReadableRegisterF64::GeneralPurpose6),
             GENERAL_PURPOSE_REGISTER_F64_7 => Ok(ReadableRegisterF64::GeneralPurpose7),
-            _ => Err(format!("Invalid register: {}", value)),
+            _ => Err(format!("Invalid register: {value}")),
         }
     }
 }
@@ -166,7 +166,7 @@ impl TryFrom<&str> for WritableRegisterF64 {
             GENERAL_PURPOSE_REGISTER_F64_5 => Ok(WritableRegisterF64::GeneralPurpose5),
             GENERAL_PURPOSE_REGISTER_F64_6 => Ok(WritableRegisterF64::GeneralPurpose6),
             GENERAL_PURPOSE_REGISTER_F64_7 => Ok(WritableRegisterF64::GeneralPurpose7),
-            _ => Err(format!("Invalid register: {}", value)),
+            _ => Err(format!("Invalid register: {value}")),
         }
     }
 }

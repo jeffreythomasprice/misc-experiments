@@ -1,26 +1,18 @@
 use std::collections::HashMap;
 
-use chumsky::{
-    container::Seq,
-    error::RichReason,
-    extra::{Err, Full, ParserExtra},
-    prelude::*,
-    regex::Regex,
-    text::ascii::ident,
-};
-use tracing::*;
+use chumsky::{extra::Err, prelude::*, regex::Regex};
 
-use crate::simulation::{self, language};
+use crate::simulation::language;
 
 #[derive(Debug, Clone)]
-pub enum NumberLiteral {
+enum NumberLiteral {
     I64(i64),
     U64(u64),
     F64(f64),
 }
 
 #[derive(Debug, Clone)]
-pub enum Argument {
+enum Argument {
     Identifier(String),
     Number(NumberLiteral),
 }
@@ -37,7 +29,7 @@ impl TryInto<language::SourceU64> for Argument {
             Argument::Number(NumberLiteral::I64(result)) => {
                 Ok(language::SourceU64::Literal(result as u64))
             }
-            Argument::Number(number) => Err(format!("expected a u64 literal, found: {:?}", number)),
+            Argument::Number(number) => Err(format!("expected a u64 literal, found: {number:?}")),
         }
     }
 }
@@ -51,8 +43,7 @@ impl TryInto<language::DestinationU64> for Argument {
                 Ok(language::DestinationU64::Register(s.as_str().try_into()?))
             }
             Argument::Number(number) => Err(format!(
-                "expected a writable u64 register, found: {:?}",
-                number
+                "expected a writable u64 register, found: {number:?}"
             )),
         }
     }
@@ -67,7 +58,12 @@ impl TryInto<language::SourceF64> for Argument {
             Argument::Number(NumberLiteral::F64(result)) => {
                 Ok(language::SourceF64::Literal(result))
             }
-            Argument::Number(number) => Err(format!("expected a f64 literal, found: {:?}", number)),
+            Argument::Number(NumberLiteral::I64(result)) => {
+                Ok(language::SourceF64::Literal(result as f64))
+            }
+            Argument::Number(NumberLiteral::U64(result)) => {
+                Ok(language::SourceF64::Literal(result as f64))
+            }
         }
     }
 }
@@ -81,15 +77,14 @@ impl TryInto<language::DestinationF64> for Argument {
                 Ok(language::DestinationF64::Register(s.as_str().try_into()?))
             }
             Argument::Number(number) => Err(format!(
-                "expected a writable f64 register, found: {:?}",
-                number
+                "expected a writable f64 register, found: {number:?}"
             )),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct UnvalidatedInstruction {
+struct UnvalidatedInstruction {
     pub instruction: String,
     pub arguments: Vec<Argument>,
 }
@@ -111,7 +106,7 @@ impl SourceU64 {
             SourceU64::Literal(literal) => Ok(language::SourceU64::Literal(*literal)),
             SourceU64::Label(label) => match labels.get(label) {
                 Some(label) => Ok(language::SourceU64::Literal(label.0 as u64)),
-                None => Err(format!("label '{}' not found in program", label)),
+                None => Err(format!("label '{label}' not found in program")),
             },
         }
     }
@@ -128,7 +123,7 @@ impl TryInto<SourceU64> for Argument {
             },
             Argument::Number(NumberLiteral::U64(result)) => Ok(SourceU64::Literal(result)),
             Argument::Number(NumberLiteral::I64(result)) => Ok(SourceU64::Literal(result as u64)),
-            Argument::Number(number) => Err(format!("expected a u64 literal, found: {:?}", number)),
+            Argument::Number(number) => Err(format!("expected a u64 literal, found: {number:?}")),
         }
     }
 }
@@ -456,7 +451,7 @@ impl Instruction {
 }
 
 #[derive(Debug, Clone)]
-pub enum ValidInstruction {
+enum CheckedInstruction {
     Valid(Instruction),
     Invalid {
         instruction: UnvalidatedInstruction,
@@ -464,7 +459,7 @@ pub enum ValidInstruction {
     },
 }
 
-impl ValidInstruction {
+impl CheckedInstruction {
     fn new(
         UnvalidatedInstruction {
             instruction,
@@ -478,7 +473,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(Instruction::AddU64 {
+                        CheckedInstruction::Valid(Instruction::AddU64 {
                             destination,
                             left,
                             right,
@@ -487,13 +482,13 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(Instruction::AddF64 {
+                        CheckedInstruction::Valid(Instruction::AddF64 {
                             destination,
                             left,
                             right,
                         })
                     } else {
-                        ValidInstruction::Invalid {
+                        CheckedInstruction::Invalid {
                             instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
@@ -508,7 +503,7 @@ impl ValidInstruction {
                         }
                     }
                 }
-                _ => ValidInstruction::Invalid {
+                _ => CheckedInstruction::Invalid {
                     instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
@@ -527,7 +522,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(Instruction::SubU64 {
+                        CheckedInstruction::Valid(Instruction::SubU64 {
                             destination,
                             left,
                             right,
@@ -536,13 +531,13 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(Instruction::SubF64 {
+                        CheckedInstruction::Valid(Instruction::SubF64 {
                             destination,
                             left,
                             right,
                         })
                     } else {
-                        ValidInstruction::Invalid {
+                        CheckedInstruction::Invalid {
                             instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
@@ -557,7 +552,7 @@ impl ValidInstruction {
                         }
                     }
                 }
-                _ => ValidInstruction::Invalid {
+                _ => CheckedInstruction::Invalid {
                     instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
@@ -576,7 +571,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(Instruction::MulU64 {
+                        CheckedInstruction::Valid(Instruction::MulU64 {
                             destination,
                             left,
                             right,
@@ -585,13 +580,13 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(Instruction::MulF64 {
+                        CheckedInstruction::Valid(Instruction::MulF64 {
                             destination,
                             left,
                             right,
                         })
                     } else {
-                        ValidInstruction::Invalid {
+                        CheckedInstruction::Invalid {
                             instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
@@ -606,7 +601,7 @@ impl ValidInstruction {
                         }
                     }
                 }
-                _ => ValidInstruction::Invalid {
+                _ => CheckedInstruction::Invalid {
                     instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
@@ -625,7 +620,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(Instruction::DivU64 {
+                        CheckedInstruction::Valid(Instruction::DivU64 {
                             destination,
                             left,
                             right,
@@ -634,13 +629,13 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(Instruction::DivF64 {
+                        CheckedInstruction::Valid(Instruction::DivF64 {
                             destination,
                             left,
                             right,
                         })
                     } else {
-                        ValidInstruction::Invalid {
+                        CheckedInstruction::Invalid {
                             instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
@@ -655,7 +650,7 @@ impl ValidInstruction {
                         }
                     }
                 }
-                _ => ValidInstruction::Invalid {
+                _ => CheckedInstruction::Invalid {
                     instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
@@ -671,9 +666,9 @@ impl ValidInstruction {
             "jmp" => match arguments.as_slice() {
                 [address] => {
                     if let Ok(address) = address.clone().try_into() {
-                        ValidInstruction::Valid(Instruction::Jump { address })
+                        CheckedInstruction::Valid(Instruction::Jump { address })
                     } else {
-                        ValidInstruction::Invalid {
+                        CheckedInstruction::Invalid {
                             instruction: UnvalidatedInstruction {
                                 instruction: instruction.clone(),
                                 arguments: arguments.clone(),
@@ -686,7 +681,7 @@ impl ValidInstruction {
                         }
                     }
                 }
-                _ => ValidInstruction::Invalid {
+                _ => CheckedInstruction::Invalid {
                     instruction: UnvalidatedInstruction {
                         instruction: instruction.clone(),
                         arguments: arguments.clone(),
@@ -699,84 +694,380 @@ impl ValidInstruction {
                 },
             },
 
-            /*
-            TODO handle all instruction types
+            "jeq" => match arguments.as_slice() {
+                [address, left, right] => {
+                    if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpEqualU64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpEqualF64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': address: {:?}, left: {:?}, right: {:?}",
+                                instruction.to_uppercase(),
+                                address,
+                                left,
+                                right
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 3 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
+            },
 
-            JumpEqualU64 {
-                address: SourceU64,
-                left: SourceU64,
-                right: SourceU64,
+            "jne" => match arguments.as_slice() {
+                [address, left, right] => {
+                    if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpNotEqualU64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpNotEqualF64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': address: {:?}, left: {:?}, right: {:?}",
+                                instruction.to_uppercase(),
+                                address,
+                                left,
+                                right
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 3 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
             },
-            JumpEqualF64 {
-                address: SourceU64,
-                left: SourceF64,
-                right: SourceF64,
+
+            "jlt" => match arguments.as_slice() {
+                [address, left, right] => {
+                    if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpLessThanU64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpLessThanF64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': address: {:?}, left: {:?}, right: {:?}",
+                                instruction.to_uppercase(),
+                                address,
+                                left,
+                                right
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 3 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
             },
-            JumpNotEqualU64 {
-                address: SourceU64,
-                left: SourceU64,
-                right: SourceU64,
+
+            "jle" => match arguments.as_slice() {
+                [address, left, right] => {
+                    if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpLessThanOrEqualToU64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpLessThanOrEqualToF64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': address: {:?}, left: {:?}, right: {:?}",
+                                instruction.to_uppercase(),
+                                address,
+                                left,
+                                right
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 3 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
             },
-            JumpNotEqualF64 {
-                address: SourceU64,
-                left: SourceF64,
-                right: SourceF64,
+
+            "jgt" => match arguments.as_slice() {
+                [address, left, right] => {
+                    if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpGreaterThanU64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpGreaterThanF64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': address: {:?}, left: {:?}, right: {:?}",
+                                instruction.to_uppercase(),
+                                address,
+                                left,
+                                right
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 3 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
             },
-            JumpLessThanU64 {
-                address: SourceU64,
-                left: SourceU64,
-                right: SourceU64,
+
+            "jge" => match arguments.as_slice() {
+                [address, left, right] => {
+                    if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpGreaterThanOrEqualToU64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else if let Ok(address) = address.clone().try_into()
+                        && let Ok(left) = left.clone().try_into()
+                        && let Ok(right) = right.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::JumpGreaterThanOrEqualToF64 {
+                            address,
+                            left,
+                            right,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': address: {:?}, left: {:?}, right: {:?}",
+                                instruction.to_uppercase(),
+                                address,
+                                left,
+                                right
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 3 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
             },
-            JumpLessThanF64 {
-                address: SourceU64,
-                left: SourceF64,
-                right: SourceF64,
+
+            "sl" => match arguments.as_slice() {
+                [destination, source] => {
+                    if let Ok(destination) = destination.clone().try_into()
+                        && let Ok(source) = source.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::ShiftLeft {
+                            destination,
+                            source,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': destination: {:?}, source: {:?}",
+                                instruction.to_uppercase(),
+                                destination,
+                                source
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 2 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
             },
-            JumpLessThanOrEqualToU64 {
-                address: SourceU64,
-                left: SourceU64,
-                right: SourceU64,
+
+            "sr" => match arguments.as_slice() {
+                [destination, source] => {
+                    if let Ok(destination) = destination.clone().try_into()
+                        && let Ok(source) = source.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::ShiftRight {
+                            destination,
+                            source,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': destination: {:?}, source: {:?}",
+                                instruction.to_uppercase(),
+                                destination,
+                                source
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 2 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
             },
-            JumpLessThanOrEqualToF64 {
-                address: SourceU64,
-                left: SourceF64,
-                right: SourceF64,
-            },
-            JumpGreaterThanU64 {
-                address: SourceU64,
-                left: SourceU64,
-                right: SourceU64,
-            },
-            JumpGreaterThanF64 {
-                address: SourceU64,
-                left: SourceF64,
-                right: SourceF64,
-            },
-            JumpGreaterThanOrEqualToU64 {
-                address: SourceU64,
-                left: SourceU64,
-                right: SourceU64,
-            },
-            JumpGreaterThanOrEqualToF64 {
-                address: SourceU64,
-                left: SourceF64,
-                right: SourceF64,
-            },
-            ShiftLeft {
-                destination: DestinationU64,
-                source: SourceU64,
-            },
-            ShiftRight {
-                destination: DestinationU64,
-                source: SourceU64,
-            },
-            */
-            _ => ValidInstruction::Invalid {
+
+            _ => CheckedInstruction::Invalid {
                 instruction: UnvalidatedInstruction {
                     instruction: instruction.clone(),
                     arguments,
                 },
-                error: format!("unrecognized instruction: {}", instruction),
+                error: format!("unrecognized instruction: {instruction}"),
             },
         }
     }
@@ -839,8 +1130,13 @@ pub fn parse(input: &str) -> Result<Program, String> {
         Err(e) => Err(Rich::custom(span, e)),
     });
     // TODO hex, binary, octal
-    // TODO floats
-    let number = choice((number_i64, number_u64));
+    let number_f64 = regex(r"[+-]?([0-9]*[.])?[0-9]+([eE][+-]?[0-9]+)?").try_map(
+        |input: &str, span| match input.parse() {
+            Ok(result) => Ok(NumberLiteral::F64(result)),
+            Err(e) => Err(Rich::custom(span, e)),
+        },
+    );
+    let number = choice((number_f64, number_i64, number_u64));
 
     let argument = choice((
         identifier
@@ -853,12 +1149,16 @@ pub fn parse(input: &str) -> Result<Program, String> {
 
     // either a Some(valid instruction) or None
     let instruction = identifier.clone().padded().then(argument_list).validate(
-        |(instruction, arguments), e, emitter| match ValidInstruction::new(UnvalidatedInstruction {
-            instruction,
-            arguments,
-        }) {
-            ValidInstruction::Valid(instruction) => Some(instruction),
-            ValidInstruction::Invalid {
+        |(instruction, arguments), e, emitter| match CheckedInstruction::new(
+            UnvalidatedInstruction {
+                instruction,
+                arguments,
+            },
+        ) {
+            CheckedInstruction::Valid(instruction) => {
+                Some(LabelOrInstruction::Instruction(instruction))
+            }
+            CheckedInstruction::Invalid {
                 instruction: _,
                 error,
             } => {
@@ -868,13 +1168,13 @@ pub fn parse(input: &str) -> Result<Program, String> {
         },
     );
 
-    // a list of either valid instructions or labels, or None that represents places where invalid instructions were validated and rejected
-    let instruction = instruction.map(|x| x.map(LabelOrInstruction::Instruction));
+    // because instructions have to be options because we skip invalid instructions, this will be an option too
     let label = identifier
         .then(just(':'))
         .padded()
         .map(|(name, _)| Some(LabelOrInstruction::Label(name)));
 
+    // a list of either valid instructions or labels, or None that represents places where invalid instructions were validated and rejected
     let program = choice((label, instruction)).repeated().collect::<Vec<_>>();
 
     Program::new(
@@ -902,6 +1202,8 @@ mod tests {
         foo:
         bar:
             add r0, r1, r2
+            add velocity_x, velocity_x, 1.5
+            sub velocity_y, velocity_y, -17
             jmp foo
         ";
         let result = parse(input);
