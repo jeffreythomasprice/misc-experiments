@@ -87,6 +87,10 @@ impl Environment {
         return result;
     }
 
+    pub fn step(&mut self, time: f64) {
+        todo!()
+    }
+
     /// Finds the first intersection with another actor or the world, starting from the actor's position and extending in the direction of
     /// the actor's turret.
     pub fn actor_scan(&self, starting_actor: Rc<RefCell<Actor>>) -> f64 {

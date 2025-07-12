@@ -1,3 +1,4 @@
+mod ecs;
 mod math;
 mod simulation;
 
