@@ -30,7 +30,6 @@ impl TryInto<language::SourceU64> for Argument {
 
     fn try_into(self) -> Result<language::SourceU64, Self::Error> {
         match self {
-            // TODO handle label addresses?
             Argument::Identifier(s) => Ok(language::SourceU64::Register(s.as_str().try_into()?)),
             Argument::Number(NumberLiteral::U64(result)) => {
                 Ok(language::SourceU64::Literal(result))
@@ -96,8 +95,369 @@ pub struct UnvalidatedInstruction {
 }
 
 #[derive(Debug, Clone)]
+pub enum SourceU64 {
+    Register(language::ReadableRegisterU64),
+    Literal(u64),
+    Label(String),
+}
+
+impl SourceU64 {
+    fn into_runnable(
+        &self,
+        labels: &HashMap<String, language::ProgramPointer>,
+    ) -> Result<language::SourceU64, String> {
+        match self {
+            SourceU64::Register(register) => Ok(language::SourceU64::Register(register.clone())),
+            SourceU64::Literal(literal) => Ok(language::SourceU64::Literal(*literal)),
+            SourceU64::Label(label) => match labels.get(label) {
+                Some(label) => Ok(language::SourceU64::Literal(label.0 as u64)),
+                None => Err(format!("label '{}' not found in program", label)),
+            },
+        }
+    }
+}
+
+impl TryInto<SourceU64> for Argument {
+    type Error = String;
+
+    fn try_into(self) -> Result<SourceU64, Self::Error> {
+        match self {
+            Argument::Identifier(s) => match s.as_str().try_into() {
+                Ok(register) => Ok(SourceU64::Register(register)),
+                Result::Err(_) => Ok(SourceU64::Label(s)),
+            },
+            Argument::Number(NumberLiteral::U64(result)) => Ok(SourceU64::Literal(result)),
+            Argument::Number(NumberLiteral::I64(result)) => Ok(SourceU64::Literal(result as u64)),
+            Argument::Number(number) => Err(format!("expected a u64 literal, found: {:?}", number)),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Instruction {
+    AddU64 {
+        destination: language::DestinationU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    AddF64 {
+        destination: language::DestinationF64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    SubU64 {
+        destination: language::DestinationU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    SubF64 {
+        destination: language::DestinationF64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    MulU64 {
+        destination: language::DestinationU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    MulF64 {
+        destination: language::DestinationF64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    DivU64 {
+        destination: language::DestinationU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    DivF64 {
+        destination: language::DestinationF64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    Jump {
+        address: SourceU64,
+    },
+    JumpEqualU64 {
+        address: SourceU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    JumpEqualF64 {
+        address: SourceU64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    JumpNotEqualU64 {
+        address: SourceU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    JumpNotEqualF64 {
+        address: SourceU64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    JumpLessThanU64 {
+        address: SourceU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    JumpLessThanF64 {
+        address: SourceU64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    JumpLessThanOrEqualToU64 {
+        address: SourceU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    JumpLessThanOrEqualToF64 {
+        address: SourceU64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    JumpGreaterThanU64 {
+        address: SourceU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    JumpGreaterThanF64 {
+        address: SourceU64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    JumpGreaterThanOrEqualToU64 {
+        address: SourceU64,
+        left: SourceU64,
+        right: SourceU64,
+    },
+    JumpGreaterThanOrEqualToF64 {
+        address: SourceU64,
+        left: language::SourceF64,
+        right: language::SourceF64,
+    },
+    ShiftLeft {
+        destination: language::DestinationU64,
+        source: SourceU64,
+    },
+    ShiftRight {
+        destination: language::DestinationU64,
+        source: SourceU64,
+    },
+}
+
+impl Instruction {
+    fn into_runnable(
+        &self,
+        labels: &HashMap<String, language::ProgramPointer>,
+    ) -> Result<language::Instruction, String> {
+        match self {
+            Instruction::AddU64 {
+                destination,
+                left,
+                right,
+            } => Ok(language::Instruction::AddU64 {
+                destination: destination.clone(),
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::AddF64 {
+                destination,
+                left,
+                right,
+            } => Ok(language::Instruction::AddF64 {
+                destination: destination.clone(),
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::SubU64 {
+                destination,
+                left,
+                right,
+            } => Ok(language::Instruction::SubU64 {
+                destination: destination.clone(),
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::SubF64 {
+                destination,
+                left,
+                right,
+            } => Ok(language::Instruction::SubF64 {
+                destination: destination.clone(),
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::MulU64 {
+                destination,
+                left,
+                right,
+            } => Ok(language::Instruction::MulU64 {
+                destination: destination.clone(),
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::MulF64 {
+                destination,
+                left,
+                right,
+            } => Ok(language::Instruction::MulF64 {
+                destination: destination.clone(),
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::DivU64 {
+                destination,
+                left,
+                right,
+            } => Ok(language::Instruction::DivU64 {
+                destination: destination.clone(),
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::DivF64 {
+                destination,
+                left,
+                right,
+            } => Ok(language::Instruction::DivF64 {
+                destination: destination.clone(),
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::Jump { address } => Ok(language::Instruction::Jump {
+                address: address.clone().into_runnable(labels)?,
+            }),
+            Instruction::JumpEqualU64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpEqualU64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::JumpEqualF64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpEqualF64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::JumpNotEqualU64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpNotEqualU64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::JumpNotEqualF64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpNotEqualF64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::JumpLessThanU64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpLessThanU64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::JumpLessThanF64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpLessThanF64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::JumpLessThanOrEqualToU64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpLessThanOrEqualToU64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::JumpLessThanOrEqualToF64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpLessThanOrEqualToF64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::JumpGreaterThanU64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpGreaterThanU64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::JumpGreaterThanF64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpGreaterThanF64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::JumpGreaterThanOrEqualToU64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpGreaterThanOrEqualToU64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.into_runnable(labels)?,
+                right: right.into_runnable(labels)?,
+            }),
+            Instruction::JumpGreaterThanOrEqualToF64 {
+                address,
+                left,
+                right,
+            } => Ok(language::Instruction::JumpGreaterThanOrEqualToF64 {
+                address: address.clone().into_runnable(labels)?,
+                left: left.clone(),
+                right: right.clone(),
+            }),
+            Instruction::ShiftLeft {
+                destination,
+                source,
+            } => Ok(language::Instruction::ShiftLeft {
+                destination: destination.clone(),
+                source: source.into_runnable(labels)?,
+            }),
+            Instruction::ShiftRight {
+                destination,
+                source,
+            } => Ok(language::Instruction::ShiftRight {
+                destination: destination.clone(),
+                source: source.into_runnable(labels)?,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum ValidInstruction {
-    Valid(language::Instruction),
+    Valid(Instruction),
     Invalid {
         instruction: UnvalidatedInstruction,
         error: String,
@@ -118,7 +478,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(language::Instruction::AddU64 {
+                        ValidInstruction::Valid(Instruction::AddU64 {
                             destination,
                             left,
                             right,
@@ -127,7 +487,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(language::Instruction::AddF64 {
+                        ValidInstruction::Valid(Instruction::AddF64 {
                             destination,
                             left,
                             right,
@@ -167,7 +527,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(language::Instruction::SubU64 {
+                        ValidInstruction::Valid(Instruction::SubU64 {
                             destination,
                             left,
                             right,
@@ -176,7 +536,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(language::Instruction::SubF64 {
+                        ValidInstruction::Valid(Instruction::SubF64 {
                             destination,
                             left,
                             right,
@@ -216,7 +576,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(language::Instruction::MulU64 {
+                        ValidInstruction::Valid(Instruction::MulU64 {
                             destination,
                             left,
                             right,
@@ -225,7 +585,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(language::Instruction::MulF64 {
+                        ValidInstruction::Valid(Instruction::MulF64 {
                             destination,
                             left,
                             right,
@@ -265,7 +625,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(language::Instruction::DivU64 {
+                        ValidInstruction::Valid(Instruction::DivU64 {
                             destination,
                             left,
                             right,
@@ -274,7 +634,7 @@ impl ValidInstruction {
                         && let Ok(left) = left.clone().try_into()
                         && let Ok(right) = right.clone().try_into()
                     {
-                        ValidInstruction::Valid(language::Instruction::DivF64 {
+                        ValidInstruction::Valid(Instruction::DivF64 {
                             destination,
                             left,
                             right,
@@ -311,7 +671,7 @@ impl ValidInstruction {
             "jmp" => match arguments.as_slice() {
                 [address] => {
                     if let Ok(address) = address.clone().try_into() {
-                        ValidInstruction::Valid(language::Instruction::Jump { address })
+                        ValidInstruction::Valid(Instruction::Jump { address })
                     } else {
                         ValidInstruction::Invalid {
                             instruction: UnvalidatedInstruction {
@@ -424,18 +784,19 @@ impl ValidInstruction {
 
 #[derive(Debug, Clone)]
 enum LabelOrInstruction {
-    Instruction(language::Instruction),
+    Instruction(Instruction),
     Label(String),
 }
 
 #[derive(Debug, Clone)]
 pub struct Program {
     pub labels: HashMap<String, language::ProgramPointer>,
-    pub instructions: Vec<language::Instruction>,
+    pub instructions: Vec<Instruction>,
+    pub runnable_program: language::Program,
 }
 
 impl Program {
-    fn new(content: Vec<LabelOrInstruction>) -> Self {
+    fn new(content: Vec<LabelOrInstruction>) -> Result<Self, String> {
         let mut labels = HashMap::new();
         let mut instructions = Vec::new();
         let mut next_address = language::ProgramPointer(0);
@@ -452,15 +813,20 @@ impl Program {
             }
         }
 
-        Program {
+        let runnable_instructions = instructions
+            .iter()
+            .map(|instruction| instruction.into_runnable(&labels))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Program {
             labels,
             instructions,
-        }
+            runnable_program: language::Program::new(runnable_instructions),
+        })
     }
 }
 
-// TODO actually return a full program
-pub fn parse(input: &str) -> Result<Program, Vec<Rich<char>>> {
+pub fn parse(input: &str) -> Result<Program, String> {
     let identifier: Regex<&_, Err<Rich<char>>> = regex("[a-zA-Z_][a-zA-Z0-9_]*");
     let identifier = identifier.map(|s: &str| s.to_string());
 
@@ -511,14 +877,15 @@ pub fn parse(input: &str) -> Result<Program, Vec<Rich<char>>> {
 
     let program = choice((label, instruction)).repeated().collect::<Vec<_>>();
 
-    Ok(Program::new(
+    Program::new(
         program
             .parse(input)
-            .into_result()?
+            .into_result()
+            .map_err(|e| format!("{e:?}"))?
             .into_iter()
             .flatten()
             .collect(),
-    ))
+    )
 }
 
 #[cfg(test)]
@@ -535,6 +902,7 @@ mod tests {
         foo:
         bar:
             add r0, r1, r2
+            jmp foo
         ";
         let result = parse(input);
         match &result {
@@ -543,6 +911,7 @@ mod tests {
                 for instruction in result.instructions.iter() {
                     println!("TODO instruction: {:?}", instruction);
                 }
+                println!("TODO runnable program: {:?}", result.runnable_program);
             }
             Err(e) => println!("TODO error parsing: {:?}", e),
         }

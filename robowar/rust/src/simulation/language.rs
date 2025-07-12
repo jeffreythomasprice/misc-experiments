@@ -340,11 +340,16 @@ impl TryFrom<u64> for ProgramPointer {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Program {
     instructions: Vec<Instruction>,
 }
 
 impl Program {
+    pub fn new(instructions: Vec<Instruction>) -> Self {
+        Self { instructions }
+    }
+
     pub fn get(&self, p: ProgramPointer) -> Option<&Instruction> {
         self.instructions.get(p.0)
     }
