@@ -195,6 +195,14 @@ pub enum DestinationF64 {
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    SetU64 {
+        destination: DestinationU64,
+        source: SourceU64,
+    },
+    SetF64 {
+        destination: DestinationF64,
+        source: SourceF64,
+    },
     AddU64 {
         destination: DestinationU64,
         left: SourceU64,

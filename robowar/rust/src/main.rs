@@ -199,7 +199,8 @@ fn main() -> Result<()> {
     let program = Rc::new(
         parser::parse(
             r"
-                add velocity_x, 0, 1
+                set velocity_x, 0
+                set velocity_y, 1
 
                 loop:
                     jmp loop

@@ -130,6 +130,14 @@ impl TryInto<SourceU64> for Argument {
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
+    SetU64 {
+        destination: language::DestinationU64,
+        source: SourceU64,
+    },
+    SetF64 {
+        destination: language::DestinationF64,
+        source: language::SourceF64,
+    },
     AddU64 {
         destination: language::DestinationU64,
         left: SourceU64,
@@ -249,6 +257,20 @@ impl Instruction {
         labels: &HashMap<String, language::ProgramPointer>,
     ) -> Result<language::Instruction, String> {
         match self {
+            Instruction::SetU64 {
+                destination,
+                source,
+            } => Ok(language::Instruction::SetU64 {
+                destination: destination.clone(),
+                source: source.clone().into_runnable(labels)?,
+            }),
+            Instruction::SetF64 {
+                destination,
+                source,
+            } => Ok(language::Instruction::SetF64 {
+                destination: destination.clone(),
+                source: source.clone(),
+            }),
             Instruction::AddU64 {
                 destination,
                 left,
@@ -467,6 +489,49 @@ impl CheckedInstruction {
         }: UnvalidatedInstruction,
     ) -> Self {
         match instruction.to_lowercase().as_str() {
+            "set" => match arguments.as_slice() {
+                [destination, source] => {
+                    if let Ok(destination) = destination.clone().try_into()
+                        && let Ok(source) = source.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::SetU64 {
+                            destination,
+                            source,
+                        })
+                    } else if let Ok(destination) = destination.clone().try_into()
+                        && let Ok(source) = source.clone().try_into()
+                    {
+                        CheckedInstruction::Valid(Instruction::SetF64 {
+                            destination,
+                            source,
+                        })
+                    } else {
+                        CheckedInstruction::Invalid {
+                            instruction: UnvalidatedInstruction {
+                                instruction: instruction.clone(),
+                                arguments: arguments.clone(),
+                            },
+                            error: format!(
+                                "invalid arguments for '{}': destination: {:?}, source: {:?}",
+                                instruction.to_uppercase(),
+                                destination,
+                                source
+                            ),
+                        }
+                    }
+                }
+                _ => CheckedInstruction::Invalid {
+                    instruction: UnvalidatedInstruction {
+                        instruction: instruction.clone(),
+                        arguments: arguments.clone(),
+                    },
+                    error: format!(
+                        "expected 2 arguments for '{}', found {}",
+                        instruction.to_uppercase(),
+                        arguments.len()
+                    ),
+                },
+            },
             "add" => match arguments.as_slice() {
                 [destination, left, right] => {
                     if let Ok(destination) = destination.clone().try_into()

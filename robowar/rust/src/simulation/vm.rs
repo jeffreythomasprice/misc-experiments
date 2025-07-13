@@ -97,6 +97,22 @@ impl VirtualMachine {
         actor: &physics::Actor,
     ) -> Result<ClockTime, StepError> {
         match self.read_next_instruction() {
+            Some(Instruction::SetU64 {
+                destination,
+                source,
+            }) => {
+                let source = self.resolve_source_u64(source);
+                self.write_destination_u64(destination, source.value);
+                self.clock += source.clock_cost;
+            }
+            Some(Instruction::SetF64 {
+                destination,
+                source,
+            }) => {
+                let source = self.resolve_source_f64(source, environment, actor);
+                self.write_destination_f64(destination, source.value);
+                self.clock += source.clock_cost;
+            }
             Some(Instruction::AddU64 {
                 destination,
                 left,
