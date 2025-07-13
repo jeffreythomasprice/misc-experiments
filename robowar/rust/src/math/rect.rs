@@ -40,12 +40,34 @@ where
 
     pub fn new_with_points(points: &[Vec2<T>]) -> Option<Rect<T>>
     where
-        T: Zero + Ord,
+        T: Zero + PartialOrd,
     {
         points.iter().fold(None, |result, point| match result {
             Some(result) => Some(Self {
-                min: Vec2::new(result.min.x.min(point.x), result.min.y.min(point.y)),
-                max: Vec2::new(result.max.x.min(point.x), result.max.y.min(point.y)),
+                min: Vec2::new(
+                    if result.min.x < point.x {
+                        result.min.x
+                    } else {
+                        point.x
+                    },
+                    if result.min.y < point.y {
+                        result.min.y
+                    } else {
+                        point.y
+                    },
+                ),
+                max: Vec2::new(
+                    if result.max.x > point.x {
+                        result.max.x
+                    } else {
+                        point.x
+                    },
+                    if result.max.y > point.y {
+                        result.max.y
+                    } else {
+                        point.y
+                    },
+                ),
             }),
             None => Some(Rect::new_with_origin_size(
                 *point,

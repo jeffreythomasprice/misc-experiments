@@ -18,12 +18,12 @@ pub struct Environment {
 }
 
 impl Actor {
-    pub fn position(&self) -> Vec2<f64> {
-        *self.collider.center()
+    pub fn circle(&self) -> &Circle<f64> {
+        &self.collider
     }
 
-    pub fn set_position(&mut self, value: Vec2<f64>) {
-        self.collider = Circle::new(value, *self.collider.radius())
+    pub fn set_circle(&mut self, value: Circle<f64>) {
+        self.collider = value;
     }
 
     pub fn velocity(&self) -> Vec2<f64> {
@@ -153,7 +153,7 @@ impl Environment {
         */
 
         let scan_ray = Ray2::new(
-            starting_actor.position(),
+            *starting_actor.circle().center(),
             starting_actor.turret_angle().cos_sin_vec2(),
         );
 

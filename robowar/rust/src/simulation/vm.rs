@@ -78,7 +78,7 @@ impl VirtualMachine {
     }
 
     pub fn update_to_match_actor(&mut self, actor: &physics::Actor) {
-        self.position = actor.position();
+        self.position = *actor.circle().center();
         self.velocity = actor.velocity();
         self.turret_angle = actor.turret_angle();
         self.turrent_angular_velocity = actor.turret_angular_velocity();
