@@ -9,6 +9,7 @@ chumsky = { version = "0.10.1", features = ["regex"] }
 color-eyre = "0.6.5"
 num = "0.4.3"
 rand = "0.9.1"
+rapier2d-f64 = "0.26.1"
 softbuffer = "0.4.6"
 tiny-skia = "0.11.4"
 tracing = "0.1.41"

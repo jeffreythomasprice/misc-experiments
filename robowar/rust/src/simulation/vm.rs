@@ -4,6 +4,8 @@ use std::{
     rc::Rc,
 };
 
+use color_eyre::eyre::Result;
+
 use crate::{
     math::*,
     simulation::{language::*, physics},
@@ -77,18 +79,18 @@ impl VirtualMachine {
         }
     }
 
-    pub fn update_to_match_actor(&mut self, actor: &physics::Actor) {
-        self.position = *actor.circle().center();
-        self.velocity = actor.velocity();
+    pub fn update_to_match_actor(&mut self, actor: &physics::Actor) -> Result<()> {
+        self.position = actor.position()?;
+        self.velocity = actor.velocity()?;
         self.turret_angle = actor.turret_angle();
         self.turrent_angular_velocity = actor.turret_angular_velocity();
+        Ok(())
     }
 
-    pub fn update_actor_match_vm(&self, actor: &mut physics::Actor) {
-        actor.set_circle(Circle::new(self.position, *actor.circle().radius()));
-        actor.set_velocity(self.velocity);
-        actor.set_turret_angle(self.turret_angle);
+    pub fn update_actor_match_vm(&self, actor: &mut physics::Actor) -> Result<()> {
+        actor.set_velocity(self.velocity)?;
         actor.set_turret_angular_velocity(self.turrent_angular_velocity);
+        Ok(())
     }
 
     pub fn step(

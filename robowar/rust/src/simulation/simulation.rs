@@ -1,5 +1,7 @@
 use std::{cell::RefCell, ops::RangeInclusive, rc::Rc, time::Duration};
 
+use color_eyre::eyre::Result;
+
 use crate::{
     math::Ray2,
     simulation::{
@@ -25,21 +27,21 @@ impl Simulation {
         mut physics_environment: physics::Environment,
         programs: Vec<Rc<Program>>,
         actor_size: RangeInclusive<f64>,
-    ) -> Self {
+    ) -> Result<Self> {
         physics_environment.clear_actors();
         let mut robots = Vec::new();
         for program in programs.iter() {
-            let robot = physics_environment.add_random_actor(actor_size.clone());
+            let robot = physics_environment.add_random_actor(actor_size.clone())?;
             robots.push(Robots {
                 actor: robot,
                 vm: VirtualMachine::new(program.clone()),
             });
         }
-        Self {
+        Ok(Self {
             physics_environment,
             robots,
             total_time: Duration::ZERO,
-        }
+        })
     }
 
     pub fn physics_environment(&self) -> &physics::Environment {

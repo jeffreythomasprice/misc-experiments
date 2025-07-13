@@ -69,9 +69,3 @@ where
         }
     }
 }
-
-fn test() {
-    let a = Vec2::new(1., 2.);
-    let b = Vec2::new(3., 4.);
-    let c = b - a;
-}

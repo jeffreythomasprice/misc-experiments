@@ -4,6 +4,8 @@ use chumsky::{extra::Err, prelude::*, regex::Regex};
 
 use crate::simulation::language;
 
+// TODO either eyre or a custom error type for everything in here, no Result<_, String>
+
 #[derive(Debug, Clone)]
 enum NumberLiteral {
     I64(i64),

@@ -74,7 +74,10 @@ impl EventHandler for Demo {
     fn render(&mut self, buffer: &mut [u32], width: u32, height: u32) -> Result<()> {
         let border = 50.;
         let camera = Camera::new(
-            self.simulation.physics_environment().bounding_box().clone(),
+            self.simulation
+                .physics_environment()
+                .bounding_box()?
+                .clone(),
             // Rect::new_with_origin_size(Vec2::new(0.0, 0.0), Vec2::new(width as f64, height as f64)),
             Rect::new_with_points(&[
                 Vec2::new(border, border),
@@ -102,7 +105,7 @@ impl EventHandler for Demo {
 
         paint.set_color_rgba8(0, 0, 0, 255);
         let mut path = PathBuilder::new();
-        for line in self.simulation.physics_environment().get_line_segments() {
+        for line in self.simulation.physics_environment().get_line_segments()? {
             let a = *line.origin();
             let b = *line.origin() + *line.delta();
             path.move_to(a.x as f32, a.y as f32);
@@ -121,8 +124,8 @@ impl EventHandler for Demo {
 
         for actor in self.simulation.physics_environment().get_actors() {
             let actor = actor.borrow();
-            let position = *actor.circle().center();
-            let radius = *actor.circle().radius();
+            let position = actor.position()?;
+            let radius = actor.radius();
             let circle =
                 PathBuilder::from_circle(position.x as f32, position.y as f32, radius as f32)
                     .ok_or(eyre!("error creating circle path"))?;
@@ -199,8 +202,8 @@ fn main() -> Result<()> {
     let program = Rc::new(
         parser::parse(
             r"
-                set velocity_x, 0
-                set velocity_y, 1
+                set velocity_x, 250
+                set velocity_y, 200
 
                 loop:
                     jmp loop
@@ -217,5 +220,5 @@ fn main() -> Result<()> {
         )),
         vec![program.clone(), program.clone(), program.clone()],
         (10.0)..=(20.0),
-    )))
+    )?))
 }
