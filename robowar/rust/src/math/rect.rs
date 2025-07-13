@@ -18,7 +18,7 @@ where
 {
     pub fn new_with_origin_size(origin: Vec2<T>, size: Vec2<T>) -> Self
     where
-        T: Add<Output = T> + Ord,
+        T: Add<Output = T> + PartialOrd,
     {
         let p1 = origin;
         let p2 = origin + size;
@@ -54,15 +54,15 @@ where
         })
     }
 
-    pub fn minimum(&self) -> &Vec2<T> {
-        &self.min
+    pub fn minimum(&self) -> Vec2<T> {
+        self.min
     }
 
-    pub fn maximum(&self) -> &Vec2<T> {
-        &self.max
+    pub fn maximum(&self) -> Vec2<T> {
+        self.max
     }
 
-    pub fn origin(&self) -> &Vec2<T> {
+    pub fn origin(&self) -> Vec2<T> {
         self.minimum()
     }
 
@@ -71,5 +71,19 @@ where
         T: Sub<Output = T>,
     {
         self.max - self.min
+    }
+
+    pub fn width(&self) -> T
+    where
+        T: Sub<Output = T>,
+    {
+        self.max.x - self.min.x
+    }
+
+    pub fn height(&self) -> T
+    where
+        T: Sub<Output = T>,
+    {
+        self.max.y - self.min.y
     }
 }

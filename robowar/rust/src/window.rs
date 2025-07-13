@@ -15,6 +15,7 @@ use winit::{
 const DESIRED_SIZE: LogicalSize<u32> = LogicalSize::new(1024, 768);
 
 pub trait EventHandler {
+    fn resize(&mut self, width: u32, height: u32) -> Result<()>;
     fn render(&mut self, buffer: &mut [u32], width: u32, height: u32) -> Result<()>;
 }
 
@@ -64,6 +65,7 @@ impl<EH: EventHandler> WindowState<EH> {
             self.surface
                 .resize(width, height)
                 .map_err(|e| eyre!("failed to resize softbuffer surface: {e:?}"))?;
+            self.event_handler.resize(width.get(), height.get())?;
         }
         Ok(())
     }

@@ -1,9 +1,12 @@
 use std::{cell::RefCell, ops::RangeInclusive, rc::Rc};
 
-use crate::simulation::{
-    language::Program,
-    physics,
-    vm::{StepError, VirtualMachine},
+use crate::{
+    math::Ray2,
+    simulation::{
+        language::Program,
+        physics,
+        vm::{StepError, VirtualMachine},
+    },
 };
 
 struct Robots {
@@ -37,7 +40,9 @@ impl Simulation {
         }
     }
 
-    // TODO some way to get current state for display
+    pub fn physics_environment(&self) -> &physics::Environment {
+        &self.physics_environment
+    }
 
     pub fn step(&mut self) {
         /*

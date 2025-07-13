@@ -77,6 +77,14 @@ impl Environment {
         }
     }
 
+    pub fn bounding_box(&self) -> &Rect<f64> {
+        &self.bounding_box
+    }
+
+    pub fn get_line_segments(&self) -> &[Ray2<f64>] {
+        &self.static_line_segments
+    }
+
     pub fn get_actors(&self) -> &Vec<Rc<RefCell<Actor>>> {
         &self.actors
     }
