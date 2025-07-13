@@ -1,4 +1,9 @@
-use std::{num::NonZero, process::exit, sync::Arc};
+use std::{
+    num::NonZero,
+    process::exit,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use color_eyre::eyre::{Result, eyre};
 use softbuffer::{Context, Surface};
@@ -17,12 +22,14 @@ const DESIRED_SIZE: LogicalSize<u32> = LogicalSize::new(1024, 768);
 pub trait EventHandler {
     fn resize(&mut self, width: u32, height: u32) -> Result<()>;
     fn render(&mut self, buffer: &mut [u32], width: u32, height: u32) -> Result<()>;
+    fn update(&mut self, elapsed_time: Duration) -> Result<()>;
 }
 
 struct WindowState<EH: EventHandler> {
     event_handler: EH,
     window: Arc<Window>,
     surface: Surface<Arc<Window>, Arc<Window>>,
+    last_update: Option<Instant>,
 }
 
 impl<EH: EventHandler> WindowState<EH> {
@@ -54,6 +61,7 @@ impl<EH: EventHandler> WindowState<EH> {
             event_handler,
             window,
             surface,
+            last_update: None,
         })
     }
 
@@ -86,6 +94,16 @@ impl<EH: EventHandler> WindowState<EH> {
         buffer
             .present()
             .map_err(|e| eyre!("failed to present softbuffer buffer: {e:?}"))?;
+
+        self.window.request_redraw();
+
+        let now = Instant::now();
+        if let Some(last_update) = self.last_update {
+            let elapsed_time = now.duration_since(last_update);
+            self.event_handler.update(elapsed_time)?;
+        }
+        self.last_update = Some(now);
+
         Ok(())
     }
 }

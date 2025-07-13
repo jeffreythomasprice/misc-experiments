@@ -1,4 +1,4 @@
-use std::{cell::RefCell, ops::RangeInclusive, rc::Rc};
+use std::{cell::RefCell, ops::RangeInclusive, rc::Rc, time::Duration};
 
 use crate::{
     math::Ray2,
@@ -17,6 +17,7 @@ struct Robots {
 pub struct Simulation {
     physics_environment: physics::Environment,
     robots: Vec<Robots>,
+    total_time: Duration,
 }
 
 impl Simulation {
@@ -37,6 +38,7 @@ impl Simulation {
         Self {
             physics_environment,
             robots,
+            total_time: Duration::ZERO,
         }
     }
 
@@ -44,22 +46,14 @@ impl Simulation {
         &self.physics_environment
     }
 
-    pub fn step(&mut self) {
-        /*
-        TODO how step should really work
+    pub fn update(&mut self, elapsed_time: Duration) {
+        // update physics environment
+        self.total_time += elapsed_time;
+        self.physics_environment.step(self.total_time.as_secs_f64());
 
-        get current clock of every vm
-        find all the ones tied for lowest clock
-        step all those robots
-        find the lowest clock out of those, and take the different between the old value
-        step physics that amount
-        */
-
-        // TODO how much time to step each physics simulation?
-        self.physics_environment.step(1.);
-
+        // TODO need to update robots only until they match current time
         for robot in self.robots.iter_mut() {
-            let actor = robot.actor.borrow();
+            let mut actor = robot.actor.borrow_mut();
             robot.vm.update_to_match_actor(&actor);
             match robot.vm.step(&self.physics_environment, &actor) {
                 Ok(new_clock) => {
@@ -70,8 +64,7 @@ impl Simulation {
                 }
                 _ => (),
             }
+            robot.vm.update_actor_match_vm(&mut actor);
         }
-
-        // TODO step each robot
     }
 }

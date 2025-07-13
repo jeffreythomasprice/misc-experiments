@@ -134,7 +134,19 @@ impl Environment {
         move all actors according to their velocity and turret angle
         slide along walls, don't update velocity
         */
-        todo!()
+        for actor in self.actors.iter_mut() {
+            let mut actor = actor.borrow_mut();
+
+            // Update position based on velocity
+            // TODO make this a convenience method on actor
+            let circle = actor.circle().clone();
+            let new_position = *circle.center() + actor.velocity() * time;
+            actor.set_circle(Circle::new(new_position, *circle.radius()));
+
+            // Update turret angle based on angular velocity
+            let new_turret_angle = actor.turret_angle() + actor.turret_angular_velocity() * time;
+            actor.set_turret_angle(new_turret_angle);
+        }
     }
 
     /// Finds the first intersection with another actor or the world, starting from the actor's position and extending in the direction of

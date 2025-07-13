@@ -84,6 +84,13 @@ impl VirtualMachine {
         self.turrent_angular_velocity = actor.turret_angular_velocity();
     }
 
+    pub fn update_actor_match_vm(&self, actor: &mut physics::Actor) {
+        actor.set_circle(Circle::new(self.position, *actor.circle().radius()));
+        actor.set_velocity(self.velocity);
+        actor.set_turret_angle(self.turret_angle);
+        actor.set_turret_angular_velocity(self.turrent_angular_velocity);
+    }
+
     pub fn step(
         &mut self,
         environment: &physics::Environment,

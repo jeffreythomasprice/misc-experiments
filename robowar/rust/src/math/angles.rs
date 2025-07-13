@@ -1,4 +1,7 @@
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    ops::{Add, Mul},
+};
 
 use crate::math::Vec2;
 
@@ -85,6 +88,28 @@ where
     }
 }
 
+impl<T> Add<Radians<T>> for Radians<T>
+where
+    T: Add<T, Output = T>,
+{
+    type Output = Radians<T>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl<T> Mul<T> for Radians<T>
+where
+    T: Mul<T, Output = T>,
+{
+    type Output = Radians<T>;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        Self(self.0 * rhs)
+    }
+}
+
 impl<T> Degrees<T>
 where
     T: Angle,
@@ -107,5 +132,27 @@ where
 
     pub fn sin(&self) -> T {
         self.0.sin_of_radians()
+    }
+}
+
+impl<T> Add<Degrees<T>> for Degrees<T>
+where
+    T: Add<T, Output = T>,
+{
+    type Output = Degrees<T>;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl<T> Mul<T> for Degrees<T>
+where
+    T: Mul<T, Output = T>,
+{
+    type Output = Degrees<T>;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        Self(self.0 * rhs)
     }
 }

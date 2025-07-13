@@ -1,5 +1,6 @@
 use crate::math::Vec2;
 
+#[derive(Debug, Clone)]
 pub struct Circle<T> {
     center: Vec2<T>,
     radius: T,

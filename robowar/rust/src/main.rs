@@ -3,7 +3,7 @@ mod parser;
 mod simulation;
 mod window;
 
-use std::rc::Rc;
+use std::{rc::Rc, time::Duration};
 
 use color_eyre::eyre::{self, Result, eyre};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, PixmapMut, Stroke, Transform};
@@ -178,6 +178,11 @@ impl EventHandler for Demo {
 
         Ok(())
     }
+
+    fn update(&mut self, elapsed_time: Duration) -> Result<()> {
+        self.simulation.update(elapsed_time);
+        Ok(())
+    }
 }
 
 fn main() -> Result<()> {
@@ -194,8 +199,10 @@ fn main() -> Result<()> {
     let program = Rc::new(
         parser::parse(
             r"
-                main:
-                    jmp main
+                add velocity_x, 0, 1
+
+                loop:
+                    jmp loop
                 ",
         )
         .map_err(|e| eyre!("{e:?}"))?
