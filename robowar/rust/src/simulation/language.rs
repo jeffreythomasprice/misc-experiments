@@ -314,6 +314,7 @@ pub enum Instruction {
         destination: DestinationU64,
         source: SourceU64,
     },
+    // TODO push, pop
 }
 
 #[derive(Debug, Clone, Copy)]

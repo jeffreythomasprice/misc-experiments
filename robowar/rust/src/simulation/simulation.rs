@@ -48,7 +48,7 @@ impl Simulation {
         &self.physics_environment
     }
 
-    pub fn update(&mut self, elapsed_time: Duration) {
+    pub fn update(&mut self, elapsed_time: Duration) -> Result<()> {
         // update physics environment
         self.total_time += elapsed_time;
         self.physics_environment.step(self.total_time.as_secs_f64());
@@ -56,7 +56,7 @@ impl Simulation {
         // TODO need to update robots only until they match current time
         for robot in self.robots.iter_mut() {
             let mut actor = robot.actor.borrow_mut();
-            robot.vm.update_to_match_actor(&actor);
+            robot.vm.update_to_match_actor(&actor)?;
             match robot.vm.step(&self.physics_environment, &actor) {
                 Ok(new_clock) => {
                     // TODO what to do with new_clock?
@@ -66,7 +66,8 @@ impl Simulation {
                 }
                 _ => (),
             }
-            robot.vm.update_actor_match_vm(&mut actor);
+            robot.vm.update_actor_match_vm(&mut actor)?;
         }
+        Ok(())
     }
 }

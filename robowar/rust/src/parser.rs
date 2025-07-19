@@ -251,6 +251,7 @@ pub enum Instruction {
         destination: language::DestinationU64,
         source: SourceU64,
     },
+    // TODO push, pop
 }
 
 impl Instruction {
@@ -1129,6 +1130,7 @@ impl CheckedInstruction {
                 },
             },
 
+            // TODO push, pop
             _ => CheckedInstruction::Invalid {
                 instruction: UnvalidatedInstruction {
                     instruction: instruction.clone(),
@@ -1240,6 +1242,8 @@ pub fn parse(input: &str) -> Result<Program, String> {
         .then(just(':'))
         .padded()
         .map(|(name, _)| Some(LabelOrInstruction::Label(name)));
+
+    // TODO a program could also have constants, which are numeric expressions defined only by other constants that have already been defined
 
     // a list of either valid instructions or labels, or None that represents places where invalid instructions were validated and rejected
     let program = choice((label, instruction)).repeated().collect::<Vec<_>>();

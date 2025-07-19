@@ -206,19 +206,24 @@ fn main() -> Result<()> {
                 set velocity_y, 200
 
                 loop:
+                    add velocity_y, velocity_y, 10
                     jmp loop
                 ",
         )
         .map_err(|e| eyre!("{e:?}"))?
         .runnable_program,
     );
+    let mut robots = Vec::new();
+    for _ in 0..10 {
+        robots.push(program.clone());
+    }
 
     run(Demo::new(simulation::simulation::Simulation::new(
         physics::Environment::new_standard_rectangle(Rect::new_with_origin_size(
             Vec2::new(0.0, 0.0),
             Vec2::new(500.0, 500.0),
         )),
-        vec![program.clone(), program.clone(), program.clone()],
+        robots,
         (10.0)..=(20.0),
     )?))
 }

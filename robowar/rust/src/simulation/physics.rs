@@ -64,13 +64,11 @@ impl Actor {
 
     pub fn set_velocity(&mut self, value: Vec2<f64>) -> Result<()> {
         let mut rigid_body_set = self.rigid_body_set.borrow_mut();
+        // TODO de-duplicate the getter for rigid body
         let rigid_body = rigid_body_set.get_mut(self.rigid_body_handle).ok_or(eyre!(
             "failed to find rigid body on environment, as this actor been removed?"
         ))?;
-        rigid_body.set_vels(
-            RigidBodyVelocity::new(Matrix2x1::new(value.x, value.y), 0.),
-            true,
-        );
+        rigid_body.set_linvel(Matrix2x1::new(value.x, value.y), true);
         Ok(())
     }
 
@@ -97,7 +95,7 @@ impl Actor {
 
 impl Environment {
     pub fn new_standard_rectangle(bounding_box: Rect<f64>) -> Self {
-        let mut rigid_body_set = RigidBodySet::new();
+        let rigid_body_set = RigidBodySet::new();
         let mut collider_set = ColliderSet::new();
 
         let polyline = ColliderBuilder::polyline(
@@ -230,6 +228,8 @@ impl Environment {
     }
 
     pub fn step(&mut self, time: f64) {
+        // TODO needs some way to detect collisions, update robot health
+
         // update the physics engine
         let mut rigid_body_set = self.rigid_body_set.borrow_mut();
         // TODO only step if enough time has passed?
