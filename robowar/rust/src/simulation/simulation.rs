@@ -1,41 +1,45 @@
 use std::{cell::RefCell, ops::RangeInclusive, rc::Rc, time::Duration};
 
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
+use tracing::*;
 
 use crate::{
     math::Ray2,
     simulation::{
         language::Program,
         physics,
+        user_data_map::UserDataMap,
         vm::{StepError, VirtualMachine},
     },
 };
 
-struct Robots {
-    actor: Rc<RefCell<physics::Actor>>,
+struct Robot {
+    // TODO actors should have a better user data than just their index?
+    actor: Rc<RefCell<physics::Actor<u128>>>,
     vm: VirtualMachine,
 }
 
 pub struct Simulation {
-    physics_environment: physics::Environment,
-    robots: Vec<Robots>,
+    physics_environment: physics::Environment<u128>,
+    robots: UserDataMap<Robot>,
     total_time: Duration,
 }
 
 impl Simulation {
     pub fn new(
-        mut physics_environment: physics::Environment,
+        mut physics_environment: physics::Environment<u128>,
         programs: Vec<Rc<Program>>,
         actor_size: RangeInclusive<f64>,
     ) -> Result<Self> {
         physics_environment.clear_actors();
-        let mut robots = Vec::new();
+        let mut robots = UserDataMap::new();
         for program in programs.iter() {
-            let robot = physics_environment.add_random_actor(actor_size.clone())?;
-            robots.push(Robots {
-                actor: robot,
-                vm: VirtualMachine::new(program.clone()),
-            });
+            robots.insert_factory(|id| {
+                Ok(Robot {
+                    actor: physics_environment.add_random_actor(actor_size.clone(), id)?,
+                    vm: VirtualMachine::new(program.clone()),
+                })
+            })?;
         }
         Ok(Self {
             physics_environment,
@@ -44,17 +48,43 @@ impl Simulation {
         })
     }
 
-    pub fn physics_environment(&self) -> &physics::Environment {
+    pub fn physics_environment(&self) -> &physics::Environment<u128> {
         &self.physics_environment
     }
 
     pub fn update(&mut self, elapsed_time: Duration) -> Result<()> {
         // update physics environment
         self.total_time += elapsed_time;
-        self.physics_environment.step(self.total_time.as_secs_f64());
+        self.physics_environment
+            .step(self.total_time.as_secs_f64(), |e| {
+                match e {
+                    physics::CollisionEvent::Started(actor1, actor2) => {
+                        let actor1 = actor1.borrow();
+                        let actor2 = actor2.borrow();
+                        let robot1 = self.robots.get(*actor1.user_data()).ok_or_else(|| {
+                            eyre!("Actor with id {} not found", actor1.user_data())
+                        })?;
+                        let robot2 = self.robots.get(*actor2.user_data()).ok_or_else(|| {
+                            eyre!("Actor with id {} not found", actor2.user_data())
+                        })?;
+                        info!(
+                            "TODO collision STARTED between {:?} and {:?}",
+                            actor1.user_data(),
+                            actor2.user_data()
+                        );
+                        // TODO actually do something with robots
+                    }
+                    physics::CollisionEvent::Stopped(actor1, actor2) => info!(
+                        "TODO collision STOPPED between {:?} and {:?}",
+                        actor1.borrow().user_data(),
+                        actor2.borrow().user_data()
+                    ),
+                };
+                Ok(())
+            });
 
         // TODO need to update robots only until they match current time
-        for robot in self.robots.iter_mut() {
+        for (_, robot) in self.robots.iter_mut() {
             let mut actor = robot.actor.borrow_mut();
             robot.vm.update_to_match_actor(&actor)?;
             match robot.vm.step(&self.physics_environment, &actor) {

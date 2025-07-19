@@ -122,7 +122,7 @@ impl EventHandler for Demo {
             None,
         );
 
-        for actor in self.simulation.physics_environment().get_actors() {
+        for actor in self.simulation.physics_environment().actors_iter() {
             let actor = actor.borrow();
             let position = actor.position()?;
             let radius = actor.radius();

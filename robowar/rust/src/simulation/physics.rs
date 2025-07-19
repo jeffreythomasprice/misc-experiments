@@ -1,23 +1,33 @@
-use std::{cell::RefCell, ops::RangeInclusive, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, ops::RangeInclusive, rc::Rc};
 
 use color_eyre::eyre::{Result, eyre};
-use rand::Rng;
+use rand::{Rng, rand_core::le};
 use rapier2d_f64::{
+    crossbeam,
     na::{Isometry2, Matrix2x1, OPoint, Point2, iter::ColumnIter},
+    parry::utils::hashmap::HashMap,
     prelude::*,
 };
+use tracing::*;
 
-use crate::math::*;
+use crate::{math::*, simulation::user_data_map::UserDataMap};
 
-pub struct Actor {
+pub struct Actor<T> {
     rigid_body_set: Rc<RefCell<RigidBodySet>>,
     rigid_body_handle: RigidBodyHandle,
     radius: f64,
     turret_angle: Radians<f64>,
     turret_angular_velocity: Radians<f64>,
+    user_data: T,
 }
 
-pub struct Environment {
+#[derive(Clone)]
+pub enum CollisionEvent<ActorData> {
+    Started(Rc<RefCell<Actor<ActorData>>>, Rc<RefCell<Actor<ActorData>>>),
+    Stopped(Rc<RefCell<Actor<ActorData>>>, Rc<RefCell<Actor<ActorData>>>),
+}
+
+pub struct Environment<ActorData> {
     rigid_body_set: Rc<RefCell<RigidBodySet>>,
     collider_set: ColliderSet,
     polyline_handle: ColliderHandle,
@@ -37,11 +47,13 @@ pub struct Environment {
     ccd_solver: CCDSolver,
     query_pipeline: QueryPipeline,
     physics_hooks: (),
-    event_handler: (),
-    actors: Vec<Rc<RefCell<Actor>>>,
+    collision_recv: crossbeam::channel::Receiver<rapier2d_f64::geometry::CollisionEvent>,
+    contact_force_recv: crossbeam::channel::Receiver<ContactForceEvent>,
+    event_handler: ChannelEventCollector,
+    actors: UserDataMap<Rc<RefCell<Actor<ActorData>>>>,
 }
 
-impl Actor {
+impl<T> Actor<T> {
     // TODO de-duplicate all the bits that get the rigid body
 
     pub fn position(&self) -> Result<Vec2<f64>> {
@@ -91,9 +103,17 @@ impl Actor {
     pub fn set_turret_angular_velocity(&mut self, value: Radians<f64>) {
         self.turret_angular_velocity = value;
     }
+
+    pub fn user_data(&self) -> &T {
+        &self.user_data
+    }
 }
 
-impl Environment {
+impl<ActorData> Environment<ActorData>
+where
+    // TODO no debug should be needed
+    ActorData: Debug,
+{
     pub fn new_standard_rectangle(bounding_box: Rect<f64>) -> Self {
         let rigid_body_set = RigidBodySet::new();
         let mut collider_set = ColliderSet::new();
@@ -121,7 +141,9 @@ impl Environment {
         let ccd_solver = CCDSolver::new();
         let query_pipeline = QueryPipeline::new();
         let physics_hooks = ();
-        let event_handler = ();
+        let (collision_send, collision_recv) = crossbeam::channel::unbounded();
+        let (contact_force_send, contact_force_recv) = crossbeam::channel::unbounded();
+        let event_handler = ChannelEventCollector::new(collision_send, contact_force_send);
 
         Self {
             rigid_body_set: Rc::new(RefCell::new(rigid_body_set)),
@@ -138,8 +160,10 @@ impl Environment {
             ccd_solver,
             query_pipeline,
             physics_hooks,
+            collision_recv,
+            contact_force_recv,
             event_handler,
-            actors: Vec::new(),
+            actors: UserDataMap::new(),
         }
     }
 
@@ -173,8 +197,8 @@ impl Environment {
             .collect::<Vec<_>>())
     }
 
-    pub fn get_actors(&self) -> &Vec<Rc<RefCell<Actor>>> {
-        &self.actors
+    pub fn actors_iter(&self) -> impl Iterator<Item = &Rc<RefCell<Actor<ActorData>>>> {
+        self.actors.iter().map(|(_, actor)| actor)
     }
 
     pub fn clear_actors(&mut self) {
@@ -187,7 +211,8 @@ impl Environment {
     pub fn add_random_actor(
         &mut self,
         actor_size: RangeInclusive<f64>,
-    ) -> Result<Rc<RefCell<Actor>>> {
+        user_data: ActorData,
+    ) -> Result<Rc<RefCell<Actor<ActorData>>>> {
         // TODO pick a position and radius such that we don't initially collide
 
         let radius = rand::rng().random_range(actor_size);
@@ -210,11 +235,8 @@ impl Environment {
         let rigid_body = RigidBodyBuilder::dynamic()
             .translation(Matrix2x1::new(position.x, position.y))
             .build();
-        let collider = ColliderBuilder::ball(radius).restitution(0.7).build();
         let mut rigid_body_set = self.rigid_body_set.borrow_mut();
         let rigid_body_handle = rigid_body_set.insert(rigid_body);
-        self.collider_set
-            .insert_with_parent(collider, rigid_body_handle, &mut rigid_body_set);
 
         let result = Rc::new(RefCell::new(Actor {
             rigid_body_set: self.rigid_body_set.clone(),
@@ -222,12 +244,25 @@ impl Environment {
             radius,
             turret_angle,
             turret_angular_velocity,
+            user_data,
         }));
-        self.actors.push(result.clone());
+        let id = self.actors.insert(result.clone());
+
+        let collider = ColliderBuilder::ball(radius)
+            .restitution(0.7)
+            .active_events(ActiveEvents::COLLISION_EVENTS)
+            .user_data(id)
+            .build();
+        self.collider_set
+            .insert_with_parent(collider, rigid_body_handle, &mut rigid_body_set);
+
         Ok(result)
     }
 
-    pub fn step(&mut self, time: f64) {
+    pub fn step<F>(&mut self, time: f64, collision_callback: F)
+    where
+        F: Fn(CollisionEvent<ActorData>) -> Result<()>,
+    {
         // TODO needs some way to detect collisions, update robot health
 
         // update the physics engine
@@ -250,16 +285,27 @@ impl Environment {
         );
 
         // turrets
-        for actor in self.actors.iter_mut() {
+        for (_, actor) in self.actors.iter_mut() {
             let mut actor = actor.borrow_mut();
             let new_turret_angle = actor.turret_angle() + actor.turret_angular_velocity() * time;
             actor.set_turret_angle(new_turret_angle);
+        }
+
+        // collision events
+        while let Ok(collision_event) = self.collision_recv.try_recv() {
+            if let Err(e) = self.handle_collision_event(&collision_event, |e| collision_callback(e))
+            {
+                error!("failed to handle collision event: {:?}", e);
+            }
+        }
+        while let Ok(contact_force_event) = self.contact_force_recv.try_recv() {
+            info!("TODO contact force event: {:?}", contact_force_event);
         }
     }
 
     /// Finds the first intersection with another actor or the world, starting from the actor's position and extending in the direction of
     /// the actor's turret.
-    pub fn actor_scan(&self, starting_actor: &Actor) -> f64 {
+    pub fn actor_scan(&self, starting_actor: &Actor<ActorData>) -> f64 {
         /*
         TODO actor scan
 
@@ -273,5 +319,36 @@ impl Environment {
         */
 
         todo!()
+    }
+
+    fn handle_collision_event<F>(
+        &self,
+        collision_event: &rapier2d_f64::geometry::CollisionEvent,
+        collision_callback: F,
+    ) -> Result<()>
+    where
+        F: Fn(CollisionEvent<ActorData>) -> Result<()>,
+    {
+        let collider1 = self
+            .collider_set
+            .get(collision_event.collider1())
+            .ok_or(eyre!("failed to find collider1 in collision event"))?;
+        let collider2 = self
+            .collider_set
+            .get(collision_event.collider2())
+            .ok_or(eyre!("failed to find collider2 in collision event"))?;
+        if let Some(actor1) = self.actors.get(collider1.user_data)
+            && let Some(actor2) = self.actors.get(collider2.user_data)
+        {
+            let actor1 = actor1.clone();
+            let actor2 = actor2.clone();
+            if collision_event.started() {
+                collision_callback(CollisionEvent::Started(actor1, actor2))?;
+            } else if collision_event.stopped() {
+                collision_callback(CollisionEvent::Stopped(actor1, actor2))?;
+            }
+        }
+
+        Ok(())
     }
 }

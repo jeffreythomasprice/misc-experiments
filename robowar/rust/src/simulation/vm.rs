@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     num::TryFromIntError,
     ops::{Add, AddAssign},
     rc::Rc,
@@ -79,7 +80,10 @@ impl VirtualMachine {
         }
     }
 
-    pub fn update_to_match_actor(&mut self, actor: &physics::Actor) -> Result<()> {
+    pub fn update_to_match_actor<ActorData>(
+        &mut self,
+        actor: &physics::Actor<ActorData>,
+    ) -> Result<()> {
         self.position = actor.position()?;
         self.velocity = actor.velocity()?;
         self.turret_angle = actor.turret_angle();
@@ -87,17 +91,24 @@ impl VirtualMachine {
         Ok(())
     }
 
-    pub fn update_actor_match_vm(&self, actor: &mut physics::Actor) -> Result<()> {
+    pub fn update_actor_match_vm<ActorData>(
+        &self,
+        actor: &mut physics::Actor<ActorData>,
+    ) -> Result<()> {
         actor.set_velocity(self.velocity)?;
         actor.set_turret_angular_velocity(self.turrent_angular_velocity);
         Ok(())
     }
 
-    pub fn step(
+    pub fn step<ActorData>(
         &mut self,
-        environment: &physics::Environment,
-        actor: &physics::Actor,
-    ) -> Result<ClockTime, StepError> {
+        environment: &physics::Environment<ActorData>,
+        actor: &physics::Actor<ActorData>,
+    ) -> Result<ClockTime, StepError>
+    where
+        // TODO no debug should be needed
+        ActorData: Debug,
+    {
         match self.read_next_instruction() {
             Some(Instruction::SetU64 {
                 destination,
@@ -342,17 +353,19 @@ impl VirtualMachine {
         Ok(())
     }
 
-    fn binary_operator_common_f64<F>(
+    fn binary_operator_common_f64<F, ActorData>(
         &mut self,
         destination: DestinationF64,
         left: SourceF64,
         right: SourceF64,
         f: F,
-        environment: &physics::Environment,
-        actor: &physics::Actor,
+        environment: &physics::Environment<ActorData>,
+        actor: &physics::Actor<ActorData>,
     ) -> Result<(), StepError>
     where
         F: FnOnce(f64, f64) -> f64,
+        // TODO no debug should be needed
+        ActorData: Debug,
     {
         let left = self.resolve_source_f64(left, environment, actor);
         let right = self.resolve_source_f64(right, environment, actor);
@@ -385,17 +398,19 @@ impl VirtualMachine {
         Ok(())
     }
 
-    fn jump_comparison_f64<F>(
+    fn jump_comparison_f64<F, ActorData>(
         &mut self,
         address: SourceU64,
         left: SourceF64,
         right: SourceF64,
         f: F,
-        environment: &physics::Environment,
-        actor: &physics::Actor,
+        environment: &physics::Environment<ActorData>,
+        actor: &physics::Actor<ActorData>,
     ) -> Result<(), StepError>
     where
         F: FnOnce(f64, f64) -> bool,
+        // TODO no debug should be needed
+        ActorData: Debug,
     {
         let left = self.resolve_source_f64(left, environment, actor);
         let right = self.resolve_source_f64(right, environment, actor);
@@ -431,12 +446,16 @@ impl VirtualMachine {
         }
     }
 
-    fn resolve_source_f64(
+    fn resolve_source_f64<ActorData>(
         &self,
         source: SourceF64,
-        environment: &physics::Environment,
-        actor: &physics::Actor,
-    ) -> ResolvedValue<f64> {
+        environment: &physics::Environment<ActorData>,
+        actor: &physics::Actor<ActorData>,
+    ) -> ResolvedValue<f64>
+    where
+        // TODO no debug should be needed
+        ActorData: Debug,
+    {
         match source {
             SourceF64::Register(r) => ResolvedValue {
                 value: self.read_register_f64(r, environment, actor),
@@ -487,12 +506,16 @@ impl VirtualMachine {
         } = value;
     }
 
-    fn read_register_f64(
+    fn read_register_f64<ActorData>(
         &self,
         r: ReadableRegisterF64,
-        environment: &physics::Environment,
-        actor: &physics::Actor,
-    ) -> f64 {
+        environment: &physics::Environment<ActorData>,
+        actor: &physics::Actor<ActorData>,
+    ) -> f64
+    where
+        // TODO no debug should be needed
+        ActorData: Debug,
+    {
         match r {
             ReadableRegisterF64::PositionX => self.position.x,
             ReadableRegisterF64::PositionY => self.position.y,
