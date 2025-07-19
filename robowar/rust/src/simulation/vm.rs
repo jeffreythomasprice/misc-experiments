@@ -83,7 +83,10 @@ impl VirtualMachine {
     pub fn update_to_match_actor<ActorData>(
         &mut self,
         actor: &physics::Actor<ActorData>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        ActorData: Clone,
+    {
         self.position = actor.position()?;
         self.velocity = actor.velocity()?;
         self.turret_angle = actor.turret_angle();
@@ -94,7 +97,10 @@ impl VirtualMachine {
     pub fn update_actor_match_vm<ActorData>(
         &self,
         actor: &mut physics::Actor<ActorData>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        ActorData: Clone,
+    {
         actor.set_velocity(self.velocity)?;
         actor.set_turret_angular_velocity(self.turrent_angular_velocity);
         Ok(())
@@ -107,7 +113,7 @@ impl VirtualMachine {
     ) -> Result<ClockTime, StepError>
     where
         // TODO no debug should be needed
-        ActorData: Debug,
+        ActorData: Debug + Clone,
     {
         match self.read_next_instruction() {
             Some(Instruction::SetU64 {
@@ -365,7 +371,7 @@ impl VirtualMachine {
     where
         F: FnOnce(f64, f64) -> f64,
         // TODO no debug should be needed
-        ActorData: Debug,
+        ActorData: Debug + Clone,
     {
         let left = self.resolve_source_f64(left, environment, actor);
         let right = self.resolve_source_f64(right, environment, actor);
@@ -410,7 +416,7 @@ impl VirtualMachine {
     where
         F: FnOnce(f64, f64) -> bool,
         // TODO no debug should be needed
-        ActorData: Debug,
+        ActorData: Debug + Clone,
     {
         let left = self.resolve_source_f64(left, environment, actor);
         let right = self.resolve_source_f64(right, environment, actor);
@@ -454,7 +460,7 @@ impl VirtualMachine {
     ) -> ResolvedValue<f64>
     where
         // TODO no debug should be needed
-        ActorData: Debug,
+        ActorData: Debug + Clone,
     {
         match source {
             SourceF64::Register(r) => ResolvedValue {
@@ -514,7 +520,7 @@ impl VirtualMachine {
     ) -> f64
     where
         // TODO no debug should be needed
-        ActorData: Debug,
+        ActorData: Debug + Clone,
     {
         match r {
             ReadableRegisterF64::PositionX => self.position.x,

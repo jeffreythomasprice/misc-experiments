@@ -12,6 +12,15 @@ use tracing::*;
 
 use crate::{math::*, simulation::user_data_map::UserDataMap};
 
+#[derive(Clone)]
+pub enum Collidable<ActorData>
+where
+    ActorData: Clone,
+{
+    Actor(Rc<RefCell<Actor<ActorData>>>),
+    Environment,
+}
+
 pub struct Actor<T> {
     rigid_body_set: Rc<RefCell<RigidBodySet>>,
     rigid_body_handle: RigidBodyHandle,
@@ -22,12 +31,18 @@ pub struct Actor<T> {
 }
 
 #[derive(Clone)]
-pub enum CollisionEvent<ActorData> {
-    Started(Rc<RefCell<Actor<ActorData>>>, Rc<RefCell<Actor<ActorData>>>),
-    Stopped(Rc<RefCell<Actor<ActorData>>>, Rc<RefCell<Actor<ActorData>>>),
+pub enum CollisionEvent<ActorData>
+where
+    ActorData: Clone,
+{
+    Started(Collidable<ActorData>, Collidable<ActorData>),
+    Stopped(Collidable<ActorData>, Collidable<ActorData>),
 }
 
-pub struct Environment<ActorData> {
+pub struct Environment<ActorData>
+where
+    ActorData: Clone,
+{
     rigid_body_set: Rc<RefCell<RigidBodySet>>,
     collider_set: ColliderSet,
     polyline_handle: ColliderHandle,
@@ -50,10 +65,14 @@ pub struct Environment<ActorData> {
     collision_recv: crossbeam::channel::Receiver<rapier2d_f64::geometry::CollisionEvent>,
     contact_force_recv: crossbeam::channel::Receiver<ContactForceEvent>,
     event_handler: ChannelEventCollector,
-    actors: UserDataMap<Rc<RefCell<Actor<ActorData>>>>,
+    actors: Vec<Rc<RefCell<Actor<ActorData>>>>,
+    collidables: UserDataMap<Collidable<ActorData>>,
 }
 
-impl<T> Actor<T> {
+impl<T> Actor<T>
+where
+    T: Clone,
+{
     // TODO de-duplicate all the bits that get the rigid body
 
     pub fn position(&self) -> Result<Vec2<f64>> {
@@ -112,9 +131,12 @@ impl<T> Actor<T> {
 impl<ActorData> Environment<ActorData>
 where
     // TODO no debug should be needed
-    ActorData: Debug,
+    ActorData: Debug + Clone,
 {
     pub fn new_standard_rectangle(bounding_box: Rect<f64>) -> Self {
+        let mut collidables = UserDataMap::new();
+        let environment_id = collidables.insert(Collidable::Environment);
+
         let rigid_body_set = RigidBodySet::new();
         let mut collider_set = ColliderSet::new();
 
@@ -127,6 +149,7 @@ where
             ],
             Some(vec![[0, 1], [1, 2], [2, 3], [3, 0]]),
         )
+        .user_data(environment_id)
         .build();
         let polyline_handle = collider_set.insert(polyline);
 
@@ -163,7 +186,8 @@ where
             collision_recv,
             contact_force_recv,
             event_handler,
-            actors: UserDataMap::new(),
+            actors: Vec::new(),
+            collidables,
         }
     }
 
@@ -198,11 +222,12 @@ where
     }
 
     pub fn actors_iter(&self) -> impl Iterator<Item = &Rc<RefCell<Actor<ActorData>>>> {
-        self.actors.iter().map(|(_, actor)| actor)
+        self.actors.iter()
     }
 
     pub fn clear_actors(&mut self) {
         self.actors.clear();
+        // TODO clear actors from collidables
     }
 
     /// Creates a new actor with a random position and radius within the bounding box.
@@ -246,7 +271,8 @@ where
             turret_angular_velocity,
             user_data,
         }));
-        let id = self.actors.insert(result.clone());
+        let id = self.collidables.insert(Collidable::Actor(result.clone()));
+        self.actors.push(result.clone());
 
         let collider = ColliderBuilder::ball(radius)
             .restitution(0.7)
@@ -285,7 +311,7 @@ where
         );
 
         // turrets
-        for (_, actor) in self.actors.iter_mut() {
+        for actor in self.actors.iter_mut() {
             let mut actor = actor.borrow_mut();
             let new_turret_angle = actor.turret_angle() + actor.turret_angular_velocity() * time;
             actor.set_turret_angle(new_turret_angle);
@@ -337,15 +363,15 @@ where
             .collider_set
             .get(collision_event.collider2())
             .ok_or(eyre!("failed to find collider2 in collision event"))?;
-        if let Some(actor1) = self.actors.get(collider1.user_data)
-            && let Some(actor2) = self.actors.get(collider2.user_data)
+        if let Some(a) = self.collidables.get(collider1.user_data)
+            && let Some(b) = self.collidables.get(collider2.user_data)
         {
-            let actor1 = actor1.clone();
-            let actor2 = actor2.clone();
+            let a = a.clone();
+            let b = b.clone();
             if collision_event.started() {
-                collision_callback(CollisionEvent::Started(actor1, actor2))?;
+                collision_callback(CollisionEvent::Started(a, b))?;
             } else if collision_event.stopped() {
-                collision_callback(CollisionEvent::Stopped(actor1, actor2))?;
+                collision_callback(CollisionEvent::Stopped(a, b))?;
             }
         }
 

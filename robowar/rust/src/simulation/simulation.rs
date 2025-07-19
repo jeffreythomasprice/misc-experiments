@@ -59,26 +59,45 @@ impl Simulation {
             .step(self.total_time.as_secs_f64(), |e| {
                 match e {
                     physics::CollisionEvent::Started(actor1, actor2) => {
-                        let actor1 = actor1.borrow();
-                        let actor2 = actor2.borrow();
-                        let robot1 = self.robots.get(*actor1.user_data()).ok_or_else(|| {
-                            eyre!("Actor with id {} not found", actor1.user_data())
-                        })?;
-                        let robot2 = self.robots.get(*actor2.user_data()).ok_or_else(|| {
-                            eyre!("Actor with id {} not found", actor2.user_data())
-                        })?;
-                        info!(
-                            "TODO collision STARTED between {:?} and {:?}",
-                            actor1.user_data(),
-                            actor2.user_data()
-                        );
-                        // TODO actually do something with robots
+                        match (actor1, actor2) {
+                            (physics::Collidable::Actor(a1), physics::Collidable::Actor(a2)) => {
+                                let actor1 = a1.borrow();
+                                let actor2 = a2.borrow();
+                                // TODO de-duplicate all the robot lookups
+                                let robot1 =
+                                    self.robots.get(*actor1.user_data()).ok_or_else(|| {
+                                        eyre!("Actor with id {} not found", actor1.user_data())
+                                    })?;
+                                let robot2 =
+                                    self.robots.get(*actor2.user_data()).ok_or_else(|| {
+                                        eyre!("Actor with id {} not found", actor2.user_data())
+                                    })?;
+                                info!(
+                                    "TODO collision STARTED between two robots {:?} and {:?}",
+                                    actor1.user_data(),
+                                    actor2.user_data()
+                                );
+                                // TODO actually do something with robots
+                            }
+                            (physics::Collidable::Actor(a), physics::Collidable::Environment)
+                            | (physics::Collidable::Environment, physics::Collidable::Actor(a)) => {
+                                let actor = a.borrow();
+                                let robot =
+                                    self.robots.get(*actor.user_data()).ok_or_else(|| {
+                                        eyre!("Actor with id {} not found", actor.user_data())
+                                    })?;
+                                info!(
+                                    "TODO collision STARTED between robot {:?} and environment",
+                                    actor.user_data()
+                                );
+                                // TODO actually do something with robot
+                            }
+                            // no robots involved, impossible?
+                            _ => (),
+                        }
                     }
-                    physics::CollisionEvent::Stopped(actor1, actor2) => info!(
-                        "TODO collision STOPPED between {:?} and {:?}",
-                        actor1.borrow().user_data(),
-                        actor2.borrow().user_data()
-                    ),
+                    // TODO handle collision ends?
+                    physics::CollisionEvent::Stopped(actor1, actor2) => (),
                 };
                 Ok(())
             });
