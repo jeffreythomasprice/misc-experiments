@@ -61,12 +61,10 @@ pub fn identifier<'a>() -> impl Parser<'a, &'a str, String, Err<Rich<'a, char>>>
 
 #[cfg(test)]
 mod tests {
-    use std::u64;
-
-    use crate::assembler::basic_types::*;
+    use super::*;
 
     #[test]
-    fn test_number_literals() {
+    fn number_literals() {
         assert_eq!(
             number_literal().parse("42").into_result(),
             Ok(NumberLiteral::I64(42))
@@ -95,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn test_identifiers() {
+    fn identifiers() {
         assert_eq!(
             identifier().parse("foo").into_result(),
             Ok("foo".to_string())
