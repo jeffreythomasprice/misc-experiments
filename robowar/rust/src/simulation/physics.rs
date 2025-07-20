@@ -1,4 +1,9 @@
-use std::{cell::RefCell, fmt::Debug, ops::RangeInclusive, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    fmt::Debug,
+    ops::RangeInclusive,
+    rc::Rc,
+};
 
 use color_eyre::eyre::{Result, eyre};
 use rand::{Rng, rand_core::le};
@@ -73,33 +78,27 @@ impl<T> Actor<T>
 where
     T: Clone,
 {
-    // TODO de-duplicate all the bits that get the rigid body
-
     pub fn position(&self) -> Result<Vec2<f64>> {
-        let rigid_body_set = self.rigid_body_set.borrow();
-        let rigid_body = rigid_body_set.get(self.rigid_body_handle).ok_or(eyre!(
-            "failed to find rigid body on environment, as this actor been removed?"
-        ))?;
-        let result = rigid_body.translation();
+        let result = *self
+            .rigid_body(&self.rigid_body_set.borrow(), self.rigid_body_handle)?
+            .translation();
         Ok(Vec2::new(result.x, result.y))
     }
 
     pub fn velocity(&self) -> Result<Vec2<f64>> {
-        let rigid_body_set = self.rigid_body_set.borrow();
-        let rigid_body = rigid_body_set.get(self.rigid_body_handle).ok_or(eyre!(
-            "failed to find rigid body on environment, as this actor been removed?"
-        ))?;
-        let result = rigid_body.vels().linvel;
+        let result = self
+            .rigid_body(&self.rigid_body_set.borrow(), self.rigid_body_handle)?
+            .vels()
+            .linvel;
         Ok(Vec2::new(result.x, result.y))
     }
 
     pub fn set_velocity(&mut self, value: Vec2<f64>) -> Result<()> {
-        let mut rigid_body_set = self.rigid_body_set.borrow_mut();
-        // TODO de-duplicate the getter for rigid body
-        let rigid_body = rigid_body_set.get_mut(self.rigid_body_handle).ok_or(eyre!(
-            "failed to find rigid body on environment, as this actor been removed?"
-        ))?;
-        rigid_body.set_linvel(Matrix2x1::new(value.x, value.y), true);
+        self.rigid_body_mut(
+            &mut self.rigid_body_set.borrow_mut(),
+            self.rigid_body_handle,
+        )?
+        .set_linvel(Matrix2x1::new(value.x, value.y), true);
         Ok(())
     }
 
@@ -126,12 +125,31 @@ where
     pub fn user_data(&self) -> &T {
         &self.user_data
     }
+
+    fn rigid_body<'a: 'b, 'b>(
+        &self,
+        rigid_body_set: &'a RigidBodySet,
+        handle: RigidBodyHandle,
+    ) -> Result<&'b RigidBody> {
+        rigid_body_set
+            .get(handle)
+            .ok_or(eyre!("rigid body not found: {handle:?}"))
+    }
+
+    fn rigid_body_mut<'a: 'b, 'b>(
+        &self,
+        rigid_body_set: &'a mut RigidBodySet,
+        handle: RigidBodyHandle,
+    ) -> Result<&'b mut RigidBody> {
+        rigid_body_set
+            .get_mut(handle)
+            .ok_or(eyre!("rigid body not found: {handle:?}"))
+    }
 }
 
 impl<ActorData> Environment<ActorData>
 where
-    // TODO no debug should be needed
-    ActorData: Debug + Clone,
+    ActorData: Clone,
 {
     pub fn new_standard_rectangle(bounding_box: Rect<f64>) -> Self {
         let mut collidables = UserDataMap::new();
@@ -355,6 +373,7 @@ where
     where
         F: Fn(CollisionEvent<ActorData>) -> Result<()>,
     {
+        // TODO de-duplicate collider exists checks?
         let collider1 = self
             .collider_set
             .get(collision_event.collider1())

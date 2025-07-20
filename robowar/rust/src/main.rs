@@ -1,5 +1,5 @@
+mod assembler;
 mod math;
-mod parser;
 mod simulation;
 mod window;
 
@@ -183,7 +183,7 @@ impl EventHandler for Demo {
     }
 
     fn update(&mut self, elapsed_time: Duration) -> Result<()> {
-        self.simulation.update(elapsed_time);
+        self.simulation.update(elapsed_time)?;
         Ok(())
     }
 }
@@ -200,7 +200,7 @@ fn main() -> Result<()> {
         .init();
 
     let program = Rc::new(
-        parser::parse(
+        assembler::parse(
             r"
                 set velocity_x, 250
                 set velocity_y, 200

@@ -112,8 +112,7 @@ impl VirtualMachine {
         actor: &physics::Actor<ActorData>,
     ) -> Result<ClockTime, StepError>
     where
-        // TODO no debug should be needed
-        ActorData: Debug + Clone,
+        ActorData: Clone,
     {
         match self.read_next_instruction() {
             Some(Instruction::SetU64 {
@@ -370,8 +369,7 @@ impl VirtualMachine {
     ) -> Result<(), StepError>
     where
         F: FnOnce(f64, f64) -> f64,
-        // TODO no debug should be needed
-        ActorData: Debug + Clone,
+        ActorData: Clone,
     {
         let left = self.resolve_source_f64(left, environment, actor);
         let right = self.resolve_source_f64(right, environment, actor);
@@ -415,8 +413,7 @@ impl VirtualMachine {
     ) -> Result<(), StepError>
     where
         F: FnOnce(f64, f64) -> bool,
-        // TODO no debug should be needed
-        ActorData: Debug + Clone,
+        ActorData: Clone,
     {
         let left = self.resolve_source_f64(left, environment, actor);
         let right = self.resolve_source_f64(right, environment, actor);
@@ -459,8 +456,7 @@ impl VirtualMachine {
         actor: &physics::Actor<ActorData>,
     ) -> ResolvedValue<f64>
     where
-        // TODO no debug should be needed
-        ActorData: Debug + Clone,
+        ActorData: Clone,
     {
         match source {
             SourceF64::Register(r) => ResolvedValue {
@@ -519,8 +515,7 @@ impl VirtualMachine {
         actor: &physics::Actor<ActorData>,
     ) -> f64
     where
-        // TODO no debug should be needed
-        ActorData: Debug + Clone,
+        ActorData: Clone,
     {
         match r {
             ReadableRegisterF64::PositionX => self.position.x,

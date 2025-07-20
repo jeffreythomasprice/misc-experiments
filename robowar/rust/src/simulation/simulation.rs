@@ -117,6 +117,7 @@ impl Simulation {
             }
             robot.vm.update_actor_match_vm(&mut actor)?;
         }
+
         Ok(())
     }
 }
