@@ -1,17 +1,13 @@
-use std::collections::HashMap;
-
-use chumsky::{extra::Err, prelude::*, regex::Regex};
+mod basic_types;
+mod compile_time_expression;
 
 use crate::simulation::language;
+use basic_types::*;
+use chumsky::{extra::Err, prelude::*, regex::Regex};
+use compile_time_expression::*;
+use std::collections::HashMap;
 
 // TODO custom error types for everything here, no Result<_, String>
-
-#[derive(Debug, Clone)]
-enum NumberLiteral {
-    I64(i64),
-    U64(u64),
-    F64(f64),
-}
 
 #[derive(Debug, Clone)]
 enum Argument {
@@ -991,37 +987,15 @@ impl Program {
 }
 
 pub fn parse(input: &str) -> Result<Program, String> {
-    let identifier: Regex<&_, Err<Rich<char>>> = regex("[a-zA-Z_][a-zA-Z0-9_]*");
-    let identifier = identifier.map(|s: &str| s.to_string());
-
-    let number_i64 = regex(r"-?[0-9]+").try_map(|input: &str, span| match input.parse() {
-        Ok(result) => Ok(NumberLiteral::I64(result)),
-        Err(e) => Err(Rich::custom(span, e)),
-    });
-    let number_u64 = regex(r"[0-9]+").try_map(|input: &str, span| match input.parse() {
-        Ok(result) => Ok(NumberLiteral::U64(result)),
-        Err(e) => Err(Rich::custom(span, e)),
-    });
-    // TODO hex, binary, octal
-    let number_f64 = regex(r"[+-]?([0-9]*[.])?[0-9]+([eE][+-]?[0-9]+)?").try_map(
-        |input: &str, span| match input.parse() {
-            Ok(result) => Ok(NumberLiteral::F64(result)),
-            Err(e) => Err(Rich::custom(span, e)),
-        },
-    );
-    let number = choice((number_f64, number_i64, number_u64));
-
     let argument = choice((
-        identifier
-            .clone()
-            .map(|s| Argument::Identifier(s.to_string())),
-        number.map(Argument::Number),
+        identifier().map(|s| Argument::Identifier(s.to_string())),
+        number_literal().map(Argument::Number),
     ));
 
     let argument_list = argument.padded().separated_by(just(',')).collect();
 
     // either a Some(valid instruction) or None
-    let instruction = identifier.clone().padded().then(argument_list).validate(
+    let instruction = identifier().padded().then(argument_list).validate(
         |(instruction, arguments), e, emitter| match Instruction::new(instruction, arguments) {
             Ok(instruction) => Some(LabelOrInstruction::Instruction(instruction)),
             Err(error) => {
@@ -1032,12 +1006,12 @@ pub fn parse(input: &str) -> Result<Program, String> {
     );
 
     // because instructions have to be options because we skip invalid instructions, this will be an option too
-    let label = identifier
+    let label = identifier()
         .then(just(':'))
         .padded()
         .map(|(name, _)| Some(LabelOrInstruction::Label(name)));
 
-    // TODO a program could also have constants, which are numeric expressions defined only by other constants that have already been defined
+    // TODO compile time expressions, of the form "identifier = expression"
 
     // a list of either valid instructions or labels, or None that represents places where invalid instructions were validated and rejected
     let program = choice((label, instruction)).repeated().collect::<Vec<_>>();
