@@ -349,6 +349,14 @@ impl TryFrom<u64> for ProgramPointer {
     }
 }
 
+impl TryInto<u64> for ProgramPointer {
+    type Error = TryFromIntError;
+
+    fn try_into(self) -> Result<u64, Self::Error> {
+        self.0.try_into()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Program {
     instructions: Vec<Instruction>,

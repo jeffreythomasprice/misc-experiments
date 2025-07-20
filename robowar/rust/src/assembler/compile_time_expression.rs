@@ -2,18 +2,17 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use chumsky::{Parser, error::Rich};
-use chumsky::{extra::Err, prelude::*, regex::Regex};
-use rapier2d_f64::parry::either::Either::Right;
+use chumsky::{extra::Err, prelude::*};
 
 use crate::assembler::basic_types::*;
 
 #[derive(Debug, Clone, PartialEq)]
-enum EvaluateError {
+pub enum EvaluateError {
     NameNotFound(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum AST {
+pub enum AST {
     NumberLiteral(NumberLiteral),
     Identifier(String),
     Add(Box<AST>, Box<AST>),
@@ -27,7 +26,7 @@ enum AST {
 impl AST {
     pub fn evaluate(
         &self,
-        variables: &HashMap<&str, NumberLiteral>,
+        variables: &HashMap<String, NumberLiteral>,
     ) -> Result<NumberLiteral, EvaluateError> {
         match self {
             AST::NumberLiteral(result) => Ok(result.clone()),
@@ -249,7 +248,56 @@ mod tests {
         );
     }
 
-    // TODO test involving variables
+    #[test]
+    fn variables() {
+        let parser = compile_time_expression();
+        let mut variables = HashMap::new();
+        variables.insert(
+            "x".to_string(),
+            parser
+                .parse("1+2*3")
+                .into_result()
+                .unwrap()
+                .evaluate(&variables)
+                .unwrap(),
+        );
+        assert_eq!(
+            variables,
+            HashMap::from([("x".to_string(), NumberLiteral::I64(7)),])
+        );
+        variables.insert(
+            "y".to_string(),
+            parser
+                .parse("x*2")
+                .into_result()
+                .unwrap()
+                .evaluate(&variables)
+                .unwrap(),
+        );
+        assert_eq!(
+            variables,
+            HashMap::from([
+                ("x".to_string(), NumberLiteral::I64(7)),
+                ("y".to_string(), NumberLiteral::I64(14)),
+            ])
+        );
+        variables.insert(
+            "x".to_string(),
+            parser
+                .parse("-x")
+                .into_result()
+                .unwrap()
+                .evaluate(&variables)
+                .unwrap(),
+        );
+        assert_eq!(
+            variables,
+            HashMap::from([
+                ("x".to_string(), NumberLiteral::I64(-7)),
+                ("y".to_string(), NumberLiteral::I64(14)),
+            ])
+        );
+    }
 
     fn successful_expression_test(
         input: &str,
