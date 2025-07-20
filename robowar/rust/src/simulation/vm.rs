@@ -5,6 +5,7 @@ use std::{
     rc::Rc,
 };
 
+use chumsky::extra::Err;
 use color_eyre::eyre::Result;
 
 use crate::{
@@ -37,10 +38,21 @@ struct ResolvedValue<T> {
 pub enum StepError {
     Halted,
     TryFromIntError(TryFromIntError),
+    StackUnderflow,
+    AddressOutOfBounds,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum StackOrHeapValue {
+    U64(u64),
+    F64(f64),
 }
 
 pub struct VirtualMachine {
     program: Rc<Program>,
+
+    stack: Vec<StackOrHeapValue>,
+    heap: Vec<StackOrHeapValue>,
 
     program_counter: ProgramPointer,
     clock: ClockTime,
@@ -59,8 +71,12 @@ pub struct VirtualMachine {
 
 impl VirtualMachine {
     pub fn new(program: Rc<Program>) -> Self {
+        let stack = vec![StackOrHeapValue::U64(0); program.stack_size];
+        let heap = vec![StackOrHeapValue::U64(0); program.heap_size];
         Self {
             program,
+            stack,
+            heap,
 
             program_counter: 0.into(),
             clock: ClockTime(0),
@@ -321,6 +337,64 @@ impl VirtualMachine {
                 destination,
                 source,
             }) => self.unary_operator_common_u64(destination, source, |source| source >> 1)?,
+            Some(Instruction::PushU64 { source }) => {
+                let source = self.resolve_source_u64(source);
+                self.push_u64(source.value);
+                self.clock += source.clock_cost;
+            }
+            Some(Instruction::PushF64 { source }) => {
+                let source = self.resolve_source_f64(source, environment, actor);
+                self.push_f64(source.value);
+                self.clock += source.clock_cost;
+            }
+            Some(Instruction::PopU64 { destination }) => {
+                let value = self.pop_u64()?;
+                self.write_destination_u64(destination, value);
+                self.clock += ClockTime(1);
+            }
+            Some(Instruction::PopF64 { destination }) => {
+                let value = self.pop_f64()?;
+                self.write_destination_f64(destination, value);
+                self.clock += ClockTime(1);
+            }
+            Some(Instruction::LoadU64 {
+                destination,
+                source_address,
+            }) => {
+                let source_address = self.resolve_source_u64(source_address);
+                let value = self.load_u64(source_address.value)?;
+                self.write_destination_u64(destination, value);
+                self.clock += source_address.clock_cost;
+            }
+            Some(Instruction::LoadF64 {
+                destination,
+                source_address,
+            }) => {
+                let source_address = self.resolve_source_u64(source_address);
+                let value = self.load_f64(source_address.value)?;
+                self.write_destination_f64(destination, value);
+                self.clock += source_address.clock_cost;
+            }
+            Some(Instruction::StoreU64 {
+                source,
+                destination_address,
+            }) => {
+                let destination_address = self.resolve_source_u64(destination_address);
+                let source = self.resolve_source_u64(source);
+                self.store_u64(destination_address.value, source.value);
+                self.clock += destination_address.clock_cost;
+                self.clock += source.clock_cost;
+            }
+            Some(Instruction::StoreF64 {
+                source,
+                destination_address,
+            }) => {
+                let destination_address = self.resolve_source_u64(destination_address);
+                let source = self.resolve_source_f64(source, environment, actor);
+                self.store_f64(destination_address.value, source.value);
+                self.clock += destination_address.clock_cost;
+                self.clock += source.clock_cost;
+            }
             None => Err(StepError::Halted)?,
         };
         Ok(self.clock)
@@ -561,5 +635,61 @@ impl VirtualMachine {
             WritableRegisterF64::GeneralPurpose6 => &mut self.register_general_purpose_f64[6],
             WritableRegisterF64::GeneralPurpose7 => &mut self.register_general_purpose_f64[7],
         } = value;
+    }
+
+    fn push_u64(&mut self, value: u64) {
+        self.stack.push(StackOrHeapValue::U64(value));
+    }
+
+    fn push_f64(&mut self, value: f64) {
+        self.stack.push(StackOrHeapValue::F64(value));
+    }
+
+    fn pop_u64(&mut self) -> Result<u64, StepError> {
+        match self.stack.pop() {
+            Some(StackOrHeapValue::U64(value)) => Ok(value),
+            Some(StackOrHeapValue::F64(value)) => Ok(value as u64),
+            None => Err(StepError::StackUnderflow),
+        }
+    }
+
+    fn pop_f64(&mut self) -> Result<f64, StepError> {
+        match self.stack.pop() {
+            Some(StackOrHeapValue::F64(value)) => Ok(value),
+            Some(StackOrHeapValue::U64(value)) => Ok(value as f64),
+            None => Err(StepError::StackUnderflow),
+        }
+    }
+
+    fn load_u64(&self, address: u64) -> Result<u64, StepError> {
+        match self.heap.get(address as usize) {
+            Some(StackOrHeapValue::U64(value)) => Ok(*value),
+            Some(StackOrHeapValue::F64(value)) => Ok(*value as u64),
+            None => Err(StepError::AddressOutOfBounds),
+        }
+    }
+
+    fn load_f64(&self, address: u64) -> Result<f64, StepError> {
+        match self.heap.get(address as usize) {
+            Some(StackOrHeapValue::F64(value)) => Ok(*value),
+            Some(StackOrHeapValue::U64(value)) => Ok(*value as f64),
+            None => Err(StepError::AddressOutOfBounds),
+        }
+    }
+
+    fn store_u64(&mut self, address: u64, value: u64) -> Result<(), StepError> {
+        match self.heap.get_mut(address as usize) {
+            Some(ptr) => *ptr = StackOrHeapValue::U64(value),
+            None => Err(StepError::AddressOutOfBounds)?,
+        }
+        Ok(())
+    }
+
+    fn store_f64(&mut self, address: u64, value: f64) -> Result<(), StepError> {
+        match self.heap.get_mut(address as usize) {
+            Some(ptr) => *ptr = StackOrHeapValue::F64(value),
+            None => Err(StepError::AddressOutOfBounds)?,
+        }
+        Ok(())
     }
 }

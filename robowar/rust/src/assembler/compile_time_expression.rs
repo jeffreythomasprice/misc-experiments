@@ -122,8 +122,6 @@ impl AST {
 }
 
 pub fn compile_time_expression<'a>() -> impl Parser<'a, &'a str, Box<AST>, Err<Rich<'a, char>>> {
-    // TODO compile time expressions
-
     let number = Rc::new(number_literal().map(|x| Box::new(AST::NumberLiteral(x))));
 
     let identifier = Rc::new(identifier().map(|x| Box::new(AST::Identifier(x))));

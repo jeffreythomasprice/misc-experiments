@@ -314,7 +314,34 @@ pub enum Instruction {
         destination: DestinationU64,
         source: SourceU64,
     },
-    // TODO push, pop
+    PushU64 {
+        source: SourceU64,
+    },
+    PushF64 {
+        source: SourceF64,
+    },
+    PopU64 {
+        destination: DestinationU64,
+    },
+    PopF64 {
+        destination: DestinationF64,
+    },
+    LoadU64 {
+        destination: DestinationU64,
+        source_address: SourceU64,
+    },
+    LoadF64 {
+        destination: DestinationF64,
+        source_address: SourceU64,
+    },
+    StoreU64 {
+        destination_address: SourceU64,
+        source: SourceU64,
+    },
+    StoreF64 {
+        destination_address: SourceU64,
+        source: SourceF64,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -360,11 +387,17 @@ impl TryInto<u64> for ProgramPointer {
 #[derive(Debug, Clone)]
 pub struct Program {
     instructions: Vec<Instruction>,
+    pub stack_size: usize,
+    pub heap_size: usize,
 }
 
 impl Program {
-    pub fn new(instructions: Vec<Instruction>) -> Self {
-        Self { instructions }
+    pub fn new(instructions: Vec<Instruction>, stack_size: usize, heap_size: usize) -> Self {
+        Self {
+            instructions,
+            stack_size,
+            heap_size,
+        }
     }
 
     pub fn get(&self, p: ProgramPointer) -> Option<&Instruction> {

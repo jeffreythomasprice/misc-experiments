@@ -283,7 +283,34 @@ pub enum Instruction {
         destination: language::DestinationU64,
         source: SourceU64,
     },
-    // TODO push, pop
+    PushU64 {
+        source: SourceU64,
+    },
+    PushF64 {
+        source: SourceF64,
+    },
+    PopU64 {
+        destination: language::DestinationU64,
+    },
+    PopF64 {
+        destination: language::DestinationF64,
+    },
+    LoadU64 {
+        destination: language::DestinationU64,
+        source_address: SourceU64,
+    },
+    LoadF64 {
+        destination: language::DestinationF64,
+        source_address: SourceU64,
+    },
+    StoreU64 {
+        destination_address: SourceU64,
+        source: SourceU64,
+    },
+    StoreF64 {
+        destination_address: SourceU64,
+        source: SourceF64,
+    },
 }
 
 impl Instruction {
@@ -759,7 +786,14 @@ impl Instruction {
                 )),
             },
 
-            // TODO push, pop
+            "push" => todo!(),
+
+            "pop" => todo!(),
+
+            "load" => todo!(),
+
+            "store" => todo!(),
+
             _ => Err(format!("unrecognized instruction: {instruction}")),
         }
     }
@@ -980,6 +1014,46 @@ impl Instruction {
                 destination: destination.clone(),
                 source: source.into_runnable(values)?,
             }),
+            Instruction::PushU64 { source } => Ok(language::Instruction::PushU64 {
+                source: source.clone().into_runnable(values)?,
+            }),
+            Instruction::PushF64 { source } => Ok(language::Instruction::PushF64 {
+                source: source.clone().into_runnable(values)?,
+            }),
+            Instruction::PopU64 { destination } => Ok(language::Instruction::PopU64 {
+                destination: destination.clone(),
+            }),
+            Instruction::PopF64 { destination } => Ok(language::Instruction::PopF64 {
+                destination: destination.clone(),
+            }),
+            Instruction::LoadU64 {
+                destination,
+                source_address,
+            } => Ok(language::Instruction::LoadU64 {
+                destination: destination.clone(),
+                source_address: source_address.into_runnable(values)?,
+            }),
+            Instruction::LoadF64 {
+                destination,
+                source_address,
+            } => Ok(language::Instruction::LoadF64 {
+                destination: destination.clone(),
+                source_address: source_address.into_runnable(values)?,
+            }),
+            Instruction::StoreU64 {
+                destination_address,
+                source,
+            } => Ok(language::Instruction::StoreU64 {
+                destination_address: destination_address.into_runnable(values)?,
+                source: source.into_runnable(values)?,
+            }),
+            Instruction::StoreF64 {
+                destination_address,
+                source,
+            } => Ok(language::Instruction::StoreF64 {
+                destination_address: destination_address.into_runnable(values)?,
+                source: source.into_runnable(values)?,
+            }),
         }
     }
 }
@@ -1038,8 +1112,12 @@ impl Program {
             .map(|instruction| instruction.into_runnable(&values))
             .collect::<Result<Vec<_>, _>>()?;
 
+        // TODO configurable stack and heap sizes
+        let stack_size = 1024;
+        let heap_size = 65536;
+
         Ok(Program {
-            runnable_program: language::Program::new(runnable_instructions),
+            runnable_program: language::Program::new(runnable_instructions, stack_size, heap_size),
         })
     }
 }
