@@ -55,6 +55,7 @@ pub struct VirtualMachine {
 
     program_counter: ProgramPointer,
     clock: ClockTime,
+    halted: bool,
 
     health: f64,
     energy: f64,
@@ -79,6 +80,7 @@ impl VirtualMachine {
 
             program_counter: 0.into(),
             clock: ClockTime(0),
+            halted: false,
 
             // TODO health should be configurable?
             health: 100.0,
@@ -129,6 +131,9 @@ impl VirtualMachine {
     where
         ActorData: Clone,
     {
+        if self.halted {
+            return Err(StepError::Halted);
+        }
         match self.read_next_instruction() {
             Some(Instruction::SetU64 {
                 destination,
@@ -380,7 +385,11 @@ impl VirtualMachine {
             }) => {
                 let destination_address = self.resolve_source_u64(destination_address);
                 let source = self.resolve_source_u64(source);
-                self.store_u64(destination_address.value, source.value);
+                self.store_u64(destination_address.value, source.value)
+                    .map_err(|e| {
+                        self.halted = true;
+                        e
+                    })?;
                 self.clock += destination_address.clock_cost;
                 self.clock += source.clock_cost;
             }
@@ -390,7 +399,11 @@ impl VirtualMachine {
             }) => {
                 let destination_address = self.resolve_source_u64(destination_address);
                 let source = self.resolve_source_f64(source, environment, actor);
-                self.store_f64(destination_address.value, source.value);
+                self.store_f64(destination_address.value, source.value)
+                    .map_err(|e| {
+                        self.halted = true;
+                        e
+                    })?;
                 self.clock += destination_address.clock_cost;
                 self.clock += source.clock_cost;
             }

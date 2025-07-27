@@ -786,13 +786,111 @@ impl Instruction {
                 )),
             },
 
-            "push" => todo!(),
+            "push" => match arguments.as_slice() {
+                [source] => {
+                    if let Ok(source) = source.clone().try_into() {
+                        Ok(Instruction::PushU64 { source })
+                    } else if let Ok(source) = source.clone().try_into() {
+                        Ok(Instruction::PushF64 { source })
+                    } else {
+                        Err(format!(
+                            "invalid argument for '{}': source: {:?}",
+                            instruction.to_uppercase(),
+                            source
+                        ))
+                    }
+                }
+                _ => Err(format!(
+                    "expected 1 argument for '{}', found {}",
+                    instruction.to_uppercase(),
+                    arguments.len()
+                )),
+            },
 
-            "pop" => todo!(),
+            "pop" => match arguments.as_slice() {
+                [destination] => {
+                    if let Ok(destination) = destination.clone().try_into() {
+                        Ok(Instruction::PopU64 { destination })
+                    } else if let Ok(destination) = destination.clone().try_into() {
+                        Ok(Instruction::PopF64 { destination })
+                    } else {
+                        Err(format!(
+                            "invalid argument for '{}': destination: {:?}",
+                            instruction.to_uppercase(),
+                            destination
+                        ))
+                    }
+                }
+                _ => Err(format!(
+                    "expected 1 argument for '{}', found {}",
+                    instruction.to_uppercase(),
+                    arguments.len()
+                )),
+            },
 
-            "load" => todo!(),
+            "load" => match arguments.as_slice() {
+                [destination, source_address] => {
+                    if let Ok(destination) = destination.clone().try_into()
+                        && let Ok(source_address) = source_address.clone().try_into()
+                    {
+                        Ok(Instruction::LoadU64 {
+                            destination,
+                            source_address,
+                        })
+                    } else if let Ok(destination) = destination.clone().try_into()
+                        && let Ok(source_address) = source_address.clone().try_into()
+                    {
+                        Ok(Instruction::LoadF64 {
+                            destination,
+                            source_address,
+                        })
+                    } else {
+                        Err(format!(
+                            "invalid arguments for '{}': destination: {:?}, source_address: {:?}",
+                            instruction.to_uppercase(),
+                            destination,
+                            source_address
+                        ))
+                    }
+                }
+                _ => Err(format!(
+                    "expected 2 arguments for '{}', found {}",
+                    instruction.to_uppercase(),
+                    arguments.len()
+                )),
+            },
 
-            "store" => todo!(),
+            "store" => match arguments.as_slice() {
+                [destination_address, source] => {
+                    if let Ok(destination_address) = destination_address.clone().try_into()
+                        && let Ok(source) = source.clone().try_into()
+                    {
+                        Ok(Instruction::StoreU64 {
+                            destination_address,
+                            source,
+                        })
+                    } else if let Ok(destination_address) = destination_address.clone().try_into()
+                        && let Ok(source) = source.clone().try_into()
+                    {
+                        Ok(Instruction::StoreF64 {
+                            destination_address,
+                            source,
+                        })
+                    } else {
+                        Err(format!(
+                            "invalid arguments for '{}': destination_address: {:?}, source: {:?}",
+                            instruction.to_uppercase(),
+                            destination_address,
+                            source
+                        ))
+                    }
+                }
+                _ => Err(format!(
+                    "expected 2 arguments for '{}', found {}",
+                    instruction.to_uppercase(),
+                    arguments.len()
+                )),
+            },
 
             _ => Err(format!("unrecognized instruction: {instruction}")),
         }

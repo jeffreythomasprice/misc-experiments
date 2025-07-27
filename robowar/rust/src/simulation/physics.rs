@@ -322,12 +322,13 @@ where
 
         // collision events
         while let Ok(collision_event) = self.collision_recv.try_recv() {
+            trace!("collision event: {:?}", collision_event);
             if let Err(e) = self.handle_collision_event(&collision_event, &collision_callback) {
                 error!("failed to handle collision event: {:?}", e);
             }
         }
         while let Ok(contact_force_event) = self.contact_force_recv.try_recv() {
-            info!("TODO contact force event: {:?}", contact_force_event);
+            trace!("contact force event: {:?}", contact_force_event);
         }
     }
 
