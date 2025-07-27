@@ -1,27 +1,21 @@
-use std::{
-    cell::{Ref, RefCell},
-    fmt::Debug,
-    ops::RangeInclusive,
-    rc::Rc,
-};
+use std::{cell::RefCell, ops::RangeInclusive, rc::Rc};
 
 use color_eyre::eyre::{Result, eyre};
-use rand::{Rng, rand_core::le};
+use rand::Rng;
 use rapier2d_f64::{
     crossbeam,
-    na::{Isometry2, Matrix2x1, OPoint, Point2, iter::ColumnIter},
-    parry::utils::hashmap::HashMap,
+    na::{Matrix2x1, Point2},
     prelude::*,
 };
 use tracing::*;
 
-use crate::{math::*, simulation::user_data_map::UserDataMap};
+use crate::{
+    math::*,
+    simulation::ecs::{self},
+};
 
 #[derive(Clone)]
-pub enum Collidable<ActorData>
-where
-    ActorData: Clone,
-{
+pub enum Collidable<ActorData> {
     Actor(Rc<RefCell<Actor<ActorData>>>),
     Environment,
 }
@@ -36,18 +30,12 @@ pub struct Actor<T> {
 }
 
 #[derive(Clone)]
-pub enum CollisionEvent<ActorData>
-where
-    ActorData: Clone,
-{
+pub enum CollisionEvent<ActorData> {
     Started(Collidable<ActorData>, Collidable<ActorData>),
     Stopped(Collidable<ActorData>, Collidable<ActorData>),
 }
 
-pub struct Environment<ActorData>
-where
-    ActorData: Clone,
-{
+pub struct Environment<ActorData> {
     rigid_body_set: Rc<RefCell<RigidBodySet>>,
     collider_set: ColliderSet,
     polyline_handle: ColliderHandle,
@@ -71,13 +59,10 @@ where
     contact_force_recv: crossbeam::channel::Receiver<ContactForceEvent>,
     event_handler: ChannelEventCollector,
     actors: Vec<Rc<RefCell<Actor<ActorData>>>>,
-    collidables: UserDataMap<Collidable<ActorData>>,
+    collidables: ecs::ComponentSystem<Collidable<ActorData>>,
 }
 
-impl<T> Actor<T>
-where
-    T: Clone,
-{
+impl<T> Actor<T> {
     pub fn position(&self) -> Result<Vec2<f64>> {
         let result = *self
             .rigid_body(&self.rigid_body_set.borrow(), self.rigid_body_handle)?
@@ -152,7 +137,7 @@ where
     ActorData: Clone,
 {
     pub fn new_standard_rectangle(bounding_box: Rect<f64>) -> Self {
-        let mut collidables = UserDataMap::new();
+        let mut collidables = ecs::ComponentSystem::new();
         let environment_id = collidables.insert(Collidable::Environment);
 
         let rigid_body_set = RigidBodySet::new();
@@ -167,7 +152,7 @@ where
             ],
             Some(vec![[0, 1], [1, 2], [2, 3], [3, 0]]),
         )
-        .user_data(environment_id)
+        .user_data(environment_id.0 as u128)
         .build();
         let polyline_handle = collider_set.insert(polyline);
 
@@ -295,7 +280,7 @@ where
         let collider = ColliderBuilder::ball(radius)
             .restitution(0.7)
             .active_events(ActiveEvents::COLLISION_EVENTS)
-            .user_data(id)
+            .user_data(id.0 as u128)
             .build();
         self.collider_set
             .insert_with_parent(collider, rigid_body_handle, &mut rigid_body_set);
@@ -337,8 +322,7 @@ where
 
         // collision events
         while let Ok(collision_event) = self.collision_recv.try_recv() {
-            if let Err(e) = self.handle_collision_event(&collision_event, |e| collision_callback(e))
-            {
+            if let Err(e) = self.handle_collision_event(&collision_event, &collision_callback) {
                 error!("failed to handle collision event: {:?}", e);
             }
         }
@@ -382,8 +366,8 @@ where
             .collider_set
             .get(collision_event.collider2())
             .ok_or(eyre!("failed to find collider2 in collision event"))?;
-        if let Some(a) = self.collidables.get(collider1.user_data)
-            && let Some(b) = self.collidables.get(collider2.user_data)
+        if let Some(a) = self.collidables.get(ecs::Id(collider1.user_data as usize))
+            && let Some(b) = self.collidables.get(ecs::Id(collider2.user_data as usize))
         {
             let a = a.clone();
             let b = b.clone();

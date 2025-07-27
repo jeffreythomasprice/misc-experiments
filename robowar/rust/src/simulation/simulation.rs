@@ -3,36 +3,33 @@ use std::{cell::RefCell, ops::RangeInclusive, rc::Rc, time::Duration};
 use color_eyre::eyre::{Result, eyre};
 use tracing::*;
 
-use crate::{
-    math::Ray2,
-    simulation::{
-        language::Program,
-        physics,
-        user_data_map::UserDataMap,
-        vm::{StepError, VirtualMachine},
-    },
+use crate::simulation::{
+    ecs,
+    language::Program,
+    physics,
+    vm::{StepError, VirtualMachine},
 };
 
 struct Robot {
     // TODO actors should have a better user data than just their index?
-    actor: Rc<RefCell<physics::Actor<u128>>>,
+    actor: Rc<RefCell<physics::Actor<ecs::Id>>>,
     vm: VirtualMachine,
 }
 
 pub struct Simulation {
-    physics_environment: physics::Environment<u128>,
-    robots: UserDataMap<Robot>,
+    physics_environment: physics::Environment<ecs::Id>,
+    robots: ecs::ComponentSystem<Robot>,
     total_time: Duration,
 }
 
 impl Simulation {
     pub fn new(
-        mut physics_environment: physics::Environment<u128>,
+        mut physics_environment: physics::Environment<ecs::Id>,
         programs: Vec<Rc<Program>>,
         actor_size: RangeInclusive<f64>,
     ) -> Result<Self> {
         physics_environment.clear_actors();
-        let mut robots = UserDataMap::new();
+        let mut robots = ecs::ComponentSystem::new();
         for program in programs.iter() {
             robots.insert_factory(|id| {
                 Ok(Robot {
@@ -48,7 +45,7 @@ impl Simulation {
         })
     }
 
-    pub fn physics_environment(&self) -> &physics::Environment<u128> {
+    pub fn physics_environment(&self) -> &physics::Environment<ecs::Id> {
         &self.physics_environment
     }
 
@@ -66,11 +63,11 @@ impl Simulation {
                                 // TODO de-duplicate all the robot lookups
                                 let robot1 =
                                     self.robots.get(*actor1.user_data()).ok_or_else(|| {
-                                        eyre!("Actor with id {} not found", actor1.user_data())
+                                        eyre!("Actor with id {:?} not found", actor1.user_data())
                                     })?;
                                 let robot2 =
                                     self.robots.get(*actor2.user_data()).ok_or_else(|| {
-                                        eyre!("Actor with id {} not found", actor2.user_data())
+                                        eyre!("Actor with id {:?} not found", actor2.user_data())
                                     })?;
                                 info!(
                                     "TODO collision STARTED between two robots {:?} and {:?}",
@@ -84,7 +81,7 @@ impl Simulation {
                                 let actor = a.borrow();
                                 let robot =
                                     self.robots.get(*actor.user_data()).ok_or_else(|| {
-                                        eyre!("Actor with id {} not found", actor.user_data())
+                                        eyre!("Actor with id {:?} not found", actor.user_data())
                                     })?;
                                 info!(
                                     "TODO collision STARTED between robot {:?} and environment",

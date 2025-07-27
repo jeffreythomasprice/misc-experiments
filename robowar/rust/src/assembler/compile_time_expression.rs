@@ -166,7 +166,9 @@ pub fn compile_time_expression<'a>() -> impl Parser<'a, &'a str, Box<AST>, Err<R
             Add,
             Subtract,
         }
-        let addop = mulop.clone().foldl(
+        
+
+        mulop.clone().foldl(
             choice((
                 just("+").map(|_| AddOp::Add),
                 just("-").map(|_| AddOp::Subtract),
@@ -178,9 +180,7 @@ pub fn compile_time_expression<'a>() -> impl Parser<'a, &'a str, Box<AST>, Err<R
                 AddOp::Add => Box::new(AST::Add(a, b)),
                 AddOp::Subtract => Box::new(AST::Subtract(a, b)),
             },
-        );
-
-        addop
+        )
     })
 }
 

@@ -3,7 +3,7 @@ mod compile_time_expression;
 
 use crate::{assembler::compile_time_expression::compile_time_expression, simulation::language};
 use basic_types::*;
-use chumsky::{error, prelude::*};
+use chumsky::prelude::*;
 use std::collections::HashMap;
 
 // TODO custom error types for everything here, no Result<_, String>

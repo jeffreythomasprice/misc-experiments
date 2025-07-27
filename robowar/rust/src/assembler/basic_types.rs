@@ -1,5 +1,5 @@
 use chumsky::{Parser, error::Rich};
-use chumsky::{extra::Err, prelude::*, regex::Regex};
+use chumsky::{extra::Err, prelude::*};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NumberLiteral {

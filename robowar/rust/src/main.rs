@@ -5,8 +5,8 @@ mod window;
 
 use std::{rc::Rc, time::Duration};
 
-use color_eyre::eyre::{self, Result, eyre};
-use tiny_skia::{Color, FillRule, Paint, PathBuilder, PixmapMut, Stroke, Transform};
+use color_eyre::eyre::{Result, eyre};
+use tiny_skia::{FillRule, Paint, PathBuilder, PixmapMut, Stroke, Transform};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
@@ -76,8 +76,7 @@ impl EventHandler for Demo {
         let camera = Camera::new(
             self.simulation
                 .physics_environment()
-                .bounding_box()?
-                .clone(),
+                .bounding_box()?,
             // Rect::new_with_origin_size(Vec2::new(0.0, 0.0), Vec2::new(width as f64, height as f64)),
             Rect::new_with_points(&[
                 Vec2::new(border, border),
@@ -169,11 +168,11 @@ impl EventHandler for Demo {
         }
 
         for i in (0..self.pixels_rgba.len()).step_by(4) {
-            let r = self.pixels_rgba[i + 0];
+            let r = self.pixels_rgba[i];
             let g = self.pixels_rgba[i + 1];
             let b = self.pixels_rgba[i + 2];
             let a = self.pixels_rgba[i + 3];
-            pixels_abgr[i + 0] = b;
+            pixels_abgr[i] = b;
             pixels_abgr[i + 1] = g;
             pixels_abgr[i + 2] = r;
             pixels_abgr[i + 3] = a;
@@ -224,6 +223,6 @@ fn main() -> Result<()> {
             Vec2::new(500.0, 500.0),
         )),
         robots,
-        (10.0)..=(20.0),
+        (10.0)..=20.0,
     )?))
 }

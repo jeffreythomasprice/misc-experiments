@@ -5,7 +5,6 @@ use std::{
     rc::Rc,
 };
 
-use chumsky::extra::Err;
 use color_eyre::eyre::Result;
 
 use crate::{
