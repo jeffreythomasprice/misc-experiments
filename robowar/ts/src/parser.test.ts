@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { InputLocation, literal, oneOf, ExpectedError, regex, seq, ParseError, defer } from "./parser";
+import { InputLocation, literal, oneOf, ExpectedError, regex, seq, ParseError, defer, anyNumberOf, optional, ignorePrefix as ignorePrefix, ignoreSuffix, ignorePrefixAndSuffix, padded } from "./parser";
 
 describe(__filename, () => {
 	describe("locations", () => {
@@ -276,6 +276,344 @@ describe(__filename, () => {
 			setParser(literal("foo"));
 			expect(() => setParser(literal("bar")))
 				.toThrow("Deferred parser already initialized");
+		});
+	});
+
+	describe(anyNumberOf.name, () => {
+		test("zero matches", () => {
+			expect(anyNumberOf(literal("foo"))
+				.parse({
+					text: "bar",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: [],
+					remainder: {
+						text: "bar",
+						location: new InputLocation(0, 0),
+					},
+				});
+		});
+
+		test("one match", () => {
+			expect(anyNumberOf(literal("foo"))
+				.parse({
+					text: "foobar",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: ["foo"],
+					remainder: {
+						text: "bar",
+						location: new InputLocation(0, 3),
+					},
+				});
+		});
+
+		test("two matches", () => {
+			expect(anyNumberOf(literal("foo"))
+				.parse({
+					text: "foofoobar",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: ["foo", "foo"],
+					remainder: {
+						text: "bar",
+						location: new InputLocation(0, 6),
+					},
+				});
+		});
+
+		test("rethrows unexpected errors", () => {
+			expect(() => anyNumberOf(literal("foo").map(_s => {
+				throw new Error("Unexpected error");
+			})).parse({
+				text: "foo",
+				location: new InputLocation(0, 0),
+			}))
+				.toThrow("Unexpected error");
+		});
+
+		test("empty string input", () => {
+			expect(anyNumberOf(literal("foo"))
+				.parse({
+					text: "",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: [],
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 0),
+					},
+				});
+		});
+	});
+
+	describe(optional.name, () => {
+		test("success, returns parsed value", () => {
+			expect(optional(literal("foo"))
+				.parse({
+					text: "foobar",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "foo",
+					remainder: {
+						text: "bar",
+						location: new InputLocation(0, 3),
+					},
+				});
+		});
+
+		test("failure, returns null and doesn't advance", () => {
+			expect(optional(literal("foo"))
+				.parse({
+					text: "bar",
+					location: new InputLocation(1, 5),
+				}))
+				.toEqual({
+					value: null,
+					remainder: {
+						text: "bar",
+						location: new InputLocation(1, 5),
+					},
+				});
+		});
+
+		test("rethrows unexpected errors from map function", () => {
+			expect(() => optional(literal("foo").map(_s => {
+				throw new Error("Unexpected error in map");
+			})).parse({
+				text: "foo",
+				location: new InputLocation(0, 0),
+			}))
+				.toThrow("Unexpected error in map");
+		});
+
+		test("empty string input", () => {
+			expect(optional(literal("foo"))
+				.parse({
+					text: "",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: null,
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 0),
+					},
+				});
+		});
+
+		test("success at end of input", () => {
+			expect(optional(literal("foo"))
+				.parse({
+					text: "foo",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "foo",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 3),
+					},
+				});
+		});
+	});
+
+	describe(ignorePrefix.name, () => {
+		test("with prefix present", () => {
+			const prefixParser = literal("prefix");
+			const mainParser = literal("main");
+
+			expect(ignorePrefix(prefixParser, mainParser)
+				.parse({
+					text: "prefixmain",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "main",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 10),
+					},
+				});
+		});
+
+		test("without prefix present", () => {
+			const prefixParser = literal("prefix");
+			const mainParser = literal("main");
+
+			expect(ignorePrefix(prefixParser, mainParser)
+				.parse({
+					text: "main",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "main",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 4),
+					},
+				});
+		});
+
+		test("failure when main parser fails", () => {
+			const prefixParser = literal("prefix");
+			const mainParser = literal("main");
+
+			expect(() => ignorePrefix(prefixParser, mainParser)
+				.parse({
+					text: "prefixfoo",
+					location: new InputLocation(0, 0),
+				}))
+				.toThrow(new ExpectedError(new InputLocation(0, 6), "main"));
+		});
+	});
+
+	describe(ignoreSuffix.name, () => {
+		test("with suffix present", () => {
+			const mainParser = literal("main");
+			const suffixParser = literal("suffix");
+
+			expect(ignoreSuffix(mainParser, suffixParser)
+				.parse({
+					text: "mainsuffix",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "main",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 10),
+					},
+				});
+		});
+
+		test("without suffix present", () => {
+			const mainParser = literal("main");
+			const suffixParser = literal("suffix");
+
+			expect(ignoreSuffix(mainParser, suffixParser)
+				.parse({
+					text: "main",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "main",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 4),
+					},
+				});
+		});
+
+		test("failure when main parser fails", () => {
+			const mainParser = literal("main");
+			const suffixParser = literal("suffix");
+
+			expect(() => ignoreSuffix(mainParser, suffixParser)
+				.parse({
+					text: "foo",
+					location: new InputLocation(0, 0),
+				}))
+				.toThrow(new ExpectedError(new InputLocation(0, 0), "main"));
+		});
+	});
+
+	describe(ignorePrefixAndSuffix.name, () => {
+		test("with both prefix and suffix present", () => {
+			const prefixParser = literal("prefix");
+			const mainParser = literal("main");
+			const suffixParser = literal("suffix");
+
+			expect(ignorePrefixAndSuffix(prefixParser, mainParser, suffixParser)
+				.parse({
+					text: "prefixmainsuffix",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "main",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 16),
+					},
+				});
+		});
+
+		test("with only prefix present", () => {
+			const prefixParser = literal("prefix");
+			const mainParser = literal("main");
+			const suffixParser = literal("suffix");
+
+			expect(ignorePrefixAndSuffix(prefixParser, mainParser, suffixParser)
+				.parse({
+					text: "prefixmain",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "main",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 10),
+					},
+				});
+		});
+
+		test("with only suffix present", () => {
+			const prefixParser = literal("prefix");
+			const mainParser = literal("main");
+			const suffixParser = literal("suffix");
+
+			expect(ignorePrefixAndSuffix(prefixParser, mainParser, suffixParser)
+				.parse({
+					text: "mainsuffix",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "main",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 10),
+					},
+				});
+		});
+
+		test("with neither prefix nor suffix present", () => {
+			const prefixParser = literal("prefix");
+			const mainParser = literal("main");
+			const suffixParser = literal("suffix");
+
+			expect(ignorePrefixAndSuffix(prefixParser, mainParser, suffixParser)
+				.parse({
+					text: "main",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: "main",
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 4),
+					},
+				});
+		});
+	});
+
+	describe(padded.name, () => {
+		test("ignore whitespace", () => {
+			const parser = padded(literal("foo"));
+			expect(parser.parse({
+				text: "   foo   ",
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: "foo",
+				remainder: {
+					text: "",
+					location: new InputLocation(0, 9),
+				},
+			});
 		});
 	});
 });

@@ -212,3 +212,86 @@ export function defer<T>(): [Parser<T>, (parser: Parser<T>) => void] {
 	const result = new DeferredParser<T>();
 	return [result, (parser: Parser<T>) => result.set(parser)];
 }
+
+class AnyNumberOfParser<T> extends Parser<T[]> {
+	constructor(private readonly parser: Parser<T>) {
+		super();
+	}
+
+	parse(input: Input): ParseSuccess<T[]> {
+		const values: T[] = [];
+		let currentInput = input;
+		while (true) {
+			try {
+				const result = this.parser.parse(currentInput);
+				values.push(result.value);
+				// TODO early exit if we're not making any progress
+				currentInput = result.remainder;
+			} catch (e) {
+				if (e instanceof ParseError) {
+					break; // Stop on parse error
+				}
+				throw e; // Rethrow unexpected errors
+			}
+		}
+		return {
+			value: values,
+			remainder: currentInput
+		};
+	}
+}
+
+export function anyNumberOf<T>(parser: Parser<T>): Parser<T[]> {
+	return new AnyNumberOfParser(parser);
+}
+
+class OptionalParser<T> extends Parser<T | null> {
+	constructor(private readonly parser: Parser<T>) {
+		super();
+	}
+
+	parse(input: Input): ParseSuccess<T | null> {
+		try {
+			const result = this.parser.parse(input);
+			return {
+				value: result.value,
+				remainder: result.remainder
+			};
+		} catch (e) {
+			if (e instanceof ParseError) {
+				return {
+					value: null,
+					remainder: input
+				};
+			}
+			throw e; // Rethrow unexpected errors
+		}
+	}
+}
+
+export function optional<T>(parser: Parser<T>): Parser<T | null> {
+	return new OptionalParser(parser);
+}
+
+export function ignorePrefix<T>(prefix_parser: Parser<unknown>, parser: Parser<T>): Parser<T> {
+	return seq(optional(prefix_parser), parser)
+		.map(([_prefix, value]) => value);
+}
+
+export function ignoreSuffix<T>(parser: Parser<T>, suffix_parser: Parser<unknown>): Parser<T> {
+	return seq(parser, optional(suffix_parser))
+		.map(([value, _suffix]) => value);
+}
+
+export function ignorePrefixAndSuffix<T>(
+	prefix_parser: Parser<unknown>,
+	parser: Parser<T>,
+	suffix_parser: Parser<unknown>
+): Parser<T> {
+	return ignorePrefix(prefix_parser, ignoreSuffix(parser, suffix_parser));
+}
+
+export function padded<T>(parser: Parser<T>): Parser<T> {
+	const whitespace = regex(/^\s+/);
+	return ignorePrefixAndSuffix(whitespace, parser, whitespace);
+}
