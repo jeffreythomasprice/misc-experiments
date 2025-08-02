@@ -295,3 +295,12 @@ export function padded<T>(parser: Parser<T>): Parser<T> {
 	const whitespace = regex(/^\s+/);
 	return ignorePrefixAndSuffix(whitespace, parser, whitespace);
 }
+
+// TODO tests
+export function separatedBy<T>(parser: Parser<T>, separator: Parser<unknown>): Parser<T[]> {
+	return seq(
+		parser,
+		anyNumberOf(seq(separator, parser))
+	)
+		.map(([first, rest]) => [first, ...rest.map(([, value]) => value)]);
+}
