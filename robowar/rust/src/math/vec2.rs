@@ -1,3 +1,4 @@
+use crate::math::sqrt::Sqrt;
 use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Debug, Clone)]
@@ -11,6 +12,24 @@ impl<T> Copy for Vec2<T> where T: Copy {}
 impl<T> Vec2<T> {
     pub fn new(x: T, y: T) -> Self {
         Self { x, y }
+    }
+}
+
+impl<T> Vec2<T>
+where
+    T: Add<T, Output = T> + Mul<T, Output = T> + Copy,
+{
+    pub fn magnitude_squared(&self) -> T {
+        self.x * self.x + self.y * self.y
+    }
+}
+
+impl<T> Vec2<T>
+where
+    T: Add<T, Output = T> + Mul<T, Output = T> + Copy + Sqrt,
+{
+    pub fn magnitude(&self) -> T {
+        self.magnitude_squared().sqrt()
     }
 }
 

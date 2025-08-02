@@ -63,6 +63,12 @@ pub struct Environment<ActorData> {
 }
 
 impl<T> Actor<T> {
+    pub fn mass(&self) -> Result<f64> {
+        Ok(self
+            .rigid_body(&self.rigid_body_set.borrow(), self.rigid_body_handle)?
+            .mass())
+    }
+
     pub fn position(&self) -> Result<Vec2<f64>> {
         let result = *self
             .rigid_body(&self.rigid_body_set.borrow(), self.rigid_body_handle)?

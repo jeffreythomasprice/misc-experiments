@@ -74,7 +74,13 @@ impl Simulation {
                                     actor1.user_data(),
                                     actor2.user_data()
                                 );
-                                // TODO actually do something with robots
+
+                                let relative_velocity =
+                                    (actor1.velocity()? - actor2.velocity()?).magnitude();
+                                let damage_to_1 = relative_velocity * actor2.mass()?;
+                                let damage_to_2 = relative_velocity * actor1.mass()?;
+                                info!("TODO apply damage to robot 1 = {}", damage_to_1);
+                                info!("TODO apply damage to robot 2 = {}", damage_to_2);
                             }
                             (physics::Collidable::Actor(a), physics::Collidable::Environment)
                             | (physics::Collidable::Environment, physics::Collidable::Actor(a)) => {
@@ -87,7 +93,12 @@ impl Simulation {
                                     "TODO collision STARTED between robot {:?} and environment",
                                     actor.user_data()
                                 );
-                                // TODO actually do something with robot
+
+                                let relative_velocity = actor.velocity()?.magnitude();
+                                // TODO what should the assumed mass be?
+                                let assumed_mass = 100.;
+                                let damage = relative_velocity * assumed_mass;
+                                info!("TODO apply damage to robot from environment = {}", damage);
                             }
                             // no robots involved, impossible?
                             _ => (),
