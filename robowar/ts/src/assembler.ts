@@ -1,4 +1,4 @@
-import { anyNumberOf, defer, literal, oneOf, padded, Parser, regex, separatedBy, seq } from "./parser";
+import { anyNumberOf, defer, ignorePrefixAndSuffix, literal, oneOf, padded, Parser, regex, separatedBy, seq } from "./parser";
 
 export type ConstExprAST =
 	| { type: "number"; value: number }
@@ -15,9 +15,175 @@ export interface ConstDef {
 	value: ConstExprAST;
 }
 
+export type Register = "r0" | "r1" | "r2" | "r3" | "r4" | "r5" | "r6" | "r7";
+
+export interface OperandMemory {
+	type: "memory";
+	value: Register;
+}
+
+export interface OperandRegister {
+	type: "register";
+	value: Register;
+}
+
+export interface OperandConstExpr {
+	type: "constExpr";
+	value: ConstExprAST;
+}
+
+export interface OperandLiteral {
+	type: "literal";
+	value: number;
+}
+
+export type UnverifiedOperand = OperandMemory | OperandRegister | OperandConstExpr;
+
 export interface UnverifiedInstruction {
 	instruction: string;
-	operands: ConstExprAST[];
+	operands: UnverifiedOperand[];
+}
+
+export type VerifiedOperand = OperandMemory | OperandRegister | OperandLiteral;
+
+export type VerifiedInstruction =
+	| {
+		type: "noop";
+	}
+	| {
+		type: "halt";
+	}
+	| {
+		type: "set";
+		dest: OperandMemory;
+		src: OperandRegister;
+	}
+	| {
+		type: "set";
+		dest: OperandRegister;
+		src: OperandMemory;
+	}
+	| {
+		type: "set";
+		dest: OperandRegister;
+		src: OperandLiteral;
+	}
+	| {
+		type: "add";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "sub";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "mul";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "div";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "mod";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "shl";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "shr";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "and";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "or";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "xor";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "jump";
+		dest: OperandRegister;
+	}
+	| {
+		type: "jeq";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "jne";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "jlt";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "jle";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "jgt";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "jge";
+		dest: OperandRegister;
+		left: OperandRegister;
+		right: OperandRegister;
+	}
+	| {
+		type: "push";
+		src: OperandRegister;
+	}
+	| {
+		type: "pop";
+		dest: OperandRegister;
+	}
+	| {
+		type: "fire";
+		src: OperandRegister;
+	};
+
+// TODO tests
+export function isRegisterName(name: string) {
+	return /^r[0-7]+$/.test(name);
 }
 
 export function number(): Parser<number> {
@@ -35,6 +201,22 @@ export function label(): Parser<string> {
 		literal(":"),
 	)
 		.map(([name]) => name);
+}
+
+// TODO tests
+export function register(): Parser<Register> {
+	return identifier()
+		.filter(isRegisterName)
+		.map(name => name as Register);
+}
+
+// TODO tests
+export function memoryAddress(): Parser<Register> {
+	return ignorePrefixAndSuffix(
+		padded(literal("[")),
+		register(),
+		padded(literal("]")),
+	);
 }
 
 // TODO tests
@@ -144,10 +326,23 @@ export function constDef(): Parser<ConstDef> {
 }
 
 // TODO tests
+export function operand(): Parser<UnverifiedOperand> {
+	return oneOf(
+		// TODO if constExpr is a register only, return that instead
+		padded(constExpr())
+			.map<UnverifiedOperand>(value => ({ type: "constExpr", value })),
+		padded(memoryAddress())
+			.map<UnverifiedOperand>(value => ({ type: "memory", value })),
+		padded(register())
+			.map<UnverifiedOperand>(value => ({ type: "register", value })),
+	);
+}
+
+// TODO tests
 export function instruction(): Parser<UnverifiedInstruction> {
 	return seq(
 		padded(identifier()),
-		separatedBy(constExpr(), padded(literal(",")))
+		separatedBy(operand(), padded(literal(",")))
 	)
 		.map<UnverifiedInstruction>(([instruction, operands]) => ({
 			instruction,
@@ -186,10 +381,6 @@ export function program() {
 		.map((statements) => {
 			const constExprMap: Record<string, number> = {};
 
-			const isRegisterName = (name: string) => {
-				return /^r[0-7]+$/.test(name);
-			};
-
 			const assertValidNewConstExprName = (name: string) => {
 				if (name in constExprMap) {
 					throw new Error(`Duplicate definition: ${name}`);
@@ -199,86 +390,161 @@ export function program() {
 				}
 			};
 
-			const evaluateConstExpr = (expr: ConstExprAST):
-				| { type: "number", value: number; }
-				| { type: "register", value: string; } => {
+			// TODO move me, tests
+			const evaluateConstExpr = (expr: ConstExprAST): number => {
 				switch (expr.type) {
 					case "number":
-						return { type: "number", value: expr.value };
+						return expr.value;
 					case "identifier":
 						if (expr.name in constExprMap) {
-							return { type: "number", value: constExprMap[expr.name] };
+							return constExprMap[expr.name];
 						} else {
 							throw new Error(`Undefined identifier: ${expr.name}`);
 						}
 					case "add": {
 						const left = evaluateConstExpr(expr.left);
 						const right = evaluateConstExpr(expr.right);
-						if (left.type === "register" || right.type === "register") {
-							throw new Error("Cannot add registers");
-						}
-						return { type: "number", value: left.value + right.value };
+						return left + right;
 					}
 					case "sub": {
 						const left = evaluateConstExpr(expr.left);
 						const right = evaluateConstExpr(expr.right);
-						if (left.type === "register" || right.type === "register") {
-							throw new Error("Cannot subtract registers");
-						}
-						return { type: "number", value: left.value - right.value };
+						return left - right;
 					}
 					case "mul": {
 						const left = evaluateConstExpr(expr.left);
 						const right = evaluateConstExpr(expr.right);
-						if (left.type === "register" || right.type === "register") {
-							throw new Error("Cannot multiply registers");
-						}
-						return { type: "number", value: left.value * right.value };
+						return left * right;
 					}
 					case "div": {
 						const left = evaluateConstExpr(expr.left);
 						const right = evaluateConstExpr(expr.right);
-						if (left.type === "register" || right.type === "register") {
-							throw new Error("Cannot divide registers");
-						}
-						return { type: "number", value: left.value / right.value };
+						return left / right;
 					}
 					case "mod": {
 						const left = evaluateConstExpr(expr.left);
 						const right = evaluateConstExpr(expr.right);
-						if (left.type === "register" || right.type === "register") {
-							throw new Error("Cannot modulo registers");
-						}
-						return { type: "number", value: left.value % right.value };
+						return left % right;
 					}
 					case "neg": {
 						const value = evaluateConstExpr(expr.expr);
-						if (value.type === "register") {
-							throw new Error("Cannot negate registers");
-						}
-						return { type: "number", value: -value.value };
+						return -value;
 					}
 				}
 			};
 
+			// TODO move me, tests
+			const validateOperand = (op: UnverifiedOperand): VerifiedOperand => {
+				if (op.type === "constExpr") {
+					const value = evaluateConstExpr(op.value);
+					return { type: "literal", value };
+				}
+				return op;
+			};
+
+			// TODO move me, tests
+			const validateInstruction = (unverifiedInstruction: UnverifiedInstruction): VerifiedInstruction => {
+				const operands = unverifiedInstruction.operands.map(validateOperand);
+				switch (unverifiedInstruction.instruction) {
+					case "noop": {
+						const expectedOperands = 0;
+						if (operands.length !== expectedOperands) {
+							throw new Error(`Expected ${expectedOperands} operands for ${unverifiedInstruction.instruction}`);
+						}
+						return { type: "noop" };
+					}
+					case "halt": {
+						const expectedOperands = 0;
+						if (operands.length !== expectedOperands) {
+							throw new Error(`Expected ${expectedOperands} operands for ${unverifiedInstruction.instruction}`);
+						}
+						return { type: "halt" };
+					}
+					case "set": {
+						const expectedOperands = 2;
+						if (operands.length !== expectedOperands) {
+							throw new Error(`Expected ${expectedOperands} operands for ${unverifiedInstruction.instruction}`);
+						}
+						if (operands[0].type === "memory" && operands[1].type === "register") {
+							return {
+								type: "set",
+								dest: operands[0],
+								src: operands[1],
+							};
+						}
+						if (operands[0].type === "register" && operands[1].type === "memory") {
+							return {
+								type: "set",
+								dest: operands[0],
+								src: operands[1],
+							};
+						}
+						if (operands[0].type === "register" && operands[1].type === "literal") {
+							return {
+								type: "set",
+								dest: operands[0],
+								src: operands[1],
+							};
+						}
+						throw new Error(`Invalid operands for ${unverifiedInstruction.instruction}: ${operands.map(op => op.type).join(", ")}`);
+					}
+					case "add": {
+						const expectedOperands = 3;
+						if (operands.length !== expectedOperands) {
+							throw new Error(`Expected ${expectedOperands} operands for ${unverifiedInstruction.instruction}`);
+						}
+						if (operands[0].type === "register" &&
+							operands[1].type === "register" &&
+							operands[2].type === "register") {
+							return {
+								type: "add",
+								dest: operands[0],
+								left: operands[1],
+								right: operands[2],
+							};
+						}
+						throw new Error(`Invalid operands for ${unverifiedInstruction.instruction}: ${operands.map(op => op.type).join(", ")}`);
+					}
+					/*
+					TODO remaining instructions
+
+					06 - sub rd, ra, rb - set register rd = register a - register b
+					07 - mul rd, ra, rb - set register rd = register a * register b
+					08 - div rd, ra, rb - set register rd = register a / register b
+					09 - mod rd, ra, rb - set register rd = register a % register b
+					0a - shl rd, ra, rb - set register rd = register a left shifted by register b bits
+					0b - shr rd, ra, rb - set register rd = register a right shifted by register b bits
+					0c - and rd, ra, rb - set register rd = register a bitwise and register b
+					0d - or rd, ra, rb - set register rd = register a bitwise or register b
+					0e - xor rd, ra, rb - set register rd = register a bitwise xor register b
+					0f - jump rd - jump to address in register rd
+					10 - jeq rd, ra, rb - jump to address in register rd if register a == register b
+					11 - jne rd, ra, rb - jump to address in register rd if register a != register b
+					12 - jlt rd, ra, rb - jump to address in register rd if register a < register b
+					13 - jle rd, ra, rb - jump to address in register rd if register a <= register b
+					14 - jgt rd, ra, rb - jump to address in register rd if register a > register b
+					15 - jge rd, ra, rb - jump to address in register rd if register a >= register b
+					16 - push rx - push value in register x to the stack
+					17 - pop rx - pop value from stack and put in register x
+					18 - fire rx - fire a bullet with energy in register x
+					*/
+					default:
+						throw new Error(`Unknown instruction: ${unverifiedInstruction.instruction}`);
+				}
+			}
+
 			let instructionCount = 0;
+			const instructions: VerifiedInstruction[] = [];
 			for (const statement of statements) {
 				if (statement.type === "label") {
 					assertValidNewConstExprName(statement.value);
 					constExprMap[statement.value] = instructionCount;
 				} else if (statement.type === "constDef") {
 					assertValidNewConstExprName(statement.value.name);
-					const result = evaluateConstExpr(statement.value.value);
-					if (result.type === "register") {
-						throw new Error(`Cannot use register as const expr: ${statement.value.name}`);
-					}
-					constExprMap[statement.value.name] = result.value;
+					constExprMap[statement.value.name] = evaluateConstExpr(statement.value.value);
 				} else if (statement.type === "instruction") {
 					instructionCount++;
-
-					const operands = statement.value.operands.map(op => evaluateConstExpr(op));
-
-					// TODO validate instruction
+					instructions.push(validateInstruction(statement.value));
 				}
 			}
 		});

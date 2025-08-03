@@ -71,6 +71,20 @@ export abstract class Parser<T> {
 			}
 		})();
 	}
+
+	// TODO tests
+	filter(f: (value: T) => boolean): Parser<T> {
+		const parent = this;
+		return new (class extends Parser<T> {
+			parse(input: Input): ParseSuccess<T> {
+				const result = parent.parse(input);
+				if (!f(result.value)) {
+					throw new ParseError(input.location, "Value didn't pass filter");
+				}
+				return result;
+			}
+		})();
+	}
 }
 
 class LiteralParser extends Parser<string> {

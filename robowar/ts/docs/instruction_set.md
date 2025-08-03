@@ -41,15 +41,18 @@ opcode - instruction - description
 09 - mod rd, ra, rb - set register rd = register a % register b
 0a - shl rd, ra, rb - set register rd = register a left shifted by register b bits
 0b - shr rd, ra, rb - set register rd = register a right shifted by register b bits
-0c - jump rd - jump to address in register rd
-0d - jeq rd, ra, rb - jump to address in register rd if register a == register b
-0e - jne rd, ra, rb - jump to address in register rd if register a != register b
-0f - jlt rd, ra, rb - jump to address in register rd if register a < register b
-10 - jle rd, ra, rb - jump to address in register rd if register a <= register b
-11 - jgt rd, ra, rb - jump to address in register rd if register a > register b
-12 - jge rd, ra, rb - jump to address in register rd if register a >= register b
-13 - push rx - push value in register x to the stack
-14 - pop rx - pop value from stack and put in register x
-15 - fire rx - fire a bullet with energy in register x
+0c - and rd, ra, rb - set register rd = register a bitwise and register b
+0d - or rd, ra, rb - set register rd = register a bitwise or register b
+0e - xor rd, ra, rb - set register rd = register a bitwise xor register b
+0f - jump rd - jump to address in register rd
+10 - jeq rd, ra, rb - jump to address in register rd if register a == register b
+11 - jne rd, ra, rb - jump to address in register rd if register a != register b
+12 - jlt rd, ra, rb - jump to address in register rd if register a < register b
+13 - jle rd, ra, rb - jump to address in register rd if register a <= register b
+14 - jgt rd, ra, rb - jump to address in register rd if register a > register b
+15 - jge rd, ra, rb - jump to address in register rd if register a >= register b
+16 - push rx - push value in register x to the stack
+17 - pop rx - pop value from stack and put in register x
+18 - fire rx - fire a bullet with energy in register x
 
 labels are identifiers followed by ":"
