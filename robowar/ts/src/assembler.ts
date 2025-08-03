@@ -317,7 +317,6 @@ export function constExpr(): Parser<ConstExprAST> {
 	return result;
 }
 
-// TODO tests
 export function constDef(): Parser<ConstDef> {
 	return seq(
 		padded(identifier()),
@@ -330,7 +329,6 @@ export function constDef(): Parser<ConstDef> {
 		}));
 }
 
-// TODO tests
 export function operand(): Parser<UnverifiedOperand> {
 	return oneOf(
 		padded(constExpr())
@@ -347,7 +345,6 @@ export function operand(): Parser<UnverifiedOperand> {
 	);
 }
 
-// TODO tests
 export function instruction(): Parser<UnverifiedInstruction> {
 	return seq(
 		padded(identifier()),

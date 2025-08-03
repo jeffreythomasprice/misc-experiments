@@ -1,5 +1,5 @@
 import { describe, expect, it, test } from "bun:test";
-import { constExpr, identifier, isRegisterName, label, memoryAddress, number, register } from "./assembler";
+import { constDef, constExpr, identifier, instruction, isRegisterName, label, memoryAddress, number, operand, register, type Register } from "./assembler";
 import { InputLocation } from "./parser";
 
 describe(__filename, () => {
@@ -310,6 +310,105 @@ describe(__filename, () => {
 			} as const],
 		])("parses %p correctly", (input, expected) => {
 			expect(constExpr().parse({
+				text: input,
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: expected,
+				remainder: {
+					text: "",
+					location: new InputLocation(0, input.length),
+				},
+			});
+		});
+	});
+
+	describe(constDef.name, () => {
+		it.each([
+			["RESULT = (a + b) * 2", {
+				name: "RESULT",
+				value: {
+					type: "mul",
+					left: {
+						type: "add",
+						left: { type: "identifier", name: "a" } as const,
+						right: { type: "identifier", name: "b" } as const
+					} as const,
+					right: { type: "number", value: 2 } as const
+				} as const
+			}],
+			["_PRIVATE = 0", {
+				name: "_PRIVATE",
+				value: { type: "number", value: 0 } as const
+			}],
+		])("parses %p correctly", (input, expected) => {
+			expect(constDef().parse({
+				text: input,
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: expected,
+				remainder: {
+					text: "",
+					location: new InputLocation(0, input.length),
+				},
+			});
+		});
+	});
+
+	describe(operand.name, () => {
+		it.each([
+			["r1", { type: "register", value: "r1" } as const],
+			["[r7]", { type: "memory", value: "r7" } as const],
+			["42", { type: "constExpr", value: { type: "number", value: 42 } } as const],
+			["FOO", { type: "constExpr", value: { type: "identifier", name: "FOO" } } as const],
+			["2 + 3", {
+				type: "constExpr",
+				value: {
+					type: "add",
+					left: { type: "number", value: 2 },
+					right: { type: "number", value: 3 }
+				}
+			} as const],
+		])("parses %p as operand correctly", (input, expected) => {
+			expect(operand().parse({
+				text: input,
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: expected,
+				remainder: {
+					text: "",
+					location: new InputLocation(0, input.length),
+				},
+			});
+		});
+	});
+
+	describe(instruction.name, () => {
+		it.each([
+			["nop", {
+				instruction: "nop",
+				operands: []
+			}],
+			["push r1", {
+				instruction: "push",
+				operands: [{ type: "register", value: "r1" as Register } as const]
+			}],
+			["set r1, r2", {
+				instruction: "set",
+				operands: [
+					{ type: "register", value: "r1" as Register } as const,
+					{ type: "register", value: "r2" as Register } as const
+				]
+			}],
+			["add r0, r1, r2", {
+				instruction: "add",
+				operands: [
+					{ type: "register", value: "r0" as Register } as const,
+					{ type: "register", value: "r1" as Register } as const,
+					{ type: "register", value: "r2" as Register } as const
+				]
+			}],
+		])("parses %p correctly", (input, expected) => {
+			expect(instruction().parse({
 				text: input,
 				location: new InputLocation(0, 0),
 			})).toEqual({
