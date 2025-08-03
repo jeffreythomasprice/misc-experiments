@@ -181,9 +181,8 @@ export type VerifiedInstruction =
 		src: OperandRegister;
 	};
 
-// TODO tests
 export function isRegisterName(name: string) {
-	return /^r[0-7]+$/.test(name);
+	return /^r[0-7]$/.test(name);
 }
 
 export function number(): Parser<number> {
@@ -203,14 +202,12 @@ export function label(): Parser<string> {
 		.map(([name]) => name);
 }
 
-// TODO tests
 export function register(): Parser<Register> {
 	return identifier()
 		.filter(isRegisterName)
 		.map(name => name as Register);
 }
 
-// TODO tests
 export function memoryAddress(): Parser<Register> {
 	return ignorePrefixAndSuffix(
 		padded(literal("[")),
@@ -328,9 +325,13 @@ export function constDef(): Parser<ConstDef> {
 // TODO tests
 export function operand(): Parser<UnverifiedOperand> {
 	return oneOf(
-		// TODO if constExpr is a register only, return that instead
 		padded(constExpr())
-			.map<UnverifiedOperand>(value => ({ type: "constExpr", value })),
+			.map<UnverifiedOperand>(value => {
+				if (value.type === "identifier" && isRegisterName(value.name)) {
+					return { type: "register", value: value.name as Register };
+				}
+				return { type: "constExpr", value };
+			}),
 		padded(memoryAddress())
 			.map<UnverifiedOperand>(value => ({ type: "memory", value })),
 		padded(register())
