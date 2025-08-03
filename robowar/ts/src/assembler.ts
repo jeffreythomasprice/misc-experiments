@@ -358,6 +358,10 @@ export function program() {
 		| { type: "constDef"; value: ConstDef; }
 		| { type: "instruction"; value: UnverifiedInstruction; };
 
+	/*
+	just parse the text
+	we're not evaluating anything, and we're not proving the instructions are valid
+	*/
 	const phase1 = anyNumberOf(oneOf(
 		padded(label())
 			.map<InstructionOrConstDef>(value => ({
@@ -376,7 +380,9 @@ export function program() {
 			})),
 	));
 
-	// TODO phase 2 should be to validate all labels and const defs, and substitute real values into all instructions, and verify that instructions are all valid
+	/*
+	now we can go in order and evaluate any expressions, and prove that all instructions are valid
+	*/
 	const phase2 = phase1
 		.map((statements) => {
 			const constExprMap: Record<string, number> = {};

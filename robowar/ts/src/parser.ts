@@ -72,7 +72,6 @@ export abstract class Parser<T> {
 		})();
 	}
 
-	// TODO tests
 	filter(f: (value: T) => boolean): Parser<T> {
 		const parent = this;
 		return new (class extends Parser<T> {
@@ -238,8 +237,12 @@ class AnyNumberOfParser<T> extends Parser<T[]> {
 		while (true) {
 			try {
 				const result = this.parser.parse(currentInput);
+				// early exit if we're not making any progress
+				if (result.remainder.text.length === currentInput.text.length) {
+					break;
+				}
+				// this should mean we actually processed something
 				values.push(result.value);
-				// TODO early exit if we're not making any progress
 				currentInput = result.remainder;
 			} catch (e) {
 				if (e instanceof ParseError) {
@@ -310,11 +313,13 @@ export function padded<T>(parser: Parser<T>): Parser<T> {
 	return ignorePrefixAndSuffix(whitespace, parser, whitespace);
 }
 
-// TODO tests
 export function separatedBy<T>(parser: Parser<T>, separator: Parser<unknown>): Parser<T[]> {
-	return seq(
-		parser,
-		anyNumberOf(seq(separator, parser))
+	return optional(
+		seq(
+			parser,
+			anyNumberOf(seq(separator, parser))
+		)
+			.map(([first, rest]) => [first, ...rest.map(([, value]) => value)])
 	)
-		.map(([first, rest]) => [first, ...rest.map(([, value]) => value)]);
+		.map(results => results ?? []);
 }

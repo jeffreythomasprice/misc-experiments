@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { InputLocation, literal, oneOf, ExpectedError, regex, seq, ParseError, defer, anyNumberOf, optional, ignorePrefix as ignorePrefix, ignoreSuffix, ignorePrefixAndSuffix, padded } from "./parser";
+import { InputLocation, literal, oneOf, ExpectedError, regex, seq, ParseError, defer, anyNumberOf, optional, ignorePrefix as ignorePrefix, ignoreSuffix, ignorePrefixAndSuffix, padded, separatedBy } from "./parser";
 
 describe(__filename, () => {
 	describe("locations", () => {
@@ -130,6 +130,46 @@ describe(__filename, () => {
 					location: new InputLocation(0, 0),
 				}))
 				.toThrow("Forced failure in map");
+		});
+	});
+
+	describe("filter", () => {
+		test("success when filter returns true", () => {
+			expect(regex(/[0-9]+/)
+				.map((value) => parseInt(value, 10))
+				.filter((value) => value > 100)
+				.parse({
+					text: "123foo",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: 123,
+					remainder: {
+						text: "foo",
+						location: new InputLocation(0, 3),
+					},
+				});
+		});
+
+		test("failure when filter returns false", () => {
+			expect(() => regex(/[0-9]+/)
+				.map((value) => parseInt(value, 10))
+				.filter((value) => value > 100)
+				.parse({
+					text: "50foo",
+					location: new InputLocation(1, 2),
+				}))
+				.toThrow(new ParseError(new InputLocation(1, 2), "Value didn't pass filter"));
+		});
+
+		test("failure in initial parser before filter", () => {
+			expect(() => regex(/[0-9]+/)
+				.filter((value) => value.length > 2)
+				.parse({
+					text: "foo123",
+					location: new InputLocation(1, 2),
+				}))
+				.toThrow(new ExpectedError(new InputLocation(1, 2), "/[0-9]+/"));
 		});
 	});
 
@@ -346,6 +386,21 @@ describe(__filename, () => {
 					remainder: {
 						text: "",
 						location: new InputLocation(0, 0),
+					},
+				});
+		});
+
+		test("successfully exits when not making progress", () => {
+			expect(anyNumberOf(optional(literal("foo")))
+				.parse({
+					text: "foofoofoobar",
+					location: new InputLocation(0, 0),
+				}))
+				.toEqual({
+					value: ["foo", "foo", "foo"],
+					remainder: {
+						text: "bar",
+						location: new InputLocation(0, 9),
 					},
 				});
 		});
@@ -614,6 +669,94 @@ describe(__filename, () => {
 					location: new InputLocation(0, 9),
 				},
 			});
+		});
+	});
+
+	describe(separatedBy.name, () => {
+		test("single element, no separator", () => {
+			const parser = separatedBy(literal("foo"), literal(","));
+			expect(parser.parse({
+				text: "foo",
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: ["foo"],
+				remainder: {
+					text: "",
+					location: new InputLocation(0, 3),
+				},
+			});
+		});
+
+		test("multiple elements with separator", () => {
+			const parser = separatedBy(literal("foo"), literal(","));
+			expect(parser.parse({
+				text: "foo,foo,foo",
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: ["foo", "foo", "foo"],
+				remainder: {
+					text: "",
+					location: new InputLocation(0, 11),
+				},
+			});
+		});
+
+		test("multiple elements with remainder", () => {
+			const parser = separatedBy(literal("foo"), literal(","));
+			expect(parser.parse({
+				text: "foo,foo,foobar",
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: ["foo", "foo", "foo"],
+				remainder: {
+					text: "bar",
+					location: new InputLocation(0, 11),
+				},
+			});
+		});
+
+		test("trailing separator is not consumed", () => {
+			const parser = separatedBy(literal("foo"), literal(","));
+			expect(parser.parse({
+				text: "foo,foo,",
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: ["foo", "foo"],
+				remainder: {
+					text: ",",
+					location: new InputLocation(0, 7),
+				},
+			});
+		});
+
+		test("failure when first element fails", () => {
+			const parser = separatedBy(literal("foo"), literal(","));
+			expect(parser.parse({
+				text: "bar,foo,foo",
+				location: new InputLocation(1, 2),
+			}))
+				.toEqual({
+					value: [],
+					remainder: {
+						text: "bar,foo,foo",
+						location: new InputLocation(1, 2),
+					},
+				});
+		});
+
+		test("empty input succeeds", () => {
+			const parser = separatedBy(literal("foo"), literal(","));
+			expect(parser.parse({
+				text: "",
+				location: new InputLocation(0, 0),
+			}))
+				.toEqual({
+					value: [],
+					remainder: {
+						text: "",
+						location: new InputLocation(0, 0),
+					},
+				});
 		});
 	});
 });
