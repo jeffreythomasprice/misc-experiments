@@ -1,5 +1,5 @@
 import { describe, expect, it, test } from "bun:test";
-import { identifier, isRegisterName, label, memoryAddress, number, register } from "./assembler";
+import { constExpr, identifier, isRegisterName, label, memoryAddress, number, register } from "./assembler";
 import { InputLocation } from "./parser";
 
 describe(__filename, () => {
@@ -146,6 +146,179 @@ describe(__filename, () => {
 				text: "[r8]",
 				location: new InputLocation(0, 0),
 			})).toThrow(new Error("Value didn't pass filter"));
+		});
+	});
+
+	describe(constExpr.name, () => {
+		it.each([
+			// Simple numbers
+			["123", { type: "number", value: 123 } as const],
+			["0", { type: "number", value: 0 } as const],
+			["-42", { type: "neg", expr: { type: "number", value: 42 } } as const],
+
+			// Simple identifiers
+			["foo", { type: "identifier", name: "foo" } as const],
+			["MAX_VALUE", { type: "identifier", name: "MAX_VALUE" } as const],
+
+			// Basic arithmetic with order of operations
+			["2 + 3 * 4", {
+				type: "add",
+				left: { type: "number", value: 2 },
+				right: {
+					type: "mul",
+					left: { type: "number", value: 3 },
+					right: { type: "number", value: 4 }
+				}
+			} as const],
+
+			// Multiplication before addition (left associative)
+			["5 * 6 + 7 * 8", {
+				type: "add",
+				left: {
+					type: "mul",
+					left: { type: "number", value: 5 },
+					right: { type: "number", value: 6 }
+				},
+				right: {
+					type: "mul",
+					left: { type: "number", value: 7 },
+					right: { type: "number", value: 8 }
+				}
+			} as const],
+
+			// Division and modulo with order of operations
+			["10 + 20 / 4 % 3", {
+				type: "add",
+				left: { type: "number", value: 10 },
+				right: {
+					type: "mod",
+					left: {
+						type: "div",
+						left: { type: "number", value: 20 },
+						right: { type: "number", value: 4 }
+					},
+					right: { type: "number", value: 3 }
+				}
+			} as const],
+
+			// Parentheses override order of operations
+			["(2 + 3) * 4", {
+				type: "mul",
+				left: {
+					type: "add",
+					left: { type: "number", value: 2 },
+					right: { type: "number", value: 3 }
+				},
+				right: { type: "number", value: 4 }
+			} as const],
+
+			// Nested parentheses
+			["((1 + 2) * 3) + 4", {
+				type: "add",
+				left: {
+					type: "mul",
+					left: {
+						type: "add",
+						left: { type: "number", value: 1 },
+						right: { type: "number", value: 2 }
+					},
+					right: { type: "number", value: 3 }
+				},
+				right: { type: "number", value: 4 }
+			} as const],
+
+			// Complex expression with all operators and precedence
+			["10 - 3 * 2 + 8 / 4 % 3", {
+				type: "add",
+				left: {
+					type: "sub",
+					left: { type: "number", value: 10 },
+					right: {
+						type: "mul",
+						left: { type: "number", value: 3 },
+						right: { type: "number", value: 2 }
+					}
+				},
+				right: {
+					type: "mod",
+					left: {
+						type: "div",
+						left: { type: "number", value: 8 },
+						right: { type: "number", value: 4 }
+					},
+					right: { type: "number", value: 3 }
+				}
+			} as const],
+
+			// Left associativity of same precedence operations
+			["100 / 10 / 2", {
+				type: "div",
+				left: {
+					type: "div",
+					left: { type: "number", value: 100 },
+					right: { type: "number", value: 10 }
+				},
+				right: { type: "number", value: 2 }
+			} as const],
+
+			// Mixed identifiers and numbers
+			["x * 2 + y", {
+				type: "add",
+				left: {
+					type: "mul",
+					left: { type: "identifier", name: "x" },
+					right: { type: "number", value: 2 }
+				},
+				right: { type: "identifier", name: "y" }
+			} as const],
+
+			["-x * 2", {
+				type: "mul",
+				left: {
+					type: "neg",
+					expr: { type: "identifier", name: "x" }
+				},
+				right: { type: "number", value: 2 }
+			} as const],
+
+			["-x + 2", {
+				type: "add",
+				left: {
+					type: "neg",
+					expr: { type: "identifier", name: "x" }
+				},
+				right: { type: "number", value: 2 }
+			} as const],
+
+			// Unary negation with parentheses
+			["-(x + y)", {
+				type: "neg",
+				expr: {
+					type: "add",
+					left: { type: "identifier", name: "x" },
+					right: { type: "identifier", name: "y" }
+				}
+			} as const],
+
+			// Multiple unary negations
+			["--5", {
+				type: "neg",
+				expr: {
+					type: "neg",
+					expr: { type: "number", value: 5 }
+				}
+			} as const],
+		])("parses %p correctly", (input, expected) => {
+			expect(constExpr().parse({
+				text: input,
+				location: new InputLocation(0, 0),
+			})).toEqual({
+				value: expected,
+				remainder: {
+					text: "",
+					location: new InputLocation(0, input.length),
+				},
+			});
 		});
 	});
 });
