@@ -43,14 +43,35 @@ physicsWorld.createCollider(rapider2d.ColliderDesc.polyline(
 	])
 ));
 
-const ballRigidBody = physicsWorld.createRigidBody(rapider2d.RigidBodyDesc.dynamic()
-	.setTranslation(physicsWorldSize.x / 2, physicsWorldSize.y / 2));
-const ballRadius = 5;
-physicsWorld.createCollider(
-	rapider2d.ColliderDesc.ball(ballRadius)
-		.setRestitution(0.7),
-	ballRigidBody
-);
+interface Ball {
+	radius: number;
+	rigidBody: rapider2d.RigidBody;
+}
+const balls: Ball[] = [];
+for (let i = 0; i < 10; i++) {
+	const radius = Math.random() * 3 + 2;
+	const minX = radius * 2;
+	const maxX = physicsWorldSize.x - radius * 2;
+	const minY = radius * 2;
+	const maxY = physicsWorldSize.y - radius * 2;
+	// TODO force no intersections at start
+	const x = Math.random() * (maxX - minX) + minX;
+	const y = Math.random() * (maxY - minY) + minY;
+	const rigidBody = physicsWorld.createRigidBody(
+		rapider2d.RigidBodyDesc.dynamic()
+			.setTranslation(x, y)
+			.setLinvel(
+				Math.random() * 40 - 20,
+				Math.random() * 40 - 20
+			)
+	);
+	physicsWorld.createCollider(
+		rapider2d.ColliderDesc.ball(radius)
+			.setRestitution(0.7),
+		rigidBody
+	);
+	balls.push({ radius, rigidBody });
+}
 
 // the last time as given to us by requestAnimationFrame
 let lastTime: number | null = null;
@@ -71,18 +92,19 @@ const render = (time: number) => {
 
 	context.lineWidth = 5 / scale;
 	context.strokeStyle = "black";
-
-	context.beginPath();
-	context.ellipse(
-		ballRigidBody.translation().x,
-		ballRigidBody.translation().y,
-		ballRadius,
-		ballRadius,
-		0,
-		0,
-		Math.PI * 2
-	);
-	context.stroke();
+	for (const ball of balls) {
+		context.beginPath();
+		context.ellipse(
+			ball.rigidBody.translation().x,
+			ball.rigidBody.translation().y,
+			ball.radius,
+			ball.radius,
+			0,
+			0,
+			Math.PI * 2
+		);
+		context.stroke();
+	}
 
 	if (typeof lastTime === "number") {
 		// in seconds
