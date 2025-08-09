@@ -1,6 +1,6 @@
 #[rustler::nif]
-pub fn foo() -> i64 {
-    return 42;
+pub fn add_ints(a: i64, b: i64) -> i64 {
+    a + b
 }
 
-rustler::init!("rust_lib", [foo]);
+rustler::init!("rust_lib", [add_ints]);
