@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 
@@ -70,6 +71,16 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 		return result, err
 	}
 	defer result.adapter.Release()
+
+	adapterInfo := result.adapter.GetInfo()
+	fmt.Printf("Adapter Type: %v\n", adapterInfo.AdapterType)
+	fmt.Printf("Adapter Architecture: %v\n", adapterInfo.Architecture)
+	fmt.Printf("Adapter Backend Type: %v\n", adapterInfo.BackendType)
+	fmt.Printf("Adapter Device ID: %v\n", adapterInfo.DeviceId)
+	fmt.Printf("Adapter Driver Description: %v\n", adapterInfo.DriverDescription)
+	fmt.Printf("Adapter Name: %v\n", adapterInfo.Name)
+	fmt.Printf("Adapter Vendor ID: %v\n", adapterInfo.VendorId)
+	fmt.Printf("Adapter Vendor Name: %v\n", adapterInfo.VendorName)
 
 	result.device, err = result.adapter.RequestDevice(nil)
 	if err != nil {
@@ -217,7 +228,7 @@ func (s *State) Render() error {
 	renderPass.SetVertexBuffer(
 		0,
 		s.buffer.Buffer,
-		uint64(s.buffer.StrideInBytes),
+		0,
 		uint64(s.buffer.StrideInBytes)*uint64(s.buffer.Length),
 	)
 	renderPass.Draw(

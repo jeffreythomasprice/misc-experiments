@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
@@ -34,6 +33,5 @@ func (b *Buffer[T]) Destroy() {
 }
 
 func toByteSlice[T any](in []T) []byte {
-	fmt.Printf("TODO toByteSlice: %v, len=%v, sizeof[0]=%v", in, len(in), unsafe.Sizeof(in[0]))
 	return unsafe.Slice((*byte)(unsafe.Pointer(&in[0])), uintptr(len(in))*unsafe.Sizeof(in[0]))
 }
