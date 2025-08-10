@@ -2,6 +2,7 @@ import gleam/bit_array
 import gleam/bytes_tree
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
+import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
@@ -17,6 +18,23 @@ type NextConnectionIdMessage {
 
 type ConnectionState {
   State(id: Int)
+}
+
+type StartLine {
+  StartLine(method: String, path: String, protocol: String)
+}
+
+type Request {
+  Request(
+    method: String,
+    path: String,
+    headers: Dict(String, List(String)),
+    body: String,
+  )
+}
+
+type Response {
+  Response(status: Int, headers: Dict(String, List(String)), body: String)
 }
 
 pub fn main() -> Nil {
@@ -44,9 +62,20 @@ pub fn main() -> Nil {
       fn(state, msg, conn) {
         let _ = case msg {
           glisten.Packet(packet_bytes) -> {
-            let assert Ok(_) = handle_packet(state, conn, packet_bytes)
+            let assert Ok(response) =
+              handle_packet(state, conn, packet_bytes, fn(request) {
+                echo request as "TODO parsed request"
+                Response(
+                  status: 200,
+                  headers: dict.new(),
+                  body: "TODO response body",
+                )
+              })
+            echo response as "TODO response"
+            let response = response |> response_to_string
+            echo response as "TODO response"
             let assert Ok(_) =
-              glisten.send(conn, bytes_tree.from_string("TODO response"))
+              glisten.send(conn, bytes_tree.from_string(response))
           }
           glisten.User(_) -> {
             // TODO: Handle user messages
@@ -61,21 +90,18 @@ pub fn main() -> Nil {
   process.sleep_forever()
 }
 
-fn handle_packet(state: ConnectionState, conn, packet_bytes: BitArray) {
-  echo state as "TODO state"
-  echo conn as "TODO conn"
-  echo packet_bytes as "TODO packet"
+fn handle_packet(
+  state: ConnectionState,
+  conn,
+  packet_bytes: BitArray,
+  handler: fn(Request) -> Response,
+) -> Result(Response, _) {
   use packet <- result.try(
     bit_array.to_string(packet_bytes)
     |> result.map_error(fn(_) { "failed to parse request as string" }),
   )
   use request <- result.try(parse_http_request(packet))
-  echo request as "TODO parsed request"
-  Ok(request)
-}
-
-type Request {
-  Request(StartLine, headers: Dict(String, List(String)), body: String)
+  Ok(handler(request))
 }
 
 fn parse_http_request(request: String) -> Result(Request, _) {
@@ -87,14 +113,12 @@ fn parse_http_request(request: String) -> Result(Request, _) {
         False -> line
       }
     })
-  use #(start_line, lines) <- result.try(parse_http_start_line(lines))
+  use #(StartLine(method, path, _), lines) <- result.try(parse_http_start_line(
+    lines,
+  ))
   use #(headers, remainder) <- result.try(parse_headers(lines, dict.new()))
   use body <- result.try(parse_body(remainder))
-  Ok(Request(start_line, headers, body))
-}
-
-type StartLine {
-  StartLine(method: String, path: String, protocol: String)
+  Ok(Request(method, path, headers, body))
 }
 
 fn parse_http_start_line(
@@ -144,4 +168,31 @@ fn parse_body(lines: List(String)) -> Result(String, _) {
     [_, ..result] -> Ok(result |> string.join("\n"))
     _ -> Ok("")
   }
+}
+
+fn response_to_string(response: Response) -> String {
+  let status_line =
+    "HTTP/1.1 " <> int.to_string(response.status) <> " TODO status text"
+
+  let content_length = response.body |> string.byte_size
+  let headers =
+    response.headers
+    |> dict.insert("Content-Length", [int.to_string(content_length)])
+
+  let headers =
+    headers
+    |> dict.to_list
+    |> list.flat_map(fn(header) {
+      let #(key, value) = header
+      value |> list.map(fn(value) { #(key, value) })
+    })
+    |> list.map(fn(header) {
+      let #(key, value) = header
+      key <> ": " <> value
+    })
+
+  [status_line]
+  |> list.append(headers)
+  |> list.append(["", response.body])
+  |> string.join("\n")
 }
