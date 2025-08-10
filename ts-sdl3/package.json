@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@kmamal/gl": "^9.1.0",
+    "@kmamal/gpu": "^0.2.0",
     "@kmamal/sdl": "^0.11.12",
     "@napi-rs/canvas": "^0.1.77"
   }
