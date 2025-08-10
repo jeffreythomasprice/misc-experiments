@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
 
@@ -34,9 +35,21 @@ func init() {
 //go:embed shader.wgsl
 var shader string
 
-type Vertex struct {
+type Vector2f struct {
 	X float32
 	Y float32
+}
+
+type RGBAf struct {
+	R float32
+	G float32
+	B float32
+	A float32
+}
+
+type Vertex struct {
+	Position Vector2f
+	Color    RGBAf
 }
 
 type State struct {
@@ -115,14 +128,38 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 		result.device,
 		[]Vertex{
 			{
-				X: -0.5,
-				Y: -0.5,
+				Position: Vector2f{
+					X: -0.5,
+					Y: -0.5,
+				},
+				Color: RGBAf{
+					R: 1,
+					G: 0,
+					B: 0,
+					A: 1,
+				},
 			}, {
-				X: 0.5,
-				Y: -0.5,
+				Position: Vector2f{
+					X: 0.5,
+					Y: -0.5,
+				},
+				Color: RGBAf{
+					R: 0,
+					G: 1,
+					B: 0,
+					A: 1,
+				},
 			}, {
-				X: 0.0,
-				Y: 0.5,
+				Position: Vector2f{
+					X: 0.0,
+					Y: 0.5,
+				},
+				Color: RGBAf{
+					R: 0,
+					G: 0,
+					B: 1,
+					A: 1,
+				},
 			},
 		},
 		wgpu.BufferUsageVertex,
@@ -143,10 +180,25 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 					Attributes: []wgpu.VertexAttribute{
 						{
 							Format:         wgpu.VertexFormatFloat32x2,
-							Offset:         0,
+							Offset:         uint64(unsafe.Offsetof(Vertex{}.Position)),
 							ShaderLocation: 0,
+						}, {
+							Format:         wgpu.VertexFormatFloat32x4,
+							Offset:         uint64(unsafe.Offsetof(Vertex{}.Color)),
+							ShaderLocation: 1,
 						},
 					},
+				},
+			},
+		},
+		Fragment: &wgpu.FragmentState{
+			Module:     shader,
+			EntryPoint: "fs_main",
+			Targets: []wgpu.ColorTargetState{
+				{
+					Format:    result.config.Format,
+					Blend:     &wgpu.BlendStateReplace,
+					WriteMask: wgpu.ColorWriteMaskAll,
 				},
 			},
 		},
@@ -160,17 +212,6 @@ func InitState[T interface{ GetSize() (int, int) }](window T, sd *wgpu.SurfaceDe
 			Count:                  1,
 			Mask:                   0xFFFFFFFF,
 			AlphaToCoverageEnabled: false,
-		},
-		Fragment: &wgpu.FragmentState{
-			Module:     shader,
-			EntryPoint: "fs_main",
-			Targets: []wgpu.ColorTargetState{
-				{
-					Format:    result.config.Format,
-					Blend:     &wgpu.BlendStateReplace,
-					WriteMask: wgpu.ColorWriteMaskAll,
-				},
-			},
 		},
 	})
 	if err != nil {
