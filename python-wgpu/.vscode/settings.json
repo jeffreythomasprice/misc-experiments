@@ -4,4 +4,14 @@
 		"fixAll.eslint": "explicit",
 		"source.organizeImports": "explicit"
 	},
+	"editor.insertSpaces": true,
+	"editor.tabSize": 4,
+	"files.exclude": {
+		"**/.git": true,
+		"**/.svn": true,
+		"**/.hg": true,
+		"**/.DS_Store": true,
+		"**/Thumbs.db": true,
+		"**/.venv": true,
+	}
 }
