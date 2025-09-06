@@ -134,7 +134,7 @@ var exiting = false
 while !exiting {
 	var e = SDL_Event.init()
 	if SDL_PollEvent(&e) {
-		switch SDL_EventType(rawValue: Int32(e.type)) {
+		switch SDL_EventType(rawValue: e.type) {
 		case SDL_EVENT_QUIT:
 			exiting = true
 			break
