@@ -18,6 +18,10 @@ let package = Package(
                 "CSDL",
                 "CWGPU",
             ],
+            cSettings: [
+                .headerSearchPath("../../.deps/SDL3-3.2.22/include"),
+                .headerSearchPath("../../.deps/wgpu-linux-x86_64-release/include"),
+            ],
         ),
         .testTarget(
             name: "ExperimentTests",
@@ -32,18 +36,18 @@ let package = Package(
         .target(
             name: "CSDL",
             publicHeadersPath: ".",
-            // TODO cleanup cSettings?
-            // cSettings: [
-            // .headerSearchPath("-I.deps/SDL3-3.2.22/include")
-            // .unsafeFlags([
-            //     "-I../../.deps/SDL3/SDL3-3.2.16/include",
-            //     "-L../../.deps/SDL3/SDL3-3.2.16/lib/x64",
-            // ]),
-            // ],
+            linkerSettings: [
+                .unsafeFlags(["-L", ".deps/SDL3-build"]),
+                .linkedLibrary("SDL3"),
+            ],
         ),
         .target(
             name: "CWGPU",
             publicHeadersPath: ".",
+            linkerSettings: [
+                .unsafeFlags(["-L", ".deps/wgpu-linux-x86_64-release/lib"]),
+                .linkedLibrary("wgpu_native"),
+            ],
         ),
     ]
 )

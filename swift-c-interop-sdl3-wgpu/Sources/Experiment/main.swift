@@ -1,6 +1,7 @@
 import CLib
 import CSDL
 import CWGPU
+import Foundation
 
 extension String {
 	public static func fromWGPUStringView(other: WGPUStringView) -> String {
@@ -24,28 +25,75 @@ func createWGPUInstance() -> WGPUInstance {
 
 @MainActor
 func createWGPUSurface(sdlWindow: OpaquePointer, wgpuInstance: WGPUInstance) -> WGPUSurface {
-	// implement for other platforms, not just windows
+	// implement for other platforms
 	// https://github.com/eliemichel/sdl3webgpu/blob/main/sdl3webgpu.c
 
-	let props = SDL_GetWindowProperties(window)
+	#if os(Windows)
+		let props = SDL_GetWindowProperties(window)
 
-	let hwnd = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nil)
-	assert(hwnd != nil)
+		let hwnd = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nil)
+		assert(hwnd != nil)
 
-	let hInstance = GetModuleHandleA(nil)
-	assert(hInstance != nil)
+		let hInstance = GetModuleHandleA(nil)
+		assert(hInstance != nil)
 
-	var fromWindowsHWND = WGPUSurfaceSourceWindowsHWND()
-	fromWindowsHWND.chain.sType = WGPUSType_SurfaceSourceWindowsHWND
-	fromWindowsHWND.chain.next = nil
-	fromWindowsHWND.hinstance = UnsafeMutableRawPointer(hInstance!)
-	fromWindowsHWND.hwnd = hwnd
-	let result = withUnsafePointer(to: &fromWindowsHWND.chain) { fromWindowsHWNDChainPtr in
-		var surfaceDescriptor = WGPUSurfaceDescriptor()
-		surfaceDescriptor.nextInChain = fromWindowsHWNDChainPtr
-		surfaceDescriptor.label = WGPUStringView(data: nil, length: 0)
-		return wgpuInstanceCreateSurface(wgpuInstance, &surfaceDescriptor)
-	}
+		var fromWindowsHWND = WGPUSurfaceSourceWindowsHWND()
+		fromWindowsHWND.chain.sType = WGPUSType_SurfaceSourceWindowsHWND
+		fromWindowsHWND.chain.next = nil
+		fromWindowsHWND.hinstance = UnsafeMutableRawPointer(hInstance!)
+		fromWindowsHWND.hwnd = hwnd
+		let result = withUnsafePointer(to: &fromWindowsHWND.chain) { fromWindowsHWNDChainPtr in
+			var surfaceDescriptor = WGPUSurfaceDescriptor()
+			surfaceDescriptor.nextInChain = fromWindowsHWNDChainPtr
+			surfaceDescriptor.label = WGPUStringView(data: nil, length: 0)
+			return wgpuInstanceCreateSurface(wgpuInstance, &surfaceDescriptor)
+		}
+	#else
+		#if os(Linux)
+			let platform = String(cString: SDL_GetCurrentVideoDriver())
+			print("video platform: \(platform)")
+
+			let result = nil as WGPUSurface?
+		// TODO implement for x11 and wayland
+		/*
+		if (SDL_strcmp(SDL_GetCurrentVideoDriver(), "x11") == 0) {
+			void *x11_display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, NULL);
+			uint64_t x11_window = SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
+			if (!x11_display || !x11_window) return NULL;
+		
+			WGPUSurfaceSourceXlibWindow fromXlibWindow;
+			fromXlibWindow.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
+			fromXlibWindow.chain.next = NULL;
+			fromXlibWindow.display = x11_display;
+			fromXlibWindow.window = x11_window;
+		
+			WGPUSurfaceDescriptor surfaceDescriptor;
+			surfaceDescriptor.nextInChain = &fromXlibWindow.chain;
+			surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+		
+			return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+		}
+		else if (SDL_strcmp(SDL_GetCurrentVideoDriver(), "wayland") == 0) {
+			void *wayland_display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
+			void *wayland_surface = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, NULL);
+			if (!wayland_display || !wayland_surface) return NULL;
+		
+			WGPUSurfaceSourceWaylandSurface fromWaylandSurface;
+			fromWaylandSurface.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
+			fromWaylandSurface.chain.next = NULL;
+			fromWaylandSurface.display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
+			fromWaylandSurface.surface = wayland_surface;
+		
+			WGPUSurfaceDescriptor surfaceDescriptor;
+			surfaceDescriptor.nextInChain = &fromWaylandSurface.chain;
+			surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+		
+			return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+		}
+		*/
+		#endif
+	#endif
+
 	assert(result != nil)
 	print("created wgpu surface")
 	return result!

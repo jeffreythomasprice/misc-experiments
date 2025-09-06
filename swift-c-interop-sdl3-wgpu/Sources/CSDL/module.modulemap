@@ -1,5 +1,4 @@
 module CSDL [system] [extern_c] {
 	header "header.h"
-	link "SDL3"
 	export *
 }

@@ -1,4 +1,4 @@
-# TODO JEFF delete me
+# TODO clean up windows deps? merge with linux into a common script?
 
 # Remove-Item .deps -Recurse -Force
 # Remove-Item SDL3.lib
