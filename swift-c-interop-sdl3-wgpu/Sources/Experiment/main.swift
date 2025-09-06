@@ -10,7 +10,9 @@ extension String {
 		defer {
 			buf.deallocate()
 		}
-		memcpy(buf, other.data, other.length)
+		if other.length > 0 {
+			memcpy(buf, other.data, other.length)
+		}
 		buf[other.length] = 0
 		return String(cString: buf)
 	}
@@ -28,9 +30,9 @@ func createWGPUSurface(sdlWindow: OpaquePointer, wgpuInstance: WGPUInstance) -> 
 	// implement for other platforms
 	// https://github.com/eliemichel/sdl3webgpu/blob/main/sdl3webgpu.c
 
-	#if os(Windows)
-		let props = SDL_GetWindowProperties(window)
+	let props = SDL_GetWindowProperties(window)
 
+	#if os(Windows)
 		let hwnd = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nil)
 		assert(hwnd != nil)
 
@@ -52,45 +54,55 @@ func createWGPUSurface(sdlWindow: OpaquePointer, wgpuInstance: WGPUInstance) -> 
 		#if os(Linux)
 			let platform = String(cString: SDL_GetCurrentVideoDriver())
 			print("video platform: \(platform)")
+			let result: WGPUSurface?
 
-			let result = nil as WGPUSurface?
-		// TODO implement for x11 and wayland
-		/*
-		if (SDL_strcmp(SDL_GetCurrentVideoDriver(), "x11") == 0) {
-			void *x11_display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, NULL);
-			uint64_t x11_window = SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
-			if (!x11_display || !x11_window) return NULL;
-		
-			WGPUSurfaceSourceXlibWindow fromXlibWindow;
-			fromXlibWindow.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
-			fromXlibWindow.chain.next = NULL;
-			fromXlibWindow.display = x11_display;
-			fromXlibWindow.window = x11_window;
-		
-			WGPUSurfaceDescriptor surfaceDescriptor;
-			surfaceDescriptor.nextInChain = &fromXlibWindow.chain;
-			surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
-		
-			return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
-		}
-		else if (SDL_strcmp(SDL_GetCurrentVideoDriver(), "wayland") == 0) {
-			void *wayland_display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
-			void *wayland_surface = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, NULL);
-			if (!wayland_display || !wayland_surface) return NULL;
-		
-			WGPUSurfaceSourceWaylandSurface fromWaylandSurface;
-			fromWaylandSurface.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
-			fromWaylandSurface.chain.next = NULL;
-			fromWaylandSurface.display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
-			fromWaylandSurface.surface = wayland_surface;
-		
-			WGPUSurfaceDescriptor surfaceDescriptor;
-			surfaceDescriptor.nextInChain = &fromWaylandSurface.chain;
-			surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
-		
-			return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
-		}
-		*/
+			switch platform {
+			case "x11":
+				let x11Display = SDL_GetPointerProperty(
+					props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, nil)
+				let x11Window = SDL_GetNumberProperty(props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0)
+				if x11Display == nil || x11Window == 0 {
+					print("failed to get x11 display or window")
+					result = nil
+				} else {
+					var fromXLibWindow = WGPUSurfaceSourceXlibWindow()
+					fromXLibWindow.chain.sType = WGPUSType_SurfaceSourceXlibWindow
+					fromXLibWindow.chain.next = nil
+					fromXLibWindow.display = x11Display
+					fromXLibWindow.window = UInt64(x11Window)
+
+					result = withUnsafePointer(to: &fromXLibWindow.chain) {
+						fromXLibWindowChainPtr in
+						var surfaceDescriptor = WGPUSurfaceDescriptor()
+						surfaceDescriptor.nextInChain = fromXLibWindowChainPtr
+						surfaceDescriptor.label = WGPUStringView(data: nil, length: 0)
+						return wgpuInstanceCreateSurface(wgpuInstance, &surfaceDescriptor)
+					}
+				}
+			case "wayland":
+				print("TODO support wayland")
+				/*
+				void *wayland_display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
+				void *wayland_surface = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_SURFACE_POINTER, NULL);
+				if (!wayland_display || !wayland_surface) return NULL;
+				
+				WGPUSurfaceSourceWaylandSurface fromWaylandSurface;
+				fromWaylandSurface.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
+				fromWaylandSurface.chain.next = NULL;
+				fromWaylandSurface.display = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WAYLAND_DISPLAY_POINTER, NULL);
+				fromWaylandSurface.surface = wayland_surface;
+				
+				WGPUSurfaceDescriptor surfaceDescriptor;
+				surfaceDescriptor.nextInChain = &fromWaylandSurface.chain;
+				surfaceDescriptor.label = (WGPUStringView){ NULL, WGPU_STRLEN };
+				
+				return wgpuInstanceCreateSurface(instance, &surfaceDescriptor);
+				*/
+				result = nil
+			default:
+				print("unsupported video platform")
+				result = nil
+			}
 		#endif
 	#endif
 
