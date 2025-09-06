@@ -18,6 +18,9 @@ let package = Package(
                 "CSDL",
                 "CWGPU",
             ],
+            resources: [
+                .embedInCode("../../assets/shader.wsgl")
+            ],
             cSettings: [
                 .headerSearchPath("../../.deps/SDL3-3.2.22/include"),
                 .headerSearchPath("../../.deps/wgpu-linux-x86_64-release/include"),

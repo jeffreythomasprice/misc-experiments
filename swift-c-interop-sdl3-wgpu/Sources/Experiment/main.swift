@@ -30,7 +30,7 @@ func createWGPUSurface(sdlWindow: OpaquePointer, wgpuInstance: WGPUInstance) -> 
 	// implement for other platforms
 	// https://github.com/eliemichel/sdl3webgpu/blob/main/sdl3webgpu.c
 
-	let props = SDL_GetWindowProperties(window)
+	let props = SDL_GetWindowProperties(sdlWindow)
 
 	#if os(Windows)
 		let hwnd = SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nil)
@@ -140,23 +140,53 @@ func createWGPUAdapter(wgpuInstance: WGPUInstance, wgpuSurface: WGPUSurface) -> 
 	assert(result != nil)
 	print("created wgpu adapter")
 
-	// TODO print adapter info
 	var adapterInfo = WGPUAdapterInfo()
 	assert(wgpuAdapterGetInfo(result!, &adapterInfo) == WGPUStatus_Success)
 	print("adapter type: \(adapterInfo.adapterType)")
-	// Console.WriteLine($"adapter type: {adapterProperties.AdapterType}");
-	// 	Console.WriteLine($"adapter architecture: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.Architecture)}");
-	// 	Console.WriteLine($"adapter backend type: {adapterProperties.BackendType}");
-	// 	Console.WriteLine($"adapter device ID: {adapterProperties.DeviceID}");
-	// 	Console.WriteLine($"adapter driver description: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.DriverDescription)}");
-	// 	Console.WriteLine($"adapter name: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.Name)}");
-	// 	Console.WriteLine($"adapter vendor ID: {adapterProperties.VendorID}");
-	// 	Console.WriteLine($"adapter vendor name: {Marshal.PtrToStringAnsi((IntPtr)adapterProperties.VendorName)}");
+	print("adapter architecture: \(String.fromWGPUStringView(other: adapterInfo.architecture))")
+	print("adapter backend type: \(adapterInfo.backendType)")
+	print("adapter device ID: \(adapterInfo.deviceID)")
+	print(
+		"adapter driver description: \(String.fromWGPUStringView(other: adapterInfo.description))")
+	print("adapter vendor ID: \(adapterInfo.vendorID)")
+	print("adapter vendor name: \(String.fromWGPUStringView(other: adapterInfo.vendor))")
 
 	return result!
 }
 
-print("add result = \(add(1,2))")
+func createWGPUDevice(wgpuAdapter: WGPUAdapter) -> WGPUDevice {
+	var callbackInfo = WGPURequestDeviceCallbackInfo()
+	var result: WGPUDevice? = nil
+	withUnsafeMutablePointer(to: &result) {
+		callbackInfo.userdata1 = UnsafeMutableRawPointer($0)
+		callbackInfo.callback = { status, device, message, userdata1, userdata2 in
+			let message = String.fromWGPUStringView(other: message)
+			if !message.isEmpty {
+				print("device callback: \(message)")
+			}
+			UnsafeMutablePointer<WGPUDevice?>(.init(userdata1))?.pointee = device
+		}
+
+		// trying to wait for future results in rust not implemented error
+		wgpuAdapterRequestDevice(wgpuAdapter, nil, callbackInfo)
+		// let future = wgpuAdapterRequestDevice(wgpuAdapter, &deviceDescriptor, callbackInfo)
+		// var futureWaitInfo = [WGPUFutureWaitInfo(future: future, completed: 0)]
+		// assert(wgpuInstanceWaitAny(wgpuInstance, 1, &futureWaitInfo, 5000) == WGPUWaitStatus_Success)
+	}
+
+	assert(result != nil)
+	print("created wgpu device")
+	return result!
+}
+
+func createWGPUQueue(wgpuDevice: WGPUDevice) -> WGPUQueue {
+	let result = wgpuDeviceGetQueue(wgpuDevice)
+	assert(result != nil)
+	print("got wgpu queue")
+	return result!
+}
+
+print("TODO add result = \(add(1,2))")
 
 if !SDL_Init(SDL_INIT_VIDEO) {
 	let error = String(cString: SDL_GetError())
@@ -171,21 +201,34 @@ print("SDL version = \(SDL_GetVersion())")
 
 // let SDL_WINDOW_OPENGL = SDL_WindowFlags(0x0000_0000_0000_0002)
 let SDL_WINDOW_VULKAN = SDL_WindowFlags(0x0000_0000_1000_0000)
-let window = SDL_CreateWindow("Experiment", 1024, 768, SDL_WINDOW_VULKAN)
-if window == nil {
+let sdlWindow = SDL_CreateWindow("Experiment", 1024, 768, SDL_WINDOW_VULKAN)
+if sdlWindow == nil {
 	let error = String(cString: SDL_GetError())
 	print("failed to create SDL window: \(error)")
 	exit(1)
 }
 defer {
-	SDL_DestroyWindow(window)
+	SDL_DestroyWindow(sdlWindow)
 }
 
 let wgpuInstance = createWGPUInstance()
-let wgpuSurface = createWGPUSurface(sdlWindow: window!, wgpuInstance: wgpuInstance)
+let wgpuSurface = createWGPUSurface(sdlWindow: sdlWindow!, wgpuInstance: wgpuInstance)
 let wgpuAdapter = createWGPUAdapter(wgpuInstance: wgpuInstance, wgpuSurface: wgpuSurface)
+let wgpuDevice = createWGPUDevice(wgpuAdapter: wgpuAdapter)
+let wgpuQueue = createWGPUQueue(wgpuDevice: wgpuDevice)
 // TODO rest of wgpu stuff, device, etc.
 // https://github.com/gfx-rs/wgpu-native/blob/trunk/examples/triangle/main.c
+
+// print("TODO test 1 = \(Bundle.paths(forResourcesOfType: "wsgl", inDirectory: "../../assets"))")
+// print("TODO test 2 = \(Bundle.path(forResource: "shader", ofType: "wsgl", inDirectory: "assets"))")
+for bundle in Bundle.allBundles {
+	print("bundle = \(bundle)")
+	print("bundle identifier = \(String(describing: bundle.bundleIdentifier))")
+	print("bundle path = \(bundle.bundlePath)")
+	print("bundle resource path = \(String(describing: bundle.resourcePath))")
+	print("bundle executable path = \(String(describing: bundle.executablePath))")
+	print("bundle URL = \(bundle.bundleURL)")
+}
 
 let framesPerSecond = 60
 let delayBetweenFrames = 1000 / framesPerSecond
@@ -207,15 +250,25 @@ while !exiting {
 				break
 			}
 			break
+		case SDL_EVENT_WINDOW_RESIZED:
+			var width: Int32 = 0
+			var height: Int32 = 0
+			SDL_GetWindowSize(sdlWindow, &width, &height)
+			print("window resized to \(width)x\(height)")
+		// TODO resize wgpu
+		//         wgpuSurfaceConfigure(demo.surface, &demo.config);
 		default:
 			break
 		}
 	}
 
-	// TODO do some wgpu stuff
-	// glClearColor(0.25, 0.5, 1, 1)
-	// glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
-	// SDL_GL_SwapWindow(window)
+	let wgpuCommandEncoder = wgpuDeviceCreateCommandEncoder(wgpuDevice, nil)
+	assert(wgpuCommandEncoder != nil)
+
+	// TODO more wgpu stuff
+	// https://github.com/gfx-rs/wgpu-native/blob/trunk/examples/triangle/main.c
+
+	wgpuCommandEncoderRelease(wgpuCommandEncoder)
 
 	SDL_Delay(Uint32(delayBetweenFrames))
 }
