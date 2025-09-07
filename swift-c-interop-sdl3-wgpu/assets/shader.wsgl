@@ -1,3 +1,5 @@
+// TODO put matrix stuff back
+
 /*
 struct SceneUniforms {
     projection_matrix: mat4x4<f32>,
