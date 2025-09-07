@@ -506,6 +506,7 @@ func doWGPUQueueSubmit(wgpuQueue: WGPUQueue, wgpuCommandBuffers: [WGPUCommandBuf
 enum CreateWGPUBufferInitError: Error {
 	case FailedToCreateBuffer
 	case FailedToMapBufferMemory
+	case FailedToGetContentBaseAddress
 }
 
 func createWGPUBufferInit<T>(
@@ -537,9 +538,15 @@ func createWGPUBufferInit<T>(
 				}
 				defer { wgpuBufferUnmap(result) }
 
-				// TODO why deprecated?
-				contentData.withUnsafeBytes { contentPtr in
-					mappedPtr.copyMemory(from: contentPtr, byteCount: contentCount)
+				if let error = contentData.withUnsafeBytes({ (contentPtr: UnsafeRawBufferPointer) in
+					guard let baseAddress = contentPtr.baseAddress else {
+						print("failed to get base address of content data")
+						return CreateWGPUBufferInitError.FailedToGetContentBaseAddress
+					}
+					mappedPtr.copyMemory(from: baseAddress, byteCount: contentCount)
+					return nil
+				}) {
+					return .failure(error)
 				}
 			}
 		}
