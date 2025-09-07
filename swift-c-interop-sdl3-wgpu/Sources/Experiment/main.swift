@@ -30,6 +30,39 @@ extension String {
 	}
 }
 
+struct Vector2<T> {
+	var x: T
+	var y: T
+}
+
+struct RGBA<T> {
+	var r: T
+	var g: T
+	var b: T
+	var a: T
+}
+
+struct Vertex {
+	var position: Vector2<Float>
+	var color: RGBA<Float>
+}
+
+extension Array {
+	mutating func asData<ResultType>(_ body: (Data?) -> ResultType) -> ResultType {
+		self.withUnsafeMutableBytes {
+			let data: Data? =
+				if let ptr = $0.baseAddress {
+					Data(
+						bytesNoCopy: UnsafeMutableRawPointer(ptr), count: $0.count,
+						deallocator: Data.Deallocator.none)
+				} else {
+					nil
+				}
+			return body(data)
+		}
+	}
+}
+
 @MainActor
 func createWGPUInstance() -> WGPUInstance {
 	let result = wgpuCreateInstance(nil)!
@@ -470,9 +503,56 @@ func doWGPUQueueSubmit(wgpuQueue: WGPUQueue, wgpuCommandBuffers: [WGPUCommandBuf
 	}
 }
 
+enum CreateWGPUBufferInitError: Error {
+	case FailedToCreateBuffer
+	case FailedToMapBufferMemory
+}
+
+func createWGPUBufferInit<T>(
+	wgpuDevice: WGPUDevice, label: String? = nil, content: inout [T], usage: WGPUBufferUsage
+) -> Result<WGPUBuffer, CreateWGPUBufferInitError> {
+	var descriptor = WGPUBufferDescriptor()
+	if let label = label {
+		descriptor.label = label.toWGPUStringView()
+	}
+	descriptor.usage = usage
+	return content.asData { contentData in
+		let contentCount = contentData?.count ?? 0
+		descriptor.size = UInt64(contentCount)
+
+		// true if we have at least one byte to copy
+		descriptor.mappedAtCreation = if contentCount > 0 { 1 } else { 0 }
+
+		guard let result = wgpuDeviceCreateBuffer(wgpuDevice, &descriptor) else {
+			print("failed to create wgpu buffer")
+			return .failure(.FailedToCreateBuffer)
+		}
+
+		// if we have bytes to copy get the mapping buffer and copy bytes to it
+		if contentCount > 0 {
+			if let contentData = contentData {
+				guard let mappedPtr = wgpuBufferGetMappedRange(result, 0, contentCount) else {
+					print("failed to get mapped range for wgpu buffer")
+					return .failure(.FailedToMapBufferMemory)
+				}
+				defer { wgpuBufferUnmap(result) }
+
+				// TODO why deprecated?
+				contentData.withUnsafeBytes { contentPtr in
+					mappedPtr.copyMemory(from: contentPtr, byteCount: contentCount)
+				}
+			}
+		}
+
+		return .success(result)
+	}
+}
+
 func render(
 	wgpuDevice: WGPUDevice, wgpuQueue: WGPUQueue, wgpuSurface: inout WGPUSurface,
-	wgpuSurfaceConfiguration: inout WGPUSurfaceConfiguration, sdlWindow: OpaquePointer
+	wgpuSurfaceConfiguration: inout WGPUSurfaceConfiguration, sdlWindow: OpaquePointer,
+	wgpuRenderPipeline: WGPURenderPipeline,
+	wgpuVertexBuffer: WGPUBuffer
 ) throws {
 	var surfaceTexture = WGPUSurfaceTexture()
 	withUnsafeMutablePointer(to: &surfaceTexture) { surfaceTexturePtr in
@@ -519,12 +599,15 @@ func render(
 	).get()
 	defer { wgpuRenderPassEncoderRelease(renderPassEncoder) }
 
-	/*
-	TODO actually render stuff
-	
-	wgpuRenderPassEncoderSetPipeline(render_pass_encoder, render_pipeline);
-	wgpuRenderPassEncoderDraw(render_pass_encoder, 3, 1, 0, 0);
-	*/
+	wgpuRenderPassEncoderSetPipeline(renderPassEncoder, wgpuRenderPipeline)
+	wgpuRenderPassEncoderSetVertexBuffer(
+		renderPassEncoder, 0, wgpuVertexBuffer, 0,
+		// TODO don't hard-code byte size of buffer
+		(2 + 4) * 3 * 4)
+	wgpuRenderPassEncoderDraw(
+		renderPassEncoder,
+		// TODO don't hard-code number of vertices
+		3, 1, 0, 0)
 	wgpuRenderPassEncoderEnd(renderPassEncoder)
 
 	let commandBuffer = try doWGPUCommandEncoderFinish(wgpuCommandEncoder: commandEncoder).get()
@@ -608,7 +691,16 @@ defer { wgpuSurfaceRelease(wgpuSurface) }
 resizeWGPUSurfaceConfiguration(
 	wgpuSurface: &wgpuSurface, wgpuSurfaceConfiguration: &wgpuSurfaceConfig, sdlWindow: sdlWindow!)
 
-// TODO make buffer
+var vertices = [
+	Vertex(position: Vector2(x: -0.5, y: -0.5), color: RGBA(r: 1.0, g: 0.0, b: 0.0, a: 1.0)),
+	Vertex(position: Vector2(x: 0.5, y: -0.5), color: RGBA(r: 0.0, g: 1.0, b: 0.0, a: 1.0)),
+	Vertex(position: Vector2(x: 0, y: 0.5), color: RGBA(r: 0.0, g: 0.0, b: 1.0, a: 1.0)),
+]
+let vertexBuffer = try createWGPUBufferInit(
+	wgpuDevice: wgpuDevice, content: &vertices,
+	usage: WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst
+).get()
+defer { wgpuBufferRelease(vertexBuffer) }
 
 let framesPerSecond = 60
 let delayBetweenFrames = UInt64(1000 / framesPerSecond)
@@ -643,7 +735,9 @@ while !exiting {
 
 	try render(
 		wgpuDevice: wgpuDevice, wgpuQueue: wgpuQueue, wgpuSurface: &wgpuSurface,
-		wgpuSurfaceConfiguration: &wgpuSurfaceConfig, sdlWindow: sdlWindow!)
+		wgpuSurfaceConfiguration: &wgpuSurfaceConfig, sdlWindow: sdlWindow!,
+		wgpuRenderPipeline: wgpuRenderPipeline,
+		wgpuVertexBuffer: vertexBuffer)
 
 	let endTicks = SDL_GetTicks()
 	let elapsedTicks = endTicks - startTicks
