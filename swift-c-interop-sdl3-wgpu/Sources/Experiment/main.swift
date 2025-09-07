@@ -349,24 +349,24 @@ func createWGPURenderPipeline(
 	colorTargetState.writeMask = WGPUColorWriteMask_All
 	let fragmentTargets = [colorTargetState]
 	fragment.targetCount = fragmentTargets.count
-	fragmentTargets.withUnsafeBufferPointer { bufferPtr in
+	return fragmentTargets.withUnsafeBufferPointer { bufferPtr in
 		fragment.targets = bufferPtr.baseAddress
-		withUnsafePointer(to: &fragment) { fragmentPtr in
+		return withUnsafePointer(to: &fragment) { fragmentPtr in
 			descriptor.fragment = fragmentPtr
+
+			descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleList
+
+			descriptor.multisample.count = 1
+			descriptor.multisample.mask = 0xFFFF_FFFF
+
+			guard let result = wgpuDeviceCreateRenderPipeline(wgpuDevice, &descriptor) else {
+				print("failed to create wgpu render pipeline")
+				return .failure(.FailedToCreateRenderPipeline)
+			}
+			print("created wgpu render pipeline")
+			return .success(result)
 		}
 	}
-
-	descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleList
-
-	descriptor.multisample.count = 1
-	descriptor.multisample.mask = 0xFFFF_FFFF
-
-	guard let result = wgpuDeviceCreateRenderPipeline(wgpuDevice, &descriptor) else {
-		print("failed to create wgpu render pipeline")
-		return .failure(.FailedToCreateRenderPipeline)
-	}
-	print("created wgpu render pipeline")
-	return .success(result)
 }
 
 func createWGPUSurfaceConfiguration(
@@ -376,7 +376,7 @@ func createWGPUSurfaceConfiguration(
 	result.device = wgpuDevice
 	result.usage = WGPUTextureUsage_RenderAttachment
 	result.format = textureFormat
-	result.presentMode = WGPUPresentMode_Fifo
+	result.presentMode = WGPUPresentMode_Mailbox
 	result.alphaMode = alphaMode
 	return result
 }
@@ -392,6 +392,150 @@ func resizeWGPUSurfaceConfiguration(
 	wgpuSurfaceConfiguration.height = UInt32(height)
 	wgpuSurfaceConfigure(wgpuSurface, &wgpuSurfaceConfiguration)
 	print("resized wgpu surface configuration to \(width)x\(height)")
+}
+
+enum CreateWGPUTextureViewError: Error {
+	case FailedToCreateTextureView
+}
+
+func createWGPUTextureView(wgpuTexture: WGPUTexture) -> Result<
+	WGPUTextureView, CreateWGPUTextureViewError
+> {
+	guard let result = wgpuTextureCreateView(wgpuTexture, nil) else {
+		print("failed to create wgpu texture view")
+		return .failure(.FailedToCreateTextureView)
+	}
+	return .success(result)
+}
+
+enum CreateWGPUCommandEncoderError: Error {
+	case FailedToCreateCommandEncoder
+}
+
+func createWGPUCommandEncoder(wgpuDevice: WGPUDevice, label: String? = nil) -> Result<
+	WGPUCommandEncoder, CreateWGPUCommandEncoderError
+> {
+	var commandEncoderDescriptor = WGPUCommandEncoderDescriptor()
+	if let label = label {
+		commandEncoderDescriptor.label = label.toWGPUStringView()
+	}
+	guard let commandEncoder = wgpuDeviceCreateCommandEncoder(wgpuDevice, &commandEncoderDescriptor)
+	else {
+		print("failed to create command encoder")
+		return .failure(.FailedToCreateCommandEncoder)
+	}
+	return .success(commandEncoder)
+}
+
+enum CreateWGPURenderPassEncoderError: Error {
+	case FailedToCreateRenderPassEncoder
+}
+
+func createWGPURenderPassEncoder(
+	wgpuCommandEncoder: WGPUCommandEncoder,
+	wgpuRenderColorPassAttachements: [WGPURenderPassColorAttachment]
+) -> Result<WGPURenderPassEncoder, CreateWGPURenderPassEncoderError> {
+	var renderPassEncoderDescription = WGPURenderPassDescriptor()
+	renderPassEncoderDescription.colorAttachmentCount = wgpuRenderColorPassAttachements.count
+	let renderPassEncoder = wgpuRenderColorPassAttachements.withUnsafeBufferPointer {
+		colorAttachmentsPtr in
+		renderPassEncoderDescription.colorAttachments = colorAttachmentsPtr.baseAddress
+		return wgpuCommandEncoderBeginRenderPass(wgpuCommandEncoder, &renderPassEncoderDescription)
+	}
+	guard let renderPassEncoder = renderPassEncoder else {
+		print("failed to create render pass encoder")
+		return .failure(.FailedToCreateRenderPassEncoder)
+	}
+	return .success(renderPassEncoder)
+}
+
+enum DoWGPUCommandEncoderFinishError: Error {
+	case FailedToFinishCommandEncoder
+}
+
+func doWGPUCommandEncoderFinish(wgpuCommandEncoder: WGPUCommandEncoder) -> Result<
+	WGPUCommandBuffer, DoWGPUCommandEncoderFinishError
+> {
+	let result = wgpuCommandEncoderFinish(wgpuCommandEncoder, nil)
+	guard let result = result else {
+		print("failed to finish command encoder")
+		return .failure(.FailedToFinishCommandEncoder)
+	}
+	return .success(result)
+}
+
+func doWGPUQueueSubmit(wgpuQueue: WGPUQueue, wgpuCommandBuffers: [WGPUCommandBuffer?]) {
+	wgpuCommandBuffers.withUnsafeBufferPointer { wgpuCommandBuffersPtr in
+		wgpuQueueSubmit(wgpuQueue, wgpuCommandBuffers.count, wgpuCommandBuffersPtr.baseAddress)
+	}
+}
+
+func render(
+	wgpuDevice: WGPUDevice, wgpuQueue: WGPUQueue, wgpuSurface: inout WGPUSurface,
+	wgpuSurfaceConfiguration: inout WGPUSurfaceConfiguration, sdlWindow: OpaquePointer
+) throws {
+	var surfaceTexture = WGPUSurfaceTexture()
+	withUnsafeMutablePointer(to: &surfaceTexture) { surfaceTexturePtr in
+		wgpuSurfaceGetCurrentTexture(wgpuSurface, surfaceTexturePtr)
+	}
+	switch surfaceTexture.status {
+	case WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal,
+		WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal:
+		break
+	case WGPUSurfaceGetCurrentTextureStatus_Timeout, WGPUSurfaceGetCurrentTextureStatus_Outdated,
+		WGPUSurfaceGetCurrentTextureStatus_Lost:
+		print("surface texture status = \(surfaceTexture.status), resizing")
+		resizeWGPUSurfaceConfiguration(
+			wgpuSurface: &wgpuSurface, wgpuSurfaceConfiguration: &wgpuSurfaceConfiguration,
+			sdlWindow: sdlWindow)
+		return
+	default:
+		print("surface texture status = \(surfaceTexture.status), invalid")
+		return
+	}
+	defer { wgpuTextureRelease(surfaceTexture.texture) }
+
+	let textureView = try createWGPUTextureView(wgpuTexture: surfaceTexture.texture).get()
+	defer { wgpuTextureViewRelease(textureView) }
+
+	let commandEncoder = try createWGPUCommandEncoder(
+		wgpuDevice: wgpuDevice, label: "command_encoder"
+	).get()
+	defer { wgpuCommandEncoderRelease(commandEncoder) }
+
+	let renderPassEncoder = try createWGPURenderPassEncoder(
+		wgpuCommandEncoder: commandEncoder,
+		wgpuRenderColorPassAttachements: [
+			{
+				var result = WGPURenderPassColorAttachment()
+				result.view = textureView
+				result.loadOp = WGPULoadOp_Clear
+				result.storeOp = WGPUStoreOp_Store
+				result.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED
+				result.clearValue = WGPUColor(r: 0.25, g: 0.5, b: 1.0, a: 1.0)
+				return result
+			}()
+		]
+	).get()
+	defer { wgpuRenderPassEncoderRelease(renderPassEncoder) }
+
+	/*
+	TODO actually render stuff
+	
+	wgpuRenderPassEncoderSetPipeline(render_pass_encoder, render_pipeline);
+	wgpuRenderPassEncoderDraw(render_pass_encoder, 3, 1, 0, 0);
+	*/
+	wgpuRenderPassEncoderEnd(renderPassEncoder)
+
+	let commandBuffer = try doWGPUCommandEncoderFinish(wgpuCommandEncoder: commandEncoder).get()
+	defer { wgpuCommandBufferRelease(commandBuffer) }
+
+	doWGPUQueueSubmit(wgpuQueue: wgpuQueue, wgpuCommandBuffers: [commandBuffer])
+
+	let status = wgpuSurfacePresent(wgpuSurface)
+	if status != WGPUStatus_Success {
+		print("failed to present surface: \(status)")
+	}
 }
 
 print("TODO add result = \(add(1,2))")
@@ -421,41 +565,60 @@ defer {
 }
 
 let wgpuInstance = createWGPUInstance()
+defer { wgpuInstanceRelease(wgpuInstance) }
+
 var wgpuSurface = try createWGPUSurface(sdlWindow: sdlWindow!, wgpuInstance: wgpuInstance).get()
+defer { wgpuSurfaceRelease(wgpuSurface) }
+
 let wgpuAdapter = try createWGPUAdapter(wgpuInstance: wgpuInstance, wgpuSurface: wgpuSurface).get()
+defer { wgpuAdapterRelease(wgpuAdapter) }
+
 let wgpuDevice = try createWGPUDevice(wgpuAdapter: wgpuAdapter).get()
+defer { wgpuDeviceRelease(wgpuDevice) }
+
 let wgpuQueue = try createWGPUQueue(wgpuDevice: wgpuDevice).get()
+defer { wgpuQueueRelease(wgpuQueue) }
 
 let wgpuShader = try createWGPUShaderModuleWGSL(
 	wgpuDevice: wgpuDevice,
 	shaderSource: String(decoding: Data(PackageResources.shader_wsgl), as: UTF8.self)
 ).get()
+defer { wgpuShaderModuleRelease(wgpuShader) }
 
 let wgpuSurfaceCapabilities = try getWGPUSurfaceCapabilities(
 	wgpuSurface: wgpuSurface, wgpuAdapter: wgpuAdapter
 ).get()
+defer { wgpuSurfaceCapabilitiesFreeMembers(wgpuSurfaceCapabilities) }
 let surfaceTextureFormat = wgpuSurfaceCapabilities.formats[0]
 
 let wgpuPipelineLayout = try createWGPUPipelineLayout(wgpuDevice: wgpuDevice).get()
+defer { wgpuPipelineLayoutRelease(wgpuPipelineLayout) }
+
 let wgpuRenderPipeline = try createWGPURenderPipeline(
 	wgpuDevice: wgpuDevice, wgpuPipelineLayout: wgpuPipelineLayout,
 	wgpuShaderModule: wgpuShader, colorTargetFormat: surfaceTextureFormat
 ).get()
+defer { wgpuRenderPipelineRelease(wgpuRenderPipeline) }
 
 var wgpuSurfaceConfig = createWGPUSurfaceConfiguration(
 	wgpuDevice: wgpuDevice, textureFormat: surfaceTextureFormat,
 	alphaMode: wgpuSurfaceCapabilities.alphaModes[0]
 )
+defer { wgpuSurfaceRelease(wgpuSurface) }
 resizeWGPUSurfaceConfiguration(
 	wgpuSurface: &wgpuSurface, wgpuSurfaceConfiguration: &wgpuSurfaceConfig, sdlWindow: sdlWindow!)
 
+// TODO make buffer
+
 let framesPerSecond = 60
-let delayBetweenFrames = 1000 / framesPerSecond
+let delayBetweenFrames = UInt64(1000 / framesPerSecond)
 
 var exiting = false
 while !exiting {
+	let startTicks = SDL_GetTicks()
+
 	var e = SDL_Event.init()
-	if SDL_PollEvent(&e) {
+	while SDL_PollEvent(&e) {
 		switch SDL_EventType(rawValue: e.type) {
 		case SDL_EVENT_QUIT:
 			exiting = true
@@ -478,14 +641,13 @@ while !exiting {
 		}
 	}
 
-	let wgpuCommandEncoder = wgpuDeviceCreateCommandEncoder(wgpuDevice, nil)
-	// TODO no assert
-	assert(wgpuCommandEncoder != nil)
+	try render(
+		wgpuDevice: wgpuDevice, wgpuQueue: wgpuQueue, wgpuSurface: &wgpuSurface,
+		wgpuSurfaceConfiguration: &wgpuSurfaceConfig, sdlWindow: sdlWindow!)
 
-	// TODO more wgpu stuff
-	// https://github.com/gfx-rs/wgpu-native/blob/trunk/examples/triangle/main.c
-
-	wgpuCommandEncoderRelease(wgpuCommandEncoder)
-
-	SDL_Delay(Uint32(delayBetweenFrames))
+	let endTicks = SDL_GetTicks()
+	let elapsedTicks = endTicks - startTicks
+	if elapsedTicks < delayBetweenFrames {
+		SDL_Delay(UInt32(delayBetweenFrames - elapsedTicks))
+	}
 }
