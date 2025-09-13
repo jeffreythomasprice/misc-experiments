@@ -148,16 +148,56 @@ func getWGPUSurfaceCapabilities(wgpuSurface: WGPUSurface, wgpuAdapter: WGPUAdapt
 	return .success(surfaceCapabilities)
 }
 
+func createWGPUBindGroupLayout(
+	wgpuDevice: WGPUDevice, label: String? = nil, entries: [WGPUBindGroupLayoutEntry]
+) -> WGPUBindGroupLayout {
+	var descriptor = WGPUBindGroupLayoutDescriptor()
+	if let label = label {
+		descriptor.label = label.toWGPUStringView()
+	}
+	descriptor.entryCount = entries.count
+	return entries.withUnsafeBufferPointer {
+		descriptor.entries = $0.baseAddress
+		return withUnsafePointer(to: &descriptor) {
+			wgpuDeviceCreateBindGroupLayout(wgpuDevice, $0)
+		}
+	}
+}
+
+func createWGPUBindGroup(
+	wgpuDevice: WGPUDevice, label: String? = nil, layout: WGPUBindGroupLayout,
+	entries: [WGPUBindGroupEntry]
+) -> WGPUBindGroup {
+	var descriptor = WGPUBindGroupDescriptor()
+	if let label = label {
+		descriptor.label = label.toWGPUStringView()
+	}
+	descriptor.layout = layout
+	descriptor.entryCount = entries.count
+	return entries.withUnsafeBufferPointer {
+		descriptor.entries = $0.baseAddress
+		return withUnsafePointer(to: &descriptor) {
+			wgpuDeviceCreateBindGroup(wgpuDevice, $0)
+		}
+	}
+}
+
 enum CreateWGPUPipelineLayoutError: Error {
 	case FailedToCreatePipelineLayout
 }
 
-func createWGPUPipelineLayout(wgpuDevice: WGPUDevice) -> Result<
-	WGPUPipelineLayout, CreateWGPUPipelineLayoutError
-> {
-	let descriptor = WGPUPipelineLayoutDescriptor()
-	let result = withUnsafePointer(to: descriptor) { descriptorPtr in
-		wgpuDeviceCreatePipelineLayout(wgpuDevice, descriptorPtr)
+func createWGPUPipelineLayout(wgpuDevice: WGPUDevice, bindGroupLayouts: [WGPUBindGroupLayout?])
+	-> Result<
+		WGPUPipelineLayout, CreateWGPUPipelineLayoutError
+	>
+{
+	var descriptor = WGPUPipelineLayoutDescriptor()
+	descriptor.bindGroupLayoutCount = bindGroupLayouts.count
+	let result = bindGroupLayouts.withUnsafeBufferPointer {
+		descriptor.bindGroupLayouts = $0.baseAddress
+		return withUnsafePointer(to: descriptor) {
+			wgpuDeviceCreatePipelineLayout(wgpuDevice, $0)
+		}
 	}
 	guard let result = result else {
 		print("failed to create wgpu pipeline layout")

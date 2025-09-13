@@ -27,13 +27,39 @@ class Buffer<T> {
 	}
 }
 
+func getCurrentOrthoMatrix(sdlWindow: OpaquePointer) -> Matrix4<Float32> {
+	var width: Int32 = 0
+	var height: Int32 = 0
+	SDL_GetWindowSize(sdlWindow, &width, &height)
+	return Matrix4<Float32>.ortho(
+		left: 0, right: Float32(width), bottom: Float32(height), top: 0, near: -1, far: 1)
+}
+
 func render(
 	wgpuDevice: WGPUDevice, wgpuQueue: WGPUQueue, wgpuSurface: inout WGPUSurface,
 	wgpuSurfaceConfiguration: inout WGPUSurfaceConfiguration, sdlWindow: OpaquePointer,
 	wgpuRenderPipeline: WGPURenderPipeline,
 	vertexBuffer: Buffer<Vertex>,
-	indexBuffer: Buffer<UInt16>
+	indexBuffer: Buffer<UInt16>,
+	sceneUniformBuffer: Buffer<Matrix4<Float32>>,
+	sceneUniformBindGroup: WGPUBindGroup,
+	modelUniformBuffer: Buffer<Matrix4<Float32>>,
+	modelUniformBindGroup: WGPUBindGroup
 ) throws {
+	var projectionMatrix = getCurrentOrthoMatrix(sdlWindow: sdlWindow)
+	withUnsafePointer(to: &projectionMatrix) {
+		wgpuQueueWriteBuffer(
+			wgpuQueue, sceneUniformBuffer.buffer, 0, $0,
+			MemoryLayout<Matrix4<Float32>>.size)
+	}
+
+	var orthoMatrix = Matrix4<Float32>.identity
+	withUnsafePointer(to: &orthoMatrix) {
+		wgpuQueueWriteBuffer(
+			wgpuQueue, modelUniformBuffer.buffer, 0, $0,
+			MemoryLayout<Matrix4<Float32>>.size)
+	}
+
 	var surfaceTexture = WGPUSurfaceTexture()
 	withUnsafeMutablePointer(to: &surfaceTexture) { surfaceTexturePtr in
 		wgpuSurfaceGetCurrentTexture(wgpuSurface, surfaceTexturePtr)
@@ -80,6 +106,8 @@ func render(
 	defer { wgpuRenderPassEncoderRelease(renderPassEncoder) }
 
 	wgpuRenderPassEncoderSetPipeline(renderPassEncoder, wgpuRenderPipeline)
+	wgpuRenderPassEncoderSetBindGroup(renderPassEncoder, 0, sceneUniformBindGroup, 0, nil)
+	wgpuRenderPassEncoderSetBindGroup(renderPassEncoder, 1, modelUniformBindGroup, 0, nil)
 	wgpuRenderPassEncoderSetVertexBuffer(
 		renderPassEncoder, 0, vertexBuffer.buffer, 0,
 		UInt64(vertexBuffer.byteCount))
@@ -151,7 +179,94 @@ let wgpuSurfaceCapabilities = try getWGPUSurfaceCapabilities(
 defer { wgpuSurfaceCapabilitiesFreeMembers(wgpuSurfaceCapabilities) }
 let surfaceTextureFormat = wgpuSurfaceCapabilities.formats[0]
 
-let wgpuPipelineLayout = try createWGPUPipelineLayout(wgpuDevice: wgpuDevice).get()
+// TODO helper that builds the buffer, layout, and bind group all at the same time and releases them all together
+let sceneUniformBindingGroupLayout = createWGPUBindGroupLayout(
+	wgpuDevice: wgpuDevice, label: "scene_uniform_bind_group_layout",
+	entries: [
+		{
+			var result = WGPUBindGroupLayoutEntry()
+			result.binding = 0
+			result.visibility = WGPUShaderStage_Vertex
+			result.buffer.type = WGPUBufferBindingType_Uniform
+			result.buffer.hasDynamicOffset = 0
+			// TODO could be 0? determine from buffer generic type?
+			result.buffer.minBindingSize = UInt64(MemoryLayout<Matrix4<Float32>>.size)
+			return result
+		}()
+	])
+let sceneUniformBuffer = try Buffer<Matrix4<Float32>>(
+	wgpuDevice: wgpuDevice, label: "scene_uniform_buffer",
+	content: [
+		Matrix4<Float32>.identity
+	],
+	usage: WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst
+)
+let sceneUniformBindGroup = createWGPUBindGroup(
+	wgpuDevice: wgpuDevice, label: "scene_uniform_bind_group",
+	layout: sceneUniformBindingGroupLayout,
+	entries: [
+		{
+			var result = WGPUBindGroupEntry()
+			result.buffer = sceneUniformBuffer.buffer
+			result.offset = 0
+			result.size = UInt64(sceneUniformBuffer.byteCount)
+			// TODO use the same constant as the layout object
+			result.binding = 0
+			return result
+		}()
+	])
+defer {
+	wgpuBindGroupLayoutRelease(sceneUniformBindingGroupLayout)
+	wgpuBindGroupRelease(sceneUniformBindGroup)
+}
+let modelUniformBindingGroupLayout = createWGPUBindGroupLayout(
+	wgpuDevice: wgpuDevice, label: "model_uniform_bind_group_layout",
+	entries: [
+		{
+			print("TODO min binding size of mat4 = \(MemoryLayout<Matrix4<Float32>>.size)")
+			var result = WGPUBindGroupLayoutEntry()
+			result.binding = 0
+			result.visibility = WGPUShaderStage_Vertex
+			result.buffer.type = WGPUBufferBindingType_Uniform
+			result.buffer.hasDynamicOffset = 0
+			// TODO could be 0? determine from buffer generic type?
+			result.buffer.minBindingSize = UInt64(MemoryLayout<Matrix4<Float32>>.size)
+			return result
+		}()
+	])
+let modelUniformBuffer = try Buffer<Matrix4<Float32>>(
+	wgpuDevice: wgpuDevice, label: "model_uniform_buffer",
+	content: [
+		Matrix4<Float32>.identity
+	],
+	usage: WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst
+)
+let modelUniformBindGroup = createWGPUBindGroup(
+	wgpuDevice: wgpuDevice, label: "model_uniform_bind_group",
+	layout: modelUniformBindingGroupLayout,
+	entries: [
+		{
+			var result = WGPUBindGroupEntry()
+			result.buffer = modelUniformBuffer.buffer
+			result.offset = 0
+			result.size = UInt64(modelUniformBuffer.byteCount)
+			// TODO use the same constant as the layout object
+			result.binding = 0
+			return result
+		}()
+	])
+defer {
+	wgpuBindGroupLayoutRelease(modelUniformBindingGroupLayout)
+	wgpuBindGroupRelease(modelUniformBindGroup)
+}
+let wgpuPipelineLayout = try createWGPUPipelineLayout(
+	wgpuDevice: wgpuDevice,
+	bindGroupLayouts: [
+		sceneUniformBindingGroupLayout,
+		modelUniformBindingGroupLayout,
+	]
+)
+.get()
 defer { wgpuPipelineLayoutRelease(wgpuPipelineLayout) }
 
 let wgpuRenderPipeline = try createWGPURenderPipeline(
@@ -195,10 +310,10 @@ resizeWGPUSurfaceConfiguration(
 let vertexBuffer = try Buffer<Vertex>(
 	wgpuDevice: wgpuDevice, label: "vertex_buffer",
 	content: [
-		Vertex(position: Vector2(x: -0.5, y: -0.5), color: RGBA(r: 1.0, g: 0.0, b: 0.0, a: 1.0)),
-		Vertex(position: Vector2(x: 0.5, y: -0.5), color: RGBA(r: 0.0, g: 1.0, b: 0.0, a: 1.0)),
-		Vertex(position: Vector2(x: 0.5, y: 0.5), color: RGBA(r: 0.0, g: 0.0, b: 1.0, a: 1.0)),
-		Vertex(position: Vector2(x: -0.5, y: 0.5), color: RGBA(r: 1.0, g: 0.0, b: 1.0, a: 1.0)),
+		Vertex(position: Vector2(x: 50, y: 50), color: RGBA(r: 1.0, g: 0.0, b: 0.0, a: 1.0)),
+		Vertex(position: Vector2(x: 50, y: 300), color: RGBA(r: 0.0, g: 1.0, b: 0.0, a: 1.0)),
+		Vertex(position: Vector2(x: 300, y: 300), color: RGBA(r: 0.0, g: 0.0, b: 1.0, a: 1.0)),
+		Vertex(position: Vector2(x: 300, y: 50), color: RGBA(r: 1.0, g: 0.0, b: 1.0, a: 1.0)),
 	],
 	usage: WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst
 )
@@ -244,7 +359,10 @@ while !exiting {
 		wgpuDevice: wgpuDevice, wgpuQueue: wgpuQueue, wgpuSurface: &wgpuSurface,
 		wgpuSurfaceConfiguration: &wgpuSurfaceConfig, sdlWindow: sdlWindow!,
 		wgpuRenderPipeline: wgpuRenderPipeline,
-		vertexBuffer: vertexBuffer, indexBuffer: indexBuffer)
+		vertexBuffer: vertexBuffer, indexBuffer: indexBuffer,
+		sceneUniformBuffer: sceneUniformBuffer, sceneUniformBindGroup: sceneUniformBindGroup,
+		modelUniformBuffer: modelUniformBuffer, modelUniformBindGroup: modelUniformBindGroup
+	)
 
 	let endTicks = SDL_GetTicks()
 	let elapsedTicks = endTicks - startTicks
