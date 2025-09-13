@@ -171,65 +171,83 @@ enum CreateWGPURenderPipelineError: Error {
 	case FailedToCreateRenderPipeline
 }
 
+struct VertexBufferInit {
+	let stepMode: WGPUVertexStepMode
+	let stride: UInt64
+	let attributes: [WGPUVertexAttribute]
+}
+
+struct VertexPipelineInit {
+	let entryPoint: String
+	let buffers: [VertexBufferInit]
+}
+
+struct FragmentColorTargetStateInit {
+	let format: WGPUTextureFormat
+	let writeMask: WGPUColorWriteMask
+}
+
+struct FragmentPipelineInit {
+	let entryPoint: String
+	let targets: [FragmentColorTargetStateInit]
+}
+
 func createWGPURenderPipeline(
 	wgpuDevice: WGPUDevice, wgpuPipelineLayout: WGPUPipelineLayout,
+	label: String? = nil,
 	wgpuShaderModule: WGPUShaderModule,
-	colorTargetFormat: WGPUTextureFormat
+	vertices: VertexPipelineInit,
+	fragments: FragmentPipelineInit
 )
 	-> Result<WGPURenderPipeline, CreateWGPURenderPipelineError>
 {
+	// TODO fix various unsafe leaking of pointers outside withUnsafePointer and withUnsafeBufferPointer
+
 	var descriptor = WGPURenderPipelineDescriptor()
 
+	if let label = label {
+		descriptor.label = label.toWGPUStringView()
+	}
 	descriptor.layout = wgpuPipelineLayout
 
 	descriptor.vertex.module = wgpuShaderModule
-	descriptor.vertex.entryPoint = "vs_main".toWGPUStringView()
-	let vertexAttributes = [
-		// TODO something smarter for how vertex attributes work
-		WGPUVertexAttribute(
-			format: WGPUVertexFormat_Float32x2, offset: 0, shaderLocation: 0),
-		WGPUVertexAttribute(
-			format: WGPUVertexFormat_Float32x4, offset: 2 * 4, shaderLocation: 1),
-	]
-	var vertexBufferLayout = WGPUVertexBufferLayout()
-	vertexBufferLayout.stepMode = WGPUVertexStepMode_Vertex
-	// TODO something smarter for how vertex attributes work
-	vertexBufferLayout.arrayStride = (2 + 4) * 4
-	vertexBufferLayout.attributeCount = vertexAttributes.count
-	vertexAttributes.withUnsafeBufferPointer { bufferPtr in
-		vertexBufferLayout.attributes = bufferPtr.baseAddress
-		withUnsafePointer(to: &vertexBufferLayout) { vertexBufferLayoutPtr in
-			descriptor.vertex.bufferCount = 1
-			descriptor.vertex.buffers = vertexBufferLayoutPtr
-		}
+	descriptor.vertex.entryPoint = vertices.entryPoint.toWGPUStringView()
+	descriptor.vertex.bufferCount = vertices.buffers.count
+	let vertexBuffers = vertices.buffers.map {
+		var result = WGPUVertexBufferLayout()
+		result.stepMode = $0.stepMode
+		result.arrayStride = $0.stride
+		result.attributeCount = $0.attributes.count
+		let attributes = $0.attributes
+		result.attributes = attributes.withUnsafeBufferPointer { $0.baseAddress }
+		return result
 	}
+	descriptor.vertex.buffers = vertexBuffers.withUnsafeBufferPointer { $0.baseAddress }
 
 	var fragment = WGPUFragmentState()
 	fragment.module = wgpuShaderModule
-	fragment.entryPoint = "fs_main".toWGPUStringView()
-	var colorTargetState = WGPUColorTargetState()
-	colorTargetState.format = colorTargetFormat
-	colorTargetState.writeMask = WGPUColorWriteMask_All
-	let fragmentTargets = [colorTargetState]
-	fragment.targetCount = fragmentTargets.count
-	return fragmentTargets.withUnsafeBufferPointer { bufferPtr in
-		fragment.targets = bufferPtr.baseAddress
-		return withUnsafePointer(to: &fragment) { fragmentPtr in
-			descriptor.fragment = fragmentPtr
-
-			descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleList
-
-			descriptor.multisample.count = 1
-			descriptor.multisample.mask = 0xFFFF_FFFF
-
-			guard let result = wgpuDeviceCreateRenderPipeline(wgpuDevice, &descriptor) else {
-				print("failed to create wgpu render pipeline")
-				return .failure(.FailedToCreateRenderPipeline)
-			}
-			print("created wgpu render pipeline")
-			return .success(result)
-		}
+	fragment.entryPoint = fragments.entryPoint.toWGPUStringView()
+	fragment.targetCount = fragments.targets.count
+	let fragmentTargets = fragments.targets.map {
+		var result = WGPUColorTargetState()
+		result.format = $0.format
+		result.writeMask = $0.writeMask
+		return result
 	}
+	fragment.targets = fragmentTargets.withUnsafeBufferPointer { $0.baseAddress }
+	descriptor.fragment = withUnsafePointer(to: &fragment) { $0 }
+
+	descriptor.primitive.topology = WGPUPrimitiveTopology_TriangleList
+
+	descriptor.multisample.count = 1
+	descriptor.multisample.mask = 0xFFFF_FFFF
+
+	guard let result = wgpuDeviceCreateRenderPipeline(wgpuDevice, &descriptor) else {
+		print("failed to create wgpu render pipeline")
+		return .failure(.FailedToCreateRenderPipeline)
+	}
+	print("created wgpu render pipeline")
+	return .success(result)
 }
 
 func createWGPUSurfaceConfiguration(

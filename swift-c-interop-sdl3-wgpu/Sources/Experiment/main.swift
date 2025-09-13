@@ -2,18 +2,6 @@ import CSDL
 import CWGPU
 import Foundation
 
-struct Vector2<T> {
-	var x: T
-	var y: T
-}
-
-struct RGBA<T> {
-	var r: T
-	var g: T
-	var b: T
-	var a: T
-}
-
 struct Vertex {
 	var position: Vector2<Float>
 	var color: RGBA<Float>
@@ -168,7 +156,31 @@ defer { wgpuPipelineLayoutRelease(wgpuPipelineLayout) }
 
 let wgpuRenderPipeline = try createWGPURenderPipeline(
 	wgpuDevice: wgpuDevice, wgpuPipelineLayout: wgpuPipelineLayout,
-	wgpuShaderModule: wgpuShader, colorTargetFormat: surfaceTextureFormat
+	wgpuShaderModule: wgpuShader,
+	vertices: VertexPipelineInit(
+		entryPoint: "vs_main",
+		buffers: [
+			VertexBufferInit(
+				stepMode: WGPUVertexStepMode_Vertex,
+				stride: UInt64(MemoryLayout<Vertex>.stride),
+				attributes: [
+					WGPUVertexAttribute(
+						format: WGPUVertexFormat_Float32x2,
+						offset: UInt64(MemoryLayout<Vertex>.offset(of: \Vertex.position)!),
+						shaderLocation: 0),
+					WGPUVertexAttribute(
+						format: WGPUVertexFormat_Float32x4,
+						offset: UInt64(MemoryLayout<Vertex>.offset(of: \Vertex.color)!),
+						shaderLocation: 1),
+				]
+			)
+		]),
+	fragments: FragmentPipelineInit(
+		entryPoint: "fs_main",
+		targets: [
+			FragmentColorTargetStateInit(
+				format: surfaceTextureFormat, writeMask: WGPUColorWriteMask_All)
+		])
 ).get()
 defer { wgpuRenderPipelineRelease(wgpuRenderPipeline) }
 
