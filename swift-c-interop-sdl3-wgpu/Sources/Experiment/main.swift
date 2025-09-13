@@ -1,4 +1,3 @@
-import CLib
 import CSDL
 import CWGPU
 import Foundation
@@ -627,8 +626,6 @@ func render(
 		print("failed to present surface: \(status)")
 	}
 }
-
-print("TODO add result = \(add(1,2))")
 
 if !SDL_Init(SDL_INIT_VIDEO) {
 	let error = String(cString: SDL_GetError())

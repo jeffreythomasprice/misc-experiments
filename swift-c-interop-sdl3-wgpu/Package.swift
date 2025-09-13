@@ -14,7 +14,6 @@ let package = Package(
         .executableTarget(
             name: "Experiment",
             dependencies: [
-                "CLib",
                 "CSDL",
                 "CWGPU",
             ],
@@ -31,10 +30,6 @@ let package = Package(
             dependencies: [
                 "Experiment"
             ]
-        ),
-        .target(
-            name: "CLib",
-            publicHeadersPath: ".",
         ),
         .target(
             name: "CSDL",
