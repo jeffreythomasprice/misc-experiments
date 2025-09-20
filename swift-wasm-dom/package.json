@@ -1,0 +1,12 @@
+{
+  "name": "swift-wasm-dom",
+  "scripts": {
+    "start": "vite --port 8000"
+  },
+  "devDependencies": {
+    "vite": "^7.1.6"
+  },
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "^0.3.0"
+  }
+}

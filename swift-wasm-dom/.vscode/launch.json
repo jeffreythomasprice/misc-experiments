@@ -1,7 +1,7 @@
 {
 	"configurations": [
 		{
-			"type": "lldb",
+			"type": "swift",
 			"request": "launch",
 			"args": [],
 			"cwd": "${workspaceFolder:swift-wasm-dom}",
@@ -10,31 +10,13 @@
 			"preLaunchTask": "swift: Build Debug swift-wasm-dom"
 		},
 		{
-			"type": "lldb",
+			"type": "swift",
 			"request": "launch",
 			"args": [],
 			"cwd": "${workspaceFolder:swift-wasm-dom}",
 			"name": "Release swift-wasm-dom",
 			"program": "${workspaceFolder:swift-wasm-dom}/.build/release/swift-wasm-dom",
 			"preLaunchTask": "swift: Build Release swift-wasm-dom"
-		},
-		{
-			"type": "lldb",
-			"request": "launch",
-			"args": [],
-			"cwd": "${workspaceFolder:swift-wasm-dom}",
-			"name": "Debug Experiment",
-			"program": "${workspaceFolder:swift-wasm-dom}/.build/debug/Experiment",
-			"preLaunchTask": "swift: Build Debug Experiment"
-		},
-		{
-			"type": "lldb",
-			"request": "launch",
-			"args": [],
-			"cwd": "${workspaceFolder:swift-wasm-dom}",
-			"name": "Release Experiment",
-			"program": "${workspaceFolder:swift-wasm-dom}/.build/release/Experiment",
-			"preLaunchTask": "swift: Build Release Experiment"
 		}
 	]
 }
