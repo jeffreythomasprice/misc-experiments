@@ -14,7 +14,7 @@ let package = Package(
         .executableTarget(
             name: "swift-wasm-dom",
             dependencies: [
-                "JavaScriptKit"
+                .product(name: "JavaScriptKit", package: "JavaScriptKit")
             ]
         )
     ]
