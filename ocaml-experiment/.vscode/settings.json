@@ -1,0 +1,14 @@
+{
+	"files.exclude": {
+		"**/.git": true,
+		"**/.svn": true,
+		"**/.hg": true,
+		"**/.DS_Store": true,
+		"**/Thumbs.db": true,
+		"_build": true
+	},
+	"ocaml.sandbox": {
+		"kind": "opam",
+		"switch": "default"
+	}
+}
