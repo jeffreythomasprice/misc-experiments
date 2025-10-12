@@ -1,4 +1,5 @@
-open Format;;
+open Format
+open Lib;;
 
 print_string "Hello, World!\n"
 
@@ -10,7 +11,7 @@ print_newline ();;
 print_newline ();;
 print_string ("foo" ^ " " ^ (42 |> Int.to_string) ^ "\n");;
 
-print_string {|
+print_string ({|
   this is a multi-
   line string
-|}
+|} |> dedent)

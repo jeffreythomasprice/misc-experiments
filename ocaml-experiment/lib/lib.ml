@@ -31,3 +31,10 @@ let rec trim_common_leading_whitespace inputs =
   | _, true, true -> trim_common_leading_whitespace remainders
   (* no inputs, mismatched first character, etc. *)
   | _ -> inputs
+
+let dedent s =
+  let lines = String.split_on_char '\n' s in
+  (* TODO this needs to turn all entirely whitespace strings into empty string *)
+  (* TODO and then when trimming leading whitespace, only trim the ones that aren't already all whitespace *)
+  let trimmed = trim_common_leading_whitespace lines in
+  String.concat "\n" trimmed

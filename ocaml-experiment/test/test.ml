@@ -34,6 +34,8 @@ let trim_common_leading_whitespace_tests =
               let actual = trim_common_leading_whitespace inputs in
               assert_equal expected actual))
 
+(* TODO dedent tests *)
+
 let tests =
   "tests" >::: [ is_whitespace_tests; trim_common_leading_whitespace_tests ]
 
