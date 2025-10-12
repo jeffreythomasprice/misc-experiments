@@ -55,3 +55,37 @@ let dedent s =
            if trimmed == "" then "" else trim_prefix line leading_whitespace)
   in
   String.concat "\n" trimmed_lines
+
+type 'a match_result = { result : 'a; remainder : string }
+type 'a matcher = string -> 'a match_result option
+
+let match_literal (s : string) ?(case_sensitive : bool = true) : string matcher
+    =
+ fun input ->
+  let has_prefix =
+    if case_sensitive then String.starts_with input ~prefix:s
+    else
+      String.starts_with
+        (String.lowercase_ascii input)
+        ~prefix:(String.lowercase_ascii s)
+  in
+  if has_prefix then
+    let result = String.sub input 0 (String.length s) in
+    let remainder =
+      String.sub input (String.length s) (String.length input - String.length s)
+    in
+    Some { result; remainder }
+  else None
+
+(*
+TODO match char range
+TODO match any whitespace
+TODO match sequences
+TODO match any of
+TODO match optional
+TODO match in range
+TODO match at least zero
+TODO match at least one
+TODO match integers
+TODO match floats
+*)

@@ -30,5 +30,42 @@ let dedent_tests =
               let actual = dedent input in
               assert_equal expected actual))
 
-let tests = "tests" >::: [ is_whitespace_tests; dedent_tests ]
+let match_literal_tests =
+  "match literal"
+  >::: [
+         ( "default case sensitivity, matches" >:: fun _ ->
+           let m = match_literal "Foo" in
+           let actual = m "Foobar" in
+           let expected = Some { result = "Foo"; remainder = "bar" } in
+           assert_equal expected actual );
+         ( "default case sensitivity, does not match" >:: fun _ ->
+           let m = match_literal "Foo" in
+           let actual = m "foobar" in
+           let expected = None in
+           assert_equal expected actual );
+         ( "case sensitive, matches" >:: fun _ ->
+           let m = match_literal "Foo" ~case_sensitive:true in
+           let actual = m "Foobar" in
+           let expected = Some { result = "Foo"; remainder = "bar" } in
+           assert_equal expected actual );
+         ( "case sensitive, does not match" >:: fun _ ->
+           let m = match_literal "Foo" ~case_sensitive:true in
+           let actual = m "foobar" in
+           let expected = None in
+           assert_equal expected actual );
+         ( "case insensitive, matches" >:: fun _ ->
+           let m = match_literal "Foo" ~case_sensitive:false in
+           let actual = m "Foobar" in
+           let expected = Some { result = "Foo"; remainder = "bar" } in
+           assert_equal expected actual );
+         ( "case insensitive, does not match" >:: fun _ ->
+           let m = match_literal "Foo" ~case_sensitive:false in
+           let actual = m "FOObar" in
+           let expected = Some { result = "FOO"; remainder = "bar" } in
+           assert_equal expected actual );
+       ]
+
+let tests =
+  "tests" >::: [ is_whitespace_tests; dedent_tests; match_literal_tests ]
+
 let _ = run_test_tt_main tests
