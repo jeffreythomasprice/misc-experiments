@@ -13,42 +13,28 @@ let is_whitespace_tests =
               assert_equal expected (is_whitespace input)
                 ~printer:string_of_bool))
 
-let trim_common_whitespace_tests =
+let trim_common_leading_whitespace_tests =
   "trim common whitespace"
   >::: ([
-          (" foo", "  bar", (" ", "foo", " bar"));
-          (" \tfoo", " \t bar", (" \t", "foo", " bar"));
-          (" \tfoo", "  \tbar", (" ", "\tfoo", " \tbar"));
+          ( "has common whitespace",
+            [ " foo"; "  bar"; "   baz" ],
+            [ "foo"; " bar"; "  baz" ] );
+          ( "has common whitespace, 2",
+            [ "\t  \tfoo"; "\t bar"; "\t \t\t\tbaz" ],
+            [ " \tfoo"; "bar"; "\t\t\tbaz" ] );
+          ( "no common prefix",
+            [ "\t  \tfoo"; "bar"; " baz" ],
+            [ "\t  \tfoo"; "bar"; " baz" ] );
+          ( "non-whitespace common prefix",
+            [ "aaafoo"; "aaabar"; "aaabaz" ],
+            [ "aaafoo"; "aaabar"; "aaabaz" ] );
         ]
-       |> List.map (fun (input1, input2, expected) ->
-              let ( expected_whitespace,
-                    expected_remainder_1,
-                    expected_remainder_2 ) =
-                expected
-              in
-              let name =
-                Format.sprintf "\"%s\" \"%s\" -> (\"%s\", \"%s\", \"%s\")"
-                  input1 input2 expected_whitespace expected_remainder_1
-                  expected_remainder_2
-              in
+       |> List.map (fun (name, inputs, expected) ->
               name >:: fun _ ->
-              let actual_whitespace, actual_remainder_1, actual_remainder_2 =
-                trim_common_whitespace input1 input2
-              in
-              assert_equal expected_whitespace actual_whitespace
-                ~printer:(fun x -> x);
-              assert_equal expected_remainder_1 actual_remainder_1
-                ~printer:(fun x -> x);
-              assert_equal expected_remainder_2 actual_remainder_2
-                ~printer:(fun x -> x)))
+              let actual = trim_common_leading_whitespace inputs in
+              assert_equal expected actual))
 
-(* 
-let dedent_tests =
-  "dedent"
-  >::: ([ ("  foo\n   bar", "foo\n bar") (* TODO more tests *) ]
-       |> List.map (fun (a, b) ->
-              let name = Format.sprintf "%s -> %s" a b in
-              name >:: fun _ -> assert_equal b (dedent a))) *)
+let tests =
+  "tests" >::: [ is_whitespace_tests; trim_common_leading_whitespace_tests ]
 
-let tests = "tests" >::: [ is_whitespace_tests; trim_common_whitespace_tests ]
 let _ = run_test_tt_main tests

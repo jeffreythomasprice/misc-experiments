@@ -8,22 +8,26 @@ let string_uncons s =
 
 let is_whitespace c = c = ' ' || c = '\t' || c = '\n' || c = '\r'
 
-let rec trim_common_whitespace a b =
-  match (string_uncons a, string_uncons b) with
-  | (Some a_head, a_remainder), (Some b_head, b_remainder)
-    when is_whitespace a_head && is_whitespace b_head && a_head = b_head ->
-      let this_whitespace = a_head |> String.make 1 in
-      let extra_whitespace, a_result, b_result =
-        trim_common_whitespace a_remainder b_remainder
-      in
-      (this_whitespace ^ extra_whitespace, a_result, b_result)
-  | _ -> ("", a, b)
+let rec all_elements_equal inputs =
+  match inputs with
+  | [] -> true
+  | [ _ ] -> true
+  | a :: b :: c -> a = b && all_elements_equal (b :: c)
 
-let rec trim_common_whitespace_2 inputs =
+let rec trim_common_leading_whitespace inputs =
   let heads, remainders = inputs |> List.map string_uncons |> List.split in
-  ()
 
-(* 
-let dedent s =
-  let lines = String.split_on_char '\n' s in
-  s *)
+  let all_heads_equal = all_elements_equal heads in
+
+  let leading_head_is_whitespace =
+    match heads with
+    | [] -> false
+    | Some head :: _ -> is_whitespace head
+    | None :: _ -> false
+  in
+
+  match (heads, all_heads_equal, leading_head_is_whitespace) with
+  (* the first char is whitespace in all inputs, and it's the same whitespace character *)
+  | _, true, true -> trim_common_leading_whitespace remainders
+  (* no inputs, mismatched first character, etc. *)
+  | _ -> inputs
