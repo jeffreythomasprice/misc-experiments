@@ -68,8 +68,25 @@ extension [T1, T2](m: (Matcher[T1], Matcher[T2]))
         val (m1, m2) = m
         tuple2(m1, m2)
 
+def tuple3[T1, T2, T3](m1: Matcher[T1], m2: Matcher[T2], m3: Matcher[T3]): Matcher[(T1, T2, T3)] =
+    input =>
+        m1(input).match
+            case Some(MatchResult(r1, remainder)) =>
+                m2(remainder).match
+                    case Some(MatchResult(r2, remainder)) =>
+                        m3(remainder).match
+                            case Some(MatchResult(r3, remainder)) =>
+                                Some(MatchResult((r1, r2, r3), remainder))
+                            case None => None
+                    case None => None
+            case None => None
+
+extension [T1, T2, T3](m: (Matcher[T1], Matcher[T2], Matcher[T3]))
+    def toMatcher: Matcher[(T1, T2, T3)] =
+        val (m1, m2, m3) = m
+        tuple3(m1, m2, m3)
+
 /*
-TODO seq3
 TODO anyOf
 TODO optional
 TODO atLeastZero
