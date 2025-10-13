@@ -65,7 +65,49 @@ let match_literal_tests =
            assert_equal expected actual );
        ]
 
+let match_char_range_tests =
+  "match char range"
+  >::: [
+         ( "a..z, matches" >:: fun _ ->
+           let m = match_char_range 'a' 'z' in
+           let actual = m "foo" in
+           let expected = Some { result = 'f'; remainder = "oo" } in
+           assert_equal expected actual );
+         ( "a..z, does not match" >:: fun _ ->
+           let m = match_char_range 'a' 'z' in
+           let actual = m "123" in
+           let expected = None in
+           assert_equal expected actual );
+       ]
+
+let match_seq2_tests =
+  "match seq2"
+  >::: [
+         ( "both match" >:: fun _ ->
+           let m = match_seq2 (match_literal "foo") (match_literal "bar") in
+           let actual = m "foobarbaz" in
+           let expected = Some { result = ("foo", "bar"); remainder = "baz" } in
+           assert_equal expected actual );
+         ( "first fails" >:: fun _ ->
+           let m = match_seq2 (match_literal "foo") (match_literal "bar") in
+           let actual = m "fobarbaz" in
+           let expected = None in
+           assert_equal expected actual );
+         ( "second fails" >:: fun _ ->
+           let m = match_seq2 (match_literal "foo") (match_literal "bar") in
+           let actual = m "foobabaz" in
+           let expected = None in
+           assert_equal expected actual );
+       ]
+
 let tests =
-  "tests" >::: [ is_whitespace_tests; dedent_tests; match_literal_tests ]
+  "tests"
+  >::: [
+         is_whitespace_tests;
+         dedent_tests;
+         match_literal_tests;
+         match_char_range_tests;
+         match_seq2_tests;
+       ]
 
 let _ = run_test_tt_main tests

@@ -77,15 +77,35 @@ let match_literal (s : string) ?(case_sensitive : bool = true) : string matcher
     Some { result; remainder }
   else None
 
+let match_char_range (lower : char) (upper : char) : char matcher =
+ fun input ->
+  match string_uncons input with
+  | Some result, remainder ->
+      if result >= lower && result <= upper then Some { result; remainder }
+      else None
+  | None, _ -> None
+
+let match_seq2 m1 m2 =
+ fun input ->
+  match m1 input with
+  | Some { result = r1; remainder } -> (
+      match m2 remainder with
+      | Some { result = r2; remainder } -> Some { result = (r1, r2); remainder }
+      | None -> None)
+  | None -> None
+
 (*
-TODO match char range
-TODO match any whitespace
-TODO match sequences
+TODO match seq3
+TODO match seq list
 TODO match any of
 TODO match optional
 TODO match in range
 TODO match at least zero
 TODO match at least one
+TODO ignore prefix
+TODO ignore suffix
+TODO ignore prefix and suffix
 TODO match integers
 TODO match floats
+TODO match any whitespace
 *)
