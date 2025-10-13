@@ -1,4 +1,4 @@
-class StringLiterals extends munit.FunSuite {
+class StringLiteralSuite extends munit.FunSuite {
     for (
       (name, m, input, expected) <- List(
         (
@@ -36,6 +36,18 @@ class StringLiterals extends munit.FunSuite {
           stringLiteral("foo", caseSensitive = false),
           "Foobar",
           Some(MatchResult(result = "Foo", remainder = "bar"))
+        ),
+        (
+          "extension method, success",
+          "Foo".toMatcher,
+          "Foobar",
+          Some(MatchResult(result = "Foo", remainder = "bar"))
+        ),
+        (
+          "extension method, fail",
+          "foo".toMatcher,
+          "Foobar",
+          None
         )
       )
     ) test(name) {
@@ -43,7 +55,7 @@ class StringLiterals extends munit.FunSuite {
     }
 }
 
-class CharRange extends munit.FunSuite {
+class CharRangeSuite extends munit.FunSuite {
     for (
       (lower, upper, input, expected) <- List(
         (
@@ -61,5 +73,53 @@ class CharRange extends munit.FunSuite {
       )
     ) test(s"[$lower..$upper] => $expected") {
         assertEquals(charRange(lower, upper)(input), expected)
+    }
+}
+
+class ListSuite extends munit.FunSuite {
+    for (
+      (name, m, input, expected) <- List(
+        (
+          "success",
+          List(
+            stringLiteral("aaa"),
+            stringLiteral("bbb"),
+            stringLiteral("ccc")
+          ).toMatcher,
+          "aaabbbccc___",
+          Some(
+            MatchResult(result = List("aaa", "bbb", "ccc"), remainder = "___")
+          )
+        )
+      )
+    ) test(name) {
+        assertEquals(m(input), expected)
+    }
+}
+
+class Tuple2Suite extends munit.FunSuite {
+    for (
+      (name, m, input, expected) <- List(
+        (
+          "success",
+          ("foo".toMatcher, "bar".toMatcher).toMatcher,
+          "foobar_",
+          Some(MatchResult(("foo", "bar"), "_"))
+        ),
+        (
+          "fail on 1",
+          ("foo".toMatcher, "bar".toMatcher).toMatcher,
+          "fobar_",
+          None
+        ),
+        (
+          "fail on 2",
+          ("foo".toMatcher, "bar".toMatcher).toMatcher,
+          "fooba_",
+          None
+        )
+      )
+    ) test(name) {
+        assertEquals(m(input), expected)
     }
 }
