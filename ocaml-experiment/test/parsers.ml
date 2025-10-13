@@ -51,10 +51,50 @@ let match_char_range_tests =
            assert_equal expected actual );
        ]
 
+let match_seq_tests =
+  "match seq"
+  >::: [
+         ( "success" >:: fun _ ->
+           let m =
+             match_seq
+               [ match_literal "aaa"; match_literal "bbb"; match_literal "ccc" ]
+           in
+           let actual = m "aaabbbccc___" in
+           let expected =
+             Some { result = [ "aaa"; "bbb"; "ccc" ]; remainder = "baz" }
+           in
+           Format.printf "TODO %s" (show_match_result_option expected);
+           assert_equal expected actual );
+         ( "fail on 1" >:: fun _ ->
+           let m =
+             match_seq
+               [ match_literal "aaa"; match_literal "bbb"; match_literal "ccc" ]
+           in
+           let actual = m "aabbbccc___" in
+           let expected = None in
+           assert_equal expected actual );
+         ( "fail on 2" >:: fun _ ->
+           let m =
+             match_seq
+               [ match_literal "aaa"; match_literal "bbb"; match_literal "ccc" ]
+           in
+           let actual = m "aaabbccc___" in
+           let expected = None in
+           assert_equal expected actual );
+         ( "fail on 3" >:: fun _ ->
+           let m =
+             match_seq
+               [ match_literal "aaa"; match_literal "bbb"; match_literal "ccc" ]
+           in
+           let actual = m "aaabbbcc___" in
+           let expected = None in
+           assert_equal expected actual );
+       ]
+
 let match_seq2_tests =
   "match seq2"
   >::: [
-         ( "both match" >:: fun _ ->
+         ( "success" >:: fun _ ->
            let m = match_seq2 (match_literal "foo") (match_literal "bar") in
            let actual = m "foobarbaz" in
            let expected = Some { result = ("foo", "bar"); remainder = "baz" } in
@@ -74,7 +114,7 @@ let match_seq2_tests =
 let match_seq3_tests =
   "match seq3"
   >::: [
-         ( "both match" >:: fun _ ->
+         ( "success" >:: fun _ ->
            let m =
              match_seq3 (match_literal "aaa") (match_literal "bbb")
                (match_literal "ccc")
@@ -115,6 +155,7 @@ let tests =
   >::: [
          match_literal_tests;
          match_char_range_tests;
+         match_seq_tests;
          match_seq2_tests;
          match_seq3_tests;
        ]

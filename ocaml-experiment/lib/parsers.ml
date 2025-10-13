@@ -1,6 +1,6 @@
 open Strings
 
-type 'a match_result = { result : 'a; remainder : string }
+type 'a match_result = { result : 'a; remainder : string } [@@deriving show]
 type 'a matcher = string -> 'a match_result option
 
 let match_literal (s : string) ?(case_sensitive : bool = true) : string matcher
@@ -29,7 +29,25 @@ let match_char_range (lower : char) (upper : char) : char matcher =
       else None
   | None, _ -> None
 
-let match_seq2 m1 m2 =
+let rec match_seq (matchers : 'a matcher list) : 'a list matcher =
+  match matchers with
+  (* base case, no matchers, input passed through unchanged *)
+  | [] -> fun input -> Some { result = []; remainder = input }
+  | m :: matchers -> (
+      (* a matcher that handles the 2nd and on *)
+      let match_rest = match_seq matchers in
+      fun input ->
+        (* apply the first matcher *)
+        match m input with
+        | Some { result = result_head; remainder } -> (
+            (* apply the rest of the matchers *)
+            match match_rest remainder with
+            | Some { result = result_tail; remainder } ->
+                Some { result = result_head :: result_tail; remainder }
+            | None -> None)
+        | None -> None)
+
+let match_seq2 (m1 : 't1 matcher) (m2 : 't2 matcher) : ('t1 * 't2) matcher =
  fun input ->
   match m1 input with
   | Some { result = r1; remainder } -> (
@@ -38,7 +56,8 @@ let match_seq2 m1 m2 =
       | None -> None)
   | None -> None
 
-let match_seq3 m1 m2 m3 =
+let match_seq3 (m1 : 't1 matcher) (m2 : 't2 matcher) (m3 : 't3 matcher) :
+    ('t1 * 't2 * 't3) matcher =
  fun input ->
   match m1 input with
   | Some { result = r1; remainder } -> (
@@ -52,7 +71,6 @@ let match_seq3 m1 m2 m3 =
   | None -> None
 
 (*
-TODO match seq list
 TODO match any of
 TODO match optional
 TODO match in range
