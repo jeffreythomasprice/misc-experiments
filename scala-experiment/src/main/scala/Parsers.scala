@@ -50,7 +50,7 @@ def list[T](m: Matcher[T]*): Matcher[List[T]] =
             input => Some(MatchResult(result = List(), remainder = input))
 
 extension [T](l: List[Matcher[T]])
-    def toMatcher: Matcher[List[T]] =
+    def toListMatcher: Matcher[List[T]] =
         list(l*)
 
 def tuple2[T1, T2](m1: Matcher[T1], m2: Matcher[T2]): Matcher[(T1, T2)] =
@@ -88,6 +88,8 @@ extension [T1, T2, T3](m: (Matcher[T1], Matcher[T2], Matcher[T3]))
 
 /*
 TODO anyOf
+def anyOf[T](m: Matcher[T]*): Matcher[List[T]] =
+
 TODO optional
 TODO atLeastZero
 TODO atLeastOne
