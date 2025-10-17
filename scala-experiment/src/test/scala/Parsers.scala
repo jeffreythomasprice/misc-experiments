@@ -156,3 +156,30 @@ class Tuple3Suite extends munit.FunSuite {
         assertEquals(m(input), expected)
     }
 }
+
+class AnyOfSuite extends munit.FunSuite {
+    for (
+      (name, m, input, expected) <- List(
+        (
+          "success on first choice",
+          List("aaa".toMatcher, "bbb".toMatcher).toAnyOfMatcher,
+          "aaa___",
+          Some(MatchResult("aaa", "___"))
+        ),
+        (
+          "success on second choice",
+          List("aaa".toMatcher, "bbb".toMatcher).toAnyOfMatcher,
+          "bbb___",
+          Some(MatchResult("bbb", "___"))
+        ),
+        (
+          "failure",
+          List("aaa".toMatcher, "bbb".toMatcher).toAnyOfMatcher,
+          "ccc___",
+          None
+        )
+      )
+    ) test(name) {
+        assertEquals(m(input), expected)
+    }
+}

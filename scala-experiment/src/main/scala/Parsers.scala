@@ -86,10 +86,21 @@ extension [T1, T2, T3](m: (Matcher[T1], Matcher[T2], Matcher[T3]))
         val (m1, m2, m3) = m
         tuple3(m1, m2, m3)
 
-/*
-TODO anyOf
-def anyOf[T](m: Matcher[T]*): Matcher[List[T]] =
+def anyOf[T](m: Matcher[T]*): Matcher[T] =
+    // TODO refactor to build all the matchers up front instead of doing toAnyOfMatcher inside the function
+    input =>
+        m.toList.match
+            case head :: next =>
+                head(input).match
+                    case Some(value) => Some(value)
+                    case None        => next.toAnyOfMatcher(input)
+            case Nil => None
 
+extension [T](l: List[Matcher[T]])
+    def toAnyOfMatcher: Matcher[T] =
+        anyOf(l*)
+
+/*
 TODO optional
 TODO atLeastZero
 TODO atLeastOne
