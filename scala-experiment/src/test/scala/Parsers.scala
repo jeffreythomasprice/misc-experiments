@@ -85,7 +85,7 @@ class ListSuite extends munit.FunSuite {
             stringLiteral("aaa"),
             stringLiteral("bbb"),
             stringLiteral("ccc")
-          ).toMatcher,
+          ).toListMatcher,
           "aaabbbccc___",
           Some(
             MatchResult(result = List("aaa", "bbb", "ccc"), remainder = "___")
