@@ -4,7 +4,7 @@
 -on_load(init/0).
 
 init() ->
-    ok = erlang:load_nif("priv/rust_lib", 0).
+    ok = erlang:load_nif("priv/librust_lib", 0).
 
 add_ints(a, b) ->
     exit(nif_library_not_loaded).

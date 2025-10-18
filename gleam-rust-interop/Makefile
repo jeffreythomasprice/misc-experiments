@@ -19,7 +19,7 @@ exe: lib
 lib:
 	cd lib && cargo build
 	bun x -y mkdirp executable/priv
-	bun x -y shx cp ./lib/target/debug/rust_lib.dll executable/priv
+	bun x -y shx cp ./lib/target/debug/librust_lib.so executable/priv
 
 clean:
 	bun x -y shx rm -rf \
