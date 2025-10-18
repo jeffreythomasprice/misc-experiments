@@ -183,3 +183,69 @@ class AnyOfSuite extends munit.FunSuite {
         assertEquals(m(input), expected)
     }
 }
+
+class OptionSuite extends munit.FunSuite {
+    for (
+      (name, m, input, expected) <- List(
+        (
+          "success",
+          "aaa".toMatcher.toOptionMatcher,
+          "aaa___",
+          Some(MatchResult(Some("aaa"), "___"))
+        ),
+        (
+          "none",
+          "aaa".toMatcher.toOptionMatcher,
+          "bbb___",
+          Some(MatchResult(None, "bbb___"))
+        )
+      )
+    ) test(name) {
+        assertEquals(m(input), expected)
+    }
+}
+
+class AtLeastSuite extends munit.FunSuite {
+    for (
+      (name, m, input, expected) <- List(
+        (
+          "at least zero, success with zero",
+          "aaa".toMatcher.toAtLeastMatcher(0),
+          "___",
+          Some(MatchResult(List(), "___"))
+        ),
+        (
+          "at least zero, success with one",
+          "aaa".toMatcher.toAtLeastMatcher(0),
+          "aaa___",
+          Some(MatchResult(List("aaa"), "___"))
+        ),
+        (
+          "at least zero, success with two",
+          "aaa".toMatcher.toAtLeastMatcher(0),
+          "aaaaaa___",
+          Some(MatchResult(List("aaa", "aaa"), "___"))
+        ),
+        (
+          "at least one, failure with zero",
+          "aaa".toMatcher.toAtLeastMatcher(1),
+          "___",
+          None
+        ),
+        (
+          "at least one, success with one",
+          "aaa".toMatcher.toAtLeastMatcher(1),
+          "aaa___",
+          Some(MatchResult(List("aaa"), "___"))
+        ),
+        (
+          "at least one, success with two",
+          "aaa".toMatcher.toAtLeastMatcher(1),
+          "aaaaaa___",
+          Some(MatchResult(List("aaa", "aaa"), "___"))
+        )
+      )
+    ) test(name) {
+        assertEquals(m(input), expected)
+    }
+}

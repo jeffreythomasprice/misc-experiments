@@ -1,3 +1,4 @@
+import java.lang.classfile.instruction.ConstantInstruction.ArgumentConstantInstruction
 case class MatchResult[T](
     result: T,
     remainder: String
@@ -87,7 +88,6 @@ extension [T1, T2, T3](m: (Matcher[T1], Matcher[T2], Matcher[T3]))
         tuple3(m1, m2, m3)
 
 def anyOf[T](m: Matcher[T]*): Matcher[T] =
-    // TODO refactor to build all the matchers up front instead of doing toAnyOfMatcher inside the function
     input =>
         m.toList.match
             case head :: next =>
@@ -100,8 +100,30 @@ extension [T](l: List[Matcher[T]])
     def toAnyOfMatcher: Matcher[T] =
         anyOf(l*)
 
-/*
-TODO optional
-TODO atLeastZero
-TODO atLeastOne
- */
+def option[T](m: Matcher[T]): Matcher[Option[T]] =
+    input =>
+        m(input).match
+            case Some(MatchResult(result, remainder)) => Some(MatchResult(Some(result), remainder))
+            case None                                 => Some(MatchResult(None, input))
+
+extension [T](m: Matcher[T])
+    def toOptionMatcher: Matcher[Option[T]] =
+        option(m)
+
+def atLeast[T](m: Matcher[T], min: Int): Matcher[List[T]] =
+    if min < 0 then throw IllegalArgumentException("min be at least zero")
+
+    def matchAsManyAsPossible(input: String): MatchResult[List[T]] =
+        m(input).match
+            case Some(MatchResult(firstResult, remainder)) =>
+                matchAsManyAsPossible(remainder).match
+                    case MatchResult(tailResults, remainder) => MatchResult(firstResult :: tailResults, remainder)
+            case None =>
+                MatchResult(List(), input)
+
+    input =>
+        val results = matchAsManyAsPossible(input)
+        if results.result.length >= min then Some(results)
+        else None
+
+extension [T](m: Matcher[T]) def toAtLeastMatcher(min: Int): Matcher[List[T]] = atLeast(m, min)
