@@ -5,6 +5,9 @@ type matchResult<'t> = {
 
 type matcher<'t> = string => option<matchResult<'t>>
 
+let map = (m: matcher<'t>, f: 't => 'r): matcher<'r> => input =>
+  m(input)->Option.map(({result, remainder}) => {result: f(result), remainder})
+
 let string = (s: string): matcher<string> => input =>
   if input->String.startsWith(s) {
     Some({
@@ -72,9 +75,31 @@ let option = (m: matcher<'t>): matcher<option<'t>> => input =>
   | None => Some({result: None, remainder: input})
   }
 
-/*
- TODO atLeast
- TODO skipPrefix
- TODO skipSuffix
- TODO skipPrefixAndSuffix
- */
+let atLeast = (m: matcher<'t>, min: int): matcher<list<'t>> => {
+  let rec takeAsManyAsPossible = (m: matcher<'t>, input: string): matchResult<list<'t>> => {
+    switch m(input) {
+    | Some({result: head, remainder}) => {
+        let {result: tail, remainder} = takeAsManyAsPossible(m, remainder)
+        {result: list{head, ...tail}, remainder}
+      }
+    | None => {result: list{}, remainder: input}
+    }
+  }
+  input => {
+    let {result, remainder} = takeAsManyAsPossible(m, input)
+    if result->List.length >= min {
+      Some({result, remainder})
+    } else {
+      None
+    }
+  }
+}
+
+let skipPrefix = (prefix: matcher<'p>, m: matcher<'t>): matcher<'t> =>
+  tuple2(prefix, m)->map(((_, result)) => result)
+
+let skipSuffix = (m: matcher<'t>, suffix: matcher<'s>): matcher<'t> =>
+  tuple2(m, suffix)->map(((result, _)) => result)
+
+let skipPrefixAndSuffix = (prefix: matcher<'p>, m: matcher<'t>, suffix: matcher<'s>): matcher<'t> =>
+  tuple3(prefix, m, suffix)->map(((_, result, _)) => result)
