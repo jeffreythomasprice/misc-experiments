@@ -12,13 +12,20 @@ let string = (s: string): matcher<string> => input =>
   if input->String.startsWith(s) {
     Some({
       result: input->String.substring(~start=0, ~end=s->String.length),
-      remainder: input->String.substring(~start=s->String.length, ~end=input->String.length),
+      remainder: input->String.substringToEnd(~start=s->String.length),
     })
   } else {
     None
   }
 
-// TODO char range
+let charRange = (min: char, max: char): matcher<char> => input => {
+  let head = input->OCamlCompat.String.get(0)
+  if head >= min && head <= max {
+    Some({result: head, remainder: input->String.substringToEnd(~start=1)})
+  } else {
+    None
+  }
+}
 
 let rec list = (l: list<matcher<'t>>): matcher<list<'t>> => input =>
   switch l {

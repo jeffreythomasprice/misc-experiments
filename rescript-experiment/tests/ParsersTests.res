@@ -11,6 +11,16 @@ list{
   })
 )
 
+let m = charRange('a', 'z')
+list{
+  ("success", "j_", Some({result: 'j', remainder: "_"})),
+  ("failure", "!_", None),
+}->List.forEach(((name, input, expected)) =>
+  test("string literals: " ++ name, () => {
+    assertion((a, b) => {a == b}, m(input), expected)
+  })
+)
+
 let m = string("foo")
 list{
   ("success", "foobar", Some({result: "foo", remainder: "bar"})),
