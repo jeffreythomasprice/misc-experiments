@@ -25,7 +25,7 @@ fn main() -> Result<()> {
 
     tracing_subscriber::fmt::fmt()
         .with_writer(std::io::stderr)
-        .with_env_filter("info,game=trace")
+        .with_env_filter("info,rust_sdl3=trace")
         .init();
 
     let sdl_context = sdl3::init()?;
