@@ -1,4 +1,3 @@
-use core::f32;
 use std::{
     collections::HashMap,
     thread,
@@ -6,31 +5,16 @@ use std::{
 };
 use tracing::*;
 
-use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::{Result, eyre};
-use glam::{Mat4, UVec2, Vec2, Vec3, Vec4, vec2, vec3, vec4};
 use sdl3::{
     event::Event,
     keyboard::Keycode,
-    mouse::MouseButton,
-    sys::{
-        mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
-        video::{
+    sys::video::{
             SDL_GL_SetSwapInterval, SDL_SetWindowSurfaceVSync, SDL_WINDOW_SURFACE_VSYNC_DISABLED,
         },
-    },
     video::Window,
 };
 
-use crate::{
-    camera::Camera,
-    gl_utils::{
-        buffer::{Buffer, BufferTarget, BufferUsage},
-        shader::ShaderProgram,
-        texture::Texture,
-        vertex_array_object::VertexArrayObject,
-    },
-};
 
 pub struct KeyboardState {
     state: HashMap<Keycode, bool>,

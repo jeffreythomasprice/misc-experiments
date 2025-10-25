@@ -3,27 +3,16 @@ mod gl_utils;
 mod sdl_utils;
 
 use core::f32;
-use std::{
-    collections::HashMap,
-    thread,
-    time::{Duration, Instant},
-};
-use tracing::*;
+use std::time::Duration;
 
 use bytemuck::{Pod, Zeroable};
-use color_eyre::eyre::{Result, eyre};
+use color_eyre::eyre::Result;
 use glam::{Mat4, Vec2, Vec3, Vec4, vec2, vec3, vec4};
 use sdl3::{
     event::Event,
     keyboard::Keycode,
     mouse::MouseButton,
-    sys::{
-        mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
-        video::{
-            SDL_GL_SetSwapInterval, SDL_SetWindowSurfaceVSync, SDL_WINDOW_SURFACE_VSYNC_DISABLED,
-        },
-    },
-    video::Window,
+    sys::mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
 };
 
 use crate::{
@@ -34,7 +23,7 @@ use crate::{
         texture::Texture,
         vertex_array_object::VertexArrayObject,
     },
-    sdl_utils::{AppState, KeyboardState, sdl_main},
+    sdl_utils::{AppState, sdl_main},
 };
 
 #[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
@@ -141,7 +130,7 @@ impl App {
             ],
         )?;
 
-        let mut camera = Camera::new(
+        let camera = Camera::new(
             vec3(0.0, 0.0, 6.0),
             vec3(0.0, 0.0, 0.0),
             vec3(0.0, 1.0, 0.0),
