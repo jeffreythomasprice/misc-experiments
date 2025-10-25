@@ -1,0 +1,12 @@
+[package]
+name = "rust-sdl3-opengl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytemuck = { version = "1.24.0", features = ["derive"] }
+color-eyre = "0.6.5"
+gl = "0.14.0"
+sdl3 = { version = "0.16.1", features = ["build-from-source"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
