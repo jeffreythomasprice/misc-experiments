@@ -9,7 +9,7 @@ use tracing::*;
 
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::{Result, eyre};
-use glam::{Vec2, Vec4, vec2, vec4};
+use glam::{Mat4, Vec2, Vec4, vec2, vec4};
 use sdl3::{
     keyboard::Keycode,
     sys::video::{
@@ -19,7 +19,7 @@ use sdl3::{
 
 use crate::gl_utils::{
     buffer::{Buffer, BufferTarget, BufferUsage},
-    shader::{ShaderAttribute, ShaderProgram},
+    shader::ShaderProgram,
     vertex_array_object::VertexArrayObject,
 };
 
@@ -83,10 +83,10 @@ fn main() -> Result<()> {
         BufferTarget::Array,
         BufferUsage::StaticDraw,
         &[
-            Vertex::new(vec2(-0.5, -0.5), vec4(0.5, 0.25, 0.0, 1.0)),
-            Vertex::new(vec2(0.5, -0.5), vec4(0.0, 0.5, 0.25, 1.0)),
-            Vertex::new(vec2(0.5, 0.5), vec4(0.25, 0.0, 0.5, 1.0)),
-            Vertex::new(vec2(-0.5, 0.5), vec4(0.25, 0.5, 0.0, 1.0)),
+            Vertex::new(vec2(50.0, 50.0), vec4(0.5, 0.25, 0.0, 1.0)),
+            Vertex::new(vec2(300.0, 50.0), vec4(0.0, 0.5, 0.25, 1.0)),
+            Vertex::new(vec2(300.0, 300.0), vec4(0.25, 0.0, 0.5, 1.0)),
+            Vertex::new(vec2(50.0, 300.0), vec4(0.25, 0.5, 0.0, 1.0)),
         ],
     )?;
 
@@ -96,6 +96,7 @@ fn main() -> Result<()> {
         &[0, 1, 2, 2, 3, 0],
     )?;
 
+    // TODO builder pattern?
     let vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
         &shader,
         &array_buffer,
@@ -129,6 +130,28 @@ fn main() -> Result<()> {
             gl::Clear(gl::COLOR_BUFFER_BIT);
 
             shader.use_program();
+
+            // TODO matrices
+            let (width, height) = window.size();
+            gl::UniformMatrix4fv(
+                shader
+                    .assert_uniform_by_name("uniform_projection_matrix")?
+                    .location,
+                1,
+                gl::FALSE,
+                Mat4::orthographic_lh(0.0, width as f32, height as f32, 0.0, -1.0, 1.0)
+                    .to_cols_array()
+                    .as_ptr(),
+            );
+            gl::UniformMatrix4fv(
+                shader
+                    .assert_uniform_by_name("uniform_modelview_matrix")?
+                    .location,
+                1,
+                gl::FALSE,
+                Mat4::IDENTITY.to_cols_array().as_ptr(),
+            );
+
             vertex_array_object.bind();
             gl::DrawElements(
                 gl::TRIANGLES,

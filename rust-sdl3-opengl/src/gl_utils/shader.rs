@@ -72,16 +72,16 @@ impl Drop for Shader {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ShaderAttributeType {
+pub enum ShaderDataType {
     Float,
     FloatVec2,
     FloatVec3,
     FloatVec4,
+    FloatMat2,
+    FloatMat3,
+    FloatMat4,
     /*
     TODO rest of the possible attribute types
-    GL_FLOAT_MAT2
-    GL_FLOAT_MAT3
-    GL_FLOAT_MAT4
     GL_FLOAT_MAT2x3
     GL_FLOAT_MAT2x4
     GL_FLOAT_MAT3x2
@@ -112,26 +112,32 @@ pub enum ShaderAttributeType {
         */
 }
 
-impl ShaderAttributeType {
+impl ShaderDataType {
     pub fn gl_type(self) -> u32 {
         match self {
-            ShaderAttributeType::Float => gl::FLOAT,
-            ShaderAttributeType::FloatVec2 => gl::FLOAT_VEC2,
-            ShaderAttributeType::FloatVec3 => gl::FLOAT_VEC3,
-            ShaderAttributeType::FloatVec4 => gl::FLOAT_VEC4,
+            Self::Float => gl::FLOAT,
+            Self::FloatVec2 => gl::FLOAT_VEC2,
+            Self::FloatVec3 => gl::FLOAT_VEC3,
+            Self::FloatVec4 => gl::FLOAT_VEC4,
+            Self::FloatMat2 => gl::FLOAT_MAT2,
+            Self::FloatMat3 => gl::FLOAT_MAT3,
+            Self::FloatMat4 => gl::FLOAT_MAT4,
         }
     }
 }
 
-impl TryFrom<u32> for ShaderAttributeType {
+impl TryFrom<u32> for ShaderDataType {
     type Error = color_eyre::eyre::Error;
 
     fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
         match value {
-            gl::FLOAT => Ok(ShaderAttributeType::Float),
-            gl::FLOAT_VEC2 => Ok(ShaderAttributeType::FloatVec2),
-            gl::FLOAT_VEC3 => Ok(ShaderAttributeType::FloatVec3),
-            gl::FLOAT_VEC4 => Ok(ShaderAttributeType::FloatVec4),
+            gl::FLOAT => Ok(Self::Float),
+            gl::FLOAT_VEC2 => Ok(Self::FloatVec2),
+            gl::FLOAT_VEC3 => Ok(Self::FloatVec3),
+            gl::FLOAT_VEC4 => Ok(Self::FloatVec4),
+            gl::FLOAT_MAT2 => Ok(Self::FloatMat2),
+            gl::FLOAT_MAT3 => Ok(Self::FloatMat3),
+            gl::FLOAT_MAT4 => Ok(Self::FloatMat4),
             _ => Err(eyre!(
                 "unhandled opengl enum for shader attribute type: {}",
                 value
@@ -144,13 +150,22 @@ impl TryFrom<u32> for ShaderAttributeType {
 pub struct ShaderAttribute {
     pub name: String,
     pub size: i32,
-    pub typ: ShaderAttributeType,
+    pub typ: ShaderDataType,
     pub location: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ShaderUniform {
+    pub name: String,
+    pub size: i32,
+    pub typ: ShaderDataType,
+    pub location: i32,
 }
 
 pub struct ShaderProgram {
     instance: u32,
     pub attributes: Vec<ShaderAttribute>,
+    pub uniforms: Vec<ShaderUniform>,
 }
 
 impl ShaderProgram {
@@ -162,6 +177,7 @@ impl ShaderProgram {
             let mut result = Self {
                 instance: gl::CreateProgram(),
                 attributes: Vec::new(),
+                uniforms: Vec::new(),
             };
             gl::AttachShader(result.instance, vertex_shader.instance);
             gl::AttachShader(result.instance, fragment_shader.instance);
@@ -208,21 +224,48 @@ impl ShaderProgram {
                     gl::GetAttribLocation(result.instance, name_c_str.as_mut_ptr() as *mut i8);
                 name_c_str.resize(name_len as usize, 0);
                 let name = CString::from_vec_unchecked(name_c_str).into_string()?;
-                let location: u32 = location.try_into().map_err(|e| {
-                    eyre!("failed to find location for shader attribute {i}, name={name}: {e:?}")
-                })?;
-                let typ: ShaderAttributeType = typ.try_into()?;
+                let typ: ShaderDataType = typ.try_into()?;
                 let attribute = ShaderAttribute {
                     name,
                     size,
                     typ,
-                    location,
+                    location: location as u32,
                 };
                 trace!("attribute[{i}]: {attribute:?}");
                 result.attributes.push(attribute);
             }
 
-            // TODO uniforms
+            let mut num_uniforms = 0;
+            gl::GetProgramiv(result.instance, gl::ACTIVE_UNIFORMS, &mut num_uniforms);
+            trace!("num_uniforms = {}", num_uniforms);
+            for i in 0..(num_uniforms as u32) {
+                let mut name_c_str = vec![0; 256 as usize];
+                let mut name_len = 0;
+                let mut size = 0;
+                let mut typ = 0;
+                gl::GetActiveUniform(
+                    result.instance,
+                    i,
+                    name_c_str.len() as GLsizei,
+                    &mut name_len,
+                    &mut size,
+                    &mut typ,
+                    name_c_str.as_mut_ptr() as *mut i8,
+                );
+                let location =
+                    gl::GetUniformLocation(result.instance, name_c_str.as_mut_ptr() as *mut i8);
+                name_c_str.resize(name_len as usize, 0);
+                let name = CString::from_vec_unchecked(name_c_str).into_string()?;
+                let typ: ShaderDataType = typ.try_into()?;
+                let uniform = ShaderUniform {
+                    name,
+                    size,
+                    typ,
+                    location,
+                };
+                trace!("uniform[{i}]: {uniform:?}");
+                result.uniforms.push(uniform);
+            }
 
             Ok(result)
         }
@@ -241,6 +284,15 @@ impl ShaderProgram {
     pub fn assert_attribute_by_name(&self, name: &str) -> Result<&ShaderAttribute> {
         self.get_attribute_by_name(name)
             .ok_or(eyre!("no such attribute: {name}"))
+    }
+
+    pub fn get_uniform_by_name(&self, name: &str) -> Option<&ShaderUniform> {
+        self.uniforms.iter().find(|x| x.name == name)
+    }
+
+    pub fn assert_uniform_by_name(&self, name: &str) -> Result<&ShaderUniform> {
+        self.get_uniform_by_name(name)
+            .ok_or(eyre!("no such uniform: {name}"))
     }
 }
 

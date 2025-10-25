@@ -4,7 +4,7 @@ use color_eyre::eyre::Result;
 
 use crate::gl_utils::{
     buffer::Buffer,
-    shader::{Shader, ShaderAttribute, ShaderAttributeType, ShaderProgram},
+    shader::{Shader, ShaderAttribute, ShaderDataType, ShaderProgram, ShaderType},
 };
 
 pub struct VertexArrayObject {
@@ -43,10 +43,13 @@ impl VertexArrayObject {
 
 fn vertex_attrib_pointer<T>(attribute: &ShaderAttribute, offset: usize) {
     let (size, gl_type) = match attribute.typ {
-        ShaderAttributeType::Float => (1, gl::FLOAT),
-        ShaderAttributeType::FloatVec2 => (2, gl::FLOAT),
-        ShaderAttributeType::FloatVec3 => (3, gl::FLOAT),
-        ShaderAttributeType::FloatVec4 => (4, gl::FLOAT),
+        ShaderDataType::Float => (1, gl::FLOAT),
+        ShaderDataType::FloatVec2 => (2, gl::FLOAT),
+        ShaderDataType::FloatVec3 => (3, gl::FLOAT),
+        ShaderDataType::FloatVec4 => (4, gl::FLOAT),
+        ShaderDataType::FloatMat2 => (4, gl::FLOAT),
+        ShaderDataType::FloatMat3 => (9, gl::FLOAT),
+        ShaderDataType::FloatMat4 => (16, gl::FLOAT),
     };
     let size = size * attribute.size;
     unsafe {
