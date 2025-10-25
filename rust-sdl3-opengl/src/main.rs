@@ -1,9 +1,6 @@
 mod gl_utils;
 
-use std::{
-    thread,
-    time::SystemTime,
-};
+use std::{thread, time::SystemTime};
 
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::{Result, eyre};
