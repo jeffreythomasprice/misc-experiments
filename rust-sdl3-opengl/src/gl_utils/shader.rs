@@ -207,7 +207,7 @@ impl ShaderProgram {
             gl::GetProgramiv(result.instance, gl::ACTIVE_ATTRIBUTES, &mut num_attributes);
             trace!("num_attributes = {}", num_attributes);
             for i in 0..(num_attributes as u32) {
-                let mut name_c_str = vec![0; 256 as usize];
+                let mut name_c_str = vec![0; 256_usize];
                 let mut name_len = 0;
                 let mut size = 0;
                 let mut typ = 0;
@@ -239,7 +239,7 @@ impl ShaderProgram {
             gl::GetProgramiv(result.instance, gl::ACTIVE_UNIFORMS, &mut num_uniforms);
             trace!("num_uniforms = {}", num_uniforms);
             for i in 0..(num_uniforms as u32) {
-                let mut name_c_str = vec![0; 256 as usize];
+                let mut name_c_str = vec![0; 256_usize];
                 let mut name_len = 0;
                 let mut size = 0;
                 let mut typ = 0;

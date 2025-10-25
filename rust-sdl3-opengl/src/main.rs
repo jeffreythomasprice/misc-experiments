@@ -1,15 +1,15 @@
+mod camera;
 mod gl_utils;
 
+use core::f32;
 use std::{
-    ffi::c_void,
     thread,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
-use tracing::*;
 
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::{Result, eyre};
-use glam::{Mat4, Vec2, Vec4, vec2, vec4};
+use glam::{Mat4, Vec2, Vec4, vec2, vec3, vec4};
 use sdl3::{
     keyboard::Keycode,
     sys::video::{
@@ -17,10 +17,13 @@ use sdl3::{
     },
 };
 
-use crate::gl_utils::{
-    buffer::{Buffer, BufferTarget, BufferUsage},
-    shader::ShaderProgram,
-    vertex_array_object::VertexArrayObject,
+use crate::{
+    camera::Camera,
+    gl_utils::{
+        buffer::{Buffer, BufferTarget, BufferUsage},
+        shader::ShaderProgram,
+        vertex_array_object::VertexArrayObject,
+    },
 };
 
 #[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
@@ -83,10 +86,10 @@ fn main() -> Result<()> {
         BufferTarget::Array,
         BufferUsage::StaticDraw,
         &[
-            Vertex::new(vec2(50.0, 50.0), vec4(0.5, 0.25, 0.0, 1.0)),
-            Vertex::new(vec2(300.0, 50.0), vec4(0.0, 0.5, 0.25, 1.0)),
-            Vertex::new(vec2(300.0, 300.0), vec4(0.25, 0.0, 0.5, 1.0)),
-            Vertex::new(vec2(50.0, 300.0), vec4(0.25, 0.5, 0.0, 1.0)),
+            Vertex::new(vec2(-1.0, -1.0), vec4(0.5, 0.25, 0.0, 1.0)),
+            Vertex::new(vec2(1.0, -1.0), vec4(0.0, 0.5, 0.25, 1.0)),
+            Vertex::new(vec2(1.0, 1.0), vec4(0.25, 0.0, 0.5, 1.0)),
+            Vertex::new(vec2(-1.0, 1.0), vec4(0.25, 0.5, 0.0, 1.0)),
         ],
     )?;
 
@@ -106,6 +109,12 @@ fn main() -> Result<()> {
             ("in_color", bytemuck::offset_of!(Vertex, color)),
         ],
     )?;
+
+    let camera = Camera::new(
+        vec3(0.0, 1.0, 6.0),
+        vec3(0.0, 0.0, 0.0),
+        vec3(0.0, 1.0, 0.0),
+    );
 
     const DESIRED_FPS: f64 = 60.0;
     const DESIRED_FRAME_DURATION: Duration = Duration::from_nanos(
@@ -133,15 +142,20 @@ fn main() -> Result<()> {
 
             // TODO matrices
             let (width, height) = window.size();
+            let ortho = Mat4::orthographic_lh(0.0, width as f32, height as f32, 0.0, -1.0, 1.0);
+            let perspective = Mat4::perspective_lh(
+                f32::consts::FRAC_PI_6,
+                (width as f32) / (height as f32),
+                0.01,
+                1000.0,
+            );
             gl::UniformMatrix4fv(
                 shader
                     .assert_uniform_by_name("uniform_projection_matrix")?
                     .location,
                 1,
                 gl::FALSE,
-                Mat4::orthographic_lh(0.0, width as f32, height as f32, 0.0, -1.0, 1.0)
-                    .to_cols_array()
-                    .as_ptr(),
+                perspective.to_cols_array().as_ptr(),
             );
             gl::UniformMatrix4fv(
                 shader
@@ -149,7 +163,7 @@ fn main() -> Result<()> {
                     .location,
                 1,
                 gl::FALSE,
-                Mat4::IDENTITY.to_cols_array().as_ptr(),
+                camera.matrix().to_cols_array().as_ptr(),
             );
 
             vertex_array_object.bind();

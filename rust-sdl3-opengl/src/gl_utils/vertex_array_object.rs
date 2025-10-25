@@ -4,7 +4,7 @@ use color_eyre::eyre::Result;
 
 use crate::gl_utils::{
     buffer::Buffer,
-    shader::{Shader, ShaderAttribute, ShaderDataType, ShaderProgram, ShaderType},
+    shader::{ShaderAttribute, ShaderDataType, ShaderProgram},
 };
 
 pub struct VertexArrayObject {
