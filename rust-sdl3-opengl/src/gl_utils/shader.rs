@@ -25,7 +25,7 @@ pub struct Shader {
 
 impl Shader {
     pub fn new(typ: ShaderType, source: &str) -> Result<Self> {
-        info!("compile shader type={:?}, source=\n{}", typ, source);
+        debug!("compile shader type: {:?}, source:\n{}", typ, source);
         unsafe {
             let result = Self {
                 instance: gl::CreateShader(typ.gl_type()),
@@ -72,7 +72,7 @@ impl Drop for Shader {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ShaderDataType {
+pub enum ShaderAttributeDataType {
     Float,
     FloatVec2,
     FloatVec3,
@@ -112,7 +112,7 @@ pub enum ShaderDataType {
         */
 }
 
-impl ShaderDataType {
+impl ShaderAttributeDataType {
     pub fn gl_type(self) -> u32 {
         match self {
             Self::Float => gl::FLOAT,
@@ -126,7 +126,7 @@ impl ShaderDataType {
     }
 }
 
-impl TryFrom<u32> for ShaderDataType {
+impl TryFrom<u32> for ShaderAttributeDataType {
     type Error = color_eyre::eyre::Error;
 
     fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
@@ -146,11 +146,48 @@ impl TryFrom<u32> for ShaderDataType {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ShaderUniformDataType {
+    FloatMat2,
+    FloatMat3,
+    FloatMat4,
+    Sampler2D,
+    // TODO what other possible uniform data types?
+}
+
+impl ShaderUniformDataType {
+    pub fn gl_type(self) -> u32 {
+        match self {
+            Self::FloatMat2 => gl::FLOAT_MAT2,
+            Self::FloatMat3 => gl::FLOAT_MAT3,
+            Self::FloatMat4 => gl::FLOAT_MAT4,
+            Self::Sampler2D => gl::SAMPLER_2D,
+        }
+    }
+}
+
+impl TryFrom<u32> for ShaderUniformDataType {
+    type Error = color_eyre::eyre::Error;
+
+    fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
+        match value {
+            gl::FLOAT_MAT2 => Ok(Self::FloatMat2),
+            gl::FLOAT_MAT3 => Ok(Self::FloatMat3),
+            gl::FLOAT_MAT4 => Ok(Self::FloatMat4),
+            gl::SAMPLER_2D => Ok(Self::Sampler2D),
+            _ => Err(eyre!(
+                "unhandled opengl enum for shader uniform type: {}",
+                value
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ShaderAttribute {
     pub name: String,
     pub size: i32,
-    pub typ: ShaderDataType,
+    pub typ: ShaderAttributeDataType,
     pub location: u32,
 }
 
@@ -158,7 +195,7 @@ pub struct ShaderAttribute {
 pub struct ShaderUniform {
     pub name: String,
     pub size: i32,
-    pub typ: ShaderDataType,
+    pub typ: ShaderUniformDataType,
     pub location: i32,
 }
 
@@ -224,11 +261,10 @@ impl ShaderProgram {
                     gl::GetAttribLocation(result.instance, name_c_str.as_mut_ptr() as *mut i8);
                 name_c_str.resize(name_len as usize, 0);
                 let name = CString::from_vec_unchecked(name_c_str).into_string()?;
-                let typ: ShaderDataType = typ.try_into()?;
                 let attribute = ShaderAttribute {
                     name,
                     size,
-                    typ,
+                    typ: typ.try_into()?,
                     location: location as u32,
                 };
                 trace!("attribute[{i}]: {attribute:?}");
@@ -256,11 +292,10 @@ impl ShaderProgram {
                     gl::GetUniformLocation(result.instance, name_c_str.as_mut_ptr() as *mut i8);
                 name_c_str.resize(name_len as usize, 0);
                 let name = CString::from_vec_unchecked(name_c_str).into_string()?;
-                let typ: ShaderDataType = typ.try_into()?;
                 let uniform = ShaderUniform {
                     name,
                     size,
-                    typ,
+                    typ: typ.try_into()?,
                     location,
                 };
                 trace!("uniform[{i}]: {uniform:?}");

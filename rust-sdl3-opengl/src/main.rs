@@ -14,7 +14,7 @@ use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2, Vec4, vec2, vec3, vec4};
 use sdl3::{
     event::Event,
-    keyboard::{Keycode, Scancode},
+    keyboard::Keycode,
     mouse::MouseButton,
     sys::{
         mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
@@ -29,6 +29,7 @@ use crate::{
     gl_utils::{
         buffer::{Buffer, BufferTarget, BufferUsage},
         shader::ShaderProgram,
+        texture::Texture,
         vertex_array_object::VertexArrayObject,
     },
 };
@@ -37,15 +38,15 @@ use crate::{
 #[repr(C)]
 struct Vertex {
     pub position: Vec2,
-    _padding: [u8; 8],
+    pub texture_coordinate: Vec2,
     pub color: Vec4,
 }
 
 impl Vertex {
-    pub fn new(position: Vec2, color: Vec4) -> Self {
+    pub fn new(position: Vec2, texture_coordinate: Vec2, color: Vec4) -> Self {
         Self {
             position,
-            _padding: Default::default(),
+            texture_coordinate,
             color,
         }
     }
@@ -82,7 +83,7 @@ fn main() -> Result<()> {
 
     let video_subsystem = sdl_context.video()?;
 
-    let mut window = video_subsystem
+    let window = video_subsystem
         .window("Experiment", 1024, 768)
         .position_centered()
         .opengl()
@@ -104,6 +105,10 @@ fn main() -> Result<()> {
             .unwrap() as *const _
     });
 
+    let texture = Texture::new_image(load_image::load_data(include_bytes!(
+        "../assets/bricks.png"
+    ))?)?;
+
     let shader = ShaderProgram::new(
         include_str!("shaders/shader.vert"),
         include_str!("shaders/shader.frag"),
@@ -113,10 +118,10 @@ fn main() -> Result<()> {
         BufferTarget::Array,
         BufferUsage::StaticDraw,
         &[
-            Vertex::new(vec2(-1.0, -1.0), vec4(0.5, 0.25, 0.0, 1.0)),
-            Vertex::new(vec2(1.0, -1.0), vec4(0.0, 0.5, 0.25, 1.0)),
-            Vertex::new(vec2(1.0, 1.0), vec4(0.25, 0.0, 0.5, 1.0)),
-            Vertex::new(vec2(-1.0, 1.0), vec4(0.25, 0.5, 0.0, 1.0)),
+            Vertex::new(vec2(-1.0, -1.0), vec2(0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0)),
+            Vertex::new(vec2(1.0, -1.0), vec2(1.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0)),
+            Vertex::new(vec2(1.0, 1.0), vec2(1.0, 1.0), vec4(1.0, 1.0, 1.0, 1.0)),
+            Vertex::new(vec2(-1.0, 1.0), vec2(0.0, 1.0), vec4(1.0, 1.0, 1.0, 1.0)),
         ],
     )?;
 
@@ -133,6 +138,10 @@ fn main() -> Result<()> {
         &element_array_buffer,
         &[
             ("in_position", bytemuck::offset_of!(Vertex, position)),
+            (
+                "in_texture_coordinate",
+                bytemuck::offset_of!(Vertex, texture_coordinate),
+            ),
             ("in_color", bytemuck::offset_of!(Vertex, color)),
         ],
     )?;
@@ -241,6 +250,13 @@ fn main() -> Result<()> {
                 1,
                 gl::FALSE,
                 camera.matrix().to_cols_array().as_ptr(),
+            );
+
+            gl::ActiveTexture(gl::TEXTURE0);
+            texture.bind();
+            gl::Uniform1i(
+                shader.assert_uniform_by_name("uniform_sampler")?.location,
+                0,
             );
 
             vertex_array_object.bind();
