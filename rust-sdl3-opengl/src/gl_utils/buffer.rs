@@ -20,14 +20,29 @@ impl BufferTarget {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BufferUsage {
+    StreamDraw,
+    StreamRead,
+    StreamCopy,
     StaticDraw,
-    // TODO rest of the usage enums
+    StaticRead,
+    StaticCopy,
+    DynamicDraw,
+    DynamicRead,
+    DynamicCopy,
 }
 
 impl BufferUsage {
     pub fn gl_type(self) -> u32 {
         match self {
-            BufferUsage::StaticDraw => gl::STATIC_DRAW,
+            Self::StreamDraw => gl::STREAM_DRAW,
+            Self::StreamRead => gl::STREAM_READ,
+            Self::StreamCopy => gl::STREAM_COPY,
+            Self::StaticDraw => gl::STATIC_DRAW,
+            Self::StaticRead => gl::STATIC_READ,
+            Self::StaticCopy => gl::STATIC_COPY,
+            Self::DynamicDraw => gl::DYNAMIC_DRAW,
+            Self::DynamicRead => gl::DYNAMIC_READ,
+            Self::DynamicCopy => gl::DYNAMIC_COPY,
         }
     }
 }

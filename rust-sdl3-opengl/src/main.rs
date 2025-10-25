@@ -218,7 +218,6 @@ fn main() -> Result<()> {
 
             shader.use_program();
 
-            // TODO matrices
             let (width, height) = window.size();
             let ortho = Mat4::orthographic_lh(0.0, width as f32, height as f32, 0.0, -1.0, 1.0);
             let perspective = Mat4::perspective_lh(
