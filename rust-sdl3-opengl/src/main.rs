@@ -97,9 +97,6 @@ fn main() -> Result<()> {
         SDL_GL_SetSwapInterval(0);
     }
 
-    // TODO fix mouse mode?
-    //  SDL_SetHintWithPriority(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1", SDL_HINT_OVERRIDE);
-
     gl::load_with(|s| {
         video_subsystem
             .gl_get_proc_address(s)
