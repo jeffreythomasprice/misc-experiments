@@ -141,11 +141,11 @@ impl TryFrom<u32> for ShaderAttributeType {
 }
 
 #[derive(Debug, Clone)]
-struct ShaderAttribute {
+pub struct ShaderAttribute {
     pub name: String,
     pub size: i32,
     pub typ: ShaderAttributeType,
-    pub location: i32,
+    pub location: u32,
 }
 
 pub struct ShaderProgram {
@@ -208,6 +208,9 @@ impl ShaderProgram {
                     gl::GetAttribLocation(result.instance, name_c_str.as_mut_ptr() as *mut i8);
                 name_c_str.resize(name_len as usize, 0);
                 let name = CString::from_vec_unchecked(name_c_str).into_string()?;
+                let location: u32 = location.try_into().map_err(|e| {
+                    eyre!("failed to find location for shader attribute {i}, name={name}: {e:?}")
+                })?;
                 let typ: ShaderAttributeType = typ.try_into()?;
                 let attribute = ShaderAttribute {
                     name,
@@ -229,6 +232,15 @@ impl ShaderProgram {
         unsafe {
             gl::UseProgram(self.instance);
         }
+    }
+
+    pub fn get_attribute_by_name(&self, name: &str) -> Option<&ShaderAttribute> {
+        self.attributes.iter().find(|x| x.name == name)
+    }
+
+    pub fn assert_attribute_by_name(&self, name: &str) -> Result<&ShaderAttribute> {
+        self.get_attribute_by_name(name)
+            .ok_or(eyre!("no such attribute: {name}"))
     }
 }
 

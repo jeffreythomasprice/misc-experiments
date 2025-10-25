@@ -1,21 +1,44 @@
 mod gl_utils;
 
-use std::{thread, time::SystemTime};
+use std::{
+    ffi::c_void,
+    thread,
+    time::{Duration, Instant, SystemTime},
+};
+use tracing::*;
 
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::{Result, eyre};
-use sdl3::keyboard::Keycode;
+use glam::{Vec2, Vec4, vec2, vec4};
+use sdl3::{
+    keyboard::Keycode,
+    sys::video::{
+        SDL_GL_SetSwapInterval, SDL_SetWindowSurfaceVSync, SDL_WINDOW_SURFACE_VSYNC_DISABLED,
+    },
+};
 
 use crate::gl_utils::{
     buffer::{Buffer, BufferTarget, BufferUsage},
-    shader::ShaderProgram,
+    shader::{ShaderAttribute, ShaderProgram},
+    vertex_array_object::VertexArrayObject,
 };
 
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
 #[repr(C)]
 struct Vertex {
-    pub x: f32,
-    pub y: f32,
+    pub position: Vec2,
+    _padding: [u8; 8],
+    pub color: Vec4,
+}
+
+impl Vertex {
+    pub fn new(position: Vec2, color: Vec4) -> Self {
+        Self {
+            position,
+            _padding: Default::default(),
+            color,
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -38,6 +61,12 @@ fn main() -> Result<()> {
     let gl_context = window.gl_create_context()?;
     window.gl_make_current(&gl_context)?;
 
+    // turn off vsync
+    unsafe {
+        SDL_SetWindowSurfaceVSync(window.raw(), SDL_WINDOW_SURFACE_VSYNC_DISABLED);
+        SDL_GL_SetSwapInterval(0);
+    }
+
     gl::load_with(|s| {
         video_subsystem
             .gl_get_proc_address(s)
@@ -54,24 +83,34 @@ fn main() -> Result<()> {
         BufferTarget::Array,
         BufferUsage::StaticDraw,
         &[
-            Vertex { x: -0.5, y: -0.5 },
-            Vertex { x: 0.5, y: -0.5 },
-            Vertex { x: 0.0, y: 0.5 },
+            Vertex::new(vec2(-0.5, -0.5), vec4(0.5, 0.25, 0.0, 1.0)),
+            Vertex::new(vec2(0.5, -0.5), vec4(0.0, 0.5, 0.25, 1.0)),
+            Vertex::new(vec2(0.5, 0.5), vec4(0.25, 0.0, 0.5, 1.0)),
+            Vertex::new(vec2(-0.5, 0.5), vec4(0.25, 0.5, 0.0, 1.0)),
         ],
     )?;
 
-    // TODO structify vertex array objects
-    let mut vertex_array_object = 0;
-    unsafe {
-        gl::GenVertexArrays(1, &mut vertex_array_object);
-        gl::BindVertexArray(vertex_array_object);
-        // TODO helper for figuring out the vertex attributes from the shader and vertex
-        gl::EnableVertexAttribArray(0);
-        array_buffer.bind();
-        gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
-    }
+    let element_array_buffer = Buffer::<u16>::new(
+        BufferTarget::ElementArray,
+        BufferUsage::StaticDraw,
+        &[0, 1, 2, 2, 3, 0],
+    )?;
 
-    let mut last_tick = None;
+    let vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
+        &shader,
+        &array_buffer,
+        &element_array_buffer,
+        &[
+            ("in_position", bytemuck::offset_of!(Vertex, position)),
+            ("in_color", bytemuck::offset_of!(Vertex, color)),
+        ],
+    )?;
+
+    const DESIRED_FPS: f64 = 60.0;
+    const DESIRED_FRAME_DURATION: Duration = Duration::from_nanos(
+        ((Duration::from_secs(1).as_nanos() as f64) / DESIRED_FPS).ceil() as u64,
+    );
+    let mut last_tick: Option<Instant> = None;
     'mainLoop: loop {
         let mut event_pump = sdl_context.event_pump()?;
         for event in event_pump.poll_iter() {
@@ -90,22 +129,24 @@ fn main() -> Result<()> {
             gl::Clear(gl::COLOR_BUFFER_BIT);
 
             shader.use_program();
-            gl::BindVertexArray(vertex_array_object);
-            gl::DrawArrays(gl::TRIANGLES, 0, 3);
+            vertex_array_object.bind();
+            gl::DrawElements(
+                gl::TRIANGLES,
+                element_array_buffer.len() as i32,
+                gl::UNSIGNED_SHORT,
+                std::ptr::null(),
+            );
         }
         window.gl_swap_window();
 
-        let now = SystemTime::now();
+        let now = Instant::now();
         if let Some(previous) = last_tick {
-            // TODO sensible FPS calcualtor
-            // const desired_fps: f64 = 60.0;
-            // const milliseconds_per_frame: f64 = 1000.0 / desired_fps;
-            // let elapsed_time = now - previous;
-            // if elapsed_time < milliseconds_per_frame {
-
-            //     // thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
-            // }
-            thread::yield_now();
+            let elapsed_time = now - previous;
+            if elapsed_time >= DESIRED_FRAME_DURATION {
+                thread::yield_now();
+            } else {
+                thread::sleep(DESIRED_FRAME_DURATION - elapsed_time);
+            }
         }
         last_tick = Some(now);
     }

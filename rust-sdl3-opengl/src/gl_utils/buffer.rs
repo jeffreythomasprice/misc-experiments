@@ -35,6 +35,7 @@ impl BufferUsage {
 pub struct Buffer<T> {
     target: BufferTarget,
     instance: u32,
+    len: usize,
     _phantom: PhantomData<T>,
 }
 
@@ -60,6 +61,7 @@ impl<T> Buffer<T> {
             Ok(Self {
                 target,
                 instance,
+                len: data.len(),
                 _phantom: Default::default(),
             })
         }
@@ -69,5 +71,9 @@ impl<T> Buffer<T> {
         unsafe {
             gl::BindBuffer(self.target.gl_type(), self.instance);
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 }

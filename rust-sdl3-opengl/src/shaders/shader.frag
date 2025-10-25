@@ -1,7 +1,9 @@
 #version 410 core
 
+varying vec4 varying_color;
+
 out vec4 out_color;
 
 void main() {
-	out_color = vec4(0.5, 0.0, 0.5, 1.0);
+	out_color = varying_color;
 }
