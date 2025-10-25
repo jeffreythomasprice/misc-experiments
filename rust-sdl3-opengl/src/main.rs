@@ -11,7 +11,7 @@ use tracing::*;
 
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::{Result, eyre};
-use glam::{Mat4, Vec2, Vec4, vec2, vec3, vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4, vec2, vec3, vec4};
 use sdl3::{
     event::Event,
     keyboard::Keycode,
@@ -37,16 +37,20 @@ use crate::{
 #[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
 #[repr(C)]
 struct Vertex {
-    pub position: Vec2,
+    pub position: Vec3,
+    _padding1: [u8; 4],
     pub texture_coordinate: Vec2,
+    _padding2: [u8; 8],
     pub color: Vec4,
 }
 
 impl Vertex {
-    pub fn new(position: Vec2, texture_coordinate: Vec2, color: Vec4) -> Self {
+    pub fn new(position: Vec3, texture_coordinate: Vec2, color: Vec4) -> Self {
         Self {
             position,
+            _padding1: Default::default(),
             texture_coordinate,
+            _padding2: Default::default(),
             color,
         }
     }
@@ -114,21 +118,50 @@ fn main() -> Result<()> {
         include_str!("shaders/shader.frag"),
     )?;
 
+    let color1 = vec4(1.0, 0.0, 0.0, 1.0);
+    let color2 = vec4(0.0, 1.0, 0.0, 1.0);
+    let color3 = vec4(0.0, 0.0, 1.0, 1.0);
+    let color4 = vec4(1.0, 1.0, 0.0, 1.0);
+    let color5 = vec4(0.0, 1.0, 1.0, 1.0);
+    let color6 = vec4(1.0, 0.0, 1.0, 1.0);
     let array_buffer = Buffer::new(
         BufferTarget::Array,
         BufferUsage::StaticDraw,
         &[
-            Vertex::new(vec2(-1.0, -1.0), vec2(0.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0)),
-            Vertex::new(vec2(1.0, -1.0), vec2(1.0, 0.0), vec4(1.0, 1.0, 1.0, 1.0)),
-            Vertex::new(vec2(1.0, 1.0), vec2(1.0, 1.0), vec4(1.0, 1.0, 1.0, 1.0)),
-            Vertex::new(vec2(-1.0, 1.0), vec2(0.0, 1.0), vec4(1.0, 1.0, 1.0, 1.0)),
+            Vertex::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color1),
+            Vertex::new(vec3(1.0, -1.0, -1.0), vec2(1.0, 0.0), color1),
+            Vertex::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 1.0), color1),
+            Vertex::new(vec3(-1.0, 1.0, -1.0), vec2(0.0, 1.0), color1),
+            Vertex::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 0.0), color2),
+            Vertex::new(vec3(1.0, -1.0, 1.0), vec2(1.0, 0.0), color2),
+            Vertex::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color2),
+            Vertex::new(vec3(-1.0, 1.0, 1.0), vec2(0.0, 1.0), color2),
+            Vertex::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color3),
+            Vertex::new(vec3(1.0, -1.0, -1.0), vec2(1.0, 0.0), color3),
+            Vertex::new(vec3(1.0, -1.0, 1.0), vec2(1.0, 1.0), color3),
+            Vertex::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 1.0), color3),
+            Vertex::new(vec3(-1.0, 1.0, -1.0), vec2(0.0, 0.0), color4),
+            Vertex::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 0.0), color4),
+            Vertex::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color4),
+            Vertex::new(vec3(-1.0, 1.0, 1.0), vec2(0.0, 1.0), color4),
+            Vertex::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color5),
+            Vertex::new(vec3(-1.0, 1.0, -1.0), vec2(1.0, 0.0), color5),
+            Vertex::new(vec3(-1.0, 1.0, 1.0), vec2(1.0, 1.0), color5),
+            Vertex::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 1.0), color5),
+            Vertex::new(vec3(1.0, -1.0, -1.0), vec2(0.0, 0.0), color6),
+            Vertex::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 0.0), color6),
+            Vertex::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color6),
+            Vertex::new(vec3(1.0, -1.0, 1.0), vec2(0.0, 1.0), color6),
         ],
     )?;
 
     let element_array_buffer = Buffer::<u16>::new(
         BufferTarget::ElementArray,
         BufferUsage::StaticDraw,
-        &[0, 1, 2, 2, 3, 0],
+        &[
+            0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12, 16,
+            17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20,
+        ],
     )?;
 
     // TODO builder pattern?
@@ -223,7 +256,11 @@ fn main() -> Result<()> {
 
         unsafe {
             gl::ClearColor(0.25, 0.5, 0.75, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
+            gl::ClearDepth(1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+
+            gl::DepthFunc(gl::LEQUAL);
+            gl::Enable(gl::DEPTH_TEST);
 
             shader.use_program();
 
