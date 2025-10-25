@@ -3,17 +3,24 @@ mod gl_utils;
 
 use core::f32;
 use std::{
+    collections::HashMap,
     thread,
     time::{Duration, Instant},
 };
+use tracing::*;
 
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::{Result, eyre};
 use glam::{Mat4, Vec2, Vec4, vec2, vec3, vec4};
 use sdl3::{
-    keyboard::Keycode,
-    sys::video::{
-        SDL_GL_SetSwapInterval, SDL_SetWindowSurfaceVSync, SDL_WINDOW_SURFACE_VSYNC_DISABLED,
+    event::Event,
+    keyboard::{Keycode, Scancode},
+    mouse::MouseButton,
+    sys::{
+        mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
+        video::{
+            SDL_GL_SetSwapInterval, SDL_SetWindowSurfaceVSync, SDL_WINDOW_SURFACE_VSYNC_DISABLED,
+        },
     },
 };
 
@@ -44,6 +51,26 @@ impl Vertex {
     }
 }
 
+struct KeyboardState {
+    state: HashMap<Keycode, bool>,
+}
+
+impl KeyboardState {
+    pub fn new() -> Self {
+        Self {
+            state: HashMap::new(),
+        }
+    }
+
+    pub fn is_pressed(&self, keycode: Keycode) -> bool {
+        *self.state.get(&keycode).unwrap_or(&false)
+    }
+
+    pub fn set_pressed(&mut self, keycode: Keycode, pressed: bool) {
+        self.state.insert(keycode, pressed);
+    }
+}
+
 fn main() -> Result<()> {
     let pkg_name = env!("CARGO_PKG_NAME").replace("-", "_");
     tracing_subscriber::fmt::fmt()
@@ -55,7 +82,7 @@ fn main() -> Result<()> {
 
     let video_subsystem = sdl_context.video()?;
 
-    let window = video_subsystem
+    let mut window = video_subsystem
         .window("Experiment", 1024, 768)
         .position_centered()
         .opengl()
@@ -69,6 +96,9 @@ fn main() -> Result<()> {
         SDL_SetWindowSurfaceVSync(window.raw(), SDL_WINDOW_SURFACE_VSYNC_DISABLED);
         SDL_GL_SetSwapInterval(0);
     }
+
+    // TODO fix mouse mode?
+    //  SDL_SetHintWithPriority(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1", SDL_HINT_OVERRIDE);
 
     gl::load_with(|s| {
         video_subsystem
@@ -110,26 +140,77 @@ fn main() -> Result<()> {
         ],
     )?;
 
-    let camera = Camera::new(
-        vec3(0.0, 1.0, 6.0),
+    let mut camera = Camera::new(
+        vec3(0.0, 0.0, 6.0),
         vec3(0.0, 0.0, 0.0),
         vec3(0.0, 1.0, 0.0),
     );
+
+    let mut is_mouse_locked = false;
+    let mut keyboard_state = KeyboardState::new();
 
     const DESIRED_FPS: f64 = 60.0;
     const DESIRED_FRAME_DURATION: Duration = Duration::from_nanos(
         ((Duration::from_secs(1).as_nanos() as f64) / DESIRED_FPS).ceil() as u64,
     );
     let mut last_tick: Option<Instant> = None;
+
     'mainLoop: loop {
         let mut event_pump = sdl_context.event_pump()?;
         for event in event_pump.poll_iter() {
             match event {
-                sdl3::event::Event::Quit { .. }
-                | sdl3::event::Event::KeyUp {
+                Event::Quit { .. }
+                | Event::KeyUp {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'mainLoop,
+
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    ..
+                } => {
+                    keyboard_state.set_pressed(keycode, true);
+                }
+
+                Event::KeyUp {
+                    keycode: Some(keycode),
+                    ..
+                } => {
+                    keyboard_state.set_pressed(keycode, false);
+                }
+
+                Event::MouseButtonDown {
+                    mouse_btn: MouseButton::Left,
+                    ..
+                } => {
+                    is_mouse_locked = !is_mouse_locked;
+                    unsafe {
+                        if is_mouse_locked {
+                            SDL_HideCursor();
+                        } else {
+                            SDL_ShowCursor();
+                        }
+                    }
+                }
+
+                Event::MouseMotion {
+                    x, y, xrel, yrel, ..
+                } => {
+                    if is_mouse_locked {
+                        let (width, height) = window.size();
+                        let center_x = (width as f32) / 2.0;
+                        let center_y = (height as f32) / 2.0;
+
+                        if !(x == center_x && y == center_y) {
+                            camera.turn(vec2(xrel, yrel));
+                        }
+
+                        unsafe {
+                            SDL_WarpMouseInWindow(window.raw(), center_x, center_y);
+                        }
+                    }
+                }
+
                 _ => (),
             };
         }
@@ -179,6 +260,26 @@ fn main() -> Result<()> {
         let now = Instant::now();
         if let Some(previous) = last_tick {
             let elapsed_time = now - previous;
+
+            let elapsed_seconds = elapsed_time.as_secs_f32();
+            let left =
+                keyboard_state.is_pressed(Keycode::Left) || keyboard_state.is_pressed(Keycode::A);
+            let right =
+                keyboard_state.is_pressed(Keycode::Right) || keyboard_state.is_pressed(Keycode::D);
+            let forward =
+                keyboard_state.is_pressed(Keycode::Up) || keyboard_state.is_pressed(Keycode::W);
+            let backward =
+                keyboard_state.is_pressed(Keycode::Down) || keyboard_state.is_pressed(Keycode::S);
+            let up = keyboard_state.is_pressed(Keycode::Space);
+            let down = keyboard_state.is_pressed(Keycode::LShift)
+                || keyboard_state.is_pressed(Keycode::RShift);
+            let move_speed = elapsed_seconds * 10.0;
+            camera.move_position(
+                (if forward { 1.0 } else { 0.0 } - if backward { 1.0 } else { 0.0 }) * move_speed,
+                (if right { 1.0 } else { 0.0 } - if left { 1.0 } else { 0.0 }) * move_speed,
+                (if up { 1.0 } else { 0.0 } - if down { 1.0 } else { 0.0 }) * move_speed,
+            );
+
             if elapsed_time >= DESIRED_FRAME_DURATION {
                 thread::yield_now();
             } else {

@@ -57,9 +57,9 @@ impl Camera {
         let g = target - position;
         let angle_up = angle_between_vectors(g, u);
         let angle_up = fix_angle_up(if default_up.dot(forward) > 0.0 {
-            angle_up
-        } else {
             -angle_up
+        } else {
+            angle_up
         });
 
         Self {
