@@ -20,6 +20,12 @@ pub struct KeyboardState {
     state: HashMap<Keycode, bool>,
 }
 
+impl Default for KeyboardState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KeyboardState {
     pub fn new() -> Self {
         Self {

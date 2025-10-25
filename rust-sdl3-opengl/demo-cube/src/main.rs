@@ -1,7 +1,3 @@
-mod camera;
-mod gl_utils;
-mod sdl_utils;
-
 use core::f32;
 use std::time::Duration;
 
@@ -15,7 +11,7 @@ use sdl3::{
     sys::mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
 };
 
-use crate::{
+use lib::{
     camera::Camera,
     gl_utils::{
         buffer::{Buffer, BufferTarget, BufferUsage},
@@ -148,7 +144,7 @@ impl App {
     }
 }
 
-impl sdl_utils::App for App {
+impl lib::sdl_utils::App for App {
     fn render(&self, AppState { window, .. }: &AppState) -> Result<()> {
         unsafe {
             gl::ClearColor(0.25, 0.5, 0.75, 1.0);
