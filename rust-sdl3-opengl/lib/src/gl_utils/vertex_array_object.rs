@@ -7,6 +7,12 @@ use crate::gl_utils::{
     shader::{ShaderAttribute, ShaderAttributeDataType, ShaderProgram},
 };
 
+#[derive(Debug, Clone)]
+pub struct VertexAttributeDefinition {
+    pub name: String,
+    pub offset: usize,
+}
+
 pub struct VertexArrayObject {
     instance: u32,
 }
@@ -16,7 +22,7 @@ impl VertexArrayObject {
         shader: &ShaderProgram,
         array_buffer: &Buffer<T>,
         element_array_buffer: &Buffer<u16>,
-        attributes: &[(&str, usize)],
+        attributes: &[VertexAttributeDefinition],
     ) -> Result<Self> {
         unsafe {
             let mut instance = 0;
@@ -27,8 +33,11 @@ impl VertexArrayObject {
             }
             array_buffer.bind();
             element_array_buffer.bind();
-            for (name, offset) in attributes.iter() {
-                vertex_attrib_pointer::<T>(shader.assert_attribute_by_name(name)?, *offset);
+            for attr in attributes.iter() {
+                vertex_attrib_pointer::<T>(
+                    shader.assert_attribute_by_name(&attr.name)?,
+                    attr.offset,
+                );
             }
             Ok(Self { instance })
         }

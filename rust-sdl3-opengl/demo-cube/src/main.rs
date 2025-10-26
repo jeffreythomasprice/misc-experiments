@@ -19,7 +19,7 @@ use lib::{
         buffer::{Buffer, BufferTarget, BufferUsage},
         shader::ShaderProgram,
         texture::Texture,
-        vertex_array_object::VertexArrayObject,
+        vertex_array_object::{VertexArrayObject, VertexAttributeDefinition},
     },
     sdl_utils::{AppState, sdl_main},
 };
@@ -119,18 +119,21 @@ impl App {
             &font_array_buffer,
             &font_element_array_buffer,
             &[
-                (
-                    "in_position",
-                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, position),
-                ),
-                (
-                    "in_texture_coordinate",
-                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, texture_coordinate),
-                ),
-                (
-                    "in_color",
-                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, color),
-                ),
+                VertexAttributeDefinition {
+                    name: "in_position".to_owned(),
+                    offset: bytemuck::offset_of!(Vertex2DColorTextureCoordinate, position),
+                },
+                VertexAttributeDefinition {
+                    name: "in_texture_coordinate".to_owned(),
+                    offset: bytemuck::offset_of!(
+                        Vertex2DColorTextureCoordinate,
+                        texture_coordinate
+                    ),
+                },
+                VertexAttributeDefinition {
+                    name: "in_color".to_owned(),
+                    offset: bytemuck::offset_of!(Vertex2DColorTextureCoordinate, color),
+                },
             ],
         )?;
 
@@ -187,18 +190,21 @@ impl App {
             &cube_array_buffer,
             &cube_element_array_buffer,
             &[
-                (
-                    "in_position",
-                    bytemuck::offset_of!(Vertex3DColorTextureCoordinate, position),
-                ),
-                (
-                    "in_texture_coordinate",
-                    bytemuck::offset_of!(Vertex3DColorTextureCoordinate, texture_coordinate),
-                ),
-                (
-                    "in_color",
-                    bytemuck::offset_of!(Vertex3DColorTextureCoordinate, color),
-                ),
+                VertexAttributeDefinition {
+                    name: "in_position".to_owned(),
+                    offset: bytemuck::offset_of!(Vertex3DColorTextureCoordinate, position),
+                },
+                VertexAttributeDefinition {
+                    name: "in_texture_coordinate".to_owned(),
+                    offset: bytemuck::offset_of!(
+                        Vertex3DColorTextureCoordinate,
+                        texture_coordinate
+                    ),
+                },
+                VertexAttributeDefinition {
+                    name: "in_color".to_owned(),
+                    offset: bytemuck::offset_of!(Vertex3DColorTextureCoordinate, color),
+                },
             ],
         )?;
 
@@ -362,18 +368,21 @@ impl lib::sdl_utils::App for App {
             &self.font_array_buffer,
             &self.font_element_array_buffer,
             &[
-                (
-                    "in_position",
-                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, position),
-                ),
-                (
-                    "in_texture_coordinate",
-                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, texture_coordinate),
-                ),
-                (
-                    "in_color",
-                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, color),
-                ),
+                VertexAttributeDefinition {
+                    name: "in_position".to_owned(),
+                    offset: bytemuck::offset_of!(Vertex2DColorTextureCoordinate, position),
+                },
+                VertexAttributeDefinition {
+                    name: "in_texture_coordinate".to_owned(),
+                    offset: bytemuck::offset_of!(
+                        Vertex2DColorTextureCoordinate,
+                        texture_coordinate
+                    ),
+                },
+                VertexAttributeDefinition {
+                    name: "in_color".to_owned(),
+                    offset: bytemuck::offset_of!(Vertex2DColorTextureCoordinate, color),
+                },
             ],
         )?;
 
