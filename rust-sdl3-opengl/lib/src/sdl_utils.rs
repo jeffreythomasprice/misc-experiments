@@ -10,11 +10,10 @@ use sdl3::{
     event::Event,
     keyboard::Keycode,
     sys::video::{
-            SDL_GL_SetSwapInterval, SDL_SetWindowSurfaceVSync, SDL_WINDOW_SURFACE_VSYNC_DISABLED,
-        },
+        SDL_GL_SetSwapInterval, SDL_SetWindowSurfaceVSync, SDL_WINDOW_SURFACE_VSYNC_DISABLED,
+    },
     video::Window,
 };
-
 
 pub struct KeyboardState {
     state: HashMap<Keycode, bool>,

@@ -1,18 +1,20 @@
-use core::f32;
-use std::time::Duration;
-
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::Result;
+use core::f32;
 use glam::{Mat4, Vec2, Vec3, Vec4, vec2, vec3, vec4};
 use sdl3::{
     event::Event,
+    iostream::IOStream,
     keyboard::Keycode,
     mouse::MouseButton,
     sys::mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
 };
+use std::{rc::Rc, time::Duration};
+use tracing::*;
 
 use lib::{
     camera::Camera,
+    font::Font,
     gl_utils::{
         buffer::{Buffer, BufferTarget, BufferUsage},
         shader::ShaderProgram,
@@ -24,7 +26,25 @@ use lib::{
 
 #[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
 #[repr(C)]
-struct Vertex {
+struct Vertex2DColorTextureCoordinate {
+    pub position: Vec2,
+    pub texture_coordinate: Vec2,
+    pub color: Vec4,
+}
+
+impl Vertex2DColorTextureCoordinate {
+    pub fn new(position: Vec2, texture_coordinate: Vec2, color: Vec4) -> Self {
+        Self {
+            position,
+            texture_coordinate,
+            color,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Pod, Zeroable, Default)]
+#[repr(C)]
+struct Vertex3DColorTextureCoordinate {
     pub position: Vec3,
     _padding1: [u8; 4],
     pub texture_coordinate: Vec2,
@@ -32,7 +52,7 @@ struct Vertex {
     pub color: Vec4,
 }
 
-impl Vertex {
+impl Vertex3DColorTextureCoordinate {
     pub fn new(position: Vec3, texture_coordinate: Vec2, color: Vec4) -> Self {
         Self {
             position,
@@ -46,10 +66,17 @@ impl Vertex {
 
 struct App {
     texture: Texture,
-    shader: ShaderProgram,
-    array_buffer: Buffer<Vertex>,
-    element_array_buffer: Buffer<u16>,
-    vertex_array_object: VertexArrayObject,
+    font: Font,
+    font_texture: Option<Texture>,
+    shader2d: ShaderProgram,
+    shader3d: ShaderProgram,
+    // TODO meshes?
+    font_array_buffer: Buffer<Vertex2DColorTextureCoordinate>,
+    font_element_array_buffer: Buffer<u16>,
+    font_vertex_array_object: VertexArrayObject,
+    cube_array_buffer: Buffer<Vertex3DColorTextureCoordinate>,
+    cube_element_array_buffer: Buffer<u16>,
+    cube_vertex_array_object: VertexArrayObject,
     camera: Camera,
     is_mouse_locked: bool,
 }
@@ -60,9 +87,51 @@ impl App {
             "../assets/bricks.png"
         ))?)?;
 
-        let shader = ShaderProgram::new(
-            include_str!("shaders/shader.vert"),
-            include_str!("shaders/shader.frag"),
+        let ttf_context = Rc::new(sdl3::ttf::init()?);
+        let font = Font::new_from_vec(
+            ttf_context,
+            include_bytes!("../assets/IntelOneMono-Regular.ttf").into(),
+            20.0,
+        )?;
+
+        let shader2d = ShaderProgram::new(
+            include_str!("shaders/shader2d.vert"),
+            include_str!("shaders/shader2d.frag"),
+        )?;
+
+        let shader3d = ShaderProgram::new(
+            include_str!("shaders/shader3d.vert"),
+            include_str!("shaders/shader3d.frag"),
+        )?;
+
+        let font_array_buffer = Buffer::new(
+            BufferTarget::Array,
+            BufferUsage::StreamDraw,
+            &[Vertex2DColorTextureCoordinate::default(); 4],
+        )?;
+        let font_element_array_buffer = Buffer::new(
+            BufferTarget::ElementArray,
+            BufferUsage::StaticDraw,
+            &[0, 1, 2, 2, 3, 0],
+        )?;
+        let font_vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
+            &shader2d,
+            &font_array_buffer,
+            &font_element_array_buffer,
+            &[
+                (
+                    "in_position",
+                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, position),
+                ),
+                (
+                    "in_texture_coordinate",
+                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, texture_coordinate),
+                ),
+                (
+                    "in_color",
+                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, color),
+                ),
+            ],
         )?;
 
         let color1 = vec4(1.0, 0.0, 0.0, 1.0);
@@ -71,38 +140,39 @@ impl App {
         let color4 = vec4(1.0, 1.0, 0.0, 1.0);
         let color5 = vec4(0.0, 1.0, 1.0, 1.0);
         let color6 = vec4(1.0, 0.0, 1.0, 1.0);
-        let array_buffer = Buffer::new(
+        // TODO builder pattern?
+        let cube_array_buffer = Buffer::new(
             BufferTarget::Array,
             BufferUsage::StaticDraw,
             &[
-                Vertex::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color1),
-                Vertex::new(vec3(1.0, -1.0, -1.0), vec2(1.0, 0.0), color1),
-                Vertex::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 1.0), color1),
-                Vertex::new(vec3(-1.0, 1.0, -1.0), vec2(0.0, 1.0), color1),
-                Vertex::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 0.0), color2),
-                Vertex::new(vec3(1.0, -1.0, 1.0), vec2(1.0, 0.0), color2),
-                Vertex::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color2),
-                Vertex::new(vec3(-1.0, 1.0, 1.0), vec2(0.0, 1.0), color2),
-                Vertex::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color3),
-                Vertex::new(vec3(1.0, -1.0, -1.0), vec2(1.0, 0.0), color3),
-                Vertex::new(vec3(1.0, -1.0, 1.0), vec2(1.0, 1.0), color3),
-                Vertex::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 1.0), color3),
-                Vertex::new(vec3(-1.0, 1.0, -1.0), vec2(0.0, 0.0), color4),
-                Vertex::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 0.0), color4),
-                Vertex::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color4),
-                Vertex::new(vec3(-1.0, 1.0, 1.0), vec2(0.0, 1.0), color4),
-                Vertex::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color5),
-                Vertex::new(vec3(-1.0, 1.0, -1.0), vec2(1.0, 0.0), color5),
-                Vertex::new(vec3(-1.0, 1.0, 1.0), vec2(1.0, 1.0), color5),
-                Vertex::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 1.0), color5),
-                Vertex::new(vec3(1.0, -1.0, -1.0), vec2(0.0, 0.0), color6),
-                Vertex::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 0.0), color6),
-                Vertex::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color6),
-                Vertex::new(vec3(1.0, -1.0, 1.0), vec2(0.0, 1.0), color6),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color1),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, -1.0, -1.0), vec2(1.0, 0.0), color1),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 1.0), color1),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, 1.0, -1.0), vec2(0.0, 1.0), color1),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 0.0), color2),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, -1.0, 1.0), vec2(1.0, 0.0), color2),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color2),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, 1.0, 1.0), vec2(0.0, 1.0), color2),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color3),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, -1.0, -1.0), vec2(1.0, 0.0), color3),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, -1.0, 1.0), vec2(1.0, 1.0), color3),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 1.0), color3),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, 1.0, -1.0), vec2(0.0, 0.0), color4),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 0.0), color4),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color4),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, 1.0, 1.0), vec2(0.0, 1.0), color4),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color5),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, 1.0, -1.0), vec2(1.0, 0.0), color5),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, 1.0, 1.0), vec2(1.0, 1.0), color5),
+                Vertex3DColorTextureCoordinate::new(vec3(-1.0, -1.0, 1.0), vec2(0.0, 1.0), color5),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, -1.0, -1.0), vec2(0.0, 0.0), color6),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, 1.0, -1.0), vec2(1.0, 0.0), color6),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color6),
+                Vertex3DColorTextureCoordinate::new(vec3(1.0, -1.0, 1.0), vec2(0.0, 1.0), color6),
             ],
         )?;
 
-        let element_array_buffer = Buffer::<u16>::new(
+        let cube_element_array_buffer = Buffer::<u16>::new(
             BufferTarget::ElementArray,
             BufferUsage::StaticDraw,
             &[
@@ -112,17 +182,23 @@ impl App {
         )?;
 
         // TODO builder pattern?
-        let vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
-            &shader,
-            &array_buffer,
-            &element_array_buffer,
+        let cube_vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
+            &shader3d,
+            &cube_array_buffer,
+            &cube_element_array_buffer,
             &[
-                ("in_position", bytemuck::offset_of!(Vertex, position)),
+                (
+                    "in_position",
+                    bytemuck::offset_of!(Vertex3DColorTextureCoordinate, position),
+                ),
                 (
                     "in_texture_coordinate",
-                    bytemuck::offset_of!(Vertex, texture_coordinate),
+                    bytemuck::offset_of!(Vertex3DColorTextureCoordinate, texture_coordinate),
                 ),
-                ("in_color", bytemuck::offset_of!(Vertex, color)),
+                (
+                    "in_color",
+                    bytemuck::offset_of!(Vertex3DColorTextureCoordinate, color),
+                ),
             ],
         )?;
 
@@ -134,10 +210,16 @@ impl App {
 
         Ok(Self {
             texture,
-            shader,
-            array_buffer,
-            element_array_buffer,
-            vertex_array_object,
+            font,
+            font_texture: None,
+            shader2d,
+            shader3d,
+            font_array_buffer,
+            font_element_array_buffer,
+            font_vertex_array_object,
+            cube_array_buffer,
+            cube_element_array_buffer,
+            cube_vertex_array_object,
             camera,
             is_mouse_locked: false,
         })
@@ -146,6 +228,15 @@ impl App {
 
 impl lib::sdl_utils::App for App {
     fn render(&self, AppState { window, .. }: &AppState) -> Result<()> {
+        let (width, height) = window.size();
+        let ortho = Mat4::orthographic_lh(0.0, width as f32, height as f32, 0.0, -1.0, 1.0);
+        let perspective = Mat4::perspective_lh(
+            f32::consts::FRAC_PI_6,
+            (width as f32) / (height as f32),
+            0.01,
+            1000.0,
+        );
+
         unsafe {
             gl::ClearColor(0.25, 0.5, 0.75, 1.0);
             gl::ClearDepth(1.0);
@@ -154,18 +245,10 @@ impl lib::sdl_utils::App for App {
             gl::DepthFunc(gl::LEQUAL);
             gl::Enable(gl::DEPTH_TEST);
 
-            self.shader.use_program();
+            self.shader3d.use_program();
 
-            let (width, height) = window.size();
-            let ortho = Mat4::orthographic_lh(0.0, width as f32, height as f32, 0.0, -1.0, 1.0);
-            let perspective = Mat4::perspective_lh(
-                f32::consts::FRAC_PI_6,
-                (width as f32) / (height as f32),
-                0.01,
-                1000.0,
-            );
             gl::UniformMatrix4fv(
-                self.shader
+                self.shader3d
                     .assert_uniform_by_name("uniform_projection_matrix")?
                     .location,
                 1,
@@ -173,7 +256,7 @@ impl lib::sdl_utils::App for App {
                 perspective.to_cols_array().as_ptr(),
             );
             gl::UniformMatrix4fv(
-                self.shader
+                self.shader3d
                     .assert_uniform_by_name("uniform_modelview_matrix")?
                     .location,
                 1,
@@ -184,19 +267,59 @@ impl lib::sdl_utils::App for App {
             gl::ActiveTexture(gl::TEXTURE0);
             self.texture.bind();
             gl::Uniform1i(
-                self.shader
+                self.shader3d
                     .assert_uniform_by_name("uniform_sampler")?
                     .location,
                 0,
             );
 
-            self.vertex_array_object.bind();
+            self.cube_vertex_array_object.bind();
             gl::DrawElements(
                 gl::TRIANGLES,
-                self.element_array_buffer.len() as i32,
+                self.cube_element_array_buffer.len() as i32,
                 gl::UNSIGNED_SHORT,
                 std::ptr::null(),
             );
+
+            gl::Disable(gl::DEPTH_TEST);
+
+            if let Some(font_texture) = &self.font_texture {
+                self.shader2d.use_program();
+
+                gl::UniformMatrix4fv(
+                    self.shader2d
+                        .assert_uniform_by_name("uniform_projection_matrix")?
+                        .location,
+                    1,
+                    gl::FALSE,
+                    ortho.to_cols_array().as_ptr(),
+                );
+                gl::UniformMatrix4fv(
+                    self.shader2d
+                        .assert_uniform_by_name("uniform_modelview_matrix")?
+                        .location,
+                    1,
+                    gl::FALSE,
+                    Mat4::IDENTITY.to_cols_array().as_ptr(),
+                );
+
+                gl::ActiveTexture(gl::TEXTURE0);
+                font_texture.bind();
+                gl::Uniform1i(
+                    self.shader2d
+                        .assert_uniform_by_name("uniform_sampler")?
+                        .location,
+                    0,
+                );
+
+                self.font_vertex_array_object.bind();
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    self.font_element_array_buffer.len() as i32,
+                    gl::UNSIGNED_SHORT,
+                    std::ptr::null(),
+                );
+            }
         }
 
         Ok(())
@@ -207,6 +330,53 @@ impl lib::sdl_utils::App for App {
         AppState { keyboard, .. }: &AppState,
         elapsed_time: Duration,
     ) -> Result<()> {
+        // TODO re-use an existing texture instead of re-allocating every time
+        let font_texture = self
+            .font
+            .render_text("Hello, World!\nTODO put an FPS counter here")?;
+        let width = font_texture.width();
+        let height = font_texture.height();
+        self.font_texture = Some(font_texture);
+        let color = vec4(1.0, 1.0, 1.0, 1.0);
+        // TODO need to have a mesh style system that can automatically recreate the VAO once this succeeds
+        self.font_array_buffer.set_data(
+            0,
+            &[
+                Vertex2DColorTextureCoordinate::new(vec2(0.0, 0.0), vec2(0.0, 0.0), color),
+                Vertex2DColorTextureCoordinate::new(vec2(width as f32, 0.0), vec2(1.0, 0.0), color),
+                Vertex2DColorTextureCoordinate::new(
+                    vec2(width as f32, height as f32),
+                    vec2(1.0, 1.0),
+                    color,
+                ),
+                Vertex2DColorTextureCoordinate::new(
+                    vec2(0.0, height as f32),
+                    vec2(0.0, 1.0),
+                    color,
+                ),
+            ],
+        )?;
+        // TODO make it easy to recreate the VAO
+        self.font_vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
+            &self.shader2d,
+            &self.font_array_buffer,
+            &self.font_element_array_buffer,
+            &[
+                (
+                    "in_position",
+                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, position),
+                ),
+                (
+                    "in_texture_coordinate",
+                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, texture_coordinate),
+                ),
+                (
+                    "in_color",
+                    bytemuck::offset_of!(Vertex2DColorTextureCoordinate, color),
+                ),
+            ],
+        )?;
+
         let elapsed_seconds = elapsed_time.as_secs_f32();
         let left = keyboard.is_pressed(Keycode::Left) || keyboard.is_pressed(Keycode::A);
         let right = keyboard.is_pressed(Keycode::Right) || keyboard.is_pressed(Keycode::D);

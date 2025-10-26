@@ -73,6 +73,8 @@ impl<T> Buffer<T> {
                 usage.gl_type(),
             );
 
+            gl::BindBuffer(target.gl_type(), 0);
+
             Ok(Self {
                 target,
                 instance,
@@ -90,5 +92,24 @@ impl<T> Buffer<T> {
 
     pub fn len(&self) -> usize {
         self.len
+    }
+
+    pub fn set_data(&mut self, offset: usize, data: &[T]) -> Result<()>
+    where
+        T: Pod,
+    {
+        // TODO respect offset
+        self.bind();
+        let bytes: &[u8] = bytemuck::cast_slice(data);
+        unsafe {
+            gl::BufferSubData(
+                self.target.gl_type(),
+                0,
+                bytes.len() as isize,
+                data.as_ptr() as *mut c_void,
+            );
+            gl::BindBuffer(self.target.gl_type(), 0);
+        }
+        Ok(())
     }
 }
