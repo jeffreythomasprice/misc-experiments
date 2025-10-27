@@ -1,12 +1,13 @@
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::Result;
 use core::f32;
-use glam::{Mat4, Vec2, Vec3, Vec4, vec2, vec3, vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4, usizevec2, vec2, vec3, vec4};
 use sdl3::{
     event::Event,
     iostream::IOStream,
     keyboard::Keycode,
     mouse::MouseButton,
+    pixels::Color,
     sys::mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
 };
 use std::{rc::Rc, time::Duration};
@@ -336,10 +337,15 @@ impl lib::sdl_utils::App for App {
         AppState { keyboard, .. }: &AppState,
         elapsed_time: Duration,
     ) -> Result<()> {
-        // TODO re-use an existing texture instead of re-allocating every time
         let font_texture = self
             .font
-            .render_text("Hello, World!\nTODO put an FPS counter here")?;
+            .layout("Hello, World!\nTODO put an FPS counter here")?
+            .render_to_texture_resize_as_needed(
+                Color::WHITE,
+                self.font_texture.take(),
+                // TODO test non-0 origins for texture blit
+                usizevec2(0, 0),
+            )?;
         let width = font_texture.width();
         let height = font_texture.height();
         self.font_texture = Some(font_texture);
