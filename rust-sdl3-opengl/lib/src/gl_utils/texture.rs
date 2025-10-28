@@ -219,12 +219,6 @@ impl Texture {
             self.bind();
             gl::PixelStorei(gl::UNPACK_ROW_LENGTH, (src.stride() / 4) as i32);
 
-            info!(
-                "TODO JEFF src size: {:?}, stride: {}, dst: {:?}",
-                src.size(),
-                src.stride(),
-                dst
-            );
             gl::TexSubImage2D(
                 gl::TEXTURE_2D,
                 0,
@@ -232,7 +226,7 @@ impl Texture {
                 dst.y as i32,
                 src.width() as i32,
                 src.height() as i32,
-                gl::RGBA8,
+                gl::RGBA,
                 gl::UNSIGNED_BYTE,
                 src.data().as_ptr() as *const c_void,
             );

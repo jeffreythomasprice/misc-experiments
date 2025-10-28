@@ -343,7 +343,6 @@ impl lib::sdl_utils::App for App {
             .render_to_texture_resize_as_needed(
                 Color::WHITE,
                 self.font_texture.take(),
-                // TODO test non-0 origins for texture blit
                 usizevec2(0, 0),
             )?;
         let width = font_texture.width();
