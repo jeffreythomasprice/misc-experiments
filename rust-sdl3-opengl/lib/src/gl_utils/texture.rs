@@ -2,11 +2,10 @@ use std::ffi::c_void;
 
 use color_eyre::eyre::{Result, eyre};
 use glam::{USizeVec2, usizevec2};
-use load_image::{Image, export::rgb::RGBA8};
+use load_image::Image;
 use sdl3::{pixels::PixelFormat, surface::Surface};
 use tracing::*;
 
-use crate::rect::USizeRect;
 
 pub struct RGBA8Pixels<'a> {
     data: &'a [u8],
@@ -77,13 +76,13 @@ impl Texture {
 
     pub fn new_surface(surface: Surface) -> Result<Self> {
         let surface = surface.convert_format(PixelFormat::RGBA8888)?;
-        Ok(surface.with_lock(|bytes| {
+        surface.with_lock(|bytes| {
             Self::new_rgba8(&RGBA8Pixels::new(
                 bytes,
                 usizevec2(surface.width() as usize, surface.height() as usize),
                 surface.pitch() as usize,
             )?)
-        })?)
+        })
     }
 
     pub fn new_rgba8(data: &RGBA8Pixels) -> Result<Self> {
@@ -201,7 +200,7 @@ impl Texture {
 
     pub fn blit_surface(&mut self, src: &Surface, dst: &USizeVec2) -> Result<()> {
         let src = src.convert_format(PixelFormat::RGBA8888)?;
-        Ok(src.with_lock(|bytes| -> Result<()> {
+        src.with_lock(|bytes| -> Result<()> {
             self.blit_rgba8(
                 &RGBA8Pixels::new(
                     bytes,
@@ -211,7 +210,7 @@ impl Texture {
                 dst,
             )?;
             Ok(())
-        })?)
+        })
     }
 
     pub fn blit_rgba8(&mut self, src: &RGBA8Pixels, dst: &USizeVec2) -> Result<()> {

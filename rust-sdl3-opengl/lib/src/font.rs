@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use color_eyre::eyre::{Result, eyre};
-use glam::{USizeVec2, UVec2, usizevec2};
+use color_eyre::eyre::Result;
+use glam::{USizeVec2, usizevec2};
 use sdl3::{
     iostream::IOStream,
     pixels::{Color, PixelFormat},
@@ -88,7 +88,7 @@ impl<'font, 'text> FontStringLayout<'font, 'text> {
             PixelFormat::RGBA8888,
         )?;
         for x in self.lines.iter() {
-            self.font.font.render(x.s).solid(color)?.blit(
+            self.font.font.render(x.s).blended(color)?.blit(
                 None,
                 &mut result,
                 Rect::new(
