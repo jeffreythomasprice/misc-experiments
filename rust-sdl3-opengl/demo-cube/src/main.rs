@@ -15,9 +15,7 @@ use lib::{
     camera::Camera,
     font::Font,
     gl_utils::{
-        shader::ShaderProgram,
-        texture::Texture,
-        vertex_array_object::VertexAttributeDefinition,
+        shader::ShaderProgram, texture::Texture, vertex_array_object::VertexAttributeDefinition,
     },
     mesh::Mesh,
     sdl_utils::{AppState, sdl_main},
@@ -305,12 +303,12 @@ impl lib::sdl_utils::App for App {
 
     fn update(
         &mut self,
-        AppState { keyboard, .. }: &AppState,
+        AppState { keyboard, fps, .. }: &AppState,
         elapsed_time: Duration,
     ) -> Result<()> {
         let font_texture = self
             .font
-            .layout("Hello, World!\nTODO put an FPS counter here")?
+            .layout(&format!("Hello, World!\nFPS: {}", fps.fps_pretty()))?
             .render_to_texture_resize_as_needed(
                 Color::WHITE,
                 self.font_texture.take(),
