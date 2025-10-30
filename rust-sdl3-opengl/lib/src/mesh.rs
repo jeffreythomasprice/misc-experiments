@@ -62,14 +62,11 @@ where
         &self.element_array_buffer
     }
 
-    pub fn set_vertices(&mut self, offset: usize, data: &[Vertex]) -> Result<()> {
-        self.array_buffer.set_data(offset, data)?;
-        self.recreate_vertex_array_object()?;
-        Ok(())
-    }
-
-    pub fn set_indices(&mut self, offset: usize, data: &[u16]) -> Result<()> {
-        self.element_array_buffer.set_data(offset, data)?;
+    pub fn buffers_mut<F>(&mut self, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Buffer<Vertex>, &mut Buffer<u16>) -> Result<()>,
+    {
+        f(&mut self.array_buffer, &mut self.element_array_buffer)?;
         self.recreate_vertex_array_object()?;
         Ok(())
     }

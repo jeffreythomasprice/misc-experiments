@@ -318,24 +318,31 @@ impl lib::sdl_utils::App for App {
         let height = font_texture.height();
         self.font_texture = Some(font_texture);
         let color = vec4(1.0, 1.0, 1.0, 1.0);
-        // TODO need to have a mesh style system that can automatically recreate the VAO once this succeeds
-        self.font_mesh.set_vertices(
-            0,
-            &[
-                Vertex2DColorTextureCoordinate::new(vec2(0.0, 0.0), vec2(0.0, 0.0), color),
-                Vertex2DColorTextureCoordinate::new(vec2(width as f32, 0.0), vec2(1.0, 0.0), color),
-                Vertex2DColorTextureCoordinate::new(
-                    vec2(width as f32, height as f32),
-                    vec2(1.0, 1.0),
-                    color,
-                ),
-                Vertex2DColorTextureCoordinate::new(
-                    vec2(0.0, height as f32),
-                    vec2(0.0, 1.0),
-                    color,
-                ),
-            ],
-        )?;
+        self.font_mesh
+            .buffers_mut(|array_buffer, element_array_buffer| {
+                array_buffer.set_data(
+                    0,
+                    &[
+                        Vertex2DColorTextureCoordinate::new(vec2(0.0, 0.0), vec2(0.0, 0.0), color),
+                        Vertex2DColorTextureCoordinate::new(
+                            vec2(width as f32, 0.0),
+                            vec2(1.0, 0.0),
+                            color,
+                        ),
+                        Vertex2DColorTextureCoordinate::new(
+                            vec2(width as f32, height as f32),
+                            vec2(1.0, 1.0),
+                            color,
+                        ),
+                        Vertex2DColorTextureCoordinate::new(
+                            vec2(0.0, height as f32),
+                            vec2(0.0, 1.0),
+                            color,
+                        ),
+                    ],
+                )?;
+                Ok(())
+            })?;
 
         let elapsed_seconds = elapsed_time.as_secs_f32();
         let left = keyboard.is_pressed(Keycode::Left) || keyboard.is_pressed(Keycode::A);
