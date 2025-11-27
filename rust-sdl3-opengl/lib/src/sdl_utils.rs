@@ -15,6 +15,8 @@ use sdl3::{
     video::Window,
 };
 
+use crate::fps::FPSCounter;
+
 pub struct KeyboardState {
     state: HashMap<Keycode, bool>,
 }
@@ -44,6 +46,7 @@ impl KeyboardState {
 pub struct AppState {
     pub window: Window,
     pub keyboard: KeyboardState,
+    pub fps: FPSCounter,
 }
 
 pub trait App {
@@ -94,8 +97,10 @@ where
     let mut app_state = AppState {
         window,
         keyboard: KeyboardState::new(),
+        fps: FPSCounter::new(),
     };
 
+    // TODO FPS counter says a different number, so my delay code is wrong
     const DESIRED_FPS: f64 = 60.0;
     const DESIRED_FRAME_DURATION: Duration = Duration::from_nanos(
         ((Duration::from_secs(1).as_nanos() as f64) / DESIRED_FPS).ceil() as u64,
@@ -138,6 +143,7 @@ where
         let now = Instant::now();
         if let Some(previous) = last_tick {
             let elapsed_time = now - previous;
+            app_state.fps.tick(elapsed_time);
             app.update(&app_state, elapsed_time)?;
             if elapsed_time >= DESIRED_FRAME_DURATION {
                 thread::yield_now();

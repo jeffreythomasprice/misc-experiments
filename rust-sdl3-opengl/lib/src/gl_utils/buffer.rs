@@ -113,3 +113,11 @@ impl<T> Buffer<T> {
         Ok(())
     }
 }
+
+impl<T> Drop for Buffer<T> {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteBuffers(1, &self.instance);
+        };
+    }
+}

@@ -1,26 +1,23 @@
 use bytemuck::{Pod, Zeroable};
 use color_eyre::eyre::Result;
 use core::f32;
-use glam::{Mat4, Vec2, Vec3, Vec4, vec2, vec3, vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4, usizevec2, vec2, vec3, vec4};
 use sdl3::{
     event::Event,
-    iostream::IOStream,
     keyboard::Keycode,
     mouse::MouseButton,
+    pixels::Color,
     sys::mouse::{SDL_HideCursor, SDL_ShowCursor, SDL_WarpMouseInWindow},
 };
 use std::{rc::Rc, time::Duration};
-use tracing::*;
 
 use lib::{
     camera::Camera,
     font::Font,
     gl_utils::{
-        buffer::{Buffer, BufferTarget, BufferUsage},
-        shader::ShaderProgram,
-        texture::Texture,
-        vertex_array_object::{VertexArrayObject, VertexAttributeDefinition},
+        shader::ShaderProgram, texture::Texture, vertex_array_object::VertexAttributeDefinition,
     },
+    mesh::Mesh,
     sdl_utils::{AppState, sdl_main},
 };
 
@@ -68,15 +65,10 @@ struct App {
     texture: Texture,
     font: Font,
     font_texture: Option<Texture>,
-    shader2d: ShaderProgram,
-    shader3d: ShaderProgram,
-    // TODO meshes?
-    font_array_buffer: Buffer<Vertex2DColorTextureCoordinate>,
-    font_element_array_buffer: Buffer<u16>,
-    font_vertex_array_object: VertexArrayObject,
-    cube_array_buffer: Buffer<Vertex3DColorTextureCoordinate>,
-    cube_element_array_buffer: Buffer<u16>,
-    cube_vertex_array_object: VertexArrayObject,
+    shader2d: Rc<ShaderProgram>,
+    shader3d: Rc<ShaderProgram>,
+    font_mesh: Mesh<Vertex2DColorTextureCoordinate>,
+    cube_mesh: Mesh<Vertex3DColorTextureCoordinate>,
     camera: Camera,
     is_mouse_locked: bool,
 }
@@ -94,31 +86,19 @@ impl App {
             20.0,
         )?;
 
-        let shader2d = ShaderProgram::new(
+        let shader2d = Rc::new(ShaderProgram::new(
             include_str!("shaders/shader2d.vert"),
             include_str!("shaders/shader2d.frag"),
-        )?;
+        )?);
 
-        let shader3d = ShaderProgram::new(
+        let shader3d = Rc::new(ShaderProgram::new(
             include_str!("shaders/shader3d.vert"),
             include_str!("shaders/shader3d.frag"),
-        )?;
+        )?);
 
-        let font_array_buffer = Buffer::new(
-            BufferTarget::Array,
-            BufferUsage::StreamDraw,
-            &[Vertex2DColorTextureCoordinate::default(); 4],
-        )?;
-        let font_element_array_buffer = Buffer::new(
-            BufferTarget::ElementArray,
-            BufferUsage::StaticDraw,
-            &[0, 1, 2, 2, 3, 0],
-        )?;
-        let font_vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
-            &shader2d,
-            &font_array_buffer,
-            &font_element_array_buffer,
-            &[
+        let font_mesh = Mesh::new(
+            shader2d.clone(),
+            vec![
                 VertexAttributeDefinition {
                     name: "in_position".to_owned(),
                     offset: bytemuck::offset_of!(Vertex2DColorTextureCoordinate, position),
@@ -135,6 +115,9 @@ impl App {
                     offset: bytemuck::offset_of!(Vertex2DColorTextureCoordinate, color),
                 },
             ],
+            // TODO needs a constructor that takes sizes, not data, shouldn't have to allocate a temp array for this
+            &[Vertex2DColorTextureCoordinate::default(); 4],
+            &[0, 1, 2, 2, 3, 0],
         )?;
 
         let color1 = vec4(1.0, 0.0, 0.0, 1.0);
@@ -143,10 +126,25 @@ impl App {
         let color4 = vec4(1.0, 1.0, 0.0, 1.0);
         let color5 = vec4(0.0, 1.0, 1.0, 1.0);
         let color6 = vec4(1.0, 0.0, 1.0, 1.0);
-        // TODO builder pattern?
-        let cube_array_buffer = Buffer::new(
-            BufferTarget::Array,
-            BufferUsage::StaticDraw,
+        let cube_mesh = Mesh::new(
+            shader3d.clone(),
+            vec![
+                VertexAttributeDefinition {
+                    name: "in_position".to_owned(),
+                    offset: bytemuck::offset_of!(Vertex3DColorTextureCoordinate, position),
+                },
+                VertexAttributeDefinition {
+                    name: "in_texture_coordinate".to_owned(),
+                    offset: bytemuck::offset_of!(
+                        Vertex3DColorTextureCoordinate,
+                        texture_coordinate
+                    ),
+                },
+                VertexAttributeDefinition {
+                    name: "in_color".to_owned(),
+                    offset: bytemuck::offset_of!(Vertex3DColorTextureCoordinate, color),
+                },
+            ],
             &[
                 Vertex3DColorTextureCoordinate::new(vec3(-1.0, -1.0, -1.0), vec2(0.0, 0.0), color1),
                 Vertex3DColorTextureCoordinate::new(vec3(1.0, -1.0, -1.0), vec2(1.0, 0.0), color1),
@@ -173,38 +171,9 @@ impl App {
                 Vertex3DColorTextureCoordinate::new(vec3(1.0, 1.0, 1.0), vec2(1.0, 1.0), color6),
                 Vertex3DColorTextureCoordinate::new(vec3(1.0, -1.0, 1.0), vec2(0.0, 1.0), color6),
             ],
-        )?;
-
-        let cube_element_array_buffer = Buffer::<u16>::new(
-            BufferTarget::ElementArray,
-            BufferUsage::StaticDraw,
             &[
                 0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12,
                 16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20,
-            ],
-        )?;
-
-        // TODO builder pattern?
-        let cube_vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
-            &shader3d,
-            &cube_array_buffer,
-            &cube_element_array_buffer,
-            &[
-                VertexAttributeDefinition {
-                    name: "in_position".to_owned(),
-                    offset: bytemuck::offset_of!(Vertex3DColorTextureCoordinate, position),
-                },
-                VertexAttributeDefinition {
-                    name: "in_texture_coordinate".to_owned(),
-                    offset: bytemuck::offset_of!(
-                        Vertex3DColorTextureCoordinate,
-                        texture_coordinate
-                    ),
-                },
-                VertexAttributeDefinition {
-                    name: "in_color".to_owned(),
-                    offset: bytemuck::offset_of!(Vertex3DColorTextureCoordinate, color),
-                },
             ],
         )?;
 
@@ -220,12 +189,8 @@ impl App {
             font_texture: None,
             shader2d,
             shader3d,
-            font_array_buffer,
-            font_element_array_buffer,
-            font_vertex_array_object,
-            cube_array_buffer,
-            cube_element_array_buffer,
-            cube_vertex_array_object,
+            font_mesh,
+            cube_mesh,
             camera,
             is_mouse_locked: false,
         })
@@ -279,15 +244,18 @@ impl lib::sdl_utils::App for App {
                 0,
             );
 
-            self.cube_vertex_array_object.bind();
+            self.cube_mesh.bind();
             gl::DrawElements(
                 gl::TRIANGLES,
-                self.cube_element_array_buffer.len() as i32,
+                self.cube_mesh.element_array_buffer().len() as i32,
                 gl::UNSIGNED_SHORT,
                 std::ptr::null(),
             );
 
             gl::Disable(gl::DEPTH_TEST);
+
+            gl::Enable(gl::BLEND);
+            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
 
             if let Some(font_texture) = &self.font_texture {
                 self.shader2d.use_program();
@@ -318,14 +286,16 @@ impl lib::sdl_utils::App for App {
                     0,
                 );
 
-                self.font_vertex_array_object.bind();
+                self.font_mesh.bind();
                 gl::DrawElements(
                     gl::TRIANGLES,
-                    self.font_element_array_buffer.len() as i32,
+                    self.font_mesh.element_array_buffer().len() as i32,
                     gl::UNSIGNED_SHORT,
                     std::ptr::null(),
                 );
             }
+
+            gl::Disable(gl::BLEND);
         }
 
         Ok(())
@@ -333,58 +303,46 @@ impl lib::sdl_utils::App for App {
 
     fn update(
         &mut self,
-        AppState { keyboard, .. }: &AppState,
+        AppState { keyboard, fps, .. }: &AppState,
         elapsed_time: Duration,
     ) -> Result<()> {
-        // TODO re-use an existing texture instead of re-allocating every time
         let font_texture = self
             .font
-            .render_text("Hello, World!\nTODO put an FPS counter here")?;
+            .layout(&format!("Hello, World!\nFPS: {}", fps.fps_pretty()))?
+            .render_to_texture_resize_as_needed(
+                Color::WHITE,
+                self.font_texture.take(),
+                usizevec2(0, 0),
+            )?;
         let width = font_texture.width();
         let height = font_texture.height();
         self.font_texture = Some(font_texture);
         let color = vec4(1.0, 1.0, 1.0, 1.0);
-        // TODO need to have a mesh style system that can automatically recreate the VAO once this succeeds
-        self.font_array_buffer.set_data(
-            0,
-            &[
-                Vertex2DColorTextureCoordinate::new(vec2(0.0, 0.0), vec2(0.0, 0.0), color),
-                Vertex2DColorTextureCoordinate::new(vec2(width as f32, 0.0), vec2(1.0, 0.0), color),
-                Vertex2DColorTextureCoordinate::new(
-                    vec2(width as f32, height as f32),
-                    vec2(1.0, 1.0),
-                    color,
-                ),
-                Vertex2DColorTextureCoordinate::new(
-                    vec2(0.0, height as f32),
-                    vec2(0.0, 1.0),
-                    color,
-                ),
-            ],
-        )?;
-        // TODO make it easy to recreate the VAO
-        self.font_vertex_array_object = VertexArrayObject::new_array_and_element_array_buffers(
-            &self.shader2d,
-            &self.font_array_buffer,
-            &self.font_element_array_buffer,
-            &[
-                VertexAttributeDefinition {
-                    name: "in_position".to_owned(),
-                    offset: bytemuck::offset_of!(Vertex2DColorTextureCoordinate, position),
-                },
-                VertexAttributeDefinition {
-                    name: "in_texture_coordinate".to_owned(),
-                    offset: bytemuck::offset_of!(
-                        Vertex2DColorTextureCoordinate,
-                        texture_coordinate
-                    ),
-                },
-                VertexAttributeDefinition {
-                    name: "in_color".to_owned(),
-                    offset: bytemuck::offset_of!(Vertex2DColorTextureCoordinate, color),
-                },
-            ],
-        )?;
+        self.font_mesh
+            .buffers_mut(|array_buffer, element_array_buffer| {
+                array_buffer.set_data(
+                    0,
+                    &[
+                        Vertex2DColorTextureCoordinate::new(vec2(0.0, 0.0), vec2(0.0, 0.0), color),
+                        Vertex2DColorTextureCoordinate::new(
+                            vec2(width as f32, 0.0),
+                            vec2(1.0, 0.0),
+                            color,
+                        ),
+                        Vertex2DColorTextureCoordinate::new(
+                            vec2(width as f32, height as f32),
+                            vec2(1.0, 1.0),
+                            color,
+                        ),
+                        Vertex2DColorTextureCoordinate::new(
+                            vec2(0.0, height as f32),
+                            vec2(0.0, 1.0),
+                            color,
+                        ),
+                    ],
+                )?;
+                Ok(())
+            })?;
 
         let elapsed_seconds = elapsed_time.as_secs_f32();
         let left = keyboard.is_pressed(Keycode::Left) || keyboard.is_pressed(Keycode::A);
