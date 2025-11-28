@@ -1,20 +1,58 @@
 bits 64
 
+section .data
+
+msg: db `Hello, world!\n`, 0
+
 section .text
 
 global _start
 _start:
-	mov     rax, 1 ; write
-	mov     rdi, 1 ; stdout
-	mov     rsi, msg
-	mov     rdx, msg.len
-	syscall
+    mov rsi, msg
+    call printz
 
-	mov     rax, 60 ; exit
-	mov     rdi, 0
-	syscall
+    mov rdi, 0
+    call exit
 
-section .data
+; inputs:
+;   rdi = exit code
+exit:
+    mov rax, 60
+    syscall
 
-msg: db "Hello, world!"
-.len: equ $ - msg
+; inputs:
+;   rsi = null-terminated char*
+; returns:
+;   rcx = length, not including null
+; clobbers:
+;   al
+strlen:
+    mov rcx, 0
+.loop:
+    mov al,[rsi]
+    inc rsi
+    inc rcx
+    test al,al
+    jne .loop
+    ret
+
+; inputs:
+;   rsi = null-terminated char*
+; clobbers:
+;   rcx
+;   al
+printz:
+    ; save pointer
+    push rsi
+    call strlen
+    ; length
+    mov rdx,rcx
+    ; 1 = write
+    mov rax,1
+    ; 1 = stdout
+    mov rdi,1
+    ; restore pointer
+    pop rsi
+    syscall
+    ret
+
