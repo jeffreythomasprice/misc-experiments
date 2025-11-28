@@ -23,40 +23,39 @@ type Message {
 }
 
 pub fn main() -> Nil {
-  echo add_ints(1, 2) as "add_ints()"
+  io.println("add_ints result: " <> int.to_string(add_ints(1, 2)))
 
-  let data = new_data(1)
+  let data = new_data(0)
   let assert Ok(actor) =
     actor.new(data)
-    |> actor.on_message(fn(data, msg) {
-      case msg {
-        Increment(amount) -> {
-          io.println("calling increment, amount: " <> int.to_string(amount))
-          data_increment(data, amount)
-          Nil
-        }
-        Get(subject) -> {
-          let result = data_get(data)
-          io.println("calling get, result: " <> int.to_string(result))
-          process.send(subject, result)
-          Nil
-        }
-      }
-      actor.continue(data)
-    })
+    |> actor.on_message(data_actor_on_message)
     |> actor.start
 
-  io.println(
-    "from main, get result: " <> int.to_string(actor.call(actor.data, 10, Get)),
-  )
   actor.send(actor.data, Increment(1))
-  io.println(
-    "from main, get result: " <> int.to_string(actor.call(actor.data, 10, Get)),
-  )
-  actor.send(actor.data, Increment(40))
+  actor.send(actor.data, Increment(2))
+  actor.send(actor.data, Increment(5))
+  actor.send(actor.data, Increment(34))
+
   io.println(
     "from main, get result: " <> int.to_string(actor.call(actor.data, 10, Get)),
   )
 
   Nil
+}
+
+fn data_actor_on_message(data: Data, msg: Message) {
+  case msg {
+    Increment(amount) -> {
+      io.println("calling increment, amount: " <> int.to_string(amount))
+      data_increment(data, amount)
+      Nil
+    }
+    Get(subject) -> {
+      let result = data_get(data)
+      io.println("calling get, result: " <> int.to_string(result))
+      process.send(subject, result)
+      Nil
+    }
+  }
+  actor.continue(data)
 }
