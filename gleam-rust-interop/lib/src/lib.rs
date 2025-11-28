@@ -1,16 +1,18 @@
 use std::sync::Mutex;
 
-use rustler::{Env, NifStruct, ResourceArc, Term};
+use rustler::{Env, Resource, ResourceArc, Term};
 
-// #[derive(NifStruct)]
-// #[module = "RustLib.Data"]
 struct Data {
     count: Mutex<i64>,
 }
 
+impl Resource for Data {}
+
 fn load(env: Env, _: Term) -> bool {
     println!("TODO load");
-    rustler::resource!(Data, env);
+    if !env.register::<Data>().is_ok() {
+        return false;
+    }
     true
 }
 
