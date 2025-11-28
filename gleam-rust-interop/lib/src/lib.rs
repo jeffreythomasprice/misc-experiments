@@ -9,7 +9,6 @@ struct Data {
 impl Resource for Data {}
 
 fn load(env: Env, _: Term) -> bool {
-    println!("TODO load");
     if !env.register::<Data>().is_ok() {
         return false;
     }
