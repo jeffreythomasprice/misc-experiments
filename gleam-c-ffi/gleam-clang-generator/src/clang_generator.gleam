@@ -1,28 +1,17 @@
-import gleam/int
-import gleam/io
-import gleamyshell
+import argv
+import clang
 
 pub fn main() -> Nil {
-  case
-    gleamyshell.execute("clang", in: "..", args: [
-      "-Xclang",
-      "-ast-dump=json",
-      "c-lib/src/lib.h",
-    ])
-  {
-    Ok(gleamyshell.CommandOutput(exit_code: 0, output:)) -> {
-      io.println("TODO output: " <> output)
+  let argv.Argv(runtime: _, program:, arguments:) = argv.load()
+  let source = case arguments {
+    [source] -> source
+    _ -> {
+      panic as { "usage: " <> program <> " <source>" }
     }
-    Ok(gleamyshell.CommandOutput(exit_code:, output:)) -> {
-      panic as {
-        "error, exit code: "
-        <> int.to_string(exit_code)
-        <> ", output:\n"
-        <> output
-      }
-    }
-    Error(e) -> panic as { "error running command: " <> e }
   }
+
+  let assert Ok(ast) = clang.parse_clang_ast_file(source)
+  echo ast as "TODO ast"
 
   Nil
 }
