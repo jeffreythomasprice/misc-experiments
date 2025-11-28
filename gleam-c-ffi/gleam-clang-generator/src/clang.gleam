@@ -1,9 +1,9 @@
-import argv
 import gleam/dynamic/decode
 import gleam/int
 import gleam/io
 import gleam/json
 import gleam/option
+import gleam/regexp
 import gleam/result
 import gleam/string
 import gleamyshell
@@ -70,6 +70,7 @@ pub type AST {
     name: option.Option(String),
     typ: option.Option(Type),
     inner: List(AST),
+    function_return_type: option.Option(String),
   )
 }
 
@@ -102,7 +103,33 @@ fn clang_ast_decoder() -> decode.Decoder(AST) {
     [],
     decode.list(clang_ast_decoder()),
   )
-  decode.success(AST(id:, kind:, loc:, is_implicit:, name:, typ:, inner:))
+
+  let function_return_type = case kind, typ {
+    "FunctionDecl", option.Some(Type(qual_type: option.Some(qual_type))) -> {
+      let assert Ok(r) =
+        regexp.compile(
+          "^([^\\(\\)]+)\\s+\\(.*$",
+          with: regexp.Options(case_insensitive: False, multi_line: False),
+        )
+      case regexp.scan(with: r, content: qual_type) {
+        [regexp.Match(submatches: [option.Some(result)], ..)] ->
+          option.Some(result)
+        _ -> option.None
+      }
+    }
+    _, _ -> option.None
+  }
+
+  decode.success(AST(
+    id:,
+    kind:,
+    loc:,
+    is_implicit:,
+    name:,
+    typ:,
+    inner:,
+    function_return_type:,
+  ))
 }
 
 pub fn parse_clang_ast_file(path: String) -> Result(AST, String) {
@@ -111,6 +138,7 @@ pub fn parse_clang_ast_file(path: String) -> Result(AST, String) {
       gleamyshell.execute("clang", in: ".", args: [
         "-Xclang",
         "-ast-dump=json",
+        "-fsyntax-only",
         path,
       ])
     {
