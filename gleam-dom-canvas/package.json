@@ -1,0 +1,17 @@
+{
+  "name": "gleam-js-experiment",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "vite": "^7.2.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "scripts": {
+    "watch": "vite",
+    "build": "vite build"
+  }
+}
