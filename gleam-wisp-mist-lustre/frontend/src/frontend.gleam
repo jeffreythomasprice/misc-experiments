@@ -16,7 +16,6 @@ type Message {
 pub fn main() -> Nil {
   let app = lustre.simple(init, update, view)
   let assert Ok(_) = lustre.start(app, "#app", Nil)
-
   Nil
 }
 
