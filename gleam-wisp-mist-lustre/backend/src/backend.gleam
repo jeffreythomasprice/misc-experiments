@@ -2,6 +2,8 @@ import cors_builder
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/http
+import gleam/http/request
+import gleam/http/response
 import gleam/int
 import gleam/json
 import gleam/otp/actor
@@ -85,7 +87,6 @@ fn middleware(
   use req <- cors_builder.wisp_middleware(
     req,
     cors_builder.new()
-      // TODO options requests are working, but actual requests yield 400 Bad request: Invalid origin
       |> cors_builder.allow_all_origins()
       |> cors_builder.allow_method(http.Get)
       |> cors_builder.allow_method(http.Post)
@@ -96,8 +97,6 @@ fn middleware(
   )
 
   use req <- wisp.handle_head(req)
-
-  use req <- wisp.csrf_known_header_protection(req)
 
   handle_request(req)
 }

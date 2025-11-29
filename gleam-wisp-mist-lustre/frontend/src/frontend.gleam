@@ -116,8 +116,9 @@ fn make_update_count_request(increment_by: Int) -> effect.Effect(Message) {
     ),
     shared.current_state_response_decoder(),
     fn(response) {
-      echo response as "TODO update response"
-      todo
+      let response.Response(body: shared.CurrentStateResponse(count:), ..) =
+        response
+      GotCountFromServer(count:)
     },
     fn(_response, e) { GotErrorFromServer(string.inspect(e)) },
   )
@@ -170,6 +171,7 @@ fn make_json_request(
       use dispatch <- effect.from
       fetch.send(request)
       // wait for response
+      // TODO should be able to present response payload even if response wasn't json
       |> promise.try_await(fetch.read_json_body)
       // parse response
       |> promise.map(fn(response) {
