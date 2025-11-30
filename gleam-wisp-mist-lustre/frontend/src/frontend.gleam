@@ -8,18 +8,21 @@ import gleam/int
 import gleam/javascript/promise
 import gleam/json
 import gleam/option
-import gleam/result
 import gleam/string
 import lustre
+import lustre/attribute
 import lustre/effect
 import lustre/element
 import lustre/element/html
-import lustre/element/keyed
 import lustre/event
 import shared
 
 type Model {
-  Model(count: option.Option(Int), error: option.Option(String))
+  Model(
+    count: option.Option(Int),
+    is_loading: Bool,
+    error: option.Option(String),
+  )
 }
 
 type Message {
@@ -36,58 +39,68 @@ pub fn main() -> Nil {
 }
 
 fn init(_) -> #(Model, effect.Effect(Message)) {
-  #(Model(count: option.None, error: option.None), make_get_count_request())
+  #(
+    Model(count: option.None, is_loading: True, error: option.None),
+    make_get_count_request(),
+  )
 }
 
 fn update(model: Model, msg: Message) -> #(Model, effect.Effect(Message)) {
   case msg {
     GotCountFromServer(count:) -> {
-      #(Model(..model, count: option.Some(count)), effect.none())
+      #(
+        Model(..model, count: option.Some(count), is_loading: False),
+        effect.none(),
+      )
     }
 
     GotErrorFromServer(error) -> {
-      #(Model(..model, error: option.Some(error)), effect.none())
+      #(
+        Model(..model, error: option.Some(error), is_loading: False),
+        effect.none(),
+      )
     }
 
     Increment -> #(
-      Model(..model, count: option.None),
+      Model(..model, is_loading: True),
       make_update_count_request(1),
     )
 
     Decrement -> #(
-      Model(..model, count: option.None),
+      Model(..model, is_loading: True),
       make_update_count_request(-1),
     )
   }
 }
 
 fn view(model: Model) -> element.Element(Message) {
-  let Model(count:, error:) = model
+  let Model(count:, is_loading:, error:) = model
 
   let count = case count {
     option.None -> html.div([], [html.text("Loading...")])
-    option.Some(count) -> counter(count)
+    option.Some(count) -> counter(count:, buttons_enabled: !is_loading)
   }
 
   let error = case error {
     option.None -> element.fragment([])
     option.Some(error) ->
-      html.div(
-        [
-          // TODO error class
-        ],
-        [html.text("Error: " <> error)],
-      )
+      html.div([attribute.class("error")], [html.text("Error: " <> error)])
   }
 
   element.fragment([count, error])
 }
 
-fn counter(count: Int) {
+fn counter(count count: Int, buttons_enabled buttons_enabled: Bool) {
   html.div([], [
-    html.button([event.on_click(Increment)], [html.text("Increment")]),
+    html.button(
+      [event.on_click(Increment), attribute.disabled(!buttons_enabled)],
+      [html.text("Increment")],
+    ),
     html.div([], [html.text("Count: " <> { count |> int.to_string })]),
-    html.button([event.on_click(Decrement)], [html.text("Decrement")]),
+    html.button(
+      [event.on_click(Decrement), attribute.disabled(!buttons_enabled)],
+      [html.text("Decrement")],
+    ),
   ])
 }
 

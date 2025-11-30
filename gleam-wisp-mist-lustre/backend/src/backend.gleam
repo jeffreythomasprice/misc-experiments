@@ -2,8 +2,6 @@ import cors_builder
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/http
-import gleam/http/request
-import gleam/http/response
 import gleam/int
 import gleam/json
 import gleam/otp/actor
