@@ -157,8 +157,6 @@ pub fn parse_clang_ast_file(path: String) -> Result(AST, String) {
     },
   )
 
-  io.println("TODO ast_str: " <> ast_str)
-
   use result <- result.try(
     json.parse(ast_str, clang_ast_decoder())
     |> result.map_error(fn(e) { string.inspect(e) }),
