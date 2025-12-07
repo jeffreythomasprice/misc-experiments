@@ -13,7 +13,8 @@
     sdl_clear_error/0,
     sdl_init/1,
     sdl_init_video/0,
-    sdl_quit/0
+    sdl_quit/0,
+    sdl_create_window_and_renderer/4
 ]).
 
 -nifs([
@@ -28,7 +29,8 @@
     sdl_clear_error/0,
     sdl_init/1,
     sdl_init_video/0,
-    sdl_quit/0
+    sdl_quit/0,
+    sdl_create_window_and_renderer/4
 ]).
 
 -on_load(init/0).
@@ -70,4 +72,7 @@ sdl_init_video() ->
     erlang:nif_error("NIF library not loaded").
 
 sdl_quit() ->
+    erlang:nif_error("NIF library not loaded").
+
+sdl_create_window_and_renderer(title, width, height, flags) ->
     erlang:nif_error("NIF library not loaded").

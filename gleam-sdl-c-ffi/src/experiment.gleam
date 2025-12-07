@@ -24,6 +24,17 @@ pub fn main() -> Nil {
 
   let assert Ok(_) = sdl_init(sdl_raw.init_video())
 
+  // TODO make a window
+  echo sdl_raw.create_window_and_renderer(
+    title: "Experiment" |> charlist.from_string,
+    width: 1024,
+    height: 768,
+    flags: 0,
+  )
+    as "TODO create_window_and_renderer"
+
+  // TODO event loop
+
   sdl_raw.quit()
 
   Nil

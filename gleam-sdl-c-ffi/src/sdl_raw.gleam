@@ -2,6 +2,10 @@ import gleam/erlang/charlist
 
 pub type InitFlags
 
+pub type Window
+
+pub type Renderer
+
 @external(erlang, "libsdl", "sdl_version_compiled")
 pub fn version_compiled() -> Int
 
@@ -37,3 +41,11 @@ pub fn init_video() -> InitFlags
 
 @external(erlang, "libsdl", "sdl_quit")
 pub fn quit() -> InitFlags
+
+@external(erlang, "libsdl", "sdl_create_window_and_renderer")
+pub fn create_window_and_renderer(
+  title title: charlist.Charlist,
+  width width: Int,
+  height height: Int,
+  flags flags: Int,
+) -> Result(#(Window, Renderer), Nil)
