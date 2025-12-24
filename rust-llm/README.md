@@ -25,5 +25,17 @@ select id, key, first_page, last_page from document_chunk;
 ```
 
 ```
-bun run src/index.ts
+# or just let systemctl do it
+ollama serve
+
+# pull all the models we're going to use
+ollama pull ...
+```
+
+```
+journalctl -u ollama --no-pager --follow --pager-end
+```
+
+```
+cargo run
 ```

@@ -1,0 +1,17 @@
+[package]
+name = "rust-llm-ollama"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+dotenvy = "0.15.7"
+llm = "1.3.6"
+pgvector = { version = "0.4.1", features = ["postgres"] }
+regex = "1.12.2"
+tempdir = "0.3.7"
+tiktoken-rs = "0.9.1"
+tokio = "1.48.0"
+tokio-postgres = "0.7.15"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
