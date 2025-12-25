@@ -41,7 +41,7 @@ pub async fn create_embedding(llm: &EmbeddingLLM, input: String) -> Result<Vec<f
 }
 
 fn create_openai_llm() -> Result<NamedLLM> {
-    let name = "gpt-5-name".to_string();
+    let name = "gpt-5-nano".to_string();
     let llm = LLMBuilder::new()
         .backend(LLMBackend::OpenAI)
         .model(&name)

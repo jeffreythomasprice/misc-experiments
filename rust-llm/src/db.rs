@@ -1,5 +1,6 @@
-use crate::env::assert_env_var;
+use crate::{env::assert_env_var, llm::EmbeddingLLM};
 use anyhow::{Result, anyhow};
+use regex::Regex;
 use tokio_postgres::{Client, Config, NoTls};
 use tracing::*;
 
@@ -49,22 +50,8 @@ pub async fn init() -> Result<Client> {
     client
         .batch_execute(
             r"
-		CREATE EXTENSION IF NOT EXISTS vector;
-
-		CREATE TABLE IF NOT EXISTS document_chunk (
-			id SERIAL PRIMARY KEY,
-            embedding_llm_name TEXT NOT NULL,
-			key TEXT NOT NULL,
-			first_page INT NOT NULL,
-			last_page INT NOT NULL,
-			content TEXT NOT NULL,
-			-- TODO determine length of embedding vector dynamically
-			embedding vector(1024) NOT NULL,
-			UNIQUE (embedding_llm_name, key, first_page, last_page)
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_document_chunk_embedding ON document_chunk USING hnsw (embedding vector_l2_ops);
-	",
+            CREATE EXTENSION IF NOT EXISTS vector;
+            ",
         )
         .await?;
 
@@ -73,15 +60,19 @@ pub async fn init() -> Result<Client> {
     Ok(client)
 }
 
-pub async fn find_all_by_key(client: &Client, embedding_llm_name: &str, key: &str) -> Result<Vec<FindAllByKeyResult>> {
+pub async fn find_all_by_key(client: &Client, llm: &EmbeddingLLM, key: &str) -> Result<Vec<FindAllByKeyResult>> {
+    let table_name = create_document_chunk_table_if_needed(client, llm).await?;
     let results = client
         .query(
-            r"
+            &format!(
+                r"
             SELECT id, embedding_llm_name, key, first_page, last_page
-            FROM document_chunk
+            FROM {table_name}
             WHERE embedding_llm_name = $1 AND key = $2
-            ",
-            &[&embedding_llm_name, &key],
+            "
+            )
+            .to_string(),
+            &[&llm.llm.name, &key],
         )
         .await?;
     Ok(results
@@ -98,41 +89,49 @@ pub async fn find_all_by_key(client: &Client, embedding_llm_name: &str, key: &st
 
 pub async fn insert(
     client: &Client,
-    embedding_llm_name: &str,
+    llm: &EmbeddingLLM,
     key: &str,
     first_page: u32,
     last_page: u32,
     content: &str,
     embedding: Vec<f32>,
 ) -> Result<()> {
+    let table_name = create_document_chunk_table_if_needed(client, llm).await?;
     let first_page = first_page as i32;
     let last_page = last_page as i32;
     let embedding = pgvector::Vector::from(embedding);
     client
         .execute(
-            r"
-            INSERT INTO document_chunk
+            &format!(
+                r"
+            INSERT INTO {table_name}
             (embedding_llm_name, key, first_page, last_page, content, embedding)
             VALUES ($1, $2, $3, $4, $5, $6)
-            ",
-            &[&embedding_llm_name, &key, &first_page, &last_page, &content, &embedding],
+            "
+            )
+            .to_string(),
+            &[&llm.llm.name, &key, &first_page, &last_page, &content, &embedding],
         )
         .await?;
     Ok(())
 }
 
-pub async fn search(client: &Client, keys: &[&str], embedding: Vec<f32>, limit: u32) -> Result<Vec<SearchResult>> {
+pub async fn search(client: &Client, llm: &EmbeddingLLM, keys: &[&str], embedding: Vec<f32>, limit: u32) -> Result<Vec<SearchResult>> {
+    let table_name = create_document_chunk_table_if_needed(client, llm).await?;
     let embedding = pgvector::Vector::from(embedding);
     let limit = limit as i64;
     let results = client
         .query(
-            r"
+            &format!(
+                r"
             SELECT id, embedding_llm_name, key, first_page, last_page, content
-            FROM document_chunk
+            FROM {table_name}
             WHERE key = ANY ($1)
             ORDER BY embedding <-> $2
             LIMIT $3
-            ",
+            "
+            )
+            .to_string(),
             &[&keys, &embedding, &limit],
         )
         .await?;
@@ -147,4 +146,34 @@ pub async fn search(client: &Client, keys: &[&str], embedding: Vec<f32>, limit: 
             content: row.get(5),
         })
         .collect())
+}
+
+async fn create_document_chunk_table_if_needed(client: &Client, llm: &EmbeddingLLM) -> Result<String> {
+    let table_name = get_document_chunk_table_name(&llm);
+    let vector_size = llm.embedding_vector_length;
+    client
+        .batch_execute(&format!(
+            r"
+            CREATE TABLE IF NOT EXISTS {table_name} (
+                id SERIAL PRIMARY KEY,
+                embedding_llm_name TEXT NOT NULL,
+                key TEXT NOT NULL,
+                first_page INT NOT NULL,
+                last_page INT NOT NULL,
+                content TEXT NOT NULL,
+                embedding vector({vector_size}) NOT NULL,
+                UNIQUE (embedding_llm_name, key, first_page, last_page)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_{table_name}_embedding ON {table_name} USING hnsw (embedding vector_l2_ops);
+        ",
+        ))
+        .await?;
+    Ok(table_name)
+}
+
+fn get_document_chunk_table_name(llm: &EmbeddingLLM) -> String {
+    // TODO no unwrap, static?
+    let r = Regex::new("[^a-zA-Z0-9_]").unwrap();
+    r.replace_all(&llm.llm.name, "_").to_string()
 }

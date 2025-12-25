@@ -3,12 +3,18 @@ mod env;
 mod llm;
 mod pdf;
 mod process;
+mod prompt;
 
 use std::path::Path;
 
-use ::llm::{LLMProvider, chat::ChatMessage};
+use ::llm::{
+    LLMProvider,
+    chat::{ChatMessage, ChatMessageBuilder},
+};
 use anyhow::Result;
+use anyhow::anyhow;
 use dotenvy::dotenv;
+use prompt::prompt;
 use tempdir::TempDir;
 use tiktoken_rs::o200k_base;
 use tracing::*;
@@ -37,40 +43,58 @@ async fn main() -> Result<()> {
     let llms = create_openai().await?;
     // let llms = create_ollama().await?;
 
-    let path = Path::new(
-        "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
-    );
-    let document_key = chunk_pdf(
-        &llms.embedding,
-        &pg_client,
-        path,
-        temp_dir.path(),
-        // TODO what should the max page size be?
-        5,
-    )
-    .await?;
-
-    // start with a prompt
-    let mut messages = vec![ChatMessage::user().content("How does initiative work?").build()];
-
-    // TODO set up some agent thing that will auto do searches via tool use?
-
-    // look up some info about that
-    let search_results = find_relevant_documents(&llms.embedding, pg_client, &document_key, "combat initiative", 3).await?;
-    for r in search_results.iter() {
-        messages.push(
-            ChatMessage::assistant()
-                .content(format!(
-                    "this is an excerpt from a potentially relevant document\nkey: {}\npage range: {}-{}\ncontent: {}",
-                    r.key, r.first_page, r.last_page, r.content
-                ))
-                .build(),
-        );
+    let mut conversation_history = vec![];
+    loop {
+        let user_response = prompt("> ");
+        conversation_history.push(ChatMessage::user().content(user_response).build());
+        // TODO check if error is context too big and remove/summarize old messages
+        let llm_response = llms.chat.llm.chat(&conversation_history).await?;
+        debug!("llm response: {llm_response:?}");
+        match llm_response.text() {
+            Some(llm_response) => {
+                println!("{}", llm_response);
+                conversation_history.push(ChatMessage::assistant().content(llm_response).build());
+            }
+            None => Err(anyhow!("llm failed to give any text response"))?,
+        }
     }
 
-    // get response
-    let response = llms.chat.llm.chat(&messages).await?;
-    info!("response: {:?}", response.text());
+    // TODO cleanup
+
+    // let path = Path::new(
+    //     "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
+    // );
+    // let document_key = chunk_pdf(
+    //     &llms.embedding,
+    //     &pg_client,
+    //     path,
+    //     temp_dir.path(),
+    //     // TODO what should the max page size be?
+    //     5,
+    // )
+    // .await?;
+
+    // // start with a prompt
+    // let mut messages = vec![ChatMessage::user().content("How does initiative work?").build()];
+
+    // // TODO set up some agent thing that will auto do searches via tool use?
+
+    // // look up some info about that
+    // let search_results = find_relevant_documents(&llms.embedding, pg_client, &document_key, "combat initiative", 3).await?;
+    // for r in search_results.iter() {
+    //     messages.push(
+    //         ChatMessage::assistant()
+    //             .content(format!(
+    //                 "this is an excerpt from a potentially relevant document\nkey: {}\npage range: {}-{}\ncontent: {}",
+    //                 r.key, r.first_page, r.last_page, r.content
+    //             ))
+    //             .build(),
+    //     );
+    // }
+
+    // // get response
+    // let response = llms.chat.llm.chat(&messages).await?;
+    // info!("response: {:?}", response.text());
 
     Ok(())
 }
@@ -91,7 +115,7 @@ async fn chunk_pdf(
     let key = input_path.to_string_lossy().to_string();
 
     // skip if we already have all pages
-    let existing = db::find_all_by_key(pg_client, &embedding_llm.llm.name, &key).await?;
+    let existing = db::find_all_by_key(pg_client, &embedding_llm, &key).await?;
     let existing_range = existing.iter().fold(None, |totals: Option<(u32, u32)>, e| {
         Some(match totals {
             Some((first_page, last_page)) => (first_page.min(e.first_page), last_page.max(e.last_page)),
@@ -135,16 +159,7 @@ async fn chunk_pdf(
                 text_content.len(),
                 embedding.len()
             );
-            db::insert(
-                pg_client,
-                &embedding_llm.llm.name,
-                &key,
-                first_page,
-                last_page,
-                &text_content,
-                embedding,
-            )
-            .await?;
+            db::insert(pg_client, &embedding_llm, &key, first_page, last_page, &text_content, embedding).await?;
             last_page
         };
         first_page = (last_page - 1).max(first_page + 1);
@@ -244,5 +259,5 @@ async fn find_relevant_documents(
     limit: u32,
 ) -> Result<Vec<db::SearchResult>> {
     let embedding = create_embedding(&embedding_llm, search.to_owned()).await?;
-    Ok(db::search(&pg_client, &[key], embedding, limit).await?)
+    Ok(db::search(&pg_client, embedding_llm, &[key], embedding, limit).await?)
 }

@@ -1534,7 +1534,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-llm-ollama"
+name = "rust-llm"
 version = "0.1.0"
 dependencies = [
  "anyhow",
