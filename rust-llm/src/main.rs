@@ -43,58 +43,58 @@ async fn main() -> Result<()> {
     let llms = create_openai().await?;
     // let llms = create_ollama().await?;
 
-    let mut conversation_history = vec![];
-    loop {
-        let user_response = prompt("> ");
-        conversation_history.push(ChatMessage::user().content(user_response).build());
-        // TODO check if error is context too big and remove/summarize old messages
-        let llm_response = llms.chat.llm.chat(&conversation_history).await?;
-        debug!("llm response: {llm_response:?}");
-        match llm_response.text() {
-            Some(llm_response) => {
-                println!("{}", llm_response);
-                conversation_history.push(ChatMessage::assistant().content(llm_response).build());
-            }
-            None => Err(anyhow!("llm failed to give any text response"))?,
-        }
-    }
-
     // TODO cleanup
 
-    // let path = Path::new(
-    //     "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
-    // );
-    // let document_key = chunk_pdf(
-    //     &llms.embedding,
-    //     &pg_client,
-    //     path,
-    //     temp_dir.path(),
-    //     // TODO what should the max page size be?
-    //     5,
-    // )
-    // .await?;
-
-    // // start with a prompt
-    // let mut messages = vec![ChatMessage::user().content("How does initiative work?").build()];
-
-    // // TODO set up some agent thing that will auto do searches via tool use?
-
-    // // look up some info about that
-    // let search_results = find_relevant_documents(&llms.embedding, pg_client, &document_key, "combat initiative", 3).await?;
-    // for r in search_results.iter() {
-    //     messages.push(
-    //         ChatMessage::assistant()
-    //             .content(format!(
-    //                 "this is an excerpt from a potentially relevant document\nkey: {}\npage range: {}-{}\ncontent: {}",
-    //                 r.key, r.first_page, r.last_page, r.content
-    //             ))
-    //             .build(),
-    //     );
+    // let mut conversation_history = vec![];
+    // loop {
+    //     let user_response = prompt("> ");
+    //     conversation_history.push(ChatMessage::user().content(user_response).build());
+    //     // TODO check if error is context too big and remove/summarize old messages
+    //     let llm_response = llms.chat.llm.chat(&conversation_history).await?;
+    //     debug!("llm response: {llm_response:?}");
+    //     match llm_response.text() {
+    //         Some(llm_response) => {
+    //             println!("{}", llm_response);
+    //             conversation_history.push(ChatMessage::assistant().content(llm_response).build());
+    //         }
+    //         None => Err(anyhow!("llm failed to give any text response"))?,
+    //     }
     // }
 
-    // // get response
-    // let response = llms.chat.llm.chat(&messages).await?;
-    // info!("response: {:?}", response.text());
+    let path = Path::new(
+        "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
+    );
+    let document_key = chunk_pdf(
+        &llms.embedding,
+        &pg_client,
+        path,
+        temp_dir.path(),
+        // TODO what should the max page size be?
+        5,
+    )
+    .await?;
+
+    // start with a prompt
+    let mut messages = vec![ChatMessage::user().content("How does initiative work?").build()];
+
+    // TODO set up some agent thing that will auto do searches via tool use?
+
+    // look up some info about that
+    let search_results = find_relevant_documents(&llms.embedding, pg_client, &document_key, "combat initiative", 3).await?;
+    for r in search_results.iter() {
+        messages.push(
+            ChatMessage::assistant()
+                .content(format!(
+                    "this is an excerpt from a potentially relevant document\nkey: {}\npage range: {}-{}\ncontent: {}",
+                    r.key, r.first_page, r.last_page, r.content
+                ))
+                .build(),
+        );
+    }
+
+    // get response
+    let response = llms.chat.llm.chat(&messages).await?;
+    info!("response: {:?}", response.text());
 
     Ok(())
 }

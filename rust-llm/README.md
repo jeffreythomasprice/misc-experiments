@@ -20,8 +20,8 @@ docker compose up -d
 docker exec -it pgvector-db psql -U postgres -d experiment
 \dx
 \dt
-\d document_chunk
-select id, key, first_page, last_page from document_chunk;
+\d document_chunk_text_embedding_3_small
+select embedding_llm_name, key, first_page, last_page from document_chunk_text_embedding_3_small;
 ```
 
 ```

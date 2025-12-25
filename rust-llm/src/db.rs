@@ -175,5 +175,6 @@ async fn create_document_chunk_table_if_needed(client: &Client, llm: &EmbeddingL
 fn get_document_chunk_table_name(llm: &EmbeddingLLM) -> String {
     // TODO no unwrap, static?
     let r = Regex::new("[^a-zA-Z0-9_]").unwrap();
-    r.replace_all(&llm.llm.name, "_").to_string()
+    let safe_name = r.replace_all(&llm.llm.name, "_");
+    format!("document_chunk_{}", safe_name)
 }
