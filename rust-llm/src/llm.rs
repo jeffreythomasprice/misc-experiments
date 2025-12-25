@@ -6,43 +6,93 @@ use llm::{
 
 use crate::env::assert_env_var;
 
-pub struct EmbeddingLLM {
+pub struct NamedLLM {
     pub llm: Box<dyn LLMProvider>,
-    pub context: u32,
+    pub name: String,
 }
 
-pub fn create_openai_llm() -> Result<Box<dyn LLMProvider>> {
-    Ok(LLMBuilder::new()
-        .backend(LLMBackend::OpenAI)
-        .model("gpt-5-nano")
-        .api_key(assert_env_var("OPENAI_API_KEY")?)
-        .build()?)
+pub struct EmbeddingLLM {
+    pub llm: NamedLLM,
+    pub context_window: u32,
+    pub embedding_vector_length: usize,
 }
 
-pub fn create_ollama_llm() -> Result<Box<dyn LLMProvider>> {
-    Ok(LLMBuilder::new()
-        .backend(LLMBackend::Ollama)
-        .base_url(get_ollama_base_url())
-        .model("llama3.2:1b")
-        // TODO do we need updated params?
-        // .max_tokens(1000)
-        // .temperature(0.5)
-        .build()?)
+pub struct LLMs {
+    pub chat: NamedLLM,
+    pub embedding: EmbeddingLLM,
 }
 
-pub fn create_ollama_embedding_llm() -> Result<EmbeddingLLM> {
-    Ok(EmbeddingLLM {
-        llm: LLMBuilder::new()
-            .backend(LLMBackend::Ollama)
-            .base_url(get_ollama_base_url())
-            .model("bge-m3:latest")
-            .build()?,
-        context: 2048,
+pub async fn create_openai() -> Result<LLMs> {
+    Ok(LLMs {
+        chat: create_openai_llm()?,
+        embedding: create_openai_embedding_llm().await?,
     })
 }
 
-pub async fn create_embedding(llm: &Box<dyn LLMProvider>, input: String) -> Result<Vec<f32>> {
-    let mut result = llm.embed(vec![input]).await?;
+pub async fn create_ollama() -> Result<LLMs> {
+    Ok(LLMs {
+        chat: create_ollama_llm()?,
+        embedding: create_ollama_embedding_llm().await?,
+    })
+}
+
+pub async fn create_embedding(llm: &EmbeddingLLM, input: String) -> Result<Vec<f32>> {
+    Ok(create_embedding_from_llm(&llm.llm, input).await?)
+}
+
+fn create_openai_llm() -> Result<NamedLLM> {
+    let name = "gpt-5-name".to_string();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::OpenAI)
+        .model(&name)
+        .api_key(get_openai_api_key()?)
+        .build()?;
+    Ok(NamedLLM { llm, name })
+}
+
+async fn create_openai_embedding_llm() -> Result<EmbeddingLLM> {
+    let name = "text-embedding-3-small".to_string();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::OpenAI)
+        .model(&name)
+        .api_key(get_openai_api_key()?)
+        .build()?;
+    let llm = NamedLLM { llm, name };
+    Ok(create_embedding_llm(llm, 8192).await?)
+}
+
+fn create_ollama_llm() -> Result<NamedLLM> {
+    let name = "llama3.2:1b".to_string();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::Ollama)
+        .base_url(get_ollama_base_url())
+        .model(&name)
+        .build()?;
+    Ok(NamedLLM { llm, name })
+}
+
+async fn create_ollama_embedding_llm() -> Result<EmbeddingLLM> {
+    let name = "bge-m3:latest".to_string();
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::Ollama)
+        .base_url(get_ollama_base_url())
+        .model(&name)
+        .build()?;
+    let llm = NamedLLM { llm, name };
+    Ok(create_embedding_llm(llm, 8192).await?)
+}
+
+async fn create_embedding_llm(llm: NamedLLM, context_window: u32) -> Result<EmbeddingLLM> {
+    let test_embedding = create_embedding_from_llm(&llm, "Hello, World!".to_owned()).await?;
+    Ok(EmbeddingLLM {
+        llm,
+        context_window,
+        embedding_vector_length: test_embedding.len(),
+    })
+}
+
+async fn create_embedding_from_llm(llm: &NamedLLM, input: String) -> Result<Vec<f32>> {
+    let mut result = llm.llm.embed(vec![input]).await?;
     let len = result.len();
     let result = result.pop();
     match (len, result) {
@@ -50,6 +100,10 @@ pub async fn create_embedding(llm: &Box<dyn LLMProvider>, input: String) -> Resu
         (0, _) => Err(anyhow!("didn't get any embedding results")),
         _ => Err(anyhow!("got multiple embedding results when we only expected one")),
     }
+}
+
+fn get_openai_api_key() -> Result<String> {
+    assert_env_var("OPENAI_API_KEY")
 }
 
 fn get_ollama_base_url() -> String {

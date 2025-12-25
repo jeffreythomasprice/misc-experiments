@@ -15,7 +15,7 @@ use tracing::*;
 
 use crate::{
     db::FindAllByKeyResult,
-    llm::{EmbeddingLLM, create_embedding, create_ollama_embedding_llm, create_ollama_llm},
+    llm::{EmbeddingLLM, create_embedding, create_ollama, create_openai},
     pdf::{extract_pdf_pages_into_new_pdf, extract_pdf_text},
 };
 
@@ -34,19 +34,19 @@ async fn main() -> Result<()> {
 
     let pg_client = db::init().await?;
 
-    let llm = create_ollama_llm()?;
-    let embedding_llm = create_ollama_embedding_llm()?;
+    let llms = create_openai().await?;
+    // let llms = create_ollama().await?;
 
     let path = Path::new(
         "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
     );
     let document_key = chunk_pdf(
-        &embedding_llm,
+        &llms.embedding,
         &pg_client,
         path,
         temp_dir.path(),
         // TODO what should the max page size be?
-        3,
+        5,
     )
     .await?;
 
@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
     // TODO set up some agent thing that will auto do searches via tool use?
 
     // look up some info about that
-    let search_results = find_relevant_documents(&embedding_llm.llm, pg_client, &document_key, "combat initiative", 3).await?;
+    let search_results = find_relevant_documents(&llms.embedding, pg_client, &document_key, "combat initiative", 3).await?;
     for r in search_results.iter() {
         messages.push(
             ChatMessage::assistant()
@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
     }
 
     // get response
-    let response = llm.chat(&messages).await?;
+    let response = llms.chat.llm.chat(&messages).await?;
     info!("response: {:?}", response.text());
 
     Ok(())
@@ -91,7 +91,7 @@ async fn chunk_pdf(
     let key = input_path.to_string_lossy().to_string();
 
     // skip if we already have all pages
-    let existing = db::find_all_by_key(pg_client, &key).await?;
+    let existing = db::find_all_by_key(pg_client, &embedding_llm.llm.name, &key).await?;
     let existing_range = existing.iter().fold(None, |totals: Option<(u32, u32)>, e| {
         Some(match totals {
             Some((first_page, last_page)) => (first_page.min(e.first_page), last_page.max(e.last_page)),
@@ -111,6 +111,7 @@ async fn chunk_pdf(
     loop {
         let last_page = if let Some(&FindAllByKeyResult {
             id: _,
+            embedding_llm_name: _,
             key: _,
             first_page: _,
             last_page,
@@ -134,7 +135,16 @@ async fn chunk_pdf(
                 text_content.len(),
                 embedding.len()
             );
-            db::insert(pg_client, &key, first_page, last_page, &text_content, embedding).await?;
+            db::insert(
+                pg_client,
+                &embedding_llm.llm.name,
+                &key,
+                first_page,
+                last_page,
+                &text_content,
+                embedding,
+            )
+            .await?;
             last_page
         };
         first_page = (last_page - 1).max(first_page + 1);
@@ -174,7 +184,8 @@ async fn create_next_chunk_embedding(
                 if current_page_count <= 1 {
                     Err(e)?;
                 }
-                let estimated_page_count = (((embedding_llm.context as f64) * (current_page_count as f64) / (estimated_token_count as f64))
+                let estimated_page_count = (((embedding_llm.context_window as f64) * (current_page_count as f64)
+                    / (estimated_token_count as f64))
                     // do ceil instead of floor because our estimate might be a little off and we can always do one more iteration to get down to where we need be
                     .ceil() as u32)
                     .max(1);
@@ -213,7 +224,7 @@ async fn create_embedding_from_pages(
     );
     let estimated_token_count = o200k_base()?.encode_with_special_tokens(&embedding_text).len();
     debug!("chunk estimated token count: {}", estimated_token_count);
-    Ok(match create_embedding(&embedding_llm.llm, embedding_text).await {
+    Ok(match create_embedding(&embedding_llm, embedding_text).await {
         Ok(embedding) => EmbeddingResult::Success {
             text_content: chunk_text_content,
             embedding,
@@ -226,12 +237,12 @@ async fn create_embedding_from_pages(
 }
 
 async fn find_relevant_documents(
-    embedding_llm: &Box<dyn LLMProvider>,
+    embedding_llm: &EmbeddingLLM,
     pg_client: tokio_postgres::Client,
     key: &str,
     search: &str,
     limit: u32,
 ) -> Result<Vec<db::SearchResult>> {
-    let embedding = create_embedding(embedding_llm, search.to_owned()).await?;
+    let embedding = create_embedding(&embedding_llm, search.to_owned()).await?;
     Ok(db::search(&pg_client, &[key], embedding, limit).await?)
 }
