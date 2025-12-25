@@ -1,10 +1,24 @@
-use anyhow::{Result, anyhow};
-use llm::{
-    LLMProvider,
-    builder::{LLMBackend, LLMBuilder},
-};
-
 use crate::env::assert_env_var;
+use anyhow::{Result, anyhow};
+use futures::future::BoxFuture;
+use llm::{
+    LLMProvider, ToolCall,
+    builder::{FunctionBuilder, LLMBackend, LLMBuilder, ParamBuilder},
+    chat::ChatMessage,
+};
+use tracing::*;
+
+pub enum Provider {
+    OpenAI,
+    Ollama,
+}
+
+pub struct Tool {
+    pub name: String,
+    pub description: String,
+    pub json_schema: Option<serde_json::Value>,
+    pub callback: Box<dyn Fn(&ToolCall) -> BoxFuture<'static, Result<String>>>,
+}
 
 pub struct NamedLLM {
     pub llm: Box<dyn LLMProvider>,
@@ -20,34 +34,90 @@ pub struct EmbeddingLLM {
 pub struct LLMs {
     pub chat: NamedLLM,
     pub embedding: EmbeddingLLM,
+    tools: Vec<Tool>,
 }
 
-pub async fn create_openai() -> Result<LLMs> {
-    Ok(LLMs {
-        chat: create_openai_llm()?,
-        embedding: create_openai_embedding_llm().await?,
-    })
-}
+impl LLMs {
+    pub async fn new(provider: Provider, system_prompt: &str, tools: Vec<Tool>) -> Result<Self> {
+        Ok(Self {
+            chat: create_llm(
+                match provider {
+                    Provider::OpenAI => create_openai_llm,
+                    Provider::Ollama => create_ollama_llm,
+                },
+                system_prompt,
+                &tools,
+            )?,
+            embedding: create_openai_embedding_llm().await?,
+            tools,
+        })
+    }
 
-pub async fn create_ollama() -> Result<LLMs> {
-    Ok(LLMs {
-        chat: create_ollama_llm()?,
-        embedding: create_ollama_embedding_llm().await?,
-    })
+    pub async fn handle_tool_calls(&self, tool_calls: Vec<ToolCall>) -> Result<ChatMessage> {
+        let mut content = Vec::new();
+        for tool_call in tool_calls.iter() {
+            let result = self.handle_tool_call(&tool_call).await?;
+            content.push(format!(
+                "tool call id: {}\ntool name: {}\nresult: {}",
+                tool_call.id, tool_call.function.name, result
+            ));
+        }
+        trace!("combined tool call results: {:?}", content);
+        Ok(ChatMessage::assistant()
+            .tool_result(tool_calls)
+            .content(content.join("\n\n"))
+            .build())
+    }
+
+    pub async fn handle_tool_call(&self, tool_call: &ToolCall) -> Result<String> {
+        trace!("tool call: {tool_call:?}");
+        match self.tools.iter().find(|tool| tool.name == tool_call.function.name) {
+            Some(tool) => {
+                let result = (tool.callback)(tool_call).await?;
+                trace!("tool call {} result = {}", tool_call.id, result);
+                Ok(result)
+            }
+            None => Err(anyhow!("no tool found for tool call: {:?}", tool_call)),
+        }
+    }
 }
 
 pub async fn create_embedding(llm: &EmbeddingLLM, input: String) -> Result<Vec<f32>> {
     Ok(create_embedding_from_llm(&llm.llm, input).await?)
 }
 
-fn create_openai_llm() -> Result<NamedLLM> {
+fn create_llm<F>(f: F, system_prompt: &str, tools: &[Tool]) -> Result<NamedLLM>
+where
+    F: FnOnce() -> Result<(String, LLMBuilder)>,
+{
+    let (name, llm_builder) = f()?;
+
+    let mut llm_builder = llm_builder.system(system_prompt);
+
+    for tool in tools {
+        let mut function_builder = FunctionBuilder::new(tool.name.clone()).description(tool.description.clone());
+        if let Some(json_schema) = tool.json_schema.clone() {
+            function_builder = function_builder.json_schema(json_schema);
+        }
+        llm_builder = llm_builder.function(function_builder);
+    }
+
+    let llm = NamedLLM {
+        llm: llm_builder.build()?,
+        name,
+    };
+    Ok(llm)
+}
+
+fn create_openai_llm() -> Result<(String, LLMBuilder)> {
     let name = "gpt-5-nano".to_string();
-    let llm = LLMBuilder::new()
-        .backend(LLMBackend::OpenAI)
-        .model(&name)
-        .api_key(get_openai_api_key()?)
-        .build()?;
-    Ok(NamedLLM { llm, name })
+    Ok((
+        name.clone(),
+        LLMBuilder::new()
+            .backend(LLMBackend::OpenAI)
+            .model(name)
+            .api_key(get_openai_api_key()?),
+    ))
 }
 
 async fn create_openai_embedding_llm() -> Result<EmbeddingLLM> {
@@ -61,14 +131,15 @@ async fn create_openai_embedding_llm() -> Result<EmbeddingLLM> {
     Ok(create_embedding_llm(llm, 8192).await?)
 }
 
-fn create_ollama_llm() -> Result<NamedLLM> {
+fn create_ollama_llm() -> Result<(String, LLMBuilder)> {
     let name = "llama3.2:1b".to_string();
-    let llm = LLMBuilder::new()
-        .backend(LLMBackend::Ollama)
-        .base_url(get_ollama_base_url())
-        .model(&name)
-        .build()?;
-    Ok(NamedLLM { llm, name })
+    Ok((
+        name.clone(),
+        LLMBuilder::new()
+            .backend(LLMBackend::Ollama)
+            .base_url(get_ollama_base_url())
+            .model(&name),
+    ))
 }
 
 async fn create_ollama_embedding_llm() -> Result<EmbeddingLLM> {

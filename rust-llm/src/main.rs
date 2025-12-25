@@ -9,19 +9,22 @@ use std::path::Path;
 
 use ::llm::{
     LLMProvider,
-    chat::{ChatMessage, ChatMessageBuilder},
+    builder::FunctionBuilder,
+    chat::{ChatMessage, ChatMessageBuilder, MessageType},
 };
 use anyhow::Result;
 use anyhow::anyhow;
 use dotenvy::dotenv;
+use futures::future::BoxFuture;
 use prompt::prompt;
+use serde::Serialize;
 use tempdir::TempDir;
 use tiktoken_rs::o200k_base;
 use tracing::*;
 
 use crate::{
     db::FindAllByKeyResult,
-    llm::{EmbeddingLLM, create_embedding, create_ollama, create_openai},
+    llm::{EmbeddingLLM, LLMs, Provider, Tool, create_embedding},
     pdf::{extract_pdf_pages_into_new_pdf, extract_pdf_text},
 };
 
@@ -40,61 +43,106 @@ async fn main() -> Result<()> {
 
     let pg_client = db::init().await?;
 
-    let llms = create_openai().await?;
-    // let llms = create_ollama().await?;
-
-    // TODO cleanup
-
-    // let mut conversation_history = vec![];
-    // loop {
-    //     let user_response = prompt("> ");
-    //     conversation_history.push(ChatMessage::user().content(user_response).build());
-    //     // TODO check if error is context too big and remove/summarize old messages
-    //     let llm_response = llms.chat.llm.chat(&conversation_history).await?;
-    //     debug!("llm response: {llm_response:?}");
-    //     match llm_response.text() {
-    //         Some(llm_response) => {
-    //             println!("{}", llm_response);
-    //             conversation_history.push(ChatMessage::assistant().content(llm_response).build());
-    //         }
-    //         None => Err(anyhow!("llm failed to give any text response"))?,
-    //     }
-    // }
-
-    let path = Path::new(
-        "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
-    );
-    let document_key = chunk_pdf(
-        &llms.embedding,
-        &pg_client,
-        path,
-        temp_dir.path(),
-        // TODO what should the max page size be?
-        5,
+    let llms = LLMs::new(
+        Provider::OpenAI,
+        r"
+        You're an assistant fro a table-top RPG.
+        
+        You can look stuff up in the rule books.
+        ",
+        vec![Tool {
+            name: "time".to_string(),
+            description: "Gets the current time".to_string(),
+            json_schema: None,
+            callback: Box::new(move |_tool_call| {
+                let result = chrono::Local::now().to_rfc3339();
+                debug!("time: {}", result);
+                // TODO what should this return? plain string or something smarter?
+                #[derive(Serialize)]
+                struct Result {
+                    time: String,
+                }
+                Box::pin(async { Ok(serde_json::to_string(&Result { time: result })?) })
+            }),
+        }],
     )
     .await?;
 
-    // start with a prompt
-    let mut messages = vec![ChatMessage::user().content("How does initiative work?").build()];
+    // TODO cleanup
 
-    // TODO set up some agent thing that will auto do searches via tool use?
+    // TODO conversation loop should be a impl method of LLMs
+    let mut conversation_history = vec![];
+    loop {
+        let user_response = prompt("> ");
+        conversation_history.push(ChatMessage::user().content(user_response).build());
 
-    // look up some info about that
-    let search_results = find_relevant_documents(&llms.embedding, pg_client, &document_key, "combat initiative", 3).await?;
-    for r in search_results.iter() {
-        messages.push(
-            ChatMessage::assistant()
-                .content(format!(
-                    "this is an excerpt from a potentially relevant document\nkey: {}\npage range: {}-{}\ncontent: {}",
-                    r.key, r.first_page, r.last_page, r.content
-                ))
-                .build(),
-        );
+        // TODO check if error is context too big and remove/summarize old messages
+
+        // loop until we're done thinking
+        loop {
+            let llm_response = llms.chat.llm.chat(&conversation_history).await?;
+            trace!("llm response: {llm_response:?}");
+
+            if let Some(thinking) = llm_response.thinking() {
+                debug!("thinking: {}", thinking);
+            }
+
+            if let Some(text) = llm_response.text() {
+                println!("{}", text);
+                conversation_history.push(ChatMessage::assistant().content(text).build());
+            }
+
+            if let Some(tool_calls) = llm_response.tool_calls() {
+                // remember the tools for the next time so it can see tool use followed immediately by tool results
+                conversation_history.push(ChatMessage::assistant().tool_use(tool_calls.clone()).build());
+                // actually call the tools
+                let result = llms.handle_tool_calls(tool_calls).await?;
+                conversation_history.push(result);
+                // we just handled the tool use, we need to send that back to the llm to respond to so we loop again
+                continue;
+            }
+
+            // nothing more to think about so we're done
+            break;
+        }
     }
 
-    // get response
-    let response = llms.chat.llm.chat(&messages).await?;
-    info!("response: {:?}", response.text());
+    // TODO cleanup
+
+    // let path = Path::new(
+    //     "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
+    // );
+    // let document_key = chunk_pdf(
+    //     &llms.embedding,
+    //     &pg_client,
+    //     path,
+    //     temp_dir.path(),
+    //     // TODO what should the max page size be?
+    //     5,
+    // )
+    // .await?;
+
+    // // start with a prompt
+    // let mut messages = vec![ChatMessage::user().content("How does initiative work?").build()];
+
+    // // TODO set up some agent thing that will auto do searches via tool use?
+
+    // // look up some info about that
+    // let search_results = find_relevant_documents(&llms.embedding, pg_client, &document_key, "combat initiative", 3).await?;
+    // for r in search_results.iter() {
+    //     messages.push(
+    //         ChatMessage::assistant()
+    //             .content(format!(
+    //                 "this is an excerpt from a potentially relevant document\nkey: {}\npage range: {}-{}\ncontent: {}",
+    //                 r.key, r.first_page, r.last_page, r.content
+    //             ))
+    //             .build(),
+    //     );
+    // }
+
+    // // get response
+    // let response = llms.chat.llm.chat(&messages).await?;
+    // info!("response: {:?}", response.text());
 
     Ok(())
 }
