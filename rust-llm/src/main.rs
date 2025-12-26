@@ -5,19 +5,25 @@ mod pdf;
 mod process;
 mod prompt;
 
-use std::path::Path;
+use std::{
+    cell::RefCell,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use ::llm::{
     LLMProvider,
     builder::FunctionBuilder,
-    chat::{ChatMessage, ChatMessageBuilder, MessageType},
+    chat::{ChatMessage, ChatMessageBuilder, ChatResponse, MessageType},
 };
 use anyhow::Result;
 use anyhow::anyhow;
 use dotenvy::dotenv;
 use futures::future::BoxFuture;
 use prompt::prompt;
+use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
 use tempdir::TempDir;
 use tiktoken_rs::o200k_base;
 use tracing::*;
@@ -43,32 +49,101 @@ async fn main() -> Result<()> {
 
     let pg_client = db::init().await?;
 
+    let document_key: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+
     let llms = LLMs::new(
-        Provider::OpenAI,
+        Provider::Ollama,
         r"
-        You're an assistant fro a table-top RPG.
-        
-        You can look stuff up in the rule books.
+        You're trying to assist running a table top game. You have access to a document store containing relevant rule books.
         ",
-        vec![Tool {
-            name: "time".to_string(),
-            description: "Gets the current time".to_string(),
-            json_schema: None,
-            callback: Box::new(move |_tool_call| {
-                let result = chrono::Local::now().to_rfc3339();
-                debug!("time: {}", result);
-                // TODO what should this return? plain string or something smarter?
-                #[derive(Serialize)]
-                struct Result {
-                    time: String,
-                }
-                Box::pin(async { Ok(serde_json::to_string(&Result { time: result })?) })
-            }),
-        }],
+        vec![
+            Tool {
+                name: "time".to_string(),
+                description: "Gets the current time".to_string(),
+                json_schema: None,
+                callback: Box::new(move |_llms, _tool_call| {
+                    let result = chrono::Local::now().to_rfc3339();
+                    debug!("time: {}", result);
+                    Box::pin(async { Ok(result) })
+                }),
+            },
+            Tool {
+                name: "document_search".to_string(),
+                description: r"
+                Find relevant document snippets by a search term
+
+                search_term - a set of keywords to search for
+
+                Result is a list of relevant snippets from documents in the database.
+                "
+                .to_string(),
+                json_schema: Some(json!({
+                    "type": "object",
+                    "properties": {
+                        "search_term": {"type": "string"}
+                    },
+                    "required": ["search_term"],
+                    "additionalProperties": false
+                })),
+                callback: {
+                    let document_key = document_key.clone();
+                    Box::new(move |llms, tool_call| {
+                        #[derive(Deserialize)]
+                        struct Args {
+                            search_term: String,
+                        }
+                        // TODO no unwrap
+                        let args: Args = serde_json::from_str(&tool_call.function.arguments).unwrap();
+                        info!("TODO search_term = {}", args.search_term);
+                        let document_key = document_key.clone();
+                        Box::pin(async move {
+                            // match &*document_key.lock().unwrap() {
+                            //     Some(document_key) => {
+                            //         info!("TODO document_key = {}", document_key);
+                            //         let search_results =
+                            //             find_relevant_documents(&llms.embedding, pg_client, &document_key, &args.search_term, 3).await?;
+                            //         // for r in search_results.iter() {
+                            //         //     messages.push(
+                            //         //         ChatMessage::assistant()
+                            //         //             .content(format!(
+                            //         //                 "this is an excerpt from a potentially relevant document\nkey: {}\npage range: {}-{}\ncontent: {}",
+                            //         //                 r.key, r.first_page, r.last_page, r.content
+                            //         //             ))
+                            //         //             .build(),
+                            //         //     );
+                            //         // }
+                            //         todo!()
+                            //     }
+                            //     None => Err(anyhow!(
+                            //         "no document key available, did we fail to load the pdf into the document store?"
+                            //     ))?,
+                            // }
+                            todo!()
+                        })
+                    })
+                },
+            },
+        ],
     )
     .await?;
 
-    // TODO cleanup
+    {
+        let path = Path::new(
+            "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
+        );
+        let document_key = &mut *document_key.lock().unwrap();
+        document_key.replace(
+            chunk_pdf(
+                &llms.embedding,
+                &pg_client,
+                path,
+                temp_dir.path(),
+                // TODO what should the max page size be?
+                5,
+            )
+            .await?,
+        );
+    }
 
     // TODO conversation loop should be a impl method of LLMs
     let mut conversation_history = vec![];
@@ -78,9 +153,11 @@ async fn main() -> Result<()> {
 
         // TODO check if error is context too big and remove/summarize old messages
 
+        // send input to llm and force tool use
+        let mut llm_response = llms.chat.llm.chat_with_tools(&conversation_history, llms.chat.llm.tools()).await?;
+
         // loop until we're done thinking
         loop {
-            let llm_response = llms.chat.llm.chat(&conversation_history).await?;
             trace!("llm response: {llm_response:?}");
 
             if let Some(thinking) = llm_response.thinking() {
@@ -98,7 +175,9 @@ async fn main() -> Result<()> {
                 // actually call the tools
                 let result = llms.handle_tool_calls(tool_calls).await?;
                 conversation_history.push(result);
-                // we just handled the tool use, we need to send that back to the llm to respond to so we loop again
+                // send that response back to the llm and get a final thought
+                conversation_history.push(ChatMessage::assistant().content("Respond to the tool use").build());
+                llm_response = llms.chat.llm.chat(&conversation_history).await?;
                 continue;
             }
 
@@ -106,45 +185,6 @@ async fn main() -> Result<()> {
             break;
         }
     }
-
-    // TODO cleanup
-
-    // let path = Path::new(
-    //     "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
-    // );
-    // let document_key = chunk_pdf(
-    //     &llms.embedding,
-    //     &pg_client,
-    //     path,
-    //     temp_dir.path(),
-    //     // TODO what should the max page size be?
-    //     5,
-    // )
-    // .await?;
-
-    // // start with a prompt
-    // let mut messages = vec![ChatMessage::user().content("How does initiative work?").build()];
-
-    // // TODO set up some agent thing that will auto do searches via tool use?
-
-    // // look up some info about that
-    // let search_results = find_relevant_documents(&llms.embedding, pg_client, &document_key, "combat initiative", 3).await?;
-    // for r in search_results.iter() {
-    //     messages.push(
-    //         ChatMessage::assistant()
-    //             .content(format!(
-    //                 "this is an excerpt from a potentially relevant document\nkey: {}\npage range: {}-{}\ncontent: {}",
-    //                 r.key, r.first_page, r.last_page, r.content
-    //             ))
-    //             .build(),
-    //     );
-    // }
-
-    // // get response
-    // let response = llms.chat.llm.chat(&messages).await?;
-    // info!("response: {:?}", response.text());
-
-    Ok(())
 }
 
 async fn chunk_pdf(
@@ -247,7 +287,8 @@ async fn create_next_chunk_embedding(
                 if current_page_count <= 1 {
                     Err(e)?;
                 }
-                let estimated_page_count = (((embedding_llm.context_window as f64) * (current_page_count as f64)
+                // TODO context window length is hard coded, and the estimated token count may not be the right algorithm anyway, just decrement? binary search the possible token lengths?
+                let estimated_page_count = (((embedding_llm.context_window_length as f64) * (current_page_count as f64)
                     / (estimated_token_count as f64))
                     // do ceil instead of floor because our estimate might be a little off and we can always do one more iteration to get down to where we need be
                     .ceil() as u32)

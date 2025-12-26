@@ -17,7 +17,7 @@ pub struct Tool {
     pub name: String,
     pub description: String,
     pub json_schema: Option<serde_json::Value>,
-    pub callback: Box<dyn Fn(&ToolCall) -> BoxFuture<'static, Result<String>>>,
+    pub callback: Box<dyn Fn(&LLMs, &ToolCall) -> BoxFuture<'static, Result<String>>>,
 }
 
 pub struct NamedLLM {
@@ -27,7 +27,7 @@ pub struct NamedLLM {
 
 pub struct EmbeddingLLM {
     pub llm: NamedLLM,
-    pub context_window: u32,
+    pub context_window_length: u32,
     pub embedding_vector_length: usize,
 }
 
@@ -39,7 +39,7 @@ pub struct LLMs {
 
 impl LLMs {
     pub async fn new(provider: Provider, system_prompt: &str, tools: Vec<Tool>) -> Result<Self> {
-        Ok(Self {
+        let result = Self {
             chat: create_llm(
                 match provider {
                     Provider::OpenAI => create_openai_llm,
@@ -48,9 +48,18 @@ impl LLMs {
                 system_prompt,
                 &tools,
             )?,
-            embedding: create_openai_embedding_llm().await?,
+            embedding: match provider {
+                Provider::OpenAI => create_openai_embedding_llm().await?,
+                Provider::Ollama => create_ollama_embedding_llm().await?,
+            },
             tools,
-        })
+        };
+        info!("chat llm name: {}", result.chat.name);
+        info!(
+            "embedding llm name: {}, context window length: {}, embedding vector length: {}",
+            result.embedding.llm.name, result.embedding.context_window_length, result.embedding.embedding_vector_length
+        );
+        Ok(result)
     }
 
     pub async fn handle_tool_calls(&self, tool_calls: Vec<ToolCall>) -> Result<ChatMessage> {
@@ -73,7 +82,7 @@ impl LLMs {
         trace!("tool call: {tool_call:?}");
         match self.tools.iter().find(|tool| tool.name == tool_call.function.name) {
             Some(tool) => {
-                let result = (tool.callback)(tool_call).await?;
+                let result = (tool.callback)(self, tool_call).await?;
                 trace!("tool call {} result = {}", tool_call.id, result);
                 Ok(result)
             }
@@ -95,6 +104,7 @@ where
     let mut llm_builder = llm_builder.system(system_prompt);
 
     for tool in tools {
+        info!("TODO adding tool name = {}, description = {}", tool.name, tool.description);
         let mut function_builder = FunctionBuilder::new(tool.name.clone()).description(tool.description.clone());
         if let Some(json_schema) = tool.json_schema.clone() {
             function_builder = function_builder.json_schema(json_schema);
@@ -132,7 +142,7 @@ async fn create_openai_embedding_llm() -> Result<EmbeddingLLM> {
 }
 
 fn create_ollama_llm() -> Result<(String, LLMBuilder)> {
-    let name = "llama3.2:1b".to_string();
+    let name = "qwen3-vl:8b-instruct-q8_0".to_string();
     Ok((
         name.clone(),
         LLMBuilder::new()
@@ -157,7 +167,7 @@ async fn create_embedding_llm(llm: NamedLLM, context_window: u32) -> Result<Embe
     let test_embedding = create_embedding_from_llm(&llm, "Hello, World!".to_owned()).await?;
     Ok(EmbeddingLLM {
         llm,
-        context_window,
+        context_window_length: context_window,
         embedding_vector_length: test_embedding.len(),
     })
 }
