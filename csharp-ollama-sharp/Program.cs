@@ -7,7 +7,7 @@ using Microsoft.Extensions.AI;
 
 static async Task<(string, ReadOnlyMemory<float>, int)> CreateNextChunkEmbedding(
     Db db,
-    Llm llm,
+    EmbeddingLlm llm,
     string inputPath,
     string outputDir,
     string key,
@@ -33,16 +33,14 @@ static async Task<(string, ReadOnlyMemory<float>, int)> CreateNextChunkEmbedding
         var embeddingText =
             $"key: {key}\nfirst page: {firstPage}\nlast page: {lastPage}\ncontent: {chunkTextContent}";
         var embedding = await llm.CreateEmbedding(embeddingText);
-        await db.Insert(
-            new(llm.EmbeddingModelId, key, firstPage, lastPage, embeddingText, embedding)
-        );
+        await db.Insert(new(llm.ModelId, key, firstPage, lastPage, embeddingText, embedding));
         return (embeddingText, embedding, lastPage);
     }
 }
 
 static async Task<string> ChunkPdf(
     Db db,
-    Llm llm,
+    EmbeddingLlm llm,
     string inputPath,
     string outputDir,
     int maxChunkPageCount
@@ -56,7 +54,7 @@ static async Task<string> ChunkPdf(
     var key = inputPath;
 
     // skip if we already have all pages
-    var existing = await db.FindAllByKey(llm.EmbeddingModelId, key).ToListAsync();
+    var existing = await db.FindAllByKey(llm.ModelId, key).ToListAsync();
     Console.WriteLine($"found {existing.Count} existing document chunks");
     var (firstExistingPage, lastExistingPage) = existing.Aggregate(
         (int.MaxValue, 0),
@@ -120,11 +118,29 @@ await using var db = await Db.Create(
     Env.AssertString("PG_DATABASE")
 );
 
-string? documentKey = null;
+var llmProvider = Llm.Provider.Ollama;
 
-Llm? llm = null;
-llm = new Llm(
-    Llm.Provider.Ollama,
+var embeddingLlm = new EmbeddingLlm(llmProvider);
+
+var tempDir = Path.Join(Path.GetTempPath(), "experiment");
+var documentKey = await ChunkPdf(
+    db,
+    embeddingLlm,
+    "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
+    tempDir,
+    5
+);
+
+var summarizeLlm = new ChatLlm(
+    llmProvider,
+    """
+    You're going to be given a user-provided question and some snippets. Figure out the answer to that question.
+    """,
+    []
+);
+
+var chatLlm = new ChatLlm(
+    llmProvider,
     """
     You're an assistant intended to help run a table top RPG. Use provided reference documents to look up answers to questions.
 
@@ -144,25 +160,20 @@ llm = new Llm(
                 Console.WriteLine($"TODO wholeQuestion: {wholeQuestion}");
                 try
                 {
-                    if (llm == null)
-                    {
-                        throw new NullReferenceException(nameof(llm));
-                    }
-                    if (documentKey == null)
-                    {
-                        throw new NullReferenceException(nameof(documentKey));
-                    }
-                    var embedding = await llm.CreateEmbedding(searchTerm);
-                    var results = await db.Search(llm.EmbeddingModelId, documentKey, embedding, 5)
+                    var embedding = await embeddingLlm.CreateEmbedding(searchTerm);
+                    var results = await db.Search(embeddingLlm.ModelId, documentKey, embedding, 5)
                         .ToListAsync();
-                    foreach (var result in results)
-                    {
-                        Console.WriteLine(
-                            $"TODO result, page range {result.FirstPage}-{result.LastPage}"
-                        );
-                    }
-                    // TODO include page ranges?
-                    return string.Join("\n\n", results.Select(x => x.Content));
+                    var response = await summarizeLlm.GetResponseAsync([
+                        .. results.Select(x => new ChatMessage(
+                            ChatRole.Assistant,
+                            $"This is a snippet from the document:\n{x.Content}"
+                        )),
+                        new ChatMessage(
+                            ChatRole.Assistant,
+                            $"This is the original question: {wholeQuestion}"
+                        ),
+                    ]);
+                    return response.Text;
                 }
                 catch (Exception e)
                 {
@@ -176,15 +187,7 @@ llm = new Llm(
     ]
 );
 
-var tempDir = Path.Join(Path.GetTempPath(), "experiment");
-documentKey = await ChunkPdf(
-    db,
-    llm,
-    "/home/jeff/scratch/games/source_material/free_or_stolen/World of Darkness (Classic)/v20 Vampire The Masquerade - 20th Anniversary Edition.pdf",
-    tempDir,
-    5
-);
-
+List<ChatMessage> history = [];
 while (true)
 {
     Console.Write("> ");
@@ -193,6 +196,12 @@ while (true)
     {
         message = Console.ReadLine();
     }
-    var response = await llm.SendUserMessageAndGetResponseAsync(message);
+
+    // TODO handle history getting too big by summarizing
+
+    history.Add(new ChatMessage(ChatRole.User, message));
+    var response = await chatLlm.GetResponseAsync(history);
+    history.AddMessages(response);
+
     Console.WriteLine($"model response: {response}");
 }

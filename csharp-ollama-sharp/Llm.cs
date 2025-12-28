@@ -1,52 +1,47 @@
 namespace Experiment;
 
-using System.Globalization;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
 
-public class Llm
+public abstract class Llm
 {
     public enum Provider
     {
         Ollama,
     }
 
-    private readonly IChatClient chatClient;
-    private readonly ChatOptions chatOptions;
+    public abstract string ModelId { get; }
+}
 
-    private readonly IEmbeddingGenerator<string, Embedding<float>> embeddingClient;
-    private readonly EmbeddingGenerationOptions embeddingOptions;
+public class ChatLlm : Llm
+{
+    private readonly IChatClient client;
+    private readonly ChatOptions options;
 
-    private readonly List<ChatMessage> history;
-
-    public Llm(Provider provider, string systemPrompt, IEnumerable<AIFunction> tools)
+    public ChatLlm(Provider provider, string systemPrompt, IEnumerable<AIFunction> tools)
     {
-        ((chatClient, chatOptions), (embeddingClient, embeddingOptions)) = provider switch
+        (client, options) = provider switch
         {
-            Provider.Ollama => (
-                CreateChatClient(CreateOllamaChatClient, systemPrompt, tools),
-                CreateOllamaEmbeddingClient()
-            ),
+            Provider.Ollama => CreateChatClient(CreateOllama, systemPrompt, tools),
         };
-        history = [];
     }
 
-    public string ChatModelId => chatOptions.ModelId!;
+    public override string ModelId => options.ModelId!;
 
-    public string EmbeddingModelId => embeddingOptions.ModelId!;
-
-    public async Task<ChatResponse> SendUserMessageAndGetResponseAsync(string userMessage)
+    public async Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> history)
     {
-        // TODO handle history getting too big by summarizing
-        history.Add(new ChatMessage(ChatRole.User, userMessage));
-        var response = await chatClient.GetResponseAsync(history, chatOptions);
-        history.AddMessages(response);
-        return response;
+        return await client.GetResponseAsync(history, options);
     }
 
-    public async Task<ReadOnlyMemory<float>> CreateEmbedding(string input)
+    public async Task<ChatResponse> GetResponseUsingSpecificTool(
+        IEnumerable<ChatMessage> history,
+        string toolName
+    )
     {
-        return await embeddingClient.GenerateVectorAsync(input, embeddingOptions);
+        var options = this.options.Clone();
+        options.ToolMode = ChatToolMode.RequireSpecific(toolName);
+        return await client.GetResponseAsync(history, options);
     }
 
     private static (IChatClient, ChatOptions) CreateChatClient(
@@ -69,27 +64,48 @@ public class Llm
         return (client, options);
     }
 
-    private static (IChatClient, ChatOptions) CreateOllamaChatClient()
+    private static (IChatClient, ChatOptions) CreateOllama()
     {
         var client = new OllamaApiClient(new Uri("http://localhost:11434"));
         var options = new ChatOptions() { ModelId = "qwen3-vl:8b-instruct-q8_0" };
         return (client, options);
     }
 
+    // TODO CreateOpenAI
+    // openai chat = gpt-5-nano
+    // return new OpenAIChatClient(new OpenAI.OpenAIClient(arguments.ApiKey), arguments.Model);
+}
+
+public class EmbeddingLlm : Llm
+{
+    private readonly IEmbeddingGenerator<string, Embedding<float>> client;
+    private readonly EmbeddingGenerationOptions options;
+
+    public EmbeddingLlm(Provider provider)
+    {
+        (client, options) = provider switch
+        {
+            Provider.Ollama => CreateOllama(),
+        };
+    }
+
+    public override string ModelId => options.ModelId!;
+
+    public async Task<ReadOnlyMemory<float>> CreateEmbedding(string input)
+    {
+        return await client.GenerateVectorAsync(input, options);
+    }
+
     private static (
         IEmbeddingGenerator<string, Embedding<float>>,
         EmbeddingGenerationOptions
-    ) CreateOllamaEmbeddingClient()
+    ) CreateOllama()
     {
         var client = new OllamaApiClient(new Uri("http://localhost:11434"));
         var options = new EmbeddingGenerationOptions() { ModelId = "bge-m3:latest" };
         return (client, options);
     }
 
-    // TODO CreateOpenAIChatClient
-    // openai chat = gpt-5-nano
-    // return new OpenAIChatClient(new OpenAI.OpenAIClient(arguments.ApiKey), arguments.Model);
-
-    // TODO CreateOpenAIEmbeddingCLient
+    // TODO CreateOpenAI
     // openai embedding = text-embedding-3-small
 }
