@@ -4,7 +4,7 @@ using Silk.NET.WebGPU;
 using var app = new App(new EventHandler());
 app.Run();
 
-class EventHandler : IAppEventHandler
+unsafe class EventHandler : IAppEventHandler
 {
     private Pipeline? pipeline;
 
@@ -19,11 +19,7 @@ class EventHandler : IAppEventHandler
         pipeline = null;
     }
 
-    public unsafe void OnRender(
-        App.State state,
-        TimeSpan deltaTime,
-        RenderPassEncoder* renderPassEncoder
-    )
+    public void OnRender(App.State state, TimeSpan deltaTime, RenderPassEncoder* renderPassEncoder)
     {
         pipeline?.Render(renderPassEncoder);
     }

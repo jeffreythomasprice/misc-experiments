@@ -8,6 +8,8 @@ using Silk.NET.Windowing;
 
 // TODO handle resize events
 
+// TODO handle keyboard events
+
 namespace Experiment;
 
 public sealed unsafe class App : IDisposable
@@ -21,7 +23,7 @@ public sealed unsafe class App : IDisposable
             this.app = app;
         }
 
-        public WebGPU WGPU => app.wgpu;
+        public WebGPU WebGPU => app.wgpu;
         public Device* Device => app.device;
         public TextureFormat PreferredTextureFormat => app.preferredTextureFormat;
     }
@@ -54,6 +56,9 @@ public sealed unsafe class App : IDisposable
         */
         window.Render += OnRender;
         window.Closing += OnClosing;
+        // TODO Resize or FramebufferResize?
+        window.Resize += OnResize;
+        window.FramebufferResize += OnResize;
 
         window.Initialize();
 
@@ -62,7 +67,14 @@ public sealed unsafe class App : IDisposable
         surface = CreateSurface(window, wgpu, instance);
         adapter = CreateAdapter(wgpu, instance, surface);
         device = CreateDevice(wgpu, adapter);
-        preferredTextureFormat = ConfigureSurface(window, wgpu, surface, device);
+        preferredTextureFormat = TextureFormat.Bgra8Unorm;
+        ConfigureSurface(
+            wgpu,
+            surface,
+            device,
+            new((uint)window.Size.X, (uint)window.Size.Y),
+            preferredTextureFormat
+        );
         ConfigureDebugCallback(wgpu, device);
 
         eventHandler.OnLoad(new(this));
@@ -82,12 +94,25 @@ public sealed unsafe class App : IDisposable
 
     private void OnRender(double deltaTime)
     {
+        Console.WriteLine("TODO OnRender start");
+
         var queue = wgpu.DeviceGetQueue(device);
         var currentCommandEncoder = wgpu.DeviceCreateCommandEncoder(device, null);
 
         SurfaceTexture surfaceTexture;
         wgpu.SurfaceGetCurrentTexture(surface, &surfaceTexture);
-        var surfaceTextureView = wgpu.TextureCreateView(surfaceTexture.Texture, null);
+        var surfaceTextureViewDescriptor = new TextureViewDescriptor()
+        {
+            Format = preferredTextureFormat,
+            MipLevelCount = 1,
+            ArrayLayerCount = 1,
+        };
+        var surfaceTextureView = wgpu.TextureCreateView(
+            surfaceTexture.Texture,
+            &surfaceTextureViewDescriptor
+        );
+
+        // TODO clean up
 
         var colorAttachments = stackalloc RenderPassColorAttachment[1];
         colorAttachments[0].View = surfaceTextureView;
@@ -118,12 +143,25 @@ public sealed unsafe class App : IDisposable
         wgpu.RenderPassEncoderRelease(currentRenderPassEncoder);
         wgpu.CommandBufferRelease(commandBuffer);
         wgpu.CommandEncoderRelease(currentCommandEncoder);
+
+        Console.WriteLine("TODO OnRender end");
     }
 
     private void OnClosing()
     {
         Console.WriteLine("Window closing");
         Cleanup();
+    }
+
+    private void OnResize(Vector2D<int> size)
+    {
+        ConfigureSurface(
+            wgpu,
+            surface,
+            device,
+            new((uint)size.X, (uint)size.Y),
+            preferredTextureFormat
+        );
     }
 
     private void Cleanup()
@@ -255,28 +293,34 @@ public sealed unsafe class App : IDisposable
         return result;
     }
 
-    private static TextureFormat ConfigureSurface(
-        IWindow window,
+    private static void ConfigureSurface(
         WebGPU wgpu,
         Surface* surface,
-        Device* device
+        Device* device,
+        Vector2D<uint> size,
+        TextureFormat preferredTextureFormat
     )
     {
-        var preferredTextureFormat = TextureFormat.Bgra8Unorm;
+        var viewFormats =
+            stackalloc TextureFormat[1] {
+                // TODO this should be preferredTextureFormat + Srgb
+                TextureFormat.Bgra8UnormSrgb,
+            };
         var configuration = new SurfaceConfiguration
         {
             Device = device,
-            Width = (uint)window.Size.X,
-            Height = (uint)window.Size.Y,
+            Width = size.X,
+            Height = size.Y,
             Format = preferredTextureFormat,
             PresentMode = PresentMode.Immediate,
             Usage = TextureUsage.RenderAttachment,
+            ViewFormatCount = 1,
+            ViewFormats = viewFormats,
+            AlphaMode = CompositeAlphaMode.Auto,
         };
         wgpu.SurfaceConfigure(surface, &configuration);
 
-        Console.WriteLine("WGPU Surface configured");
-
-        return preferredTextureFormat;
+        Console.WriteLine($"WGPU Surface configured, window size: {size}");
     }
 
     private static void ConfigureDebugCallback(WebGPU wgpu, Device* device)
