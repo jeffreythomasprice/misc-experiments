@@ -36,12 +36,16 @@ public sealed unsafe class SurfaceWrapper : IDisposable
         PhysicalDeviceWrapper physicalDevice
     )
     {
-        // TODO check result
-        KhrSurface.GetPhysicalDeviceSurfaceCapabilities(
-            physicalDevice.PhysicalDevice,
-            SurfaceKHR,
-            out var result
-        );
+        if (
+            KhrSurface.GetPhysicalDeviceSurfaceCapabilities(
+                physicalDevice.PhysicalDevice,
+                SurfaceKHR,
+                out var result
+            ) != Result.Success
+        )
+        {
+            throw new Exception("failed to get physical device surface capabilities");
+        }
         log.LogDebug(
             "Physical device capabilities on this surface, MinImageCount={MinImageCount}, MaxImageCount={MaxImageCount}, CurrentExtent={CurrentExtentWidth}x{CurrentExtentHeight}, MinImageExtent={MinImageExtentWidth}x{MinImageExtentHeight}, MaxImageExtent={MaxImageExtentWidth}x{MaxImageExtentHeight}, MaxImageArrayLayers={MaxImageArrayLayers}, SupportedTransforms={SupportedTransforms}, CurrentTransform={CurrentTransform}, SupportedCompositeAlpha={SupportedCompositeAlpha}, SupportedUsageFlags={SupportedUsageFlags}",
             result.MinImageCount,

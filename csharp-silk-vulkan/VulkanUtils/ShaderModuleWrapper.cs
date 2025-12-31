@@ -40,7 +40,7 @@ public sealed unsafe class ShaderModuleWrapper : IDisposable
                 != Result.Success
             )
             {
-                // TODO can we get compile error log?
+                // TODO is it possible to get a linking error log?
                 throw new Exception("failed to create shader module");
             }
         }

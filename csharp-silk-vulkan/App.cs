@@ -19,7 +19,7 @@ using Silk.NET.Windowing;
 // TODO handle keyboard events
 
 // TODO next tutorial
-// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/14_CommandBuffers/Program.cs
+// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/15_HelloTriangle/Program.cs
 
 public sealed unsafe partial class App : IDisposable
 {
@@ -52,8 +52,7 @@ public sealed unsafe partial class App : IDisposable
     private readonly GraphicsPipelineWrapper graphicsPipeline;
     private readonly List<FramebufferWrapper> framebuffers;
     private readonly CommandPoolWrapper commandPool;
-
-    // TODO List<CommandBuffer> commandBuffers;
+    private readonly List<CommandBufferWrapper> commandBuffers;
 
     private bool isCleanupDone = false;
 
@@ -125,6 +124,18 @@ public sealed unsafe partial class App : IDisposable
             )),
         ];
         commandPool = new CommandPoolWrapper(vk, physicalDevice, device);
+        commandBuffers =
+        [
+            .. framebuffers.Select(framebuffer => new CommandBufferWrapper(
+                vk,
+                device,
+                swapchain,
+                renderPass,
+                graphicsPipeline,
+                framebuffer,
+                commandPool
+            )),
+        ];
 
         eventHandler.OnLoad(new(this));
     }
@@ -171,7 +182,10 @@ public sealed unsafe partial class App : IDisposable
 
         eventHandler.OnUnload(new(this));
 
-        // TODO commandBuffers
+        foreach (var commandBuffer in commandBuffers)
+        {
+            commandBuffer.Dispose();
+        }
         commandPool.Dispose();
         foreach (var framebuffer in framebuffers)
         {

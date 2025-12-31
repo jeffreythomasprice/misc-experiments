@@ -19,7 +19,7 @@ public sealed unsafe class FramebufferWrapper : IDisposable
 {
     private readonly Vk vk;
     private readonly DeviceWrapper device;
-    private readonly Framebuffer framebuffer;
+    public readonly Framebuffer Framebuffer;
 
     public FramebufferWrapper(
         Vk vk,
@@ -46,7 +46,7 @@ public sealed unsafe class FramebufferWrapper : IDisposable
             };
 
             if (
-                vk.CreateFramebuffer(device.Device, in framebufferInfo, null, out framebuffer)
+                vk.CreateFramebuffer(device.Device, in framebufferInfo, null, out Framebuffer)
                 != Result.Success
             )
             {
@@ -57,6 +57,6 @@ public sealed unsafe class FramebufferWrapper : IDisposable
 
     public void Dispose()
     {
-        vk.DestroyFramebuffer(device.Device, framebuffer, null);
+        vk.DestroyFramebuffer(device.Device, Framebuffer, null);
     }
 }

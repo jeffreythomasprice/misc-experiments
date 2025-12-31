@@ -19,7 +19,7 @@ public sealed unsafe class GraphicsPipelineWrapper : IDisposable
     private readonly Vk vk;
     private readonly DeviceWrapper device;
     private readonly PipelineLayout pipelineLayout;
-    private readonly Pipeline graphicsPipeline;
+    public readonly Pipeline GraphicsPipeline;
 
     public GraphicsPipelineWrapper(
         Vk vk,
@@ -176,7 +176,7 @@ public sealed unsafe class GraphicsPipelineWrapper : IDisposable
                 1,
                 in pipelineInfo,
                 null,
-                out graphicsPipeline
+                out GraphicsPipeline
             ) != Result.Success
         )
         {
@@ -186,7 +186,7 @@ public sealed unsafe class GraphicsPipelineWrapper : IDisposable
 
     public void Dispose()
     {
-        vk.DestroyPipeline(device.Device, graphicsPipeline, null);
+        vk.DestroyPipeline(device.Device, GraphicsPipeline, null);
         vk.DestroyPipelineLayout(device.Device, pipelineLayout, null);
     }
 }

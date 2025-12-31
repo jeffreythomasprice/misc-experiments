@@ -17,80 +17,95 @@ using Silk.NET.Windowing;
 
 public sealed unsafe class CommandBufferWrapper : IDisposable
 {
-    public CommandBufferWrapper() { }
+    private readonly Vk vk;
+    private readonly DeviceWrapper device;
+    private readonly CommandPoolWrapper commandPool;
+    private readonly CommandBuffer commandBuffer;
+
+    public CommandBufferWrapper(
+        Vk vk,
+        DeviceWrapper device,
+        SwapchainWrapper swapchain,
+        RenderPassWrapper renderPass,
+        GraphicsPipelineWrapper graphicsPipeline,
+        FramebufferWrapper framebuffer,
+        CommandPoolWrapper commandPool
+    )
+    {
+        this.vk = vk;
+        this.device = device;
+        this.commandPool = commandPool;
+
+        var allocInfo = new CommandBufferAllocateInfo()
+        {
+            SType = StructureType.CommandBufferAllocateInfo,
+            CommandPool = commandPool.CommandPool,
+            Level = CommandBufferLevel.Primary,
+            CommandBufferCount = 1,
+        };
+
+        fixed (CommandBuffer* commandBufferPtr = &commandBuffer)
+        {
+            if (
+                vk.AllocateCommandBuffers(device.Device, in allocInfo, commandBufferPtr)
+                != Result.Success
+            )
+            {
+                throw new Exception("failed to allocate command buffers");
+            }
+        }
+
+        var beginInfo = new CommandBufferBeginInfo()
+        {
+            SType = StructureType.CommandBufferBeginInfo,
+        };
+
+        if (vk.BeginCommandBuffer(commandBuffer, in beginInfo) != Result.Success)
+        {
+            throw new Exception("failed to begin recording command buffer");
+        }
+
+        var renderPassInfo = new RenderPassBeginInfo()
+        {
+            SType = StructureType.RenderPassBeginInfo,
+            RenderPass = renderPass.RenderPass,
+            Framebuffer = framebuffer.Framebuffer,
+            RenderArea = { Offset = { X = 0, Y = 0 }, Extent = swapchain.Extent },
+        };
+
+        var clearColor = new ClearValue()
+        {
+            Color = new()
+            {
+                Float32_0 = 0,
+                Float32_1 = 0,
+                Float32_2 = 0,
+                Float32_3 = 1,
+            },
+        };
+
+        renderPassInfo.ClearValueCount = 1;
+        renderPassInfo.PClearValues = &clearColor;
+
+        vk.CmdBeginRenderPass(commandBuffer, &renderPassInfo, SubpassContents.Inline);
+        vk.CmdBindPipeline(
+            commandBuffer,
+            PipelineBindPoint.Graphics,
+            graphicsPipeline.GraphicsPipeline
+        );
+        vk.CmdDraw(commandBuffer, 3, 1, 0, 0);
+        vk.CmdEndRenderPass(commandBuffer);
+        if (vk.EndCommandBuffer(commandBuffer) != Result.Success)
+        {
+            throw new Exception("failed to record command buffer");
+        }
+    }
 
     public void Dispose()
     {
-        throw new NotImplementedException();
+        fixed (CommandBuffer* commandBufferPtr = &commandBuffer)
+        {
+            vk.FreeCommandBuffers(device.Device, commandPool.CommandPool, 1, commandBufferPtr);
+        }
     }
-
-    // TODO impl
-
-    //  private void CreateCommandBuffers()
-    // {
-    //     commandBuffers = new CommandBuffer[swapChainFramebuffers!.Length];
-
-    //     CommandBufferAllocateInfo allocInfo = new()
-    //     {
-    //         SType = StructureType.CommandBufferAllocateInfo,
-    //         CommandPool = commandPool,
-    //         Level = CommandBufferLevel.Primary,
-    //         CommandBufferCount = (uint)commandBuffers.Length,
-    //     };
-
-    //     fixed (CommandBuffer* commandBuffersPtr = commandBuffers)
-    //     {
-    //         if (vk!.AllocateCommandBuffers(device, in allocInfo, commandBuffersPtr) != Result.Success)
-    //         {
-    //             throw new Exception("failed to allocate command buffers!");
-    //         }
-    //     }
-
-    //     for (int i = 0; i < commandBuffers.Length; i++)
-    //     {
-    //         CommandBufferBeginInfo beginInfo = new()
-    //         {
-    //             SType = StructureType.CommandBufferBeginInfo,
-    //         };
-
-    //         if (vk!.BeginCommandBuffer(commandBuffers[i], in beginInfo) != Result.Success)
-    //         {
-    //             throw new Exception("failed to begin recording command buffer!");
-    //         }
-
-    //         RenderPassBeginInfo renderPassInfo = new()
-    //         {
-    //             SType = StructureType.RenderPassBeginInfo,
-    //             RenderPass = renderPass,
-    //             Framebuffer = swapChainFramebuffers[i],
-    //             RenderArea =
-    //             {
-    //                 Offset = { X = 0, Y = 0 },
-    //                 Extent = swapChainExtent,
-    //             }
-    //         };
-
-    //         ClearValue clearColor = new()
-    //         {
-    //             Color = new() { Float32_0 = 0, Float32_1 = 0, Float32_2 = 0, Float32_3 = 1 },
-    //         };
-
-    //         renderPassInfo.ClearValueCount = 1;
-    //         renderPassInfo.PClearValues = &clearColor;
-
-    //         vk!.CmdBeginRenderPass(commandBuffers[i], &renderPassInfo, SubpassContents.Inline);
-
-    //         vk!.CmdBindPipeline(commandBuffers[i], PipelineBindPoint.Graphics, graphicsPipeline);
-
-    //         vk!.CmdDraw(commandBuffers[i], 3, 1, 0, 0);
-
-    //         vk!.CmdEndRenderPass(commandBuffers[i]);
-
-    //         if (vk!.EndCommandBuffer(commandBuffers[i]) != Result.Success)
-    //         {
-    //             throw new Exception("failed to record command buffer!");
-    //         }
-
-    //     }
-    // }
 }
