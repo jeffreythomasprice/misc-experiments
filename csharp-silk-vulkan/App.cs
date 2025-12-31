@@ -1,3 +1,5 @@
+namespace Experiment;
+
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -17,9 +19,7 @@ using Silk.NET.Windowing;
 // TODO handle keyboard events
 
 // TODO next tutorial
-// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/13_FrameBuffers/Program.cs
-
-namespace Experiment;
+// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/14_CommandBuffers/Program.cs
 
 public sealed unsafe partial class App : IDisposable
 {
@@ -50,6 +50,10 @@ public sealed unsafe partial class App : IDisposable
     private readonly List<ImageViewWrapper> swapchainImageViews;
     private readonly RenderPassWrapper renderPass;
     private readonly GraphicsPipelineWrapper graphicsPipeline;
+    private readonly List<FramebufferWrapper> framebuffers;
+    private readonly CommandPoolWrapper commandPool;
+
+    // TODO List<CommandBuffer> commandBuffers;
 
     private bool isCleanupDone = false;
 
@@ -92,9 +96,15 @@ public sealed unsafe partial class App : IDisposable
         physicalDevice = PhysicalDeviceWrapper.FindBest(vk, instance.Instance, surface);
         device = new DeviceWrapper(vk, physicalDevice, enableValidationLayers);
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
-        swapchainImageViews = swapchain
-            .Images.Select(image => new ImageViewWrapper(vk, device, swapchain.Format, image))
-            .ToList();
+        swapchainImageViews =
+        [
+            .. swapchain.Images.Select(image => new ImageViewWrapper(
+                vk,
+                device,
+                swapchain.Format,
+                image
+            )),
+        ];
         renderPass = new RenderPassWrapper(vk, device, swapchain);
         graphicsPipeline = new GraphicsPipelineWrapper(
             vk,
@@ -104,6 +114,17 @@ public sealed unsafe partial class App : IDisposable
             File.ReadAllBytes("Shaders/shader.vert.spv"),
             File.ReadAllBytes("Shaders/shader.frag.spv")
         );
+        framebuffers =
+        [
+            .. swapchainImageViews.Select(imageView => new FramebufferWrapper(
+                vk,
+                device,
+                swapchain,
+                renderPass,
+                imageView
+            )),
+        ];
+        commandPool = new CommandPoolWrapper(vk, physicalDevice, device);
 
         eventHandler.OnLoad(new(this));
     }
@@ -150,6 +171,12 @@ public sealed unsafe partial class App : IDisposable
 
         eventHandler.OnUnload(new(this));
 
+        // TODO commandBuffers
+        commandPool.Dispose();
+        foreach (var framebuffer in framebuffers)
+        {
+            framebuffer.Dispose();
+        }
         graphicsPipeline.Dispose();
         renderPass.Dispose();
         foreach (var imageView in swapchainImageViews)

@@ -17,7 +17,7 @@ public sealed unsafe class ImageViewWrapper : IDisposable
 {
     private readonly Vk vk;
     private readonly DeviceWrapper device;
-    private readonly ImageView imageView;
+    public readonly ImageView ImageView;
 
     public ImageViewWrapper(Vk vk, DeviceWrapper device, Format format, Image image)
     {
@@ -47,7 +47,7 @@ public sealed unsafe class ImageViewWrapper : IDisposable
             },
         };
 
-        if (vk.CreateImageView(device.Device, in createInfo, null, out imageView) != Result.Success)
+        if (vk.CreateImageView(device.Device, in createInfo, null, out ImageView) != Result.Success)
         {
             throw new Exception("failed to create image views");
         }
@@ -55,6 +55,6 @@ public sealed unsafe class ImageViewWrapper : IDisposable
 
     public void Dispose()
     {
-        vk.DestroyImageView(device.Device, imageView, null);
+        vk.DestroyImageView(device.Device, ImageView, null);
     }
 }
