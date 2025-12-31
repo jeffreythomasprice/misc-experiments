@@ -98,7 +98,7 @@ public sealed unsafe class SwapchainWrapper : IDisposable
             != Result.Success
         )
         {
-            throw new Exception("failed to create swap chain!");
+            throw new Exception("failed to create swap chain");
         }
 
         KhrSwapchain.GetSwapchainImages(device.Device, SwapchainKhr, ref imageCount, null);

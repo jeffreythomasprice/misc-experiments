@@ -47,11 +47,9 @@ public sealed unsafe class ImageViewWrapper : IDisposable
             },
         };
 
-        if (
-            vk!.CreateImageView(device.Device, in createInfo, null, out imageView) != Result.Success
-        )
+        if (vk.CreateImageView(device.Device, in createInfo, null, out imageView) != Result.Success)
         {
-            throw new Exception("failed to create image views!");
+            throw new Exception("failed to create image views");
         }
     }
 

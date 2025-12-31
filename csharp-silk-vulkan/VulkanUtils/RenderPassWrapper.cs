@@ -1,0 +1,74 @@
+namespace Experiment.VulkanUtils;
+
+using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text;
+using Experiment.VulkanUtils;
+using Silk.NET.Core;
+using Silk.NET.Core.Contexts;
+using Silk.NET.Core.Native;
+using Silk.NET.Maths;
+using Silk.NET.Vulkan;
+using Silk.NET.Vulkan.Extensions.EXT;
+using Silk.NET.Vulkan.Extensions.KHR;
+using Silk.NET.Windowing;
+
+public sealed unsafe class RenderPassWrapper : IDisposable
+{
+    private readonly Vk vk;
+    private readonly DeviceWrapper device;
+    public readonly RenderPass RenderPass;
+
+    public RenderPassWrapper(Vk vk, DeviceWrapper device, SwapchainWrapper swapchain)
+    {
+        this.vk = vk;
+        this.device = device;
+
+        var colorAttachment = new AttachmentDescription()
+        {
+            Format = swapchain.Format,
+            Samples = SampleCountFlags.Count1Bit,
+            LoadOp = AttachmentLoadOp.Clear,
+            StoreOp = AttachmentStoreOp.Store,
+            StencilLoadOp = AttachmentLoadOp.DontCare,
+            InitialLayout = ImageLayout.Undefined,
+            FinalLayout = ImageLayout.PresentSrcKhr,
+        };
+
+        var colorAttachmentRef = new AttachmentReference()
+        {
+            Attachment = 0,
+            Layout = ImageLayout.ColorAttachmentOptimal,
+        };
+
+        var subpass = new SubpassDescription()
+        {
+            PipelineBindPoint = PipelineBindPoint.Graphics,
+            ColorAttachmentCount = 1,
+            PColorAttachments = &colorAttachmentRef,
+        };
+
+        var renderPassInfo = new RenderPassCreateInfo()
+        {
+            SType = StructureType.RenderPassCreateInfo,
+            AttachmentCount = 1,
+            PAttachments = &colorAttachment,
+            SubpassCount = 1,
+            PSubpasses = &subpass,
+        };
+
+        if (
+            vk.CreateRenderPass(device.Device, in renderPassInfo, null, out RenderPass)
+            != Result.Success
+        )
+        {
+            throw new Exception("failed to create render pass");
+        }
+    }
+
+    public void Dispose()
+    {
+        vk.DestroyRenderPass(device.Device, RenderPass, null);
+    }
+}

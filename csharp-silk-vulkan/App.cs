@@ -16,8 +16,8 @@ using Silk.NET.Windowing;
 
 // TODO handle keyboard events
 
-// TODO currently working on
-// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/10_FixedFunctions/Program.cs
+// TODO next tutorial
+// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/13_FrameBuffers/Program.cs
 
 namespace Experiment;
 
@@ -48,7 +48,8 @@ public sealed unsafe partial class App : IDisposable
     private readonly DeviceWrapper device;
     private readonly SwapchainWrapper swapchain;
     private readonly List<ImageViewWrapper> swapchainImageViews;
-    private readonly PipelineLayoutWrapper pipelineLayout;
+    private readonly RenderPassWrapper renderPass;
+    private readonly GraphicsPipelineWrapper graphicsPipeline;
 
     private bool isCleanupDone = false;
 
@@ -94,9 +95,12 @@ public sealed unsafe partial class App : IDisposable
         swapchainImageViews = swapchain
             .Images.Select(image => new ImageViewWrapper(vk, device, swapchain.Format, image))
             .ToList();
-        pipelineLayout = new PipelineLayoutWrapper(
+        renderPass = new RenderPassWrapper(vk, device, swapchain);
+        graphicsPipeline = new GraphicsPipelineWrapper(
             vk,
             device,
+            swapchain,
+            renderPass,
             File.ReadAllBytes("Shaders/shader.vert.spv"),
             File.ReadAllBytes("Shaders/shader.frag.spv")
         );
@@ -146,7 +150,8 @@ public sealed unsafe partial class App : IDisposable
 
         eventHandler.OnUnload(new(this));
 
-        pipelineLayout.Dispose();
+        graphicsPipeline.Dispose();
+        renderPass.Dispose();
         foreach (var imageView in swapchainImageViews)
         {
             imageView.Dispose();

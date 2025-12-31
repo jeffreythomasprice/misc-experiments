@@ -81,7 +81,7 @@ public sealed unsafe class DeviceWrapper : IDisposable
             != Result.Success
         )
         {
-            throw new Exception("failed to create logical device!");
+            throw new Exception("failed to create logical device");
         }
 
         vk.GetDeviceQueue(Device, graphicsQueueIndex, 0, out GraphicsQueue);

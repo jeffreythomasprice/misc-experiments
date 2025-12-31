@@ -20,7 +20,7 @@ public sealed unsafe class InstanceWrapper : IDisposable
             && !vk.AreAllLayersSupported(DebugMessengerWrapper.REQUIRED_VALIDATION_LAYERS)
         )
         {
-            throw new Exception("validation layers requested, but not available!");
+            throw new Exception("validation layers requested, but not available");
         }
 
         using var applicationName = new PointerUtils.DisposableStringPointer("Experiment");
@@ -66,7 +66,7 @@ public sealed unsafe class InstanceWrapper : IDisposable
 
         if (vk.CreateInstance(in createInfo, null, out Instance) != Result.Success)
         {
-            throw new Exception("failed to create instance!");
+            throw new Exception("failed to create instance");
         }
     }
 

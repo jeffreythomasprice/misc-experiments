@@ -52,7 +52,7 @@ public sealed unsafe class DebugMessengerWrapper : IDisposable
             ) != Result.Success
         )
         {
-            throw new Exception("failed to set up debug messenger!");
+            throw new Exception("failed to set up debug messenger");
         }
         this.debugMessenger = debugMessenger;
     }
