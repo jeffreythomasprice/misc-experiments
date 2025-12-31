@@ -19,7 +19,7 @@ using Silk.NET.Windowing;
 // TODO handle keyboard events
 
 // TODO next tutorial
-// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/15_HelloTriangle/Program.cs
+// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/17_SwapChainRecreation/Program.cs
 
 public sealed unsafe partial class App : IDisposable
 {
@@ -50,9 +50,6 @@ public sealed unsafe partial class App : IDisposable
     private readonly RenderPassWrapper renderPass;
     private readonly GraphicsPipelineWrapper graphicsPipeline;
     private readonly CommandPoolWrapper commandPool;
-
-    // TODO let's just try allocating command buffers as needed and free them when done for now
-    // private readonly List<CommandBufferWrapper> commandBuffers;
     private readonly SynchronizedQueueSubmitterAndPresenter synchronizedQueueSubmitterAndPresenter;
 
     private bool isCleanupDone = false;
@@ -106,19 +103,6 @@ public sealed unsafe partial class App : IDisposable
             File.ReadAllBytes("Shaders/shader.frag.spv")
         );
         commandPool = new CommandPoolWrapper(vk, physicalDevice, device);
-        // TODO let's just try allocating command buffers as needed and free them when done for now
-        // commandBuffers =
-        // [
-        //     .. framebuffers.Select(framebuffer => new CommandBufferWrapper(
-        //         vk,
-        //         device,
-        //         swapchain,
-        //         renderPass,
-        //         graphicsPipeline,
-        //         framebuffer,
-        //         commandPool
-        //     )),
-        // ];
         synchronizedQueueSubmitterAndPresenter = new SynchronizedQueueSubmitterAndPresenter(
             vk,
             device,
@@ -173,11 +157,6 @@ public sealed unsafe partial class App : IDisposable
         eventHandler.OnUnload(new(this));
 
         synchronizedQueueSubmitterAndPresenter.Dispose();
-        // TODO let's just try allocating command buffers as needed and free them when done for now
-        // foreach (var commandBuffer in commandBuffers)
-        // {
-        //     commandBuffer.Dispose();
-        // }
         commandPool.Dispose();
         graphicsPipeline.Dispose();
         renderPass.Dispose();

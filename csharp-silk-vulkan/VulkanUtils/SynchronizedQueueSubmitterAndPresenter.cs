@@ -31,6 +31,7 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
     private readonly List<ImageViewWrapper> swapchainImageViews;
     private readonly List<FramebufferWrapper> framebuffers;
 
+    // TODO combine sync primitives into a shared struct? do they really go together in that way?
     private readonly Semaphore[] imageAvailableSemaphores;
     private readonly Semaphore[] renderFinishedSemaphores;
     private readonly Fence[] inFlightFences;
