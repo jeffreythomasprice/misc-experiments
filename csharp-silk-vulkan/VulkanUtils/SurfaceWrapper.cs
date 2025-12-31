@@ -1,6 +1,7 @@
 namespace Experiment.VulkanUtils;
 
 using System.Reflection.Metadata;
+using Microsoft.Extensions.Logging;
 using Silk.NET.Core;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Vulkan;
@@ -8,12 +9,14 @@ using Silk.NET.Vulkan.Extensions.KHR;
 
 public sealed unsafe class SurfaceWrapper : IDisposable
 {
+    private readonly ILogger log;
     private readonly InstanceWrapper instance;
     public readonly KhrSurface KhrSurface;
     public readonly SurfaceKHR SurfaceKHR;
 
     public SurfaceWrapper(IVkSurface windowSurface, Vk vk, InstanceWrapper instance)
     {
+        log = LoggerUtils.Factory.Value.CreateLogger(GetType());
         this.instance = instance;
         if (!vk.TryGetInstanceExtension<KhrSurface>(instance.Instance, out KhrSurface))
         {
@@ -39,24 +42,22 @@ public sealed unsafe class SurfaceWrapper : IDisposable
             SurfaceKHR,
             out var result
         );
-        // TODO proper logging
-        Console.WriteLine($"physical device capabilities on this surface:");
-        Console.WriteLine($"    MinImageCount: {result.MinImageCount}");
-        Console.WriteLine($"    MaxImageCount: {result.MaxImageCount}");
-        Console.WriteLine(
-            $"    CurrentExtent: {result.CurrentExtent.Width}x{result.CurrentExtent.Height}"
+        log.LogDebug(
+            "Physical device capabilities on this surface, MinImageCount={MinImageCount}, MaxImageCount={MaxImageCount}, CurrentExtent={CurrentExtentWidth}x{CurrentExtentHeight}, MinImageExtent={MinImageExtentWidth}x{MinImageExtentHeight}, MaxImageExtent={MaxImageExtentWidth}x{MaxImageExtentHeight}, MaxImageArrayLayers={MaxImageArrayLayers}, SupportedTransforms={SupportedTransforms}, CurrentTransform={CurrentTransform}, SupportedCompositeAlpha={SupportedCompositeAlpha}, SupportedUsageFlags={SupportedUsageFlags}",
+            result.MinImageCount,
+            result.MaxImageCount,
+            result.CurrentExtent.Width,
+            result.CurrentExtent.Height,
+            result.MinImageExtent.Width,
+            result.MinImageExtent.Height,
+            result.MaxImageExtent.Width,
+            result.MaxImageExtent.Height,
+            result.MaxImageArrayLayers,
+            result.SupportedTransforms,
+            result.CurrentTransform,
+            result.SupportedCompositeAlpha,
+            result.SupportedUsageFlags
         );
-        Console.WriteLine(
-            $"    MinImageExtent: {result.MinImageExtent.Width}x{result.MinImageExtent.Height}"
-        );
-        Console.WriteLine(
-            $"    MaxImageExtent: {result.MaxImageExtent.Width}x{result.MaxImageExtent.Height}"
-        );
-        Console.WriteLine($"    MaxImageArrayLayers: {result.MaxImageArrayLayers}");
-        Console.WriteLine($"    SupportedTransforms: {result.SupportedTransforms}");
-        Console.WriteLine($"    CurrentTransform: {result.CurrentTransform}");
-        Console.WriteLine($"    SupportedCompositeAlpha: {result.SupportedCompositeAlpha}");
-        Console.WriteLine($"    SupportedUsageFlags: {result.SupportedUsageFlags}");
         return result;
     }
 
@@ -70,8 +71,7 @@ public sealed unsafe class SurfaceWrapper : IDisposable
             null
         );
 
-        // TODO proper logging
-        Console.WriteLine($"physical device surface format count: {count}");
+        log.LogDebug("physical device surface format count: {Count}", count);
 
         if (count == 0)
         {
@@ -89,11 +89,15 @@ public sealed unsafe class SurfaceWrapper : IDisposable
             );
         }
 
-        // TODO proper logging
-        Console.WriteLine($"physical device surface formats:");
+        log.LogDebug($"physical device surface formats:");
         foreach (var (x, i) in results.Select((x, i) => (x, i)))
         {
-            Console.WriteLine($"    Format[{i}]: {x.Format}, ColorSpace: {x.ColorSpace}");
+            log.LogDebug(
+                "    Format[{Index}]: {Format}, ColorSpace: {ColorSpace}",
+                i,
+                x.Format,
+                x.ColorSpace
+            );
         }
 
         return results;
@@ -111,8 +115,7 @@ public sealed unsafe class SurfaceWrapper : IDisposable
             null
         );
 
-        // TODO proper logging
-        Console.WriteLine($"physical device surface present mode count: {count}");
+        log.LogDebug("physical device surface present mode count: {Count}", count);
 
         if (count == 0)
         {
@@ -130,8 +133,7 @@ public sealed unsafe class SurfaceWrapper : IDisposable
             );
         }
 
-        // TODO proper logging
-        Console.WriteLine($"physical device surface present modes: [{string.Join(", ", results)}]");
+        log.LogDebug("physical device surface present modes: [{PresentModes}]", results);
 
         return results;
     }

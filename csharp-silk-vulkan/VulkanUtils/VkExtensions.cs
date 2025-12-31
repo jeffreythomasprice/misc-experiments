@@ -1,10 +1,15 @@
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Silk.NET.Vulkan;
 
 namespace Experiment.VulkanUtils;
 
 public static class VkExtensions
 {
+    private static readonly Lazy<ILogger> log = new(() =>
+        LoggerUtils.Factory.Value.CreateLogger(typeof(VkExtensions).ToString())
+    );
+
     public static unsafe bool AreAllLayersSupported(this Vk vk, IEnumerable<string> requiredLayers)
     {
         uint layerCount = 0;
@@ -18,9 +23,8 @@ public static class VkExtensions
         var availableLayerNames = availableLayers
             .Select(layer => Marshal.PtrToStringAnsi((IntPtr)layer.LayerName))
             .ToHashSet();
-        // TODO proper logging
-        Console.WriteLine($"available layer names: [{string.Join(", ", availableLayerNames)}]");
-        Console.WriteLine($"looking for required layers: [{string.Join(", ", requiredLayers)}]");
+        log.Value.LogDebug("available layer names: {AvailableLayerNames}", availableLayerNames);
+        log.Value.LogDebug("looking for required layers: {RequiredLayers}", requiredLayers);
 
         return requiredLayers.All(availableLayerNames.Contains);
     }

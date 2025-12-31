@@ -1,4 +1,9 @@
 ﻿using Experiment;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
+
+var logger = LoggerUtils.Factory.Value.CreateLogger<Program>();
+logger.LogInformation("start");
 
 using var app = new App(new EventHandler());
 app.Run();

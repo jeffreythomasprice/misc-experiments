@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Experiment.VulkanUtils;
+using Microsoft.Extensions.Logging;
 using Silk.NET.Core;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Core.Native;
@@ -11,14 +12,12 @@ using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Silk.NET.Windowing;
 
-// TODO do logging correctly
-
 // TODO handle resize events
 
 // TODO handle keyboard events
 
-// TODO next tutorial
-// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/06_SwapChainCreation/Program.cs
+// TODO currently working on
+// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/10_FixedFunctions/Program.cs
 
 namespace Experiment;
 
@@ -36,6 +35,7 @@ public sealed unsafe partial class App : IDisposable
         // TODO props here
     }
 
+    private readonly ILogger log;
     private readonly IAppEventHandler eventHandler;
 
     private readonly IWindow window;
@@ -48,11 +48,13 @@ public sealed unsafe partial class App : IDisposable
     private readonly DeviceWrapper device;
     private readonly SwapchainWrapper swapchain;
     private readonly List<ImageViewWrapper> swapchainImageViews;
+    private readonly PipelineLayoutWrapper pipelineLayout;
 
     private bool isCleanupDone = false;
 
     public App(IAppEventHandler eventHandler)
     {
+        log = LoggerUtils.Factory.Value.CreateLogger(GetType());
         this.eventHandler = eventHandler;
 
         window = Window.Create(
@@ -92,6 +94,12 @@ public sealed unsafe partial class App : IDisposable
         swapchainImageViews = swapchain
             .Images.Select(image => new ImageViewWrapper(vk, device, swapchain.Format, image))
             .ToList();
+        pipelineLayout = new PipelineLayoutWrapper(
+            vk,
+            device,
+            File.ReadAllBytes("Shaders/shader.vert.spv"),
+            File.ReadAllBytes("Shaders/shader.frag.spv")
+        );
 
         eventHandler.OnLoad(new(this));
     }
@@ -119,7 +127,7 @@ public sealed unsafe partial class App : IDisposable
 
     private void OnClosing()
     {
-        Console.WriteLine("Window closing");
+        log.LogInformation("Window closing");
         Cleanup();
     }
 
@@ -138,6 +146,7 @@ public sealed unsafe partial class App : IDisposable
 
         eventHandler.OnUnload(new(this));
 
+        pipelineLayout.Dispose();
         foreach (var imageView in swapchainImageViews)
         {
             imageView.Dispose();

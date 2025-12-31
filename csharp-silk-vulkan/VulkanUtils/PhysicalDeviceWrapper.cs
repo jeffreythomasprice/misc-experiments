@@ -1,11 +1,16 @@
 namespace Experiment.VulkanUtils;
 
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
 
 public unsafe class PhysicalDeviceWrapper
 {
+    private static readonly Lazy<ILogger> log = new(() =>
+        LoggerUtils.Factory.Value.CreateLogger<PhysicalDeviceWrapper>()
+    );
+
     private readonly Vk vk;
 
     public readonly PhysicalDevice PhysicalDevice;
@@ -17,14 +22,12 @@ public unsafe class PhysicalDeviceWrapper
 
     public static PhysicalDeviceWrapper FindBest(Vk vk, Instance instance, SurfaceWrapper surface)
     {
-        // TODO proper logging
-
         var devices = vk.GetPhysicalDevices(instance);
         var bestDevice = devices
             .Select(d =>
             {
                 var result = new PhysicalDeviceWrapper(vk, surface, d);
-                Console.WriteLine($"physical device: {result}");
+                log.Value.LogDebug("Physical device: {Device}", result);
                 return result;
             })
             .Where(d => d.GraphicsQueueIndex.HasValue)
@@ -39,7 +42,7 @@ public unsafe class PhysicalDeviceWrapper
             )
             .First();
 
-        Console.WriteLine($"Selected device: {bestDevice})");
+        log.Value.LogInformation("Selected device: {Device}", bestDevice);
         return bestDevice;
     }
 

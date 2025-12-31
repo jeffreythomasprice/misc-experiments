@@ -1,6 +1,7 @@
 namespace Experiment.VulkanUtils;
 
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using Silk.NET.Core;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Core.Native;
@@ -16,6 +17,10 @@ public sealed unsafe class DebugMessengerWrapper : IDisposable
     [
         "VK_LAYER_KHRONOS_validation",
     ];
+
+    private static readonly Lazy<ILogger> Log = new(() =>
+        LoggerUtils.Factory.Value.CreateLogger<DebugMessengerWrapper>()
+    );
 
     private readonly InstanceWrapper instance;
     private readonly ExtDebugUtils? debugUtils;
@@ -83,10 +88,24 @@ public sealed unsafe class DebugMessengerWrapper : IDisposable
         void* pUserData
     )
     {
-        // TODO proper logging
-        Console.WriteLine(
-            $"vulkan debug callback:" + Marshal.PtrToStringAnsi((nint)pCallbackData->PMessage)
-        );
+        var message = Marshal.PtrToStringAnsi((nint)pCallbackData->PMessage);
+        switch (messageSeverity)
+        {
+            case DebugUtilsMessageSeverityFlagsEXT.None:
+                break;
+            case DebugUtilsMessageSeverityFlagsEXT.VerboseBitExt:
+                Log.Value.LogTrace("vulkan debug callback {Message}", message);
+                break;
+            case DebugUtilsMessageSeverityFlagsEXT.InfoBitExt:
+                Log.Value.LogInformation("vulkan debug callback {Message}", message);
+                break;
+            case DebugUtilsMessageSeverityFlagsEXT.WarningBitExt:
+                Log.Value.LogWarning("vulkan debug callback {Message}", message);
+                break;
+            case DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt:
+                Log.Value.LogError("vulkan debug callback {Message}", message);
+                break;
+        }
         return Vk.False;
     }
 }
