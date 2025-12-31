@@ -47,12 +47,13 @@ public sealed unsafe partial class App : IDisposable
     private readonly PhysicalDeviceWrapper physicalDevice;
     private readonly DeviceWrapper device;
     private readonly SwapchainWrapper swapchain;
-    private readonly List<ImageViewWrapper> swapchainImageViews;
     private readonly RenderPassWrapper renderPass;
     private readonly GraphicsPipelineWrapper graphicsPipeline;
-    private readonly List<FramebufferWrapper> framebuffers;
     private readonly CommandPoolWrapper commandPool;
-    private readonly List<CommandBufferWrapper> commandBuffers;
+
+    // TODO let's just try allocating command buffers as needed and free them when done for now
+    // private readonly List<CommandBufferWrapper> commandBuffers;
+    private readonly SynchronizedQueueSubmitterAndPresenter synchronizedQueueSubmitterAndPresenter;
 
     private bool isCleanupDone = false;
 
@@ -95,15 +96,6 @@ public sealed unsafe partial class App : IDisposable
         physicalDevice = PhysicalDeviceWrapper.FindBest(vk, instance.Instance, surface);
         device = new DeviceWrapper(vk, physicalDevice, enableValidationLayers);
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
-        swapchainImageViews =
-        [
-            .. swapchain.Images.Select(image => new ImageViewWrapper(
-                vk,
-                device,
-                swapchain.Format,
-                image
-            )),
-        ];
         renderPass = new RenderPassWrapper(vk, device, swapchain);
         graphicsPipeline = new GraphicsPipelineWrapper(
             vk,
@@ -113,29 +105,28 @@ public sealed unsafe partial class App : IDisposable
             File.ReadAllBytes("Shaders/shader.vert.spv"),
             File.ReadAllBytes("Shaders/shader.frag.spv")
         );
-        framebuffers =
-        [
-            .. swapchainImageViews.Select(imageView => new FramebufferWrapper(
-                vk,
-                device,
-                swapchain,
-                renderPass,
-                imageView
-            )),
-        ];
         commandPool = new CommandPoolWrapper(vk, physicalDevice, device);
-        commandBuffers =
-        [
-            .. framebuffers.Select(framebuffer => new CommandBufferWrapper(
-                vk,
-                device,
-                swapchain,
-                renderPass,
-                graphicsPipeline,
-                framebuffer,
-                commandPool
-            )),
-        ];
+        // TODO let's just try allocating command buffers as needed and free them when done for now
+        // commandBuffers =
+        // [
+        //     .. framebuffers.Select(framebuffer => new CommandBufferWrapper(
+        //         vk,
+        //         device,
+        //         swapchain,
+        //         renderPass,
+        //         graphicsPipeline,
+        //         framebuffer,
+        //         commandPool
+        //     )),
+        // ];
+        synchronizedQueueSubmitterAndPresenter = new SynchronizedQueueSubmitterAndPresenter(
+            vk,
+            device,
+            swapchain,
+            renderPass,
+            graphicsPipeline,
+            commandPool
+        );
 
         eventHandler.OnLoad(new(this));
     }
@@ -154,11 +145,10 @@ public sealed unsafe partial class App : IDisposable
 
     private void OnRender(double deltaTime)
     {
-        // TODO pre prender
+        synchronizedQueueSubmitterAndPresenter.OnRender();
 
-        eventHandler.OnRender(new(this), TimeSpan.FromSeconds(deltaTime));
-
-        // TODO post render
+        // TODO fix event handler stuff to make it possible to make new command queues easily?
+        // eventHandler.OnRender(new(this), TimeSpan.FromSeconds(deltaTime));
     }
 
     private void OnClosing()
@@ -182,21 +172,15 @@ public sealed unsafe partial class App : IDisposable
 
         eventHandler.OnUnload(new(this));
 
-        foreach (var commandBuffer in commandBuffers)
-        {
-            commandBuffer.Dispose();
-        }
+        synchronizedQueueSubmitterAndPresenter.Dispose();
+        // TODO let's just try allocating command buffers as needed and free them when done for now
+        // foreach (var commandBuffer in commandBuffers)
+        // {
+        //     commandBuffer.Dispose();
+        // }
         commandPool.Dispose();
-        foreach (var framebuffer in framebuffers)
-        {
-            framebuffer.Dispose();
-        }
         graphicsPipeline.Dispose();
         renderPass.Dispose();
-        foreach (var imageView in swapchainImageViews)
-        {
-            imageView.Dispose();
-        }
         swapchain.Dispose();
         device.Dispose();
         surface.Dispose();

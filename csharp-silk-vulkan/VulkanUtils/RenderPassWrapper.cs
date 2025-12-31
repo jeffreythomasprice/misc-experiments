@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using Experiment.VulkanUtils;
+using Microsoft.Extensions.DependencyModel;
 using Silk.NET.Core;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Core.Native;
@@ -49,6 +50,16 @@ public sealed unsafe class RenderPassWrapper : IDisposable
             PColorAttachments = &colorAttachmentRef,
         };
 
+        var dependency = new SubpassDependency()
+        {
+            SrcSubpass = Vk.SubpassExternal,
+            DstSubpass = 0,
+            SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+            SrcAccessMask = 0,
+            DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+            DstAccessMask = AccessFlags.ColorAttachmentWriteBit,
+        };
+
         var renderPassInfo = new RenderPassCreateInfo()
         {
             SType = StructureType.RenderPassCreateInfo,
@@ -56,6 +67,8 @@ public sealed unsafe class RenderPassWrapper : IDisposable
             PAttachments = &colorAttachment,
             SubpassCount = 1,
             PSubpasses = &subpass,
+            DependencyCount = 1,
+            PDependencies = &dependency,
         };
 
         if (

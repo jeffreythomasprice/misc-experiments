@@ -20,7 +20,7 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
     private readonly Vk vk;
     private readonly DeviceWrapper device;
     private readonly CommandPoolWrapper commandPool;
-    private readonly CommandBuffer commandBuffer;
+    public readonly CommandBuffer CommandBuffer;
 
     public CommandBufferWrapper(
         Vk vk,
@@ -44,7 +44,7 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
             CommandBufferCount = 1,
         };
 
-        fixed (CommandBuffer* commandBufferPtr = &commandBuffer)
+        fixed (CommandBuffer* commandBufferPtr = &CommandBuffer)
         {
             if (
                 vk.AllocateCommandBuffers(device.Device, in allocInfo, commandBufferPtr)
@@ -60,7 +60,7 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
             SType = StructureType.CommandBufferBeginInfo,
         };
 
-        if (vk.BeginCommandBuffer(commandBuffer, in beginInfo) != Result.Success)
+        if (vk.BeginCommandBuffer(CommandBuffer, in beginInfo) != Result.Success)
         {
             throw new Exception("failed to begin recording command buffer");
         }
@@ -87,15 +87,16 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
         renderPassInfo.ClearValueCount = 1;
         renderPassInfo.PClearValues = &clearColor;
 
-        vk.CmdBeginRenderPass(commandBuffer, &renderPassInfo, SubpassContents.Inline);
+        vk.CmdBeginRenderPass(CommandBuffer, &renderPassInfo, SubpassContents.Inline);
         vk.CmdBindPipeline(
-            commandBuffer,
+            CommandBuffer,
             PipelineBindPoint.Graphics,
             graphicsPipeline.GraphicsPipeline
         );
-        vk.CmdDraw(commandBuffer, 3, 1, 0, 0);
-        vk.CmdEndRenderPass(commandBuffer);
-        if (vk.EndCommandBuffer(commandBuffer) != Result.Success)
+        vk.CmdDraw(CommandBuffer, 3, 1, 0, 0);
+        vk.CmdEndRenderPass(CommandBuffer);
+
+        if (vk.EndCommandBuffer(CommandBuffer) != Result.Success)
         {
             throw new Exception("failed to record command buffer");
         }
@@ -103,7 +104,7 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
 
     public void Dispose()
     {
-        fixed (CommandBuffer* commandBufferPtr = &commandBuffer)
+        fixed (CommandBuffer* commandBufferPtr = &CommandBuffer)
         {
             vk.FreeCommandBuffers(device.Device, commandPool.CommandPool, 1, commandBufferPtr);
         }
