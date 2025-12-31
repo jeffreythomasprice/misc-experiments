@@ -1,8 +1,6 @@
 namespace Experiment.VulkanUtils;
 
-using System.Reflection.Metadata;
 using Microsoft.Extensions.Logging;
-using Silk.NET.Core;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;

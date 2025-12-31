@@ -3,7 +3,6 @@ namespace Experiment.VulkanUtils;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Silk.NET.Vulkan;
-using Silk.NET.Vulkan.Extensions.KHR;
 
 public unsafe class PhysicalDeviceWrapper
 {

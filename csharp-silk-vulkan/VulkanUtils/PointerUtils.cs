@@ -1,4 +1,3 @@
-using System.Text;
 using Silk.NET.Core.Native;
 
 namespace Experiment.VulkanUtils;

@@ -1,31 +1,17 @@
 namespace Experiment.VulkanUtils;
 
 using System;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Text;
-using Experiment.VulkanUtils;
-using Microsoft.Extensions.DependencyModel;
-using Silk.NET.Core;
-using Silk.NET.Core.Contexts;
-using Silk.NET.Core.Native;
-using Silk.NET.Maths;
 using Silk.NET.Vulkan;
-using Silk.NET.Vulkan.Extensions.EXT;
-using Silk.NET.Vulkan.Extensions.KHR;
-using Silk.NET.Windowing;
 
 public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
 {
-    // TODO configurable?
-    private const int MAX_FRAMES_IN_FLIGHT = 2;
-
     private readonly Vk vk;
     private readonly DeviceWrapper device;
     private readonly SwapchainWrapper swapchain;
     private readonly RenderPassWrapper renderPass;
     private readonly GraphicsPipelineWrapper graphicsPipeline;
     private readonly CommandPoolWrapper commandPool;
+    private readonly int maxFramesInFlight;
 
     // TODO combine into a struct?
     private readonly List<ImageViewWrapper> swapchainImageViews;
@@ -44,7 +30,8 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
         GraphicsPipelineWrapper graphicsPipeline,
-        CommandPoolWrapper commandPool
+        CommandPoolWrapper commandPool,
+        int maxFramesInFlight = 2
     )
     {
         this.vk = vk;
@@ -53,6 +40,14 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
         this.renderPass = renderPass;
         this.graphicsPipeline = graphicsPipeline;
         this.commandPool = commandPool;
+        this.maxFramesInFlight = maxFramesInFlight;
+
+        if (maxFramesInFlight <= 0)
+        {
+            throw new Exception(
+                $"must provide at least one frame in flight, got {maxFramesInFlight}"
+            );
+        }
 
         swapchainImageViews =
         [
@@ -75,9 +70,9 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             )),
         ];
 
-        imageAvailableSemaphores = new Semaphore[MAX_FRAMES_IN_FLIGHT];
-        renderFinishedSemaphores = new Semaphore[MAX_FRAMES_IN_FLIGHT];
-        inFlightFences = new Fence[MAX_FRAMES_IN_FLIGHT];
+        imageAvailableSemaphores = new Semaphore[this.maxFramesInFlight];
+        renderFinishedSemaphores = new Semaphore[this.maxFramesInFlight];
+        inFlightFences = new Fence[this.maxFramesInFlight];
         imagesInFlight = new Fence[swapchain.Images.Length];
 
         SemaphoreCreateInfo semaphoreInfo = new() { SType = StructureType.SemaphoreCreateInfo };
@@ -88,7 +83,7 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             Flags = FenceCreateFlags.SignaledBit,
         };
 
-        for (var i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        for (var i = 0; i < this.maxFramesInFlight; i++)
         {
             // TODO clean up partial allocations if any fail
             if (
@@ -117,7 +112,7 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
     {
         vk.DeviceWaitIdle(device.Device);
 
-        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        for (int i = 0; i < maxFramesInFlight; i++)
         {
             vk.DestroySemaphore(device.Device, renderFinishedSemaphores[i], null);
             vk.DestroySemaphore(device.Device, imageAvailableSemaphores[i], null);
@@ -216,6 +211,6 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             swapchain.KhrSwapchain.QueuePresent(device.PresentQueue, in presentInfo);
         }
 
-        currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+        currentFrame = (currentFrame + 1) % maxFramesInFlight;
     }
 }

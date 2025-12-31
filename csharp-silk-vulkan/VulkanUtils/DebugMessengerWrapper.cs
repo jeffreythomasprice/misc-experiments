@@ -2,14 +2,8 @@ namespace Experiment.VulkanUtils;
 
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
-using Silk.NET.Core;
-using Silk.NET.Core.Contexts;
-using Silk.NET.Core.Native;
-using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
-using Silk.NET.Vulkan.Extensions.KHR;
-using Silk.NET.Windowing;
 
 public sealed unsafe class DebugMessengerWrapper : IDisposable
 {

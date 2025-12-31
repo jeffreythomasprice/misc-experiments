@@ -1,6 +1,5 @@
 namespace Experiment;
 
-using System.Reflection.Metadata;
 using Microsoft.Extensions.Logging;
 
 public static class LoggerUtils
