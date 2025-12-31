@@ -16,11 +16,11 @@ using Silk.NET.Windowing;
 public sealed unsafe class SwapchainWrapper : IDisposable
 {
     private readonly DeviceWrapper device;
-    private readonly KhrSwapchain khrSwapchain;
-    private readonly SwapchainKHR swapchainKhr;
-    private readonly Image[] images;
-    private readonly Format format;
-    private readonly Extent2D extent;
+    public readonly KhrSwapchain KhrSwapchain;
+    public readonly SwapchainKHR SwapchainKhr;
+    public readonly Image[] Images;
+    public readonly Format Format;
+    public readonly Extent2D Extent;
 
     public SwapchainWrapper(
         IWindow window,
@@ -47,7 +47,7 @@ public sealed unsafe class SwapchainWrapper : IDisposable
             imageCount = capabilities.MaxImageCount;
         }
 
-        SwapchainCreateInfoKHR createInfo = new()
+        var createInfo = new SwapchainCreateInfoKHR()
         {
             SType = StructureType.SwapchainCreateInfoKhr,
             Surface = surface.SurfaceKHR,
@@ -88,38 +88,38 @@ public sealed unsafe class SwapchainWrapper : IDisposable
             OldSwapchain = default,
         };
 
-        if (!vk.TryGetDeviceExtension(instance.Instance, device.Device, out khrSwapchain))
+        if (!vk.TryGetDeviceExtension(instance.Instance, device.Device, out KhrSwapchain))
         {
             throw new NotSupportedException("VK_KHR_swapchain extension not found.");
         }
 
         if (
-            khrSwapchain.CreateSwapchain(device.Device, in createInfo, null, out swapchainKhr)
+            KhrSwapchain.CreateSwapchain(device.Device, in createInfo, null, out SwapchainKhr)
             != Result.Success
         )
         {
             throw new Exception("failed to create swap chain!");
         }
 
-        khrSwapchain.GetSwapchainImages(device.Device, swapchainKhr, ref imageCount, null);
-        images = new Image[imageCount];
-        fixed (Image* swapChainImagesPtr = images)
+        KhrSwapchain.GetSwapchainImages(device.Device, SwapchainKhr, ref imageCount, null);
+        Images = new Image[imageCount];
+        fixed (Image* swapChainImagesPtr = Images)
         {
-            khrSwapchain.GetSwapchainImages(
+            KhrSwapchain.GetSwapchainImages(
                 device.Device,
-                swapchainKhr,
+                SwapchainKhr,
                 ref imageCount,
                 swapChainImagesPtr
             );
         }
 
-        format = surfaceFormat.Format;
-        this.extent = extent;
+        Format = surfaceFormat.Format;
+        this.Extent = extent;
     }
 
     public void Dispose()
     {
-        khrSwapchain.DestroySwapchain(device.Device, swapchainKhr, null);
+        KhrSwapchain.DestroySwapchain(device.Device, SwapchainKhr, null);
     }
 
     private static SurfaceFormatKHR GetBestSurfaceFormat(IReadOnlyList<SurfaceFormatKHR> formats)

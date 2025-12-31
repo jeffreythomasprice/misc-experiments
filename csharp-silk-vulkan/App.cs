@@ -47,6 +47,7 @@ public sealed unsafe partial class App : IDisposable
     private readonly PhysicalDeviceWrapper physicalDevice;
     private readonly DeviceWrapper device;
     private readonly SwapchainWrapper swapchain;
+    private readonly List<ImageViewWrapper> swapchainImageViews;
 
     private bool isCleanupDone = false;
 
@@ -88,6 +89,9 @@ public sealed unsafe partial class App : IDisposable
         physicalDevice = PhysicalDeviceWrapper.FindBest(vk, instance.Instance, surface);
         device = new DeviceWrapper(vk, physicalDevice, enableValidationLayers);
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
+        swapchainImageViews = swapchain
+            .Images.Select(image => new ImageViewWrapper(vk, device, swapchain.Format, image))
+            .ToList();
 
         eventHandler.OnLoad(new(this));
     }
@@ -134,6 +138,10 @@ public sealed unsafe partial class App : IDisposable
 
         eventHandler.OnUnload(new(this));
 
+        foreach (var imageView in swapchainImageViews)
+        {
+            imageView.Dispose();
+        }
         swapchain.Dispose();
         device.Dispose();
         surface.Dispose();
