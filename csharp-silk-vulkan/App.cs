@@ -10,7 +10,7 @@ using Silk.NET.Windowing;
 // TODO handle keyboard events
 
 // TODO next tutorial
-// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/18_VertexInput/Program.cs
+// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/20_StagingBuffer/Program.cs
 
 public sealed unsafe partial class App : IDisposable
 {
@@ -38,6 +38,7 @@ public sealed unsafe partial class App : IDisposable
     private readonly SurfaceWrapper surface;
     private readonly PhysicalDeviceWrapper physicalDevice;
     private readonly DeviceWrapper device;
+    private readonly BufferWrapper<Vertex2DRgba> vertexBuffer;
 
     // vulkan stuff that gets recreated periodically, e.g. when display resizes
     private SwapchainWrapper? swapchain;
@@ -87,6 +88,17 @@ public sealed unsafe partial class App : IDisposable
         surface = new SurfaceWrapper(window.VkSurface, vk, instance);
         physicalDevice = PhysicalDeviceWrapper.FindBest(vk, instance.Instance, surface);
         device = new DeviceWrapper(vk, physicalDevice, enableValidationLayers);
+        vertexBuffer = new BufferWrapper<Vertex2DRgba>(
+            vk,
+            physicalDevice,
+            device,
+            [
+                new(new Vector2D<float>(0.0f, -0.5f), new Vector4D<float>(1.0f, 0.0f, 0.0f, 1.0f)),
+                new(new Vector2D<float>(0.5f, 0.5f), new Vector4D<float>(0.0f, 1.0f, 0.0f, 1.0f)),
+                new(new Vector2D<float>(-0.5f, 0.5f), new Vector4D<float>(0.0f, 0.0f, 1.0f, 1.0f)),
+            ],
+            BufferUsageFlags.VertexBufferBit
+        );
 
         // TODO event handler onLoad should happen only after we make transient stuff?
         // eventHandler.OnLoad(new(this));
@@ -112,7 +124,21 @@ public sealed unsafe partial class App : IDisposable
             RecreateStuffThatGetsRecreatedAllTheTime();
         }
 
-        synchronizedQueueSubmitterAndPresenter?.OnRender(out needsRecreate);
+        synchronizedQueueSubmitterAndPresenter?.OnRender(
+            (commandBuffer) =>
+            {
+                // TODO helper method to automate offsets and draw?
+                var vertexBuffers = new Silk.NET.Vulkan.Buffer[] { vertexBuffer.Buffer };
+                var offsets = new ulong[] { 0 };
+                fixed (ulong* offsetsPtr = offsets)
+                fixed (Silk.NET.Vulkan.Buffer* vertexBuffersPtr = vertexBuffers)
+                {
+                    vk.CmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffersPtr, offsetsPtr);
+                }
+                vk.CmdDraw(commandBuffer, (uint)vertexBuffer.Count, 1, 0, 0);
+            },
+            out needsRecreate
+        );
 
         // TODO fix event handler stuff to make it possible to make new command queues easily?
         // eventHandler.OnRender(new(this), TimeSpan.FromSeconds(deltaTime));
@@ -141,6 +167,7 @@ public sealed unsafe partial class App : IDisposable
 
         CleanupStuffThatGetsRecreatedAllTheTime();
 
+        vertexBuffer.Dispose();
         device.Dispose();
         surface.Dispose();
         debugMessenger.Dispose();

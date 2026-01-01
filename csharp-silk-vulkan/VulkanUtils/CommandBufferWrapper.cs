@@ -17,7 +17,8 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
         RenderPassWrapper renderPass,
         GraphicsPipelineWrapper graphicsPipeline,
         FramebufferWrapper framebuffer,
-        CommandPoolWrapper commandPool
+        CommandPoolWrapper commandPool,
+        Action<CommandBuffer> renderPassCallback
     )
     {
         this.vk = vk;
@@ -76,12 +77,15 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
         renderPassInfo.PClearValues = &clearColor;
 
         vk.CmdBeginRenderPass(CommandBuffer, &renderPassInfo, SubpassContents.Inline);
+
         vk.CmdBindPipeline(
             CommandBuffer,
             PipelineBindPoint.Graphics,
             graphicsPipeline.GraphicsPipeline
         );
-        vk.CmdDraw(CommandBuffer, 3, 1, 0, 0);
+
+        renderPassCallback(CommandBuffer);
+
         vk.CmdEndRenderPass(CommandBuffer);
 
         if (vk.EndCommandBuffer(CommandBuffer) != Result.Success)

@@ -138,10 +138,11 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
     /// <summary>
     ///
     /// </summary>
+    /// <param name="renderPassCallback">should do stuff like CmdBindVertexBuffers and CmdDraw</param>
     /// <param name="needsRecreate">set to true if an error occurred that indicates we need to rebuild everything from swapchain on down</param>
     /// <exception cref="NotImplementedException"></exception>
     /// <exception cref="Exception"></exception>
-    public void OnRender(out bool needsRecreate)
+    public void OnRender(Action<CommandBuffer> renderPassCallback, out bool needsRecreate)
     {
         vk.WaitForFences(device.Device, 1, in inFlightFences[currentFrame], true, ulong.MaxValue);
 
@@ -187,7 +188,8 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             renderPass,
             graphicsPipeline,
             framebuffers[(int)imageIndex],
-            commandPool
+            commandPool,
+            renderPassCallback
         );
         fixed (CommandBuffer* commandBufferPtr = &commandBuffer.CommandBuffer)
         {
