@@ -76,8 +76,6 @@ public sealed unsafe class SwapchainWrapper : IDisposable
             CompositeAlpha = CompositeAlphaFlagsKHR.OpaqueBitKhr,
             PresentMode = presentMode,
             Clipped = true,
-
-            OldSwapchain = default,
         };
 
         if (!vk.TryGetDeviceExtension(instance.Instance, device.Device, out KhrSwapchain))

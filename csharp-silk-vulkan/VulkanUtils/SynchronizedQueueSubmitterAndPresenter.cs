@@ -1,10 +1,13 @@
 namespace Experiment.VulkanUtils;
 
 using System;
+using Microsoft.Extensions.Logging;
 using Silk.NET.Vulkan;
 
 public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
 {
+    private readonly ILogger log;
+
     private readonly Vk vk;
     private readonly DeviceWrapper device;
     private readonly SwapchainWrapper swapchain;
@@ -34,6 +37,8 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
         int maxFramesInFlight = 2
     )
     {
+        log = LoggerUtils.Factory.Value.CreateLogger(GetType());
+
         this.vk = vk;
         this.device = device;
         this.swapchain = swapchain;
@@ -130,12 +135,18 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
         }
     }
 
-    public void OnRender()
+    /// <summary>
+    ///
+    /// </summary>
+    /// <param name="needsRecreate">set to true if an error occurred that indicates we need to rebuild everything from swapchain on down</param>
+    /// <exception cref="NotImplementedException"></exception>
+    /// <exception cref="Exception"></exception>
+    public void OnRender(out bool needsRecreate)
     {
         vk.WaitForFences(device.Device, 1, in inFlightFences[currentFrame], true, ulong.MaxValue);
 
         uint imageIndex = 0;
-        swapchain.KhrSwapchain.AcquireNextImage(
+        var result = swapchain.KhrSwapchain.AcquireNextImage(
             device.Device,
             swapchain.SwapchainKhr,
             ulong.MaxValue,
@@ -143,6 +154,19 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             default,
             ref imageIndex
         );
+        if (result == Result.ErrorOutOfDateKhr)
+        {
+            log.LogDebug(
+                "AcquireNextImage failed with {Result}, signalling we need to recreate",
+                result
+            );
+            needsRecreate = true;
+            return;
+        }
+        else if (result != Result.Success && result != Result.SuboptimalKhr)
+        {
+            throw new Exception($"rendering failed to acquire swap chain image: {result}");
+        }
 
         if (imagesInFlight[imageIndex].Handle != default)
         {
@@ -208,9 +232,23 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
                 PImageIndices = &imageIndex,
             };
 
-            swapchain.KhrSwapchain.QueuePresent(device.PresentQueue, in presentInfo);
+            result = swapchain.KhrSwapchain.QueuePresent(device.PresentQueue, in presentInfo);
+            if (result == Result.ErrorOutOfDateKhr || result == Result.SuboptimalKhr)
+            {
+                log.LogDebug(
+                    "QueuePresent failed with {Result}, signalling we need to recreate",
+                    result
+                );
+                needsRecreate = true;
+            }
+            else if (result != Result.Success)
+            {
+                throw new Exception($"rendering failed to present queue: {result}");
+            }
         }
 
         currentFrame = (currentFrame + 1) % maxFramesInFlight;
+
+        needsRecreate = false;
     }
 }

@@ -7,12 +7,10 @@ using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 
-// TODO handle resize events
-
 // TODO handle keyboard events
 
 // TODO next tutorial
-// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/17_SwapChainRecreation/Program.cs
+// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/18_VertexInput/Program.cs
 
 public sealed unsafe partial class App : IDisposable
 {
@@ -33,19 +31,25 @@ public sealed unsafe partial class App : IDisposable
 
     private readonly IWindow window;
 
+    // vulkan stuff that stays alive forever
     private readonly Vk vk;
     private readonly InstanceWrapper instance;
     private readonly DebugMessengerWrapper debugMessenger;
     private readonly SurfaceWrapper surface;
     private readonly PhysicalDeviceWrapper physicalDevice;
     private readonly DeviceWrapper device;
-    private readonly SwapchainWrapper swapchain;
-    private readonly RenderPassWrapper renderPass;
-    private readonly GraphicsPipelineWrapper graphicsPipeline;
-    private readonly CommandPoolWrapper commandPool;
-    private readonly SynchronizedQueueSubmitterAndPresenter synchronizedQueueSubmitterAndPresenter;
+
+    // vulkan stuff that gets recreated periodically, e.g. when display resizes
+    private SwapchainWrapper? swapchain;
+    private RenderPassWrapper? renderPass;
+    private GraphicsPipelineWrapper? graphicsPipeline;
+    private CommandPoolWrapper? commandPool;
+    private SynchronizedQueueSubmitterAndPresenter? synchronizedQueueSubmitterAndPresenter;
 
     private bool isCleanupDone = false;
+
+    // flag that indicates we might need to recreate stuff next time
+    private bool needsRecreate = true;
 
     public App(IAppEventHandler eventHandler)
     {
@@ -67,9 +71,7 @@ public sealed unsafe partial class App : IDisposable
         // TODO OnUpdate
         window.Render += OnRender;
         window.Closing += OnClosing;
-        // TODO Resize or FramebufferResize?
         window.Resize += OnResize;
-        window.FramebufferResize += OnResize;
 
         window.Initialize();
 
@@ -85,6 +87,99 @@ public sealed unsafe partial class App : IDisposable
         surface = new SurfaceWrapper(window.VkSurface, vk, instance);
         physicalDevice = PhysicalDeviceWrapper.FindBest(vk, instance.Instance, surface);
         device = new DeviceWrapper(vk, physicalDevice, enableValidationLayers);
+
+        // TODO event handler onLoad should happen only after we make transient stuff?
+        // eventHandler.OnLoad(new(this));
+    }
+
+    public void Dispose()
+    {
+        window?.Dispose();
+        Cleanup();
+        GC.SuppressFinalize(this);
+    }
+
+    public void Run()
+    {
+        window.Run();
+    }
+
+    private void OnRender(double deltaTime)
+    {
+        if (needsRecreate)
+        {
+            needsRecreate = false;
+            RecreateStuffThatGetsRecreatedAllTheTime();
+        }
+
+        synchronizedQueueSubmitterAndPresenter?.OnRender(out needsRecreate);
+
+        // TODO fix event handler stuff to make it possible to make new command queues easily?
+        // eventHandler.OnRender(new(this), TimeSpan.FromSeconds(deltaTime));
+    }
+
+    private void OnClosing()
+    {
+        log.LogInformation("Window closing");
+        Cleanup();
+    }
+
+    private void OnResize(Vector2D<int> size)
+    {
+        needsRecreate = true;
+    }
+
+    private void Cleanup()
+    {
+        if (isCleanupDone)
+        {
+            return;
+        }
+        isCleanupDone = true;
+
+        eventHandler.OnUnload(new(this));
+
+        CleanupStuffThatGetsRecreatedAllTheTime();
+
+        device.Dispose();
+        surface.Dispose();
+        debugMessenger.Dispose();
+        instance.Dispose();
+        vk.Dispose();
+    }
+
+    private void CleanupStuffThatGetsRecreatedAllTheTime()
+    {
+        synchronizedQueueSubmitterAndPresenter?.Dispose();
+        commandPool?.Dispose();
+        graphicsPipeline?.Dispose();
+        renderPass?.Dispose();
+        swapchain?.Dispose();
+    }
+
+    private void RecreateStuffThatGetsRecreatedAllTheTime()
+    {
+        var framebufferSize = window.FramebufferSize;
+        log.LogTrace(
+            "recreating swpachain, renderpass, etc., current frame buffer size {FramebufferSize}, current swapchain extent {SwapchainExtentWidth}x{SwapchainExtentHeight}",
+            framebufferSize,
+            swapchain?.Extent.Width,
+            swapchain?.Extent.Height
+        );
+
+        if (
+            framebufferSize.X == swapchain?.Extent.Width
+            && framebufferSize.Y == swapchain?.Extent.Height
+        )
+        {
+            log.LogTrace("framebuffer size matches swapchain extent, no need to recreate");
+            return;
+        }
+
+        vk.DeviceWaitIdle(device.Device);
+
+        CleanupStuffThatGetsRecreatedAllTheTime();
+
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
         renderPass = new RenderPassWrapper(vk, device, swapchain);
         graphicsPipeline = new GraphicsPipelineWrapper(
@@ -104,60 +199,5 @@ public sealed unsafe partial class App : IDisposable
             graphicsPipeline,
             commandPool
         );
-
-        eventHandler.OnLoad(new(this));
-    }
-
-    public void Dispose()
-    {
-        window?.Dispose();
-        Cleanup();
-        GC.SuppressFinalize(this);
-    }
-
-    public void Run()
-    {
-        window.Run();
-    }
-
-    private void OnRender(double deltaTime)
-    {
-        synchronizedQueueSubmitterAndPresenter.OnRender();
-
-        // TODO fix event handler stuff to make it possible to make new command queues easily?
-        // eventHandler.OnRender(new(this), TimeSpan.FromSeconds(deltaTime));
-    }
-
-    private void OnClosing()
-    {
-        log.LogInformation("Window closing");
-        Cleanup();
-    }
-
-    private void OnResize(Vector2D<int> size)
-    {
-        // TODO resize
-    }
-
-    private void Cleanup()
-    {
-        if (isCleanupDone)
-        {
-            return;
-        }
-        isCleanupDone = true;
-
-        eventHandler.OnUnload(new(this));
-
-        synchronizedQueueSubmitterAndPresenter.Dispose();
-        commandPool.Dispose();
-        graphicsPipeline.Dispose();
-        renderPass.Dispose();
-        swapchain.Dispose();
-        device.Dispose();
-        surface.Dispose();
-        debugMessenger.Dispose();
-        instance.Dispose();
-        vk.Dispose();
     }
 }
