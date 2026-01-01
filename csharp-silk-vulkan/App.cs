@@ -14,6 +14,13 @@ using Silk.NET.Windowing;
 
 public sealed unsafe partial class App : IDisposable
 {
+    public record struct CreateOptions
+    {
+        public string Title;
+        public Vector2D<int> Size;
+        public bool FixedSize;
+    }
+
     public class State
     {
         private readonly App app;
@@ -52,18 +59,25 @@ public sealed unsafe partial class App : IDisposable
     // flag that indicates we might need to recreate stuff next time
     private bool needsRecreate = true;
 
-    public App(IAppEventHandler eventHandler)
+    public App(CreateOptions createOptions, IAppEventHandler eventHandler)
     {
         log = LoggerUtils.Factory.Value.CreateLogger(GetType());
         this.eventHandler = eventHandler;
 
-        window = Window.Create(
-            WindowOptions.DefaultVulkan with
-            {
-                Size = new Vector2D<int>(1280, 720),
-                Title = "Experiment",
-            }
-        );
+        var windowOptions = WindowOptions.DefaultVulkan with
+        {
+            Title = createOptions.Title,
+            Size = createOptions.Size,
+        };
+        if (createOptions.FixedSize)
+        {
+            windowOptions.WindowBorder = WindowBorder.Fixed;
+        }
+        window = Window.Create(windowOptions);
+        if (createOptions.FixedSize)
+        {
+            window.Center(Monitor.GetMainMonitor(null));
+        }
 
         /*
         don't rely on the OnLoad callback, we have to call Initialize manually before we can init Vulkan stuff, and we need that to call the

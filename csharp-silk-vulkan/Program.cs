@@ -4,7 +4,15 @@ using Microsoft.Extensions.Logging;
 var logger = LoggerUtils.Factory.Value.CreateLogger<Program>();
 logger.LogInformation("start");
 
-using var app = new App(new EventHandler());
+using var app = new App(
+    new App.CreateOptions
+    {
+        Title = "Experiment",
+        Size = new(1280, 720),
+        FixedSize = false,
+    },
+    new EventHandler()
+);
 app.Run();
 
 unsafe class EventHandler : IAppEventHandler
