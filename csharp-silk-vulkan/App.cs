@@ -50,7 +50,7 @@ public sealed unsafe partial class App : IDisposable
     // vulkan stuff that gets recreated periodically, e.g. when display resizes
     private SwapchainWrapper? swapchain;
     private RenderPassWrapper? renderPass;
-    private GraphicsPipelineWrapper? graphicsPipeline;
+    private GraphicsPipelineWrapper<Vertex2DRgba>? graphicsPipeline;
     private CommandPoolWrapper? commandPool;
     private SynchronizedQueueSubmitterAndPresenter? synchronizedQueueSubmitterAndPresenter;
 
@@ -138,21 +138,31 @@ public sealed unsafe partial class App : IDisposable
             RecreateStuffThatGetsRecreatedAllTheTime();
         }
 
-        synchronizedQueueSubmitterAndPresenter?.OnRender(
-            (commandBuffer) =>
-            {
-                // TODO helper method to automate offsets and draw?
-                var vertexBuffers = new Silk.NET.Vulkan.Buffer[] { vertexBuffer.Buffer };
-                var offsets = new ulong[] { 0 };
-                fixed (ulong* offsetsPtr = offsets)
-                fixed (Silk.NET.Vulkan.Buffer* vertexBuffersPtr = vertexBuffers)
+        if (graphicsPipeline is not null)
+        {
+            synchronizedQueueSubmitterAndPresenter?.OnRender(
+                (commandBuffer) =>
                 {
-                    vk.CmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffersPtr, offsetsPtr);
-                }
-                vk.CmdDraw(commandBuffer, (uint)vertexBuffer.Count, 1, 0, 0);
-            },
-            out needsRecreate
-        );
+                    // TODO defer to event handler
+                    vk.CmdBindPipeline(
+                        commandBuffer,
+                        PipelineBindPoint.Graphics,
+                        graphicsPipeline.GraphicsPipeline
+                    );
+                    // TODO helper method to automate offsets and draw?
+                    var vertexBuffers = new Silk.NET.Vulkan.Buffer[] { vertexBuffer.Buffer };
+                    var offsets = new ulong[] { 0 };
+                    fixed (ulong* offsetsPtr = offsets)
+                    fixed (Silk.NET.Vulkan.Buffer* vertexBuffersPtr = vertexBuffers)
+                    {
+                        vk.CmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffersPtr, offsetsPtr);
+                    }
+
+                    vk.CmdDraw(commandBuffer, (uint)vertexBuffer.Count, 1, 0, 0);
+                },
+                out needsRecreate
+            );
+        }
 
         // TODO fix event handler stuff to make it possible to make new command queues easily?
         // eventHandler.OnRender(new(this), TimeSpan.FromSeconds(deltaTime));
@@ -223,7 +233,7 @@ public sealed unsafe partial class App : IDisposable
 
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
         renderPass = new RenderPassWrapper(vk, device, swapchain);
-        graphicsPipeline = new GraphicsPipelineWrapper(
+        graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DRgba>(
             vk,
             device,
             swapchain,
@@ -237,7 +247,6 @@ public sealed unsafe partial class App : IDisposable
             device,
             swapchain,
             renderPass,
-            graphicsPipeline,
             commandPool
         );
     }

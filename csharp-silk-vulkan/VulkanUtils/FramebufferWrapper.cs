@@ -7,6 +7,8 @@ public sealed unsafe class FramebufferWrapper : IDisposable
 {
     private readonly Vk vk;
     private readonly DeviceWrapper device;
+    private readonly ImageViewWrapper imageView;
+    private readonly bool ownsImageView;
     public readonly Framebuffer Framebuffer;
 
     public FramebufferWrapper(
@@ -14,11 +16,14 @@ public sealed unsafe class FramebufferWrapper : IDisposable
         DeviceWrapper device,
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
-        ImageViewWrapper imageView
+        ImageViewWrapper imageView,
+        bool ownsImageView = false
     )
     {
         this.vk = vk;
         this.device = device;
+        this.imageView = imageView;
+        this.ownsImageView = ownsImageView;
 
         fixed (ImageView* attachment = &imageView.ImageView)
         {
@@ -43,8 +48,28 @@ public sealed unsafe class FramebufferWrapper : IDisposable
         }
     }
 
+    public FramebufferWrapper(
+        Vk vk,
+        DeviceWrapper device,
+        SwapchainWrapper swapchain,
+        RenderPassWrapper renderPass,
+        Image image
+    )
+        : this(
+            vk,
+            device,
+            swapchain,
+            renderPass,
+            new ImageViewWrapper(vk, device, swapchain.Format, image),
+            true
+        ) { }
+
     public void Dispose()
     {
         vk.DestroyFramebuffer(device.Device, Framebuffer, null);
+        if (ownsImageView)
+        {
+            imageView.Dispose();
+        }
     }
 }

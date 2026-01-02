@@ -12,15 +12,11 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
     private readonly DeviceWrapper device;
     private readonly SwapchainWrapper swapchain;
     private readonly RenderPassWrapper renderPass;
-    private readonly GraphicsPipelineWrapper graphicsPipeline;
     private readonly CommandPoolWrapper commandPool;
     private readonly int maxFramesInFlight;
 
-    // TODO combine into a struct?
-    private readonly List<ImageViewWrapper> swapchainImageViews;
     private readonly List<FramebufferWrapper> framebuffers;
 
-    // TODO combine sync primitives into a shared struct? do they really go together in that way?
     private readonly Semaphore[] imageAvailableSemaphores;
     private readonly Semaphore[] renderFinishedSemaphores;
     private readonly Fence[] inFlightFences;
@@ -32,7 +28,6 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
         DeviceWrapper device,
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
-        GraphicsPipelineWrapper graphicsPipeline,
         CommandPoolWrapper commandPool,
         int maxFramesInFlight = 2
     )
@@ -43,7 +38,6 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
         this.device = device;
         this.swapchain = swapchain;
         this.renderPass = renderPass;
-        this.graphicsPipeline = graphicsPipeline;
         this.commandPool = commandPool;
         this.maxFramesInFlight = maxFramesInFlight;
 
@@ -54,24 +48,14 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             );
         }
 
-        swapchainImageViews =
-        [
-            .. swapchain.Images.Select(image => new ImageViewWrapper(
-                vk,
-                device,
-                swapchain.Format,
-                image
-            )),
-        ];
-
         framebuffers =
         [
-            .. swapchainImageViews.Select(imageView => new FramebufferWrapper(
+            .. swapchain.Images.Select(image => new FramebufferWrapper(
                 vk,
                 device,
                 swapchain,
                 renderPass,
-                imageView
+                image
             )),
         ];
 
@@ -88,28 +72,70 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             Flags = FenceCreateFlags.SignaledBit,
         };
 
-        for (var i = 0; i < this.maxFramesInFlight; i++)
+        try
         {
-            // TODO clean up partial allocations if any fail
-            if (
-                vk.CreateSemaphore(
-                    device.Device,
-                    in semaphoreInfo,
-                    null,
-                    out imageAvailableSemaphores[i]
-                ) != Result.Success
-                || vk.CreateSemaphore(
-                    device.Device,
-                    in semaphoreInfo,
-                    null,
-                    out renderFinishedSemaphores[i]
-                ) != Result.Success
-                || vk.CreateFence(device.Device, in fenceInfo, null, out inFlightFences[i])
-                    != Result.Success
-            )
+            for (var i = 0; i < this.maxFramesInFlight; i++)
             {
-                throw new Exception("failed to create synchronization objects for a frame");
+                if (
+                    vk.CreateSemaphore(
+                        device.Device,
+                        in semaphoreInfo,
+                        null,
+                        out imageAvailableSemaphores[i]
+                    ) != Result.Success
+                )
+                {
+                    throw new Exception("failed to create semaphore");
+                }
+
+                if (
+                    vk.CreateSemaphore(
+                        device.Device,
+                        in semaphoreInfo,
+                        null,
+                        out renderFinishedSemaphores[i]
+                    ) != Result.Success
+                )
+                {
+                    throw new Exception("failed to create semaphore");
+                }
+
+                if (
+                    vk.CreateFence(device.Device, in fenceInfo, null, out inFlightFences[i])
+                    != Result.Success
+                )
+                {
+                    throw new Exception("failed to create fence");
+                }
             }
+        }
+        catch
+        {
+            foreach (var fence in inFlightFences)
+            {
+                if (fence.Handle != default)
+                {
+                    vk.DestroyFence(device.Device, fence, null);
+                }
+            }
+
+            foreach (var semaphore in renderFinishedSemaphores)
+            {
+                if (semaphore.Handle != default)
+                {
+                    vk.DestroySemaphore(device.Device, semaphore, null);
+                }
+            }
+
+            foreach (var semaphore in imageAvailableSemaphores)
+            {
+                if (semaphore.Handle != default)
+                {
+                    vk.DestroySemaphore(device.Device, semaphore, null);
+                }
+            }
+
+            throw;
         }
     }
 
@@ -117,21 +143,24 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
     {
         vk.DeviceWaitIdle(device.Device);
 
-        for (int i = 0; i < maxFramesInFlight; i++)
+        foreach (var fence in inFlightFences)
         {
-            vk.DestroySemaphore(device.Device, renderFinishedSemaphores[i], null);
-            vk.DestroySemaphore(device.Device, imageAvailableSemaphores[i], null);
-            vk.DestroyFence(device.Device, inFlightFences[i], null);
+            vk.DestroyFence(device.Device, fence, null);
+        }
+
+        foreach (var semaphore in renderFinishedSemaphores)
+        {
+            vk.DestroySemaphore(device.Device, semaphore, null);
+        }
+
+        foreach (var semaphore in imageAvailableSemaphores)
+        {
+            vk.DestroySemaphore(device.Device, semaphore, null);
         }
 
         foreach (var framebuffer in framebuffers)
         {
             framebuffer.Dispose();
-        }
-
-        foreach (var imageView in swapchainImageViews)
-        {
-            imageView.Dispose();
         }
     }
 
@@ -180,13 +209,11 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
         var waitSemaphores = stackalloc[] { imageAvailableSemaphores[currentFrame] };
         var waitStages = stackalloc[] { PipelineStageFlags.ColorAttachmentOutputBit };
 
-        // TODO the constructor for command buffer is presumably where custom per-frame rendering instructions will go
         var commandBuffer = new CommandBufferWrapper(
             vk,
             device,
             swapchain,
             renderPass,
-            graphicsPipeline,
             framebuffers[(int)imageIndex],
             commandPool,
             renderPassCallback

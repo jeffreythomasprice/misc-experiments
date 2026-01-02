@@ -15,7 +15,6 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
         DeviceWrapper device,
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
-        GraphicsPipelineWrapper graphicsPipeline,
         FramebufferWrapper framebuffer,
         CommandPoolWrapper commandPool,
         Action<CommandBuffer> renderPassCallback
@@ -77,12 +76,6 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
         renderPassInfo.PClearValues = &clearColor;
 
         vk.CmdBeginRenderPass(CommandBuffer, &renderPassInfo, SubpassContents.Inline);
-
-        vk.CmdBindPipeline(
-            CommandBuffer,
-            PipelineBindPoint.Graphics,
-            graphicsPipeline.GraphicsPipeline
-        );
 
         renderPassCallback(CommandBuffer);
 

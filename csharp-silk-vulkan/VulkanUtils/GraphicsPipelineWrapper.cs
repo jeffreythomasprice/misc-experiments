@@ -3,7 +3,8 @@ namespace Experiment.VulkanUtils;
 using System;
 using Silk.NET.Vulkan;
 
-public sealed unsafe class GraphicsPipelineWrapper : IDisposable
+public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
+    where TVertex : IBufferBindable
 {
     private readonly Vk vk;
     private readonly DeviceWrapper device;
@@ -49,9 +50,8 @@ public sealed unsafe class GraphicsPipelineWrapper : IDisposable
 
         var shaderStages = stackalloc[] { vertShaderStageInfo, fragShaderStageInfo };
 
-        // TODO which vertex type to use should be generic
-        var bindingDescription = Vertex2DRgba.GetBindingDescription();
-        var attributeDescriptions = Vertex2DRgba.GetAttributeDescriptions();
+        VertexInputBindingDescription bindingDescription = TVertex.BindingDescription;
+        var attributeDescriptions = TVertex.AttributeDescriptions;
         fixed (VertexInputAttributeDescription* attributeDescriptionsPtr = attributeDescriptions)
         {
             var vertexInputInfo = new PipelineVertexInputStateCreateInfo()

@@ -29,7 +29,6 @@ public sealed unsafe class ShaderModuleWrapper : IDisposable
                 != Result.Success
             )
             {
-                // TODO is it possible to get a linking error log?
                 throw new Exception("failed to create shader module");
             }
         }

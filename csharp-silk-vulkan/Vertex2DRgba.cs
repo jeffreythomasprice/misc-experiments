@@ -2,15 +2,17 @@ namespace Experiment;
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Experiment.VulkanUtils;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 
 public readonly struct Vertex2DRgba(Vector2D<float> position, Vector4D<float> color)
+    : IBufferBindable
 {
     public readonly Vector2D<float> Position = position;
     public readonly Vector4D<float> Color = color;
 
-    public static VertexInputBindingDescription GetBindingDescription() =>
+    public static VertexInputBindingDescription BindingDescription =>
         new()
         {
             Binding = 0,
@@ -18,7 +20,7 @@ public readonly struct Vertex2DRgba(Vector2D<float> position, Vector4D<float> co
             InputRate = VertexInputRate.Vertex,
         };
 
-    public static VertexInputAttributeDescription[] GetAttributeDescriptions() =>
+    public static VertexInputAttributeDescription[] AttributeDescriptions =>
         [
             new VertexInputAttributeDescription()
             {
