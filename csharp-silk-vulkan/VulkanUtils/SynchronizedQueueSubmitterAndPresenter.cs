@@ -171,7 +171,7 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
     /// <param name="needsRecreate">set to true if an error occurred that indicates we need to rebuild everything from swapchain on down</param>
     /// <exception cref="NotImplementedException"></exception>
     /// <exception cref="Exception"></exception>
-    public void OnRender(Action<CommandBuffer> renderPassCallback, out bool needsRecreate)
+    public void OnRender(Action<CommandBufferWrapper> renderPassCallback, out bool needsRecreate)
     {
         vk.WaitForFences(device.Device, 1, in inFlightFences[currentFrame], true, ulong.MaxValue);
 

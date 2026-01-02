@@ -22,7 +22,7 @@ public sealed unsafe partial class App : IDisposable
 
     public class State
     {
-        private readonly App app;
+        protected readonly App app;
 
         public State(App app)
         {
@@ -35,7 +35,26 @@ public sealed unsafe partial class App : IDisposable
             app.window.Close();
         }
 
-        // TODO props here
+        public Vk Vk => app.vk;
+
+        public PhysicalDeviceWrapper PhysicalDevice => app.physicalDevice;
+
+        public DeviceWrapper Device => app.device;
+    }
+
+    public class GraphicsReadyState : State
+    {
+        public GraphicsReadyState(App app)
+            : base(app) { }
+
+        public SwapchainWrapper Swapchain =>
+            app.swapchain ?? throw new InvalidOperationException("not initialized yet");
+
+        public RenderPassWrapper RenderPass =>
+            app.renderPass ?? throw new InvalidOperationException("not initialized yet");
+
+        public CommandPoolWrapper CommandPool =>
+            app.commandPool ?? throw new InvalidOperationException("not initialized yet");
     }
 
     private readonly ILogger log;
@@ -50,12 +69,10 @@ public sealed unsafe partial class App : IDisposable
     private readonly SurfaceWrapper surface;
     private readonly PhysicalDeviceWrapper physicalDevice;
     private readonly DeviceWrapper device;
-    private readonly BufferWrapper<Vertex2DRgba> vertexBuffer;
 
     // vulkan stuff that gets recreated periodically, e.g. when display resizes
     private SwapchainWrapper? swapchain;
     private RenderPassWrapper? renderPass;
-    private GraphicsPipelineWrapper<Vertex2DRgba>? graphicsPipeline;
     private CommandPoolWrapper? commandPool;
     private SynchronizedQueueSubmitterAndPresenter? synchronizedQueueSubmitterAndPresenter;
 
@@ -106,17 +123,6 @@ public sealed unsafe partial class App : IDisposable
         surface = new SurfaceWrapper(window.VkSurface, vk, instance);
         physicalDevice = PhysicalDeviceWrapper.FindBest(vk, instance.Instance, surface);
         device = new DeviceWrapper(vk, physicalDevice, enableValidationLayers);
-        vertexBuffer = new BufferWrapper<Vertex2DRgba>(
-            vk,
-            physicalDevice,
-            device, // vulkan stuff that gets recreated periodically, e.g. when display resizes
-            [
-                new(new Vector2D<float>(0.0f, -0.5f), new Vector4D<float>(1.0f, 0.0f, 0.0f, 1.0f)),
-                new(new Vector2D<float>(0.5f, 0.5f), new Vector4D<float>(0.0f, 1.0f, 0.0f, 1.0f)),
-                new(new Vector2D<float>(-0.5f, 0.5f), new Vector4D<float>(0.0f, 0.0f, 1.0f, 1.0f)),
-            ],
-            BufferUsageFlags.VertexBufferBit
-        );
 
         eventHandler.OnLoad(new(this));
     }
@@ -154,34 +160,20 @@ public sealed unsafe partial class App : IDisposable
             RecreateStuffThatGetsRecreatedAllTheTime();
         }
 
-        if (graphicsPipeline is not null)
+        if (swapchainCreatedEventInvokedAtLeastOnce)
         {
             synchronizedQueueSubmitterAndPresenter?.OnRender(
                 (commandBuffer) =>
                 {
-                    // TODO defer to event handler
-                    vk.CmdBindPipeline(
+                    eventHandler.OnRender(
+                        new(this),
                         commandBuffer,
-                        PipelineBindPoint.Graphics,
-                        graphicsPipeline.GraphicsPipeline
+                        TimeSpan.FromSeconds(deltaTime)
                     );
-                    // TODO helper method to automate offsets and draw?
-                    var vertexBuffers = new Silk.NET.Vulkan.Buffer[] { vertexBuffer.Buffer };
-                    var offsets = new ulong[] { 0 };
-                    fixed (ulong* offsetsPtr = offsets)
-                    fixed (Silk.NET.Vulkan.Buffer* vertexBuffersPtr = vertexBuffers)
-                    {
-                        vk.CmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffersPtr, offsetsPtr);
-                    }
-
-                    vk.CmdDraw(commandBuffer, (uint)vertexBuffer.Count, 1, 0, 0);
                 },
                 out needsRecreate
             );
         }
-
-        // TODO fix event handler stuff to make it possible to make new command queues easily?
-        // eventHandler.OnRender(new(this), TimeSpan.FromSeconds(deltaTime));
     }
 
     private void OnUpdate(double deltaTime)
@@ -218,11 +210,10 @@ public sealed unsafe partial class App : IDisposable
         }
         isCleanupDone = true;
 
-        eventHandler.OnUnload(new(this));
-
         CleanupStuffThatGetsRecreatedAllTheTime();
 
-        vertexBuffer.Dispose();
+        eventHandler.OnUnload(new(this));
+
         device.Dispose();
         surface.Dispose();
         debugMessenger.Dispose();
@@ -232,9 +223,13 @@ public sealed unsafe partial class App : IDisposable
 
     private void CleanupStuffThatGetsRecreatedAllTheTime()
     {
+        if (swapchainCreatedEventInvokedAtLeastOnce)
+        {
+            eventHandler.OnSwapchainDestroyed(new(this));
+        }
+
         synchronizedQueueSubmitterAndPresenter?.Dispose();
         commandPool?.Dispose();
-        graphicsPipeline?.Dispose();
         renderPass?.Dispose();
         swapchain?.Dispose();
     }
@@ -260,23 +255,10 @@ public sealed unsafe partial class App : IDisposable
 
         vk.DeviceWaitIdle(device.Device);
 
-        if (swapchainCreatedEventInvokedAtLeastOnce)
-        {
-            eventHandler.OnSwapchainDestroyed(new(this));
-        }
         CleanupStuffThatGetsRecreatedAllTheTime();
 
-        // TODO which parts of this should be owned by the event handler impl?
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
         renderPass = new RenderPassWrapper(vk, device, swapchain);
-        graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DRgba>(
-            vk,
-            device,
-            swapchain,
-            renderPass,
-            File.ReadAllBytes("Shaders/shader.vert.spv"),
-            File.ReadAllBytes("Shaders/shader.frag.spv")
-        );
         commandPool = new CommandPoolWrapper(vk, physicalDevice, device);
         synchronizedQueueSubmitterAndPresenter = new SynchronizedQueueSubmitterAndPresenter(
             vk,

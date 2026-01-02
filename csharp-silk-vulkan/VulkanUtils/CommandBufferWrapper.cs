@@ -17,7 +17,7 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
         RenderPassWrapper renderPass,
         FramebufferWrapper framebuffer,
         CommandPoolWrapper commandPool,
-        Action<CommandBuffer> renderPassCallback
+        Action<CommandBufferWrapper> renderPassCallback
     )
     {
         this.vk = vk;
@@ -77,7 +77,7 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
 
         vk.CmdBeginRenderPass(CommandBuffer, &renderPassInfo, SubpassContents.Inline);
 
-        renderPassCallback(CommandBuffer);
+        renderPassCallback(this);
 
         vk.CmdEndRenderPass(CommandBuffer);
 
