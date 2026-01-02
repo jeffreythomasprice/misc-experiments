@@ -3,11 +3,10 @@ namespace Experiment;
 using System;
 using Experiment.VulkanUtils;
 using Microsoft.Extensions.Logging;
+using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
-
-// TODO handle keyboard events
 
 // TODO next tutorial
 // https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/20_StagingBuffer/Program.cs
@@ -28,6 +27,12 @@ public sealed unsafe partial class App : IDisposable
         public State(App app)
         {
             this.app = app;
+        }
+
+        public void Exit()
+        {
+            app.log.LogDebug("exit");
+            app.window.Close();
         }
 
         // TODO props here
@@ -54,6 +59,8 @@ public sealed unsafe partial class App : IDisposable
     private CommandPoolWrapper? commandPool;
     private SynchronizedQueueSubmitterAndPresenter? synchronizedQueueSubmitterAndPresenter;
 
+    private bool swapchainCreatedEventInvokedAtLeastOnce = false;
+
     private bool isCleanupDone = false;
 
     // flag that indicates we might need to recreate stuff next time
@@ -79,12 +86,9 @@ public sealed unsafe partial class App : IDisposable
             window.Center(Monitor.GetMainMonitor(null));
         }
 
-        /*
-        don't rely on the OnLoad callback, we have to call Initialize manually before we can init Vulkan stuff, and we need that to call the
-        event handler's OnLoad
-        */
-        // TODO OnUpdate
+        window.Load += OnLoad;
         window.Render += OnRender;
+        window.Update += OnUpdate;
         window.Closing += OnClosing;
         window.Resize += OnResize;
 
@@ -105,7 +109,7 @@ public sealed unsafe partial class App : IDisposable
         vertexBuffer = new BufferWrapper<Vertex2DRgba>(
             vk,
             physicalDevice,
-            device,
+            device, // vulkan stuff that gets recreated periodically, e.g. when display resizes
             [
                 new(new Vector2D<float>(0.0f, -0.5f), new Vector4D<float>(1.0f, 0.0f, 0.0f, 1.0f)),
                 new(new Vector2D<float>(0.5f, 0.5f), new Vector4D<float>(0.0f, 1.0f, 0.0f, 1.0f)),
@@ -114,8 +118,7 @@ public sealed unsafe partial class App : IDisposable
             BufferUsageFlags.VertexBufferBit
         );
 
-        // TODO event handler onLoad should happen only after we make transient stuff?
-        // eventHandler.OnLoad(new(this));
+        eventHandler.OnLoad(new(this));
     }
 
     public void Dispose()
@@ -128,6 +131,19 @@ public sealed unsafe partial class App : IDisposable
     public void Run()
     {
         window.Run();
+    }
+
+    private void OnLoad()
+    {
+        log.LogTrace("window load");
+
+        var input = window.CreateInput();
+
+        foreach (var keyboard in input.Keyboards)
+        {
+            keyboard.KeyDown += OnKeyDown;
+            keyboard.KeyUp += OnKeyUp;
+        }
     }
 
     private void OnRender(double deltaTime)
@@ -168,15 +184,30 @@ public sealed unsafe partial class App : IDisposable
         // eventHandler.OnRender(new(this), TimeSpan.FromSeconds(deltaTime));
     }
 
+    private void OnUpdate(double deltaTime)
+    {
+        eventHandler.OnUpdate(new(this), TimeSpan.FromSeconds(deltaTime));
+    }
+
     private void OnClosing()
     {
-        log.LogInformation("Window closing");
+        log.LogTrace("window closing");
         Cleanup();
     }
 
     private void OnResize(Vector2D<int> size)
     {
         needsRecreate = true;
+    }
+
+    private void OnKeyDown(IKeyboard keyboard, Key key, int keyCode)
+    {
+        eventHandler.OnKeyDown(new(this), keyboard, key, keyCode);
+    }
+
+    private void OnKeyUp(IKeyboard keyboard, Key key, int keyCode)
+    {
+        eventHandler.OnKeyUp(new(this), keyboard, key, keyCode);
     }
 
     private void Cleanup()
@@ -229,8 +260,13 @@ public sealed unsafe partial class App : IDisposable
 
         vk.DeviceWaitIdle(device.Device);
 
+        if (swapchainCreatedEventInvokedAtLeastOnce)
+        {
+            eventHandler.OnSwapchainDestroyed(new(this));
+        }
         CleanupStuffThatGetsRecreatedAllTheTime();
 
+        // TODO which parts of this should be owned by the event handler impl?
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
         renderPass = new RenderPassWrapper(vk, device, swapchain);
         graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DRgba>(
@@ -249,5 +285,8 @@ public sealed unsafe partial class App : IDisposable
             renderPass,
             commandPool
         );
+
+        eventHandler.OnSwapchainCreated(new(this));
+        swapchainCreatedEventInvokedAtLeastOnce = true;
     }
 }
