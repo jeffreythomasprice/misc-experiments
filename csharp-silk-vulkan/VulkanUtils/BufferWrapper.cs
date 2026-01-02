@@ -8,9 +8,10 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
 {
     private readonly Vk vk;
     private readonly DeviceWrapper device;
+    public readonly UInt64 SizeInBytes;
+    public readonly int Count;
     public readonly Silk.NET.Vulkan.Buffer Buffer;
     public readonly DeviceMemory BufferMemory;
-    public readonly int Count;
 
     /*
     TODO support copying between two buffers
@@ -29,10 +30,13 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
         this.vk = vk;
         this.device = device;
 
+        SizeInBytes = (UInt64)(data.Length * Marshal.SizeOf<T>());
+        Count = data.Length;
+
         var bufferInfo = new BufferCreateInfo()
         {
             SType = StructureType.BufferCreateInfo,
-            Size = (ulong)(data.Length * Marshal.SizeOf<T>()),
+            Size = SizeInBytes,
             Usage = usage,
             SharingMode = SharingMode.Exclusive,
         };
@@ -63,10 +67,21 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
             throw new Exception("failed to allocate buffer memory");
         }
 
+        CopyDataToBuffer(data);
+    }
+
+    public void Dispose()
+    {
+        vk.FreeMemory(device.Device, BufferMemory, null);
+        vk.DestroyBuffer(device.Device, Buffer, null);
+    }
+
+    public void CopyDataToBuffer(ReadOnlySpan<T> data)
+    {
         vk.BindBufferMemory(device.Device, Buffer, BufferMemory, 0);
 
         void* dataPtr;
-        vk.MapMemory(device.Device, BufferMemory, 0, bufferInfo.Size, 0, &dataPtr);
+        vk.MapMemory(device.Device, BufferMemory, 0, SizeInBytes, 0, &dataPtr);
         try
         {
             data.CopyTo(new Span<T>(dataPtr, data.Length));
@@ -75,14 +90,6 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
         {
             vk.UnmapMemory(device.Device, BufferMemory);
         }
-
-        Count = data.Length;
-    }
-
-    public void Dispose()
-    {
-        vk.FreeMemory(device.Device, BufferMemory, null);
-        vk.DestroyBuffer(device.Device, Buffer, null);
     }
 
     private static uint FindMemoryType(

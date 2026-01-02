@@ -11,11 +11,9 @@ using Silk.NET.Windowing;
 /*
 TODO next tutorial
 https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/22_DescriptorSetLayout/Program.cs
-
-TODO matrix transformations
 */
 
-public sealed unsafe partial class App : IDisposable
+public sealed partial class App : IDisposable
 {
     public record struct CreateOptions
     {
@@ -38,6 +36,8 @@ public sealed unsafe partial class App : IDisposable
             app.log.LogDebug("exit");
             app.window.Close();
         }
+
+        public Vector2D<int> WindowSize => app.window.Size;
 
         public Vk Vk => app.vk;
 
@@ -194,6 +194,8 @@ public sealed unsafe partial class App : IDisposable
     private void OnResize(Vector2D<int> size)
     {
         needsRecreate = true;
+
+        eventHandler.OnResize(new(this));
     }
 
     private void OnKeyDown(IKeyboard keyboard, Key key, int keyCode)

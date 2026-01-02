@@ -15,6 +15,7 @@ public interface IAppEventHandler
         TimeSpan deltaTime
     ) { }
     public void OnUpdate(App.State state, TimeSpan deltaTime) { }
+    public void OnResize(App.State state) { }
     public void OnKeyDown(App.State state, IKeyboard keyboard, Key key, int keyCode) { }
     public void OnKeyUp(App.State state, IKeyboard keyboard, Key key, int keyCode) { }
 }

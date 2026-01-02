@@ -8,7 +8,7 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
 {
     private readonly Vk vk;
     private readonly DeviceWrapper device;
-    private readonly PipelineLayout pipelineLayout;
+    public readonly PipelineLayout PipelineLayout;
     public readonly Pipeline GraphicsPipeline;
 
     public GraphicsPipelineWrapper(
@@ -17,7 +17,8 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
         byte[] vertexShaderSpirvBytes,
-        byte[] fragmentShaderSpirvBytes
+        byte[] fragmentShaderSpirvBytes,
+        DescriptorSetLayoutWrapper[] descriptorSetLayouts
     )
     {
         this.vk = vk;
@@ -133,54 +134,62 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
             colorBlending.BlendConstants[2] = 0;
             colorBlending.BlendConstants[3] = 0;
 
-            var pipelineLayoutInfo = new PipelineLayoutCreateInfo()
-            {
-                SType = StructureType.PipelineLayoutCreateInfo,
-                SetLayoutCount = 0,
-                PushConstantRangeCount = 0,
-            };
-
-            if (
-                vk.CreatePipelineLayout(
-                    device.Device,
-                    in pipelineLayoutInfo,
-                    null,
-                    out pipelineLayout
-                ) != Result.Success
+            fixed (
+                DescriptorSetLayout* descriptorSetLayoutsPtr = descriptorSetLayouts
+                    .Select(x => x.DescriptorSetLayout)
+                    .ToArray()
             )
             {
-                throw new Exception("failed to create pipeline layout");
-            }
+                var pipelineLayoutInfo = new PipelineLayoutCreateInfo()
+                {
+                    SType = StructureType.PipelineLayoutCreateInfo,
+                    SetLayoutCount = (uint)descriptorSetLayouts.Length,
+                    PSetLayouts = descriptorSetLayoutsPtr,
+                    PushConstantRangeCount = 0,
+                };
 
-            var pipelineInfo = new GraphicsPipelineCreateInfo()
-            {
-                SType = StructureType.GraphicsPipelineCreateInfo,
-                StageCount = 2,
-                PStages = shaderStages,
-                PVertexInputState = &vertexInputInfo,
-                PInputAssemblyState = &inputAssembly,
-                PViewportState = &viewportState,
-                PRasterizationState = &rasterizer,
-                PMultisampleState = &multisampling,
-                PColorBlendState = &colorBlending,
-                Layout = pipelineLayout,
-                RenderPass = renderPass.RenderPass,
-                Subpass = 0,
-                BasePipelineHandle = default,
-            };
+                if (
+                    vk.CreatePipelineLayout(
+                        device.Device,
+                        in pipelineLayoutInfo,
+                        null,
+                        out PipelineLayout
+                    ) != Result.Success
+                )
+                {
+                    throw new Exception("failed to create pipeline layout");
+                }
 
-            if (
-                vk.CreateGraphicsPipelines(
-                    device.Device,
-                    default,
-                    1,
-                    in pipelineInfo,
-                    null,
-                    out GraphicsPipeline
-                ) != Result.Success
-            )
-            {
-                throw new Exception("failed to create graphics pipeline");
+                var pipelineInfo = new GraphicsPipelineCreateInfo()
+                {
+                    SType = StructureType.GraphicsPipelineCreateInfo,
+                    StageCount = 2,
+                    PStages = shaderStages,
+                    PVertexInputState = &vertexInputInfo,
+                    PInputAssemblyState = &inputAssembly,
+                    PViewportState = &viewportState,
+                    PRasterizationState = &rasterizer,
+                    PMultisampleState = &multisampling,
+                    PColorBlendState = &colorBlending,
+                    Layout = PipelineLayout,
+                    RenderPass = renderPass.RenderPass,
+                    Subpass = 0,
+                    BasePipelineHandle = default,
+                };
+
+                if (
+                    vk.CreateGraphicsPipelines(
+                        device.Device,
+                        default,
+                        1,
+                        in pipelineInfo,
+                        null,
+                        out GraphicsPipeline
+                    ) != Result.Success
+                )
+                {
+                    throw new Exception("failed to create graphics pipeline");
+                }
             }
         }
     }
@@ -188,6 +197,6 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
     public void Dispose()
     {
         vk.DestroyPipeline(device.Device, GraphicsPipeline, null);
-        vk.DestroyPipelineLayout(device.Device, pipelineLayout, null);
+        vk.DestroyPipelineLayout(device.Device, PipelineLayout, null);
     }
 }
