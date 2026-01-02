@@ -209,6 +209,8 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
         var waitSemaphores = stackalloc[] { imageAvailableSemaphores[currentFrame] };
         var waitStages = stackalloc[] { PipelineStageFlags.ColorAttachmentOutputBit };
 
+        // TODO support multiple render passes, iterate over all
+
         var commandBuffer = new CommandBufferWrapper(
             vk,
             device,

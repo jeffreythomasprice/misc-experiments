@@ -24,6 +24,7 @@ class Demo : IAppEventHandler
     private readonly ILogger<Demo> log;
 
     private BufferWrapper<Vertex2DRgba>? vertexBuffer;
+    private BufferWrapper<UInt16>? indexBuffer;
 
     private GraphicsPipelineWrapper<Vertex2DRgba>? graphicsPipeline;
 
@@ -41,11 +42,19 @@ class Demo : IAppEventHandler
             state.PhysicalDevice,
             state.Device,
             [
-                new(new Vector2D<float>(0.0f, -0.5f), new Vector4D<float>(1.0f, 0.0f, 0.0f, 1.0f)),
-                new(new Vector2D<float>(0.5f, 0.5f), new Vector4D<float>(0.0f, 1.0f, 0.0f, 1.0f)),
-                new(new Vector2D<float>(-0.5f, 0.5f), new Vector4D<float>(0.0f, 0.0f, 1.0f, 1.0f)),
+                new(new Vector2D<float>(-0.5f, -0.5f), new Vector4D<float>(1.0f, 0.0f, 0.0f, 1.0f)),
+                new(new Vector2D<float>(0.5f, -0.5f), new Vector4D<float>(0.0f, 1.0f, 0.0f, 1.0f)),
+                new(new Vector2D<float>(0.5f, 0.5f), new Vector4D<float>(0.0f, 0.0f, 1.0f, 1.0f)),
+                new(new Vector2D<float>(-0.5f, 0.5f), new Vector4D<float>(1.0f, 0.0f, 1.0f, 1.0f)),
             ],
             BufferUsageFlags.VertexBufferBit
+        );
+        indexBuffer = new BufferWrapper<UInt16>(
+            state.Vk,
+            state.PhysicalDevice,
+            state.Device,
+            [0, 1, 2, 2, 3, 0],
+            BufferUsageFlags.IndexBufferBit
         );
     }
 
@@ -77,6 +86,8 @@ class Demo : IAppEventHandler
 
         vertexBuffer?.Dispose();
         vertexBuffer = null;
+        indexBuffer?.Dispose();
+        indexBuffer = null;
     }
 
     public void OnRender(
@@ -114,7 +125,14 @@ class Demo : IAppEventHandler
             }
         }
 
-        state.Vk.CmdDraw(commandBuffer.CommandBuffer, (uint)vertexBuffer.Count, 1, 0, 0);
+        state.Vk.CmdBindIndexBuffer(
+            commandBuffer.CommandBuffer,
+            indexBuffer!.Buffer,
+            0,
+            IndexType.Uint16
+        );
+
+        state.Vk.CmdDrawIndexed(commandBuffer.CommandBuffer, (uint)indexBuffer.Count, 1, 0, 0, 0);
     }
 
     public void OnKeyUp(App.State state, IKeyboard keyboard, Key key, int keyCode)

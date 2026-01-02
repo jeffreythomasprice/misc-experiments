@@ -12,6 +12,12 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
     public readonly DeviceMemory BufferMemory;
     public readonly int Count;
 
+    /*
+    TODO support copying between two buffers
+    this should let us update a buffer in another thread and copy to the display buffer before rendering
+    https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/20_StagingBuffer/Program.cs
+    */
+
     public BufferWrapper(
         Vk vk,
         PhysicalDeviceWrapper physicalDevice,

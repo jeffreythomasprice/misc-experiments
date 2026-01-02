@@ -8,8 +8,12 @@ using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 
-// TODO next tutorial
-// https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/20_StagingBuffer/Program.cs
+/*
+TODO next tutorial
+https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/22_DescriptorSetLayout/Program.cs
+
+TODO matrix transformations
+*/
 
 public sealed unsafe partial class App : IDisposable
 {
