@@ -69,11 +69,6 @@ unsafe class Demo : IAppEventHandler
             [0, 1, 2, 2, 3, 0],
             BufferUsageFlags.IndexBufferBit
         );
-        log.LogInformation(
-            "TODO JEFF window size = {Width}x{Height}",
-            state.WindowSize.X,
-            state.WindowSize.Y
-        );
         uniformBuffer = new BufferWrapper<UniformBufferObject>(
             state.Vk,
             state.PhysicalDevice,
