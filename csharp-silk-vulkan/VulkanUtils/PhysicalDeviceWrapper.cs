@@ -29,7 +29,13 @@ public unsafe class PhysicalDeviceWrapper
                 log.Value.LogDebug("Physical device: {Device}", result);
                 return result;
             })
-            .Where(d => d.GraphicsQueueIndex.HasValue)
+            .Where(d =>
+                d.GraphicsQueueIndex.HasValue
+                && d.PresentQueueIndex.HasValue
+                && d.HasAllRequiredExtensions
+                && SwapchainWrapper.HasSwapchainSupport(surface, d)
+                && d.PhysicalDeviceFeatures.SamplerAnisotropy
+            )
             .OrderBy(d =>
                 d.DeviceType switch
                 {
@@ -134,5 +140,47 @@ public unsafe class PhysicalDeviceWrapper
         }
 
         throw new Exception("failed to find suitable memory type");
+    }
+
+    private bool HasAllRequiredExtensions =>
+        Extensions.IsSupersetOf(ExtensionsUtils.GetRequiredDeviceExtensions());
+
+    private ISet<string> Extensions
+    {
+        get
+        {
+            uint extentionsCount = 0;
+            vk.EnumerateDeviceExtensionProperties(
+                PhysicalDevice,
+                (byte*)null,
+                ref extentionsCount,
+                null
+            );
+
+            var availableExtensions = new ExtensionProperties[extentionsCount];
+            fixed (ExtensionProperties* availableExtensionsPtr = availableExtensions)
+            {
+                vk.EnumerateDeviceExtensionProperties(
+                    PhysicalDevice,
+                    (byte*)null,
+                    ref extentionsCount,
+                    availableExtensionsPtr
+                );
+            }
+
+            return availableExtensions
+                .Select(extension => Marshal.PtrToStringAnsi((IntPtr)extension.ExtensionName))
+                .OfType<string>()
+                .ToHashSet();
+        }
+    }
+
+    private PhysicalDeviceFeatures PhysicalDeviceFeatures
+    {
+        get
+        {
+            vk.GetPhysicalDeviceFeatures(PhysicalDevice, out var result);
+            return result;
+        }
     }
 }

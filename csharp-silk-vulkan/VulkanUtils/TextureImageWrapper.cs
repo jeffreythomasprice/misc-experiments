@@ -12,6 +12,8 @@ public sealed unsafe class TextureImageWrapper : IDisposable
 
     private readonly Image image;
     private readonly DeviceMemory deviceMemory;
+    private readonly ImageViewWrapper imageView;
+    private readonly Sampler sampler;
 
     public TextureImageWrapper(
         Vk vk,
@@ -73,15 +75,19 @@ public sealed unsafe class TextureImageWrapper : IDisposable
             ImageLayout.TransferDstOptimal,
             ImageLayout.ShaderReadOnlyOptimal
         );
+
+        imageView = new ImageViewWrapper(vk, device, Format.R8G8B8A8Srgb, image);
+
+        sampler = CreateTextureSampler(vk, physicalDevice, device);
     }
 
     public void Dispose()
     {
+        vk.DestroySampler(device.Device, sampler, null);
+        imageView.Dispose();
         vk.DestroyImage(device.Device, image, null);
         vk.FreeMemory(device.Device, deviceMemory, null);
     }
-
-    // TODO the rest of the texture stuff
 
     private void CreateImage(
         Vk vk,
@@ -272,5 +278,37 @@ public sealed unsafe class TextureImageWrapper : IDisposable
                 );
             }
         );
+    }
+
+    private static Sampler CreateTextureSampler(
+        Vk vk,
+        PhysicalDeviceWrapper physicalDevice,
+        DeviceWrapper device
+    )
+    {
+        vk.GetPhysicalDeviceProperties(physicalDevice.PhysicalDevice, out var properties);
+
+        var samplerInfo = new SamplerCreateInfo()
+        {
+            SType = StructureType.SamplerCreateInfo,
+            MagFilter = Filter.Linear,
+            MinFilter = Filter.Linear,
+            AddressModeU = SamplerAddressMode.Repeat,
+            AddressModeV = SamplerAddressMode.Repeat,
+            AddressModeW = SamplerAddressMode.Repeat,
+            AnisotropyEnable = true,
+            MaxAnisotropy = properties.Limits.MaxSamplerAnisotropy,
+            BorderColor = BorderColor.IntOpaqueBlack,
+            UnnormalizedCoordinates = false,
+            CompareEnable = false,
+            CompareOp = CompareOp.Always,
+            MipmapMode = SamplerMipmapMode.Linear,
+        };
+
+        if (vk.CreateSampler(device.Device, in samplerInfo, null, out var result) != Result.Success)
+        {
+            throw new Exception("failed to create texture sampler");
+        }
+        return result;
     }
 }

@@ -25,7 +25,7 @@ public sealed unsafe class CommandPoolWrapper : IDisposable
             != Result.Success
         )
         {
-            throw new Exception("failed to create command pool!");
+            throw new Exception("failed to create command pool");
         }
     }
 

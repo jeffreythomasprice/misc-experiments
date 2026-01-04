@@ -43,7 +43,7 @@ public sealed unsafe class FramebufferWrapper : IDisposable
                 != Result.Success
             )
             {
-                throw new Exception("failed to create framebuffer!");
+                throw new Exception("failed to create framebuffer");
             }
         }
     }

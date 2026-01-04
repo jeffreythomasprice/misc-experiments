@@ -40,7 +40,7 @@ public sealed unsafe class DeviceWrapper : IDisposable
             };
         }
 
-        var deviceFeatures = new PhysicalDeviceFeatures();
+        var deviceFeatures = new PhysicalDeviceFeatures() { SamplerAnisotropy = true };
 
         using var extensions = new PointerUtils.DisposableStringArrayPointer(
             ExtensionsUtils.GetRequiredDeviceExtensions()

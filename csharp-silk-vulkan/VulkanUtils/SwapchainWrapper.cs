@@ -112,6 +112,47 @@ public sealed unsafe class SwapchainWrapper : IDisposable
         KhrSwapchain.DestroySwapchain(device.Device, SwapchainKhr, null);
     }
 
+    public static bool HasSwapchainSupport(
+        SurfaceWrapper surface,
+        PhysicalDeviceWrapper physicalDevice
+    )
+    {
+        return HasValidSurfaceFormat(surface, physicalDevice)
+            && HasValidPresentMode(surface, physicalDevice);
+    }
+
+    public static bool HasValidSurfaceFormat(
+        SurfaceWrapper surface,
+        PhysicalDeviceWrapper physicalDevice
+    )
+    {
+        try
+        {
+            GetBestSurfaceFormat(surface.GetPhysicalDeviceSurfaceFormats(physicalDevice));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool HasValidPresentMode(
+        SurfaceWrapper surface,
+        PhysicalDeviceWrapper physicalDevice
+    )
+    {
+        try
+        {
+            GetBestPresentMode(surface.GetPhysicalDeviceSurfacePresentModes(physicalDevice));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static SurfaceFormatKHR GetBestSurfaceFormat(IReadOnlyList<SurfaceFormatKHR> formats)
     {
         return formats

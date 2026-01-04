@@ -7,6 +7,7 @@ public sealed unsafe class ImageViewWrapper : IDisposable
 {
     private readonly Vk vk;
     private readonly DeviceWrapper device;
+
     public readonly ImageView ImageView;
 
     public ImageViewWrapper(Vk vk, DeviceWrapper device, Format format, Image image)
