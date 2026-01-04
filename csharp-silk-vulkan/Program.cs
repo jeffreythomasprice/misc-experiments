@@ -166,20 +166,13 @@ unsafe class Demo : IAppEventHandler
             graphicsPipeline.GraphicsPipeline
         );
 
-        // TODO helper method to automate offsets and draw?
-        var vertexBuffers = new Silk.NET.Vulkan.Buffer[] { vertexBuffer.Buffer };
-        var offsets = new ulong[] { 0 };
-        fixed (ulong* offsetsPtr = offsets)
-        fixed (Silk.NET.Vulkan.Buffer* vertexBuffersPtr = vertexBuffers)
-        {
-            state.Vk.CmdBindVertexBuffers(
-                commandBuffer.CommandBuffer,
-                0,
-                1,
-                vertexBuffersPtr,
-                offsetsPtr
-            );
-        }
+        state.Vk.CmdBindVertexBuffers(
+            commandBuffer.CommandBuffer,
+            0,
+            1,
+            [vertexBuffer.Buffer],
+            [0]
+        );
 
         state.Vk.CmdBindIndexBuffer(
             commandBuffer.CommandBuffer,
