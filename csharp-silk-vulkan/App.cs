@@ -10,7 +10,7 @@ using Silk.NET.Windowing;
 
 /*
 TODO next tutorial
-https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/25_Sampler/Program.cs
+https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/26_TextureMapping/Program.cs
 */
 
 public sealed partial class App : IDisposable
