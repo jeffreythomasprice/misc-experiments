@@ -59,10 +59,10 @@ unsafe class Demo : IAppEventHandler
             state.PhysicalDevice,
             state.Device,
             [
-                new(new(50, 50), new(0, 0), new(1, 0, 0, 1)),
-                new(new(300, 50), new(1, 0), new(0, 1, 0, 1)),
-                new(new(300, 300), new(1, 1), new(0, 0, 1, 1)),
-                new(new(50, 300), new(0, 1), new(1, 0, 1, 1)),
+                new(new(50, 50), new(0, 0), System.Drawing.Color.Red.ToVector4Df()),
+                new(new(300, 50), new(1, 0), System.Drawing.Color.Green.ToVector4Df()),
+                new(new(300, 300), new(1, 1), System.Drawing.Color.Blue.ToVector4Df()),
+                new(new(50, 300), new(0, 1), System.Drawing.Color.Purple.ToVector4Df()),
             ],
             BufferUsageFlags.VertexBufferBit
         );
