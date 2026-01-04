@@ -1,9 +1,12 @@
 #version 450
 
-layout(location = 0) in vec4 fragColor;
+layout(binding = 1) uniform sampler2D uniformSampler;
+
+layout(location = 0) in vec2 fragTextureCoordinate;
+layout(location = 1) in vec4 fragColor;
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = fragColor;
+    outColor = texture(uniformSampler, fragTextureCoordinate) * fragColor;
 }

@@ -21,7 +21,7 @@ using var app = new App(
 );
 app.Run();
 
-struct UniformBufferObject
+struct UniformMatrices
 {
     public Matrix4X4<float> Model;
     public Matrix4X4<float> View;
@@ -30,16 +30,22 @@ struct UniformBufferObject
 
 unsafe class Demo : IAppEventHandler
 {
+    private const uint UNIFORM_MATRICES_BINDING = 0;
+    private const uint UNIFORM_SAMPLER_BINDING = 1;
+
     private readonly ILogger<Demo> log;
 
-    private BufferWrapper<Vertex2DRgba>? vertexBuffer;
+    // OnLoad stuff
+    private BufferWrapper<Vertex2DTexturedRgba>? vertexBuffer;
     private BufferWrapper<UInt16>? indexBuffer;
-    private BufferWrapper<UniformBufferObject>? uniformBuffer;
+    private BufferWrapper<UniformMatrices>? uniformBuffer;
     private DescriptorSetLayoutWrapper? uniformDescriptorSetLayout;
     private DescriptorPoolWrapper? uniformDescriptorPool;
     private DescriptorSetWrapper? uniformDescriptorSet;
 
-    private GraphicsPipelineWrapper<Vertex2DRgba>? graphicsPipeline;
+    // OnSwapchainCreated stuff
+    private GraphicsPipelineWrapper<Vertex2DTexturedRgba>? graphicsPipeline;
+    private TextureImageWrapper? texture;
 
     public Demo()
     {
@@ -48,15 +54,15 @@ unsafe class Demo : IAppEventHandler
 
     public void OnLoad(App.State state)
     {
-        vertexBuffer = new BufferWrapper<Vertex2DRgba>(
+        vertexBuffer = new BufferWrapper<Vertex2DTexturedRgba>(
             state.Vk,
             state.PhysicalDevice,
             state.Device,
             [
-                new(new Vector2D<float>(50, 300), new Vector4D<float>(1.0f, 0.0f, 1.0f, 1.0f)),
-                new(new Vector2D<float>(300, 300), new Vector4D<float>(0.0f, 0.0f, 1.0f, 1.0f)),
-                new(new Vector2D<float>(300, 50), new Vector4D<float>(0.0f, 1.0f, 0.0f, 1.0f)),
-                new(new Vector2D<float>(50, 50), new Vector4D<float>(1.0f, 0.0f, 0.0f, 1.0f)),
+                new(new(50, 300), new(0, 1), new(1.0f, 0.0f, 1.0f, 1.0f)),
+                new(new(300, 300), new(1, 1), new(0.0f, 0.0f, 1.0f, 1.0f)),
+                new(new(300, 50), new(1, 0), new(0.0f, 1.0f, 0.0f, 1.0f)),
+                new(new(50, 50), new(0, 0), new(1.0f, 0.0f, 0.0f, 1.0f)),
             ],
             BufferUsageFlags.VertexBufferBit
         );
@@ -67,11 +73,11 @@ unsafe class Demo : IAppEventHandler
             [0, 1, 2, 2, 3, 0],
             BufferUsageFlags.IndexBufferBit
         );
-        uniformBuffer = new BufferWrapper<UniformBufferObject>(
+        uniformBuffer = new BufferWrapper<UniformMatrices>(
             state.Vk,
             state.PhysicalDevice,
             state.Device,
-            [CreateUniformBufferObject(state)],
+            [CreateUniformMatrices(state)],
             BufferUsageFlags.UniformBufferBit
         );
         uniformDescriptorSetLayout = new DescriptorSetLayoutWrapper(
@@ -80,18 +86,29 @@ unsafe class Demo : IAppEventHandler
             [
                 new()
                 {
-                    Binding = 0,
+                    Binding = UNIFORM_MATRICES_BINDING,
                     DescriptorCount = 1,
                     DescriptorType = DescriptorType.UniformBuffer,
                     PImmutableSamplers = null,
                     StageFlags = ShaderStageFlags.VertexBit,
+                },
+                new()
+                {
+                    Binding = UNIFORM_SAMPLER_BINDING,
+                    DescriptorCount = 1,
+                    DescriptorType = DescriptorType.CombinedImageSampler,
+                    PImmutableSamplers = null,
+                    StageFlags = ShaderStageFlags.FragmentBit,
                 },
             ]
         );
         uniformDescriptorPool = new DescriptorPoolWrapper(
             state.Vk,
             state.Device,
-            [new() { Type = DescriptorType.UniformBuffer, DescriptorCount = 1 }],
+            [
+                new() { Type = DescriptorType.UniformBuffer, DescriptorCount = 1 },
+                new() { Type = DescriptorType.CombinedImageSampler, DescriptorCount = 1 },
+            ],
             1
         );
         uniformDescriptorSet = new DescriptorSetWrapper(
@@ -100,17 +117,17 @@ unsafe class Demo : IAppEventHandler
             uniformDescriptorPool,
             uniformDescriptorSetLayout
         );
-        uniformDescriptorSet.UpdateDescriptorSet(uniformBuffer, 0);
+        uniformDescriptorSet.UpdateDescriptorSet(uniformBuffer, UNIFORM_MATRICES_BINDING);
     }
 
     public void OnSwapchainCreated(App.GraphicsReadyState state)
     {
-        if (uniformDescriptorSetLayout is null)
+        if (uniformDescriptorSetLayout is null || uniformDescriptorSet is null)
         {
             throw new InvalidOperationException("not initialized");
         }
 
-        graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DRgba>(
+        graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DTexturedRgba>(
             state.Vk,
             state.Device,
             state.Swapchain,
@@ -124,25 +141,28 @@ unsafe class Demo : IAppEventHandler
             SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
                 "Resources/silk.png"
             );
-        log.LogInformation(
-            "TODO loaded image size: {Width}x{Height}, bits per pixel: {BitsPerPixel}, alpha: {Alpha}",
+        log.LogTrace(
+            "loaded image size: {Width}x{Height}, bits per pixel: {BitsPerPixel}, alpha: {Alpha}",
             sourceImage.Width,
             sourceImage.Height,
             sourceImage.PixelType.BitsPerPixel,
             sourceImage.PixelType.AlphaRepresentation
         );
-        using var texture = new TextureImageWrapper(
+        texture = new TextureImageWrapper(
             state.Vk,
             state.PhysicalDevice,
             state.Device,
             state.CommandPool,
             sourceImage
         );
-        log.LogInformation("TODO created texture image");
+        log.LogTrace("created texture image");
+        uniformDescriptorSet.UpdateDescriptorSet(texture, 1);
     }
 
     public void OnSwapchainDestroyed(App.GraphicsReadyState state)
     {
+        texture?.Dispose();
+        texture = null;
         graphicsPipeline?.Dispose();
         graphicsPipeline = null;
     }
@@ -223,8 +243,8 @@ unsafe class Demo : IAppEventHandler
 
         state.Vk.DeviceWaitIdle(state.Device.Device);
 
-        uniformBuffer.CopyDataToBuffer([CreateUniformBufferObject(state)]);
-        uniformDescriptorSet.UpdateDescriptorSet(uniformBuffer, 0);
+        uniformBuffer.CopyDataToBuffer([CreateUniformMatrices(state)]);
+        uniformDescriptorSet.UpdateDescriptorSet(uniformBuffer, UNIFORM_MATRICES_BINDING);
     }
 
     public void OnKeyUp(App.State state, IKeyboard keyboard, Key key, int keyCode)
@@ -235,9 +255,9 @@ unsafe class Demo : IAppEventHandler
         }
     }
 
-    private UniformBufferObject CreateUniformBufferObject(App.State state)
+    private static UniformMatrices CreateUniformMatrices(App.State state)
     {
-        return new UniformBufferObject
+        return new UniformMatrices
         {
             Model = Matrix4X4<float>.Identity,
             View = Matrix4X4<float>.Identity,
@@ -245,7 +265,7 @@ unsafe class Demo : IAppEventHandler
         };
     }
 
-    private Matrix4X4<float> GetOrthoMatrix(App.State state) =>
+    private static Matrix4X4<float> GetOrthoMatrix(App.State state) =>
         Matrix4X4.CreateOrthographicOffCenter<float>(
             0,
             state.WindowSize.X,

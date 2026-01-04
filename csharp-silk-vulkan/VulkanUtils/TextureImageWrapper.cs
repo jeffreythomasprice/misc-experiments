@@ -12,8 +12,8 @@ public sealed unsafe class TextureImageWrapper : IDisposable
 
     private readonly Image image;
     private readonly DeviceMemory deviceMemory;
-    private readonly ImageViewWrapper imageView;
-    private readonly Sampler sampler;
+    public readonly ImageViewWrapper ImageView;
+    public readonly Sampler Sampler;
 
     public TextureImageWrapper(
         Vk vk,
@@ -76,15 +76,15 @@ public sealed unsafe class TextureImageWrapper : IDisposable
             ImageLayout.ShaderReadOnlyOptimal
         );
 
-        imageView = new ImageViewWrapper(vk, device, Format.R8G8B8A8Srgb, image);
+        ImageView = new ImageViewWrapper(vk, device, Format.R8G8B8A8Srgb, image);
 
-        sampler = CreateTextureSampler(vk, physicalDevice, device);
+        Sampler = CreateTextureSampler(vk, physicalDevice, device);
     }
 
     public void Dispose()
     {
-        vk.DestroySampler(device.Device, sampler, null);
-        imageView.Dispose();
+        vk.DestroySampler(device.Device, Sampler, null);
+        ImageView.Dispose();
         vk.DestroyImage(device.Device, image, null);
         vk.FreeMemory(device.Device, deviceMemory, null);
     }

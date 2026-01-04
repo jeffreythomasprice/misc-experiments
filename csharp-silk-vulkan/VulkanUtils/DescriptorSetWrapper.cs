@@ -60,7 +60,7 @@ public sealed unsafe class DescriptorSetWrapper : IDisposable
         {
             Buffer = buffer.Buffer,
             Offset = 0,
-            Range = (ulong)Unsafe.SizeOf<UniformBufferObject>(),
+            Range = (ulong)Unsafe.SizeOf<T>(),
         };
 
         var descriptorWrite = new WriteDescriptorSet()
@@ -72,6 +72,29 @@ public sealed unsafe class DescriptorSetWrapper : IDisposable
             DescriptorType = DescriptorType.UniformBuffer,
             DescriptorCount = 1,
             PBufferInfo = &bufferInfo,
+        };
+
+        vk.UpdateDescriptorSets(device.Device, 1, in descriptorWrite, 0, null);
+    }
+
+    public void UpdateDescriptorSet(TextureImageWrapper texture, uint binding)
+    {
+        var imageInfo = new DescriptorImageInfo()
+        {
+            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+            ImageView = texture.ImageView.ImageView,
+            Sampler = texture.Sampler,
+        };
+
+        var descriptorWrite = new WriteDescriptorSet()
+        {
+            SType = StructureType.WriteDescriptorSet,
+            DstSet = DescriptorSet,
+            DstBinding = binding,
+            DstArrayElement = 0,
+            DescriptorType = DescriptorType.CombinedImageSampler,
+            DescriptorCount = 1,
+            PImageInfo = &imageInfo,
         };
 
         vk.UpdateDescriptorSets(device.Device, 1, in descriptorWrite, 0, null);
