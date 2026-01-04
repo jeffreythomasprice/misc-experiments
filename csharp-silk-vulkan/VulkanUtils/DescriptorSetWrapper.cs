@@ -1,12 +1,16 @@
 namespace Experiment.VulkanUtils;
 
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using Silk.NET.Vulkan;
 
 public sealed unsafe class DescriptorSetWrapper : IDisposable
 {
+    private readonly ILogger log;
+
     private readonly Vk vk;
     private readonly DeviceWrapper device;
+    private readonly DescriptorPoolWrapper descriptorPool;
 
     public readonly DescriptorSet DescriptorSet;
 
@@ -17,10 +21,13 @@ public sealed unsafe class DescriptorSetWrapper : IDisposable
         DescriptorSetLayoutWrapper descriptorSetLayout
     )
     {
+        log = LoggerUtils.Factory.Value.CreateLogger(GetType());
+
         this.vk = vk;
         this.device = device;
+        this.descriptorPool = descriptorPool;
 
-        // TODO logging
+        log.LogDebug("allocating descriptor set");
 
         fixed (DescriptorSetLayout* layoutPtr = &descriptorSetLayout.DescriptorSetLayout)
         {
@@ -44,7 +51,7 @@ public sealed unsafe class DescriptorSetWrapper : IDisposable
 
     public void Dispose()
     {
-        vk.FreeDescriptorSets(device.Device, default, 1, in DescriptorSet);
+        vk.FreeDescriptorSets(device.Device, descriptorPool.DescriptorPool, 1, in DescriptorSet);
     }
 
     public void UpdateDescriptorSet<T>(BufferWrapper<T> buffer, uint binding)

@@ -48,8 +48,6 @@ unsafe class Demo : IAppEventHandler
 
     public void OnLoad(App.State state)
     {
-        log.LogDebug("TODO Demo OnLoad");
-
         vertexBuffer = new BufferWrapper<Vertex2DRgba>(
             state.Vk,
             state.PhysicalDevice,
@@ -107,8 +105,6 @@ unsafe class Demo : IAppEventHandler
 
     public void OnSwapchainCreated(App.GraphicsReadyState state)
     {
-        log.LogDebug("TODO Demo OnSwapchainCreated");
-
         if (uniformDescriptorSetLayout is null)
         {
             throw new InvalidOperationException("not initialized");
@@ -127,16 +123,12 @@ unsafe class Demo : IAppEventHandler
 
     public void OnSwapchainDestroyed(App.GraphicsReadyState state)
     {
-        log.LogDebug("TODO Demo OnSwapchainDestroyed");
-
         graphicsPipeline?.Dispose();
         graphicsPipeline = null;
     }
 
     public void OnUnload(App.State state)
     {
-        log.LogDebug("TODO Demo OnUnload");
-
         uniformDescriptorSet?.Dispose();
         uniformDescriptorSet = null;
         uniformDescriptorPool?.Dispose();
@@ -211,18 +203,13 @@ unsafe class Demo : IAppEventHandler
 
     public void OnResize(App.State state)
     {
-        log.LogDebug("TODO Demo OnResize");
-
         if (uniformBuffer is null || uniformDescriptorSet is null)
         {
             throw new InvalidOperationException("not initialized");
         }
 
-        /*
-        TODO fix vulkan warnings when redoing uniform buffer
-        2026-01-02T18:08:36-05:00 fail: Experiment.VulkanUtils.DebugMessengerWrapper[0] vulkan debug callback Validation Error: [ VUID-vkBindBufferMemory-buffer-07459 ] Object 0: handle = 0x80000000008, type = VK_OBJECT_TYPE_DEVICE_MEMORY; Object 1: handle = 0x70000000007, type = VK_OBJECT_TYPE_BUFFER; Object 2: handle = 0x80000000008, type = VK_OBJECT_TYPE_DEVICE_MEMORY; | MessageID = 0x5001937c | vkBindBufferMemory():  attempting to bind VkDeviceMemory 0x80000000008[] to VkBuffer 0x70000000007[] which has already been bound to VkDeviceMemory 0x80000000008[]. The Vulkan spec states: buffer must not have been bound to a memory object (https://www.khronos.org/registry/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkBindBufferMemory-buffer-07459)
-        2026-01-02T18:08:36-05:00 fail: Experiment.VulkanUtils.DebugMessengerWrapper[0] vulkan debug callback Validation Error: [ VUID-vkUpdateDescriptorSets-None-03047 ] Object 0: handle = 0xb000000000b, type = VK_OBJECT_TYPE_DESCRIPTOR_SET; Object 1: handle = 0x90000000009, type = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT; | MessageID = 0x35d7ea98 | vkUpdateDescriptorSets(): pDescriptorWrites[0].dstBinding (0) was created with VkDescriptorBindingFlags(0), but VkDescriptorSet 0xb000000000b[] is in use by VkCommandBuffer 0x586b03afcea0[]. The Vulkan spec states: The dstSet member of each element of pDescriptorWrites or pDescriptorCopies for bindings which were created without the VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT or VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT bits set must not be used by any command that was recorded to a command buffer which is in the pending state (https://www.khronos.org/registry/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-vkUpdateDescriptorSets-None-03047)
-        */
+        state.Vk.DeviceWaitIdle(state.Device.Device);
+
         uniformBuffer.CopyDataToBuffer([CreateUniformBufferObject(state)]);
         uniformDescriptorSet.UpdateDescriptorSet(uniformBuffer, 0);
     }

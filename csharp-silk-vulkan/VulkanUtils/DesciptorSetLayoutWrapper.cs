@@ -1,9 +1,12 @@
 namespace Experiment.VulkanUtils;
 
+using Microsoft.Extensions.Logging;
 using Silk.NET.Vulkan;
 
 public sealed unsafe class DescriptorSetLayoutWrapper : IDisposable
 {
+    private readonly ILogger log;
+
     private readonly Vk vk;
     private readonly DeviceWrapper device;
 
@@ -15,10 +18,25 @@ public sealed unsafe class DescriptorSetLayoutWrapper : IDisposable
         DescriptorSetLayoutBinding[] bindings
     )
     {
+        log = LoggerUtils.Factory.Value.CreateLogger(GetType());
+
         this.vk = vk;
         this.device = device;
 
-        // TODO logging
+        log.LogDebug(
+            "creating descriptor set layout with {BindingCount} bindings",
+            bindings.Length
+        );
+        foreach (var binding in bindings)
+        {
+            log.LogDebug(
+                "binding {Binding}: Type={DescriptorType}, Count={DescriptorCount}, StageFlags={StageFlags}",
+                binding.Binding,
+                binding.DescriptorType,
+                binding.DescriptorCount,
+                binding.StageFlags
+            );
+        }
 
         fixed (DescriptorSetLayoutBinding* bindingsPtr = bindings)
         {

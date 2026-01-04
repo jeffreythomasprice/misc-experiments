@@ -1,9 +1,12 @@
 namespace Experiment.VulkanUtils;
 
+using Microsoft.Extensions.Logging;
 using Silk.NET.Vulkan;
 
 public sealed unsafe class DescriptorPoolWrapper : IDisposable
 {
+    private readonly ILogger log;
+
     private readonly Vk vk;
     private readonly DeviceWrapper device;
 
@@ -16,10 +19,24 @@ public sealed unsafe class DescriptorPoolWrapper : IDisposable
         uint maxSets
     )
     {
+        log = LoggerUtils.Factory.Value.CreateLogger(GetType());
+
         this.vk = vk;
         this.device = device;
 
-        // TODO logging
+        log.LogDebug(
+            "creating descriptor pool with {PoolSizeCount} pool sizes, max sets {MaxSets}",
+            poolSizes.Length,
+            maxSets
+        );
+        foreach (var poolSize in poolSizes)
+        {
+            log.LogDebug(
+                "pool size: Type={Type}, DescriptorCount={DescriptorCount}",
+                poolSize.Type,
+                poolSize.DescriptorCount
+            );
+        }
 
         fixed (DescriptorPoolSize* poolSizesPtr = poolSizes)
         {
@@ -29,6 +46,7 @@ public sealed unsafe class DescriptorPoolWrapper : IDisposable
                 PoolSizeCount = (uint)poolSizes.Length,
                 PPoolSizes = poolSizesPtr,
                 MaxSets = maxSets,
+                Flags = DescriptorPoolCreateFlags.FreeDescriptorSetBit,
             };
 
             if (

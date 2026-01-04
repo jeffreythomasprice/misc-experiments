@@ -10,7 +10,7 @@ using Silk.NET.Windowing;
 
 /*
 TODO next tutorial
-https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/22_DescriptorSetLayout/Program.cs
+https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/24_TextureImage/Program.cs
 */
 
 public sealed partial class App : IDisposable
@@ -215,6 +215,8 @@ public sealed partial class App : IDisposable
             return;
         }
         isCleanupDone = true;
+
+        vk.DeviceWaitIdle(device.Device);
 
         CleanupStuffThatGetsRecreatedAllTheTime();
 

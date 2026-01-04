@@ -67,6 +67,8 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
             throw new Exception("failed to allocate buffer memory");
         }
 
+        vk.BindBufferMemory(device.Device, Buffer, BufferMemory, 0);
+
         CopyDataToBuffer(data);
     }
 
@@ -78,8 +80,6 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
 
     public void CopyDataToBuffer(ReadOnlySpan<T> data)
     {
-        vk.BindBufferMemory(device.Device, Buffer, BufferMemory, 0);
-
         void* dataPtr;
         vk.MapMemory(device.Device, BufferMemory, 0, SizeInBytes, 0, &dataPtr);
         try
