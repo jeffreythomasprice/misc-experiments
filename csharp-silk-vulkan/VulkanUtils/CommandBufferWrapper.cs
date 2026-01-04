@@ -118,13 +118,7 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
 
                 var clearColor = new ClearValue()
                 {
-                    Color = new()
-                    {
-                        Float32_0 = 0,
-                        Float32_1 = 0,
-                        Float32_2 = 0,
-                        Float32_3 = 1,
-                    },
+                    Color = System.Drawing.Color.CornflowerBlue.ToClearColorValue(),
                 };
 
                 renderPassInfo.ClearValueCount = 1;
