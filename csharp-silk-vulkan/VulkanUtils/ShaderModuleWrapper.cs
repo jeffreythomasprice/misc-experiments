@@ -28,9 +28,7 @@ public sealed unsafe class ShaderModuleWrapper : IDisposable
         string source
     )
     {
-        // TODO helper for creating and cleaning up temp files?
-        string tempFilePath = Path.ChangeExtension(
-            Path.GetTempFileName(),
+        using var sourceFilePath = new TempFilePath(
             shaderType switch
             {
                 ShaderType.Vertex => "vert",
@@ -41,56 +39,19 @@ public sealed unsafe class ShaderModuleWrapper : IDisposable
                 ),
             }
         );
-        string outputFilePath = Path.GetTempFileName();
+        using var outputFilePath = new TempFilePath();
         Log.Value.LogTrace(
             "writing shader of type {ShaderType} source to: {TempFilePath}, compiling to Spir-V at output path: {OutputFilePath}",
             shaderType,
-            tempFilePath,
-            outputFilePath
+            sourceFilePath.Path,
+            outputFilePath.Path
         );
 
-        try
-        {
-            File.WriteAllText(tempFilePath, source);
+        File.WriteAllText(sourceFilePath.Path, source);
 
-            Exec.Run("glslc", [tempFilePath, "-x", "glsl", "-o", outputFilePath]);
+        Exec.Run("glslc", [sourceFilePath.Path, "-x", "glsl", "-o", outputFilePath.Path]);
 
-            return new ShaderModuleWrapper(vk, device, File.ReadAllBytes(outputFilePath));
-        }
-        finally
-        {
-            try
-            {
-                if (File.Exists(tempFilePath))
-                {
-                    File.Delete(tempFilePath);
-                }
-            }
-            catch (Exception e)
-            {
-                Log.Value.LogError(
-                    e,
-                    "failed to clean up temporary shader source file at path {TempFilePath}",
-                    tempFilePath
-                );
-            }
-
-            try
-            {
-                if (File.Exists(outputFilePath))
-                {
-                    File.Delete(outputFilePath);
-                }
-            }
-            catch (Exception e)
-            {
-                Log.Value.LogError(
-                    e,
-                    "failed to clean up temporary shader compilation output file at path {OutputFilePath}",
-                    outputFilePath
-                );
-            }
-        }
+        return new ShaderModuleWrapper(vk, device, File.ReadAllBytes(outputFilePath.Path));
     }
 
     public ShaderModuleWrapper(Vk vk, DeviceWrapper device, byte[] spirvBytes)
