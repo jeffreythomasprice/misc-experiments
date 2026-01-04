@@ -268,6 +268,7 @@ unsafe class Demo : IAppEventHandler
     }
 
     private static Matrix4X4<float> CreateOrthoMatrix(App.State state) =>
+        // TODO 0,0 is in the bottom left corner, all attempts so far to make it the top-left corner have failed
         Matrix4X4.CreateOrthographicOffCenter<float>(
             0,
             state.WindowSize.X,
