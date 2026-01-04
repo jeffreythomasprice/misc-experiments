@@ -42,10 +42,10 @@ unsafe class Demo : IAppEventHandler
     private DescriptorSetLayoutWrapper? uniformDescriptorSetLayout;
     private DescriptorPoolWrapper? uniformDescriptorPool;
     private DescriptorSetWrapper? uniformDescriptorSet;
+    private TextureImageWrapper? texture;
 
     // OnSwapchainCreated stuff
     private GraphicsPipelineWrapper<Vertex2DTexturedRgba>? graphicsPipeline;
-    private TextureImageWrapper? texture;
 
     public Demo()
     {
@@ -59,10 +59,10 @@ unsafe class Demo : IAppEventHandler
             state.PhysicalDevice,
             state.Device,
             [
-                new(new(50, 300), new(0, 1), new(1.0f, 0.0f, 1.0f, 1.0f)),
-                new(new(300, 300), new(1, 1), new(0.0f, 0.0f, 1.0f, 1.0f)),
-                new(new(300, 50), new(1, 0), new(0.0f, 1.0f, 0.0f, 1.0f)),
-                new(new(50, 50), new(0, 0), new(1.0f, 0.0f, 0.0f, 1.0f)),
+                new(new(50, 50), new(0, 0), new(1, 0, 0, 1)),
+                new(new(50, 300), new(0, 1), new(1, 0, 1, 1)),
+                new(new(300, 300), new(1, 1), new(0, 0, 1, 1)),
+                new(new(300, 50), new(1, 0), new(0, 1, 0, 1)),
             ],
             BufferUsageFlags.VertexBufferBit
         );
@@ -77,7 +77,10 @@ unsafe class Demo : IAppEventHandler
             state.Vk,
             state.PhysicalDevice,
             state.Device,
-            [CreateUniformMatrices(state)],
+            [
+                // initial blank ortho matrix, we'll set it up to an initial correct value once resize is called
+                new(),
+            ],
             BufferUsageFlags.UniformBufferBit
         );
         uniformDescriptorSetLayout = new DescriptorSetLayoutWrapper(
@@ -117,25 +120,6 @@ unsafe class Demo : IAppEventHandler
             uniformDescriptorPool,
             uniformDescriptorSetLayout
         );
-        uniformDescriptorSet.UpdateDescriptorSet(uniformBuffer, UNIFORM_MATRICES_BINDING);
-    }
-
-    public void OnSwapchainCreated(App.GraphicsReadyState state)
-    {
-        if (uniformDescriptorSetLayout is null || uniformDescriptorSet is null)
-        {
-            throw new InvalidOperationException("not initialized");
-        }
-
-        graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DTexturedRgba>(
-            state.Vk,
-            state.Device,
-            state.Swapchain,
-            state.RenderPass,
-            File.ReadAllBytes("Shaders/shader.vert.spv"),
-            File.ReadAllBytes("Shaders/shader.frag.spv"),
-            [uniformDescriptorSetLayout]
-        );
 
         using var sourceImage =
             SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
@@ -159,16 +143,34 @@ unsafe class Demo : IAppEventHandler
         uniformDescriptorSet.UpdateDescriptorSet(texture, 1);
     }
 
+    public void OnSwapchainCreated(App.GraphicsReadyState state)
+    {
+        if (uniformDescriptorSetLayout is null || uniformDescriptorSet is null)
+        {
+            throw new InvalidOperationException("not initialized");
+        }
+
+        graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DTexturedRgba>(
+            state.Vk,
+            state.Device,
+            state.Swapchain,
+            state.RenderPass,
+            File.ReadAllBytes("Shaders/shader.vert.spv"),
+            File.ReadAllBytes("Shaders/shader.frag.spv"),
+            [uniformDescriptorSetLayout]
+        );
+    }
+
     public void OnSwapchainDestroyed(App.GraphicsReadyState state)
     {
-        texture?.Dispose();
-        texture = null;
         graphicsPipeline?.Dispose();
         graphicsPipeline = null;
     }
 
     public void OnUnload(App.State state)
     {
+        texture?.Dispose();
+        texture = null;
         uniformDescriptorSet?.Dispose();
         uniformDescriptorSet = null;
         uniformDescriptorPool?.Dispose();
@@ -261,11 +263,11 @@ unsafe class Demo : IAppEventHandler
         {
             Model = Matrix4X4<float>.Identity,
             View = Matrix4X4<float>.Identity,
-            Projection = GetOrthoMatrix(state),
+            Projection = CreateOrthoMatrix(state),
         };
     }
 
-    private static Matrix4X4<float> GetOrthoMatrix(App.State state) =>
+    private static Matrix4X4<float> CreateOrthoMatrix(App.State state) =>
         Matrix4X4.CreateOrthographicOffCenter<float>(
             0,
             state.WindowSize.X,

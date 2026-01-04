@@ -44,6 +44,8 @@ public sealed partial class App : IDisposable
         public PhysicalDeviceWrapper PhysicalDevice => app.physicalDevice;
 
         public DeviceWrapper Device => app.device;
+
+        public CommandPoolWrapper CommandPool => app.commandPool;
     }
 
     public class GraphicsReadyState : State
@@ -56,9 +58,6 @@ public sealed partial class App : IDisposable
 
         public RenderPassWrapper RenderPass =>
             app.renderPass ?? throw new InvalidOperationException("not initialized yet");
-
-        public CommandPoolWrapper CommandPool =>
-            app.commandPool ?? throw new InvalidOperationException("not initialized yet");
     }
 
     private readonly ILogger log;
@@ -73,11 +72,11 @@ public sealed partial class App : IDisposable
     private readonly SurfaceWrapper surface;
     private readonly PhysicalDeviceWrapper physicalDevice;
     private readonly DeviceWrapper device;
+    private CommandPoolWrapper commandPool;
 
     // vulkan stuff that gets recreated periodically, e.g. when display resizes
     private SwapchainWrapper? swapchain;
     private RenderPassWrapper? renderPass;
-    private CommandPoolWrapper? commandPool;
     private SynchronizedQueueSubmitterAndPresenter? synchronizedQueueSubmitterAndPresenter;
 
     private bool swapchainCreatedEventInvokedAtLeastOnce = false;
@@ -127,6 +126,7 @@ public sealed partial class App : IDisposable
         surface = new SurfaceWrapper(window.VkSurface, vk, instance);
         physicalDevice = PhysicalDeviceWrapper.FindBest(vk, instance.Instance, surface);
         device = new DeviceWrapper(vk, physicalDevice, enableValidationLayers);
+        commandPool = new CommandPoolWrapper(vk, physicalDevice, device);
 
         eventHandler.OnLoad(new(this));
     }
@@ -222,6 +222,7 @@ public sealed partial class App : IDisposable
 
         eventHandler.OnUnload(new(this));
 
+        commandPool.Dispose();
         device.Dispose();
         surface.Dispose();
         debugMessenger.Dispose();
@@ -237,7 +238,6 @@ public sealed partial class App : IDisposable
         }
 
         synchronizedQueueSubmitterAndPresenter?.Dispose();
-        commandPool?.Dispose();
         renderPass?.Dispose();
         swapchain?.Dispose();
     }
@@ -267,7 +267,6 @@ public sealed partial class App : IDisposable
 
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
         renderPass = new RenderPassWrapper(vk, device, swapchain);
-        commandPool = new CommandPoolWrapper(vk, physicalDevice, device);
         synchronizedQueueSubmitterAndPresenter = new SynchronizedQueueSubmitterAndPresenter(
             vk,
             device,
