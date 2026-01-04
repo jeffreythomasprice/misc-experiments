@@ -56,7 +56,6 @@ public sealed unsafe class InstanceWrapper : IDisposable
             createInfo.PpEnabledLayerNames = (byte**)validationLayers.Pointer;
 
             var debugCreateInfo = DebugMessengerWrapper.CreateDebugMessengerCreateInfo();
-            // TODO use managed chaining, see https://dotnet.github.io/Silk.NET/docs/vulkan/structure-chaining/overview#managed-chaining
             createInfo.PNext = &debugCreateInfo;
         }
         else

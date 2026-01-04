@@ -61,18 +61,19 @@ public sealed unsafe class DebugMessengerWrapper : IDisposable
 
     public static DebugUtilsMessengerCreateInfoEXT CreateDebugMessengerCreateInfo()
     {
-        var result = new DebugUtilsMessengerCreateInfoEXT();
-        result.SType = StructureType.DebugUtilsMessengerCreateInfoExt;
-        result.MessageSeverity =
-            DebugUtilsMessageSeverityFlagsEXT.VerboseBitExt
-            | DebugUtilsMessageSeverityFlagsEXT.WarningBitExt
-            | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt;
-        result.MessageType =
-            DebugUtilsMessageTypeFlagsEXT.GeneralBitExt
-            | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt
-            | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt;
-        result.PfnUserCallback = (DebugUtilsMessengerCallbackFunctionEXT)DebugCallback;
-        return result;
+        return new DebugUtilsMessengerCreateInfoEXT
+        {
+            SType = StructureType.DebugUtilsMessengerCreateInfoExt,
+            MessageSeverity =
+                DebugUtilsMessageSeverityFlagsEXT.VerboseBitExt
+                | DebugUtilsMessageSeverityFlagsEXT.WarningBitExt
+                | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt,
+            MessageType =
+                DebugUtilsMessageTypeFlagsEXT.GeneralBitExt
+                | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt
+                | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt,
+            PfnUserCallback = (DebugUtilsMessengerCallbackFunctionEXT)DebugCallback,
+        };
     }
 
     private static uint DebugCallback(
