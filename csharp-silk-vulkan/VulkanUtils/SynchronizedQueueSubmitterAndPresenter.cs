@@ -211,14 +211,19 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
 
         // TODO support multiple render passes, iterate over all
 
-        var commandBuffer = new CommandBufferWrapper(
+        needsRecreate = false;
+        using var commandBuffer = new CommandBufferWrapper(
             vk,
             device,
+            commandPool,
+            CommandBufferUsageFlags.None,
             swapchain,
             renderPass,
             framebuffers[(int)imageIndex],
-            commandPool,
-            renderPassCallback
+            commandBuffer =>
+            {
+                renderPassCallback(commandBuffer);
+            }
         );
         fixed (CommandBuffer* commandBufferPtr = &commandBuffer.CommandBuffer)
         {
@@ -250,7 +255,8 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             }
 
             var swapChains = stackalloc[] { swapchain.SwapchainKhr };
-            PresentInfoKHR presentInfo = new()
+            var imageIndices = stackalloc[] { imageIndex };
+            var presentInfo = new PresentInfoKHR()
             {
                 SType = StructureType.PresentInfoKhr,
 
@@ -260,7 +266,7 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
                 SwapchainCount = 1,
                 PSwapchains = swapChains,
 
-                PImageIndices = &imageIndex,
+                PImageIndices = imageIndices,
             };
 
             result = swapchain.KhrSwapchain.QueuePresent(device.PresentQueue, in presentInfo);
@@ -280,6 +286,7 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
 
         currentFrame = (currentFrame + 1) % maxFramesInFlight;
 
-        needsRecreate = false;
+        // we're going to free the command buffer when it gets disposed of, but we need to wait until the queue is cleared first
+        vk.QueueWaitIdle(device.GraphicsQueue);
     }
 }

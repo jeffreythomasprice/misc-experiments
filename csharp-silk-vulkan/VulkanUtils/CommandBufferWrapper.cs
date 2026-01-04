@@ -10,14 +10,43 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
     private readonly CommandPoolWrapper commandPool;
     public readonly CommandBuffer CommandBuffer;
 
-    public CommandBufferWrapper(
+    public static void OneTimeSubmit(
         Vk vk,
         DeviceWrapper device,
-        SwapchainWrapper swapchain,
-        RenderPassWrapper renderPass,
-        FramebufferWrapper framebuffer,
         CommandPoolWrapper commandPool,
-        Action<CommandBufferWrapper> renderPassCallback
+        Action<CommandBufferWrapper> callback
+    )
+    {
+        using var commandBuffer = new CommandBufferWrapper(
+            vk,
+            device,
+            commandPool,
+            CommandBufferUsageFlags.OneTimeSubmitBit,
+            (commandBuffer) =>
+            {
+                callback(commandBuffer);
+            }
+        );
+        fixed (CommandBuffer* commandBufferPtr = &commandBuffer.CommandBuffer)
+        {
+            var submitInfo = new SubmitInfo()
+            {
+                SType = StructureType.SubmitInfo,
+                CommandBufferCount = 1,
+                PCommandBuffers = commandBufferPtr,
+            };
+
+            vk.QueueSubmit(device.GraphicsQueue, 1, in submitInfo, default);
+            vk.QueueWaitIdle(device.GraphicsQueue);
+        }
+    }
+
+    private CommandBufferWrapper(
+        Vk vk,
+        DeviceWrapper device,
+        CommandPoolWrapper commandPool,
+        CommandBufferUsageFlags flags,
+        Action<CommandBufferWrapper> callback
     )
     {
         this.vk = vk;
@@ -46,6 +75,7 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
         var beginInfo = new CommandBufferBeginInfo()
         {
             SType = StructureType.CommandBufferBeginInfo,
+            Flags = CommandBufferUsageFlags.None,
         };
 
         if (vk.BeginCommandBuffer(CommandBuffer, in beginInfo) != Result.Success)
@@ -53,39 +83,64 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
             throw new Exception("failed to begin recording command buffer");
         }
 
-        var renderPassInfo = new RenderPassBeginInfo()
-        {
-            SType = StructureType.RenderPassBeginInfo,
-            RenderPass = renderPass.RenderPass,
-            Framebuffer = framebuffer.Framebuffer,
-            RenderArea = { Offset = { X = 0, Y = 0 }, Extent = swapchain.Extent },
-        };
-
-        var clearColor = new ClearValue()
-        {
-            Color = new()
-            {
-                Float32_0 = 0,
-                Float32_1 = 0,
-                Float32_2 = 0,
-                Float32_3 = 1,
-            },
-        };
-
-        renderPassInfo.ClearValueCount = 1;
-        renderPassInfo.PClearValues = &clearColor;
-
-        vk.CmdBeginRenderPass(CommandBuffer, &renderPassInfo, SubpassContents.Inline);
-
-        renderPassCallback(this);
-
-        vk.CmdEndRenderPass(CommandBuffer);
+        callback(this);
 
         if (vk.EndCommandBuffer(CommandBuffer) != Result.Success)
         {
             throw new Exception("failed to record command buffer");
         }
     }
+
+    public CommandBufferWrapper(
+        Vk vk,
+        DeviceWrapper device,
+        CommandPoolWrapper commandPool,
+        CommandBufferUsageFlags flags,
+        SwapchainWrapper swapchain,
+        RenderPassWrapper renderPass,
+        FramebufferWrapper framebuffer,
+        Action<CommandBufferWrapper> callback
+    )
+        : this(
+            vk,
+            device,
+            commandPool,
+            flags,
+            (commandBuffer) =>
+            {
+                var renderPassInfo = new RenderPassBeginInfo()
+                {
+                    SType = StructureType.RenderPassBeginInfo,
+                    RenderPass = renderPass.RenderPass,
+                    Framebuffer = framebuffer.Framebuffer,
+                    RenderArea = { Offset = { X = 0, Y = 0 }, Extent = swapchain.Extent },
+                };
+
+                var clearColor = new ClearValue()
+                {
+                    Color = new()
+                    {
+                        Float32_0 = 0,
+                        Float32_1 = 0,
+                        Float32_2 = 0,
+                        Float32_3 = 1,
+                    },
+                };
+
+                renderPassInfo.ClearValueCount = 1;
+                renderPassInfo.PClearValues = &clearColor;
+
+                vk.CmdBeginRenderPass(
+                    commandBuffer.CommandBuffer,
+                    &renderPassInfo,
+                    SubpassContents.Inline
+                );
+
+                callback(commandBuffer);
+
+                vk.CmdEndRenderPass(commandBuffer.CommandBuffer);
+            }
+        ) { }
 
     public void Dispose()
     {

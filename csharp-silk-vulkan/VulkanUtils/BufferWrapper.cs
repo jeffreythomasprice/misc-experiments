@@ -1,6 +1,7 @@
 namespace Experiment.VulkanUtils;
 
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;
 
@@ -33,43 +34,29 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
         SizeInBytes = (UInt64)(data.Length * Marshal.SizeOf<T>());
         Count = data.Length;
 
-        var bufferInfo = new BufferCreateInfo()
-        {
-            SType = StructureType.BufferCreateInfo,
-            Size = SizeInBytes,
-            Usage = usage,
-            SharingMode = SharingMode.Exclusive,
-        };
-
-        if (vk.CreateBuffer(device.Device, in bufferInfo, null, out Buffer) != Result.Success)
-        {
-            throw new Exception("failed to create buffer");
-        }
-
-        vk.GetBufferMemoryRequirements(device.Device, Buffer, out var memRequirements);
-
-        var allocInfo = new MemoryAllocateInfo()
-        {
-            SType = StructureType.MemoryAllocateInfo,
-            AllocationSize = memRequirements.Size,
-            MemoryTypeIndex = FindMemoryType(
-                vk,
-                physicalDevice,
-                memRequirements.MemoryTypeBits,
-                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit
-            ),
-        };
-
-        if (
-            vk.AllocateMemory(device.Device, in allocInfo, null, out BufferMemory) != Result.Success
-        )
-        {
-            throw new Exception("failed to allocate buffer memory");
-        }
-
-        vk.BindBufferMemory(device.Device, Buffer, BufferMemory, 0);
+        (Buffer, BufferMemory) = Init(vk, physicalDevice, device, SizeInBytes, usage);
 
         CopyDataToBuffer(data);
+    }
+
+    public BufferWrapper(
+        Vk vk,
+        PhysicalDeviceWrapper physicalDevice,
+        DeviceWrapper device,
+        Action<Span<T>> f,
+        UInt64 sizeInBytes,
+        BufferUsageFlags usage
+    )
+    {
+        this.vk = vk;
+        this.device = device;
+
+        SizeInBytes = sizeInBytes;
+        Count = (int)(sizeInBytes / (UInt64)Marshal.SizeOf<T>());
+
+        (Buffer, BufferMemory) = Init(vk, physicalDevice, device, SizeInBytes, usage);
+
+        GetWritableSpanToBufferData(f);
     }
 
     public void Dispose()
@@ -92,26 +79,68 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
         }
     }
 
-    private static uint FindMemoryType(
+    public void GetWritableSpanToBufferData(Action<Span<T>> f)
+    {
+        GetWritableSpanToBufferData(f, 0, SizeInBytes);
+    }
+
+    public void GetWritableSpanToBufferData(Action<Span<T>> f, UInt64 offset, UInt64 sizeInBytes)
+    {
+        void* dataPtr;
+        vk.MapMemory(device.Device, BufferMemory, offset, sizeInBytes, 0, &dataPtr);
+        try
+        {
+            f(new Span<T>(dataPtr, (int)sizeInBytes / Unsafe.SizeOf<T>()));
+        }
+        finally
+        {
+            vk.UnmapMemory(device.Device, BufferMemory);
+        }
+    }
+
+    private static (Silk.NET.Vulkan.Buffer, DeviceMemory) Init(
         Vk vk,
         PhysicalDeviceWrapper physicalDevice,
-        uint typeFilter,
-        MemoryPropertyFlags properties
+        DeviceWrapper device,
+        UInt64 sizeInBytes,
+        BufferUsageFlags usage
     )
     {
-        vk.GetPhysicalDeviceMemoryProperties(physicalDevice.PhysicalDevice, out var memProperties);
-
-        for (uint i = 0; i < memProperties.MemoryTypeCount; i++)
+        var bufferInfo = new BufferCreateInfo()
         {
-            if (
-                (typeFilter & (1 << (int)i)) != 0
-                && (memProperties.MemoryTypes[(int)i].PropertyFlags & properties) == properties
-            )
-            {
-                return i;
-            }
+            SType = StructureType.BufferCreateInfo,
+            Size = sizeInBytes,
+            Usage = usage,
+            SharingMode = SharingMode.Exclusive,
+        };
+
+        if (vk.CreateBuffer(device.Device, in bufferInfo, null, out var buffer) != Result.Success)
+        {
+            throw new Exception("failed to create buffer");
         }
 
-        throw new Exception("failed to find suitable memory type");
+        vk.GetBufferMemoryRequirements(device.Device, buffer, out var memRequirements);
+
+        var allocInfo = new MemoryAllocateInfo()
+        {
+            SType = StructureType.MemoryAllocateInfo,
+            AllocationSize = memRequirements.Size,
+            MemoryTypeIndex = physicalDevice.FindMemoryType(
+                memRequirements.MemoryTypeBits,
+                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit
+            ),
+        };
+
+        if (
+            vk.AllocateMemory(device.Device, in allocInfo, null, out var bufferMemory)
+            != Result.Success
+        )
+        {
+            throw new Exception("failed to allocate buffer memory");
+        }
+
+        vk.BindBufferMemory(device.Device, buffer, bufferMemory, 0);
+
+        return (buffer, bufferMemory);
     }
 }

@@ -119,6 +119,26 @@ unsafe class Demo : IAppEventHandler
             File.ReadAllBytes("Shaders/shader.frag.spv"),
             [uniformDescriptorSetLayout]
         );
+
+        using var sourceImage =
+            SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
+                "Resources/silk.png"
+            );
+        log.LogInformation(
+            "TODO loaded image size: {Width}x{Height}, bits per pixel: {BitsPerPixel}, alpha: {Alpha}",
+            sourceImage.Width,
+            sourceImage.Height,
+            sourceImage.PixelType.BitsPerPixel,
+            sourceImage.PixelType.AlphaRepresentation
+        );
+        using var texture = new TextureImageWrapper(
+            state.Vk,
+            state.PhysicalDevice,
+            state.Device,
+            state.CommandPool,
+            sourceImage
+        );
+        log.LogInformation("TODO created texture image");
     }
 
     public void OnSwapchainDestroyed(App.GraphicsReadyState state)

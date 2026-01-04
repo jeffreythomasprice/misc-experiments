@@ -117,4 +117,22 @@ public unsafe class PhysicalDeviceWrapper
         }
         return PresentQueueIndex.Value;
     }
+
+    public uint FindMemoryType(uint typeFilter, MemoryPropertyFlags properties)
+    {
+        vk.GetPhysicalDeviceMemoryProperties(PhysicalDevice, out var memProperties);
+
+        for (uint i = 0; i < memProperties.MemoryTypeCount; i++)
+        {
+            if (
+                (typeFilter & (1 << (int)i)) != 0
+                && (memProperties.MemoryTypes[(int)i].PropertyFlags & properties) == properties
+            )
+            {
+                return i;
+            }
+        }
+
+        throw new Exception("failed to find suitable memory type");
+    }
 }
