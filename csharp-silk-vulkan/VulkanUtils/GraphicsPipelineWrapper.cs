@@ -74,9 +74,18 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
             var viewport = new Viewport()
             {
                 X = 0,
-                Y = 0,
                 Width = swapchain.Extent.Width,
-                Height = swapchain.Extent.Height,
+
+                /*
+                the default clip space in vulkan puts positive Y pointing towards the bottom of the screen
+                in OpenGL this is backwards, the positive Y goes up towards the top of the screen
+                we're going to flip this around so that normalized device coordinates coming out of fragment shaders have
+                    (-1, -1) at the top left corner, and
+                    (1,1) at the bottom right corner
+                */
+                Y = swapchain.Extent.Height,
+                Height = -swapchain.Extent.Height,
+
                 MinDepth = 0,
                 MaxDepth = 1,
             };

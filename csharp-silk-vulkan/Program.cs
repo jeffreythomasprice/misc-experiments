@@ -60,9 +60,9 @@ unsafe class Demo : IAppEventHandler
             state.Device,
             [
                 new(new(50, 50), new(0, 0), new(1, 0, 0, 1)),
-                new(new(50, 300), new(0, 1), new(1, 0, 1, 1)),
-                new(new(300, 300), new(1, 1), new(0, 0, 1, 1)),
                 new(new(300, 50), new(1, 0), new(0, 1, 0, 1)),
+                new(new(300, 300), new(1, 1), new(0, 0, 1, 1)),
+                new(new(50, 300), new(0, 1), new(1, 0, 1, 1)),
             ],
             BufferUsageFlags.VertexBufferBit
         );
@@ -268,7 +268,6 @@ unsafe class Demo : IAppEventHandler
     }
 
     private static Matrix4X4<float> CreateOrthoMatrix(App.State state) =>
-        // TODO 0,0 is in the bottom left corner, all attempts so far to make it the top-left corner have failed
         Matrix4X4.CreateOrthographicOffCenter<float>(
             0,
             state.WindowSize.X,
