@@ -28,7 +28,7 @@ struct UniformMatrices
     public Matrix4X4<float> Projection;
 }
 
-unsafe class Demo : IAppEventHandler
+class Demo : IAppEventHandler
 {
     private const uint UNIFORM_MATRICES_BINDING = 0;
     private const uint UNIFORM_SAMPLER_BINDING = 1;
@@ -150,13 +150,59 @@ unsafe class Demo : IAppEventHandler
             throw new InvalidOperationException("not initialized");
         }
 
+        using var vertexShaderModule = ShaderModuleWrapper.FromGlslSource(
+            state.Vk,
+            state.Device,
+            ShaderModuleWrapper.ShaderType.Vertex,
+            """
+            #version 450
+
+            layout(binding = 0) uniform UniformMatrices {
+                mat4 model;
+                mat4 view;
+                mat4 projection;
+            } uniformMatrices;
+
+            layout(location = 0) in vec2 inPosition;
+            layout(location = 1) in vec2 inTextureCoordinate;
+            layout(location = 2) in vec4 inColor;
+
+            layout(location = 0) out vec2 fragTextureCoordinate;
+            layout(location = 1) out vec4 fragColor;
+
+            void main() {
+                gl_Position = uniformMatrices.projection * uniformMatrices.view * uniformMatrices.model * vec4(inPosition, 0.0, 1.0);
+                fragTextureCoordinate = inTextureCoordinate;
+                fragColor = inColor;
+            }
+            """
+        );
+        using var fragmentShaderModule = ShaderModuleWrapper.FromGlslSource(
+            state.Vk,
+            state.Device,
+            ShaderModuleWrapper.ShaderType.Fragment,
+            """
+            #version 450
+
+            layout(binding = 1) uniform sampler2D uniformSampler;
+
+            layout(location = 0) in vec2 fragTextureCoordinate;
+            layout(location = 1) in vec4 fragColor;
+
+            layout(location = 0) out vec4 outColor;
+
+            void main() {
+                outColor = texture(uniformSampler, fragTextureCoordinate) * fragColor;
+            }
+            """
+        );
         graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DTexturedRgba>(
             state.Vk,
             state.Device,
             state.Swapchain,
             state.RenderPass,
-            File.ReadAllBytes("Shaders/shader.vert.spv"),
-            File.ReadAllBytes("Shaders/shader.frag.spv"),
+            vertexShaderModule,
+            fragmentShaderModule,
             [uniformDescriptorSetLayout]
         );
     }
@@ -185,7 +231,7 @@ unsafe class Demo : IAppEventHandler
         vertexBuffer = null;
     }
 
-    public void OnRender(
+    public unsafe void OnRender(
         App.GraphicsReadyState state,
         CommandBufferWrapper commandBuffer,
         TimeSpan deltaTime

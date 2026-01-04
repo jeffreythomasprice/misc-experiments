@@ -18,8 +18,4 @@
     <PackageReference Include="Silk.NET.Windowing" Version="2.22.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <PreBuildEvent>cd $(MSBuildProjectDirectory)/Shaders &amp;&amp; make</PreBuildEvent>
-  </PropertyGroup>
 </Project>

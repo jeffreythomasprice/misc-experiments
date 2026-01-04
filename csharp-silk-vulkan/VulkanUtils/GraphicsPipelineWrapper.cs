@@ -16,20 +16,13 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
         DeviceWrapper device,
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
-        byte[] vertexShaderSpirvBytes,
-        byte[] fragmentShaderSpirvBytes,
+        ShaderModuleWrapper vertexShaderModule,
+        ShaderModuleWrapper fragmentShaderModule,
         DescriptorSetLayoutWrapper[] descriptorSetLayouts
     )
     {
         this.vk = vk;
         this.device = device;
-
-        using var vertexShaderModule = new ShaderModuleWrapper(vk, device, vertexShaderSpirvBytes);
-        using var fragmentShaderModule = new ShaderModuleWrapper(
-            vk,
-            device,
-            fragmentShaderSpirvBytes
-        );
 
         using var vertexShaderMainName = new PointerUtils.DisposableStringPointer("main");
         var vertShaderStageInfo = new PipelineShaderStageCreateInfo()
