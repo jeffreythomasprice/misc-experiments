@@ -32,9 +32,9 @@ public sealed unsafe class TextureImageWrapper : IDisposable
             vk,
             physicalDevice,
             device,
-            source.CopyPixelDataTo,
-            (UInt64)(source.Width * source.Height * source.PixelType.BitsPerPixel / 8),
-            BufferUsageFlags.TransferSrcBit
+            source.Width * source.Height * source.PixelType.BitsPerPixel / 8,
+            BufferUsageFlags.TransferSrcBit,
+            source.CopyPixelDataTo
         );
 
         CreateImage(

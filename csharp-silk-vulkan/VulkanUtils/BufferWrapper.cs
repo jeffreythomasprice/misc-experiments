@@ -43,20 +43,35 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
         Vk vk,
         PhysicalDeviceWrapper physicalDevice,
         DeviceWrapper device,
-        Action<Span<T>> f,
-        UInt64 sizeInBytes,
+        int count,
         BufferUsageFlags usage
     )
     {
+        if (count <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count), "must be positive");
+        }
+
         this.vk = vk;
         this.device = device;
 
-        SizeInBytes = sizeInBytes;
-        Count = (int)(sizeInBytes / (UInt64)Marshal.SizeOf<T>());
+        SizeInBytes = (UInt64)(count * Marshal.SizeOf<T>());
+        Count = count;
 
         (Buffer, BufferMemory) = Init(vk, physicalDevice, device, SizeInBytes, usage);
+    }
 
-        GetWritableSpanToBufferData(f);
+    public BufferWrapper(
+        Vk vk,
+        PhysicalDeviceWrapper physicalDevice,
+        DeviceWrapper device,
+        int count,
+        BufferUsageFlags usage,
+        Action<Span<T>> initialDataCallback
+    )
+        : this(vk, physicalDevice, device, count, usage)
+    {
+        GetWritableSpanToBufferData(initialDataCallback);
     }
 
     public void Dispose()
@@ -67,8 +82,23 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
 
     public void CopyDataToBuffer(ReadOnlySpan<T> data)
     {
+        CopyDataToBuffer(data, 0);
+    }
+
+    /// <param name="data"></param>
+    /// <param name="offset">as an index, not a byte offset</param>
+    public void CopyDataToBuffer(ReadOnlySpan<T> data, int offset)
+    {
+        var stride = (UInt64)Marshal.SizeOf<T>();
         void* dataPtr;
-        vk.MapMemory(device.Device, BufferMemory, 0, SizeInBytes, 0, &dataPtr);
+        vk.MapMemory(
+            device.Device,
+            BufferMemory,
+            (UInt64)offset * stride,
+            (UInt64)data.Length * stride,
+            0,
+            &dataPtr
+        );
         try
         {
             data.CopyTo(new Span<T>(dataPtr, data.Length));

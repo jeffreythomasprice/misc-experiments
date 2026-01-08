@@ -1,6 +1,7 @@
 ﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 using Experiment;
+using Experiment.Engine;
 using Experiment.VulkanUtils;
 using Microsoft.Extensions.Logging;
 using Silk.NET.Input;
@@ -36,8 +37,7 @@ class Demo : IAppEventHandler
     private readonly ILogger<Demo> log;
 
     // OnLoad stuff
-    private BufferWrapper<Vertex2DTexturedRgba>? vertexBuffer;
-    private BufferWrapper<UInt16>? indexBuffer;
+    private Mesh<Vertex2DTexturedRgba>? mesh;
     private BufferWrapper<UniformMatrices>? uniformBuffer;
     private DescriptorSetLayoutWrapper? uniformDescriptorSetLayout;
     private DescriptorPoolWrapper? uniformDescriptorPool;
@@ -54,24 +54,19 @@ class Demo : IAppEventHandler
 
     public void OnLoad(App.State state)
     {
-        vertexBuffer = new BufferWrapper<Vertex2DTexturedRgba>(
-            state.Vk,
-            state.PhysicalDevice,
-            state.Device,
-            [
-                new(new(50, 50), new(0, 0), System.Drawing.Color.Red.ToVector4Df()),
-                new(new(300, 50), new(1, 0), System.Drawing.Color.Green.ToVector4Df()),
-                new(new(300, 300), new(1, 1), System.Drawing.Color.Blue.ToVector4Df()),
-                new(new(50, 300), new(0, 1), System.Drawing.Color.Purple.ToVector4Df()),
-            ],
-            BufferUsageFlags.VertexBufferBit
+        // TODO mesh should have an automatic resize mode that dynamically recreates the buffer as needed
+        mesh = new Mesh<Vertex2DTexturedRgba>(state.Vk, state.PhysicalDevice, state.Device, 8, 12);
+        mesh.AppendQuad(
+            new(new(50, 50), new(0, 0), System.Drawing.Color.Red.ToVector4Df()),
+            new(new(300, 50), new(1, 0), System.Drawing.Color.Green.ToVector4Df()),
+            new(new(300, 300), new(1, 1), System.Drawing.Color.Blue.ToVector4Df()),
+            new(new(50, 300), new(0, 1), System.Drawing.Color.Purple.ToVector4Df())
         );
-        indexBuffer = new BufferWrapper<UInt16>(
-            state.Vk,
-            state.PhysicalDevice,
-            state.Device,
-            [0, 1, 2, 2, 3, 0],
-            BufferUsageFlags.IndexBufferBit
+        mesh.AppendQuad(
+            new(new(300, 300), new(0, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(400, 300), new(1, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(400, 400), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(300, 400), new(0, 1), System.Drawing.Color.White.ToVector4Df())
         );
         uniformBuffer = new BufferWrapper<UniformMatrices>(
             state.Vk,
@@ -145,7 +140,7 @@ class Demo : IAppEventHandler
 
     public void OnSwapchainCreated(App.GraphicsReadyState state)
     {
-        if (uniformDescriptorSetLayout is null || uniformDescriptorSet is null)
+        if (uniformDescriptorSetLayout is null)
         {
             throw new InvalidOperationException("not initialized");
         }
@@ -225,10 +220,8 @@ class Demo : IAppEventHandler
         uniformDescriptorSetLayout = null;
         uniformBuffer?.Dispose();
         uniformBuffer = null;
-        indexBuffer?.Dispose();
-        indexBuffer = null;
-        vertexBuffer?.Dispose();
-        vertexBuffer = null;
+        mesh?.Dispose();
+        mesh = null;
     }
 
     public unsafe void OnRender(
@@ -238,8 +231,7 @@ class Demo : IAppEventHandler
     )
     {
         if (
-            vertexBuffer is null
-            || indexBuffer is null
+            mesh is null
             || uniformBuffer is null
             || uniformDescriptorSet is null
             || graphicsPipeline is null
@@ -254,21 +246,6 @@ class Demo : IAppEventHandler
             graphicsPipeline.GraphicsPipeline
         );
 
-        state.Vk.CmdBindVertexBuffers(
-            commandBuffer.CommandBuffer,
-            0,
-            1,
-            [vertexBuffer.Buffer],
-            [0]
-        );
-
-        state.Vk.CmdBindIndexBuffer(
-            commandBuffer.CommandBuffer,
-            indexBuffer.Buffer,
-            0,
-            IndexType.Uint16
-        );
-
         state.Vk.CmdBindDescriptorSets(
             commandBuffer.CommandBuffer,
             PipelineBindPoint.Graphics,
@@ -279,7 +256,8 @@ class Demo : IAppEventHandler
             0,
             null
         );
-        state.Vk.CmdDrawIndexed(commandBuffer.CommandBuffer, (uint)indexBuffer.Count, 1, 0, 0, 0);
+
+        mesh.BindAndDraw(commandBuffer);
     }
 
     public void OnResize(App.State state)
