@@ -3,6 +3,7 @@ namespace Experiment.VulkanUtils;
 using System;
 using System.Xml;
 using Microsoft.Extensions.Logging;
+using Silk.NET.Shaderc;
 using Silk.NET.Vulkan;
 
 public sealed unsafe class ShaderModuleWrapper : IDisposable
@@ -23,38 +24,34 @@ public sealed unsafe class ShaderModuleWrapper : IDisposable
 
     public static ShaderModuleWrapper FromGlslSource(
         Vk vk,
+        Shaderc shaderc,
         DeviceWrapper device,
         ShaderType shaderType,
         string source
     )
     {
-        using var sourceFilePath = new TempFilePath(
-            shaderType switch
-            {
-                ShaderType.Vertex => "vert",
-                ShaderType.Fragment => "frag",
-                _ => throw new ArgumentOutOfRangeException(
-                    nameof(shaderType),
-                    "unknown shader type"
-                ),
-            }
+        using var compiler = new ShadercCompilerWrapper(shaderc);
+        using var compileOptions = new ShadercCompilerOptionsWrapper(shaderc);
+        return new ShaderModuleWrapper(
+            vk,
+            device,
+            compiler.CompileGlslSource(
+                source,
+                shaderType switch
+                {
+                    ShaderType.Vertex => ShaderKind.VertexShader,
+                    ShaderType.Fragment => ShaderKind.FragmentShader,
+                    _ => throw new ArgumentOutOfRangeException(
+                        nameof(shaderType),
+                        "unknown shader type"
+                    ),
+                },
+                compileOptions
+            )
         );
-        using var outputFilePath = new TempFilePath();
-        Log.Value.LogTrace(
-            "writing shader of type {ShaderType} source to: {TempFilePath}, compiling to Spir-V at output path: {OutputFilePath}",
-            shaderType,
-            sourceFilePath.Path,
-            outputFilePath.Path
-        );
-
-        File.WriteAllText(sourceFilePath.Path, source);
-
-        Exec.Run("glslc", [sourceFilePath.Path, "-x", "glsl", "-o", outputFilePath.Path]);
-
-        return new ShaderModuleWrapper(vk, device, File.ReadAllBytes(outputFilePath.Path));
     }
 
-    public ShaderModuleWrapper(Vk vk, DeviceWrapper device, byte[] spirvBytes)
+    public ShaderModuleWrapper(Vk vk, DeviceWrapper device, byte[] bytes)
     {
         this.vk = vk;
         this.device = device;
@@ -62,12 +59,12 @@ public sealed unsafe class ShaderModuleWrapper : IDisposable
         var createInfo = new ShaderModuleCreateInfo()
         {
             SType = StructureType.ShaderModuleCreateInfo,
-            CodeSize = (nuint)spirvBytes.Length,
+            CodeSize = (nuint)bytes.Length,
         };
 
-        fixed (byte* spirvBytesPtr = spirvBytes)
+        fixed (byte* bytesPtr = bytes)
         {
-            createInfo.PCode = (uint*)spirvBytesPtr;
+            createInfo.PCode = (uint*)bytesPtr;
 
             if (
                 vk.CreateShaderModule(device.Device, in createInfo, null, out ShaderModule)

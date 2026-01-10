@@ -5,6 +5,7 @@ using Experiment.VulkanUtils;
 using Microsoft.Extensions.Logging;
 using Silk.NET.Input;
 using Silk.NET.Maths;
+using Silk.NET.Shaderc;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 
@@ -41,6 +42,8 @@ public sealed partial class App : IDisposable
 
         public Vk Vk => app.vk;
 
+        public Shaderc Shaderc => app.shaderc;
+
         public PhysicalDeviceWrapper PhysicalDevice => app.physicalDevice;
 
         public DeviceWrapper Device => app.device;
@@ -67,6 +70,7 @@ public sealed partial class App : IDisposable
 
     // vulkan stuff that stays alive forever
     private readonly Vk vk;
+    private readonly Shaderc shaderc;
     private readonly InstanceWrapper instance;
     private readonly DebugMessengerWrapper debugMessenger;
     private readonly SurfaceWrapper surface;
@@ -121,6 +125,7 @@ public sealed partial class App : IDisposable
 
         var enableValidationLayers = true;
         vk = Vk.GetApi();
+        shaderc = Shaderc.GetApi();
         instance = new InstanceWrapper(vk, window.VkSurface, enableValidationLayers);
         debugMessenger = new DebugMessengerWrapper(vk, instance, enableValidationLayers);
         surface = new SurfaceWrapper(window.VkSurface, vk, instance);
@@ -227,6 +232,7 @@ public sealed partial class App : IDisposable
         surface.Dispose();
         debugMessenger.Dispose();
         instance.Dispose();
+        shaderc.Dispose();
         vk.Dispose();
     }
 

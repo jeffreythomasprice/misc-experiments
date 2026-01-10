@@ -134,7 +134,7 @@ class Demo : IAppEventHandler
             sourceImage
         );
         log.LogTrace("created texture image");
-        uniformDescriptorSet.UpdateDescriptorSet(texture, 1);
+        uniformDescriptorSet.UpdateDescriptorSet(texture, UNIFORM_SAMPLER_BINDING);
     }
 
     public void OnSwapchainCreated(App.GraphicsReadyState state)
@@ -146,6 +146,7 @@ class Demo : IAppEventHandler
 
         using var vertexShaderModule = ShaderModuleWrapper.FromGlslSource(
             state.Vk,
+            state.Shaderc,
             state.Device,
             ShaderModuleWrapper.ShaderType.Vertex,
             """
@@ -173,6 +174,7 @@ class Demo : IAppEventHandler
         );
         using var fragmentShaderModule = ShaderModuleWrapper.FromGlslSource(
             state.Vk,
+            state.Shaderc,
             state.Device,
             ShaderModuleWrapper.ShaderType.Fragment,
             """
