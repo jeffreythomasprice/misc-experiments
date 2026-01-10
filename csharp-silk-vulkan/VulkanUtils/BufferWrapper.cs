@@ -131,6 +131,9 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
                 vk.UnmapMemory(device.Device, newDeviceMemory);
             }
 
+            vk.FreeMemory(device.Device, BufferMemory, null);
+            vk.DestroyBuffer(device.Device, Buffer, null);
+
             count = value;
             Buffer = newBuffer;
             BufferMemory = newDeviceMemory;
