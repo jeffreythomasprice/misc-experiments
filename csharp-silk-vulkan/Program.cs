@@ -54,7 +54,6 @@ class Demo : IAppEventHandler
 
     public void OnLoad(App.State state)
     {
-        // TODO mesh should have an automatic resize mode that dynamically recreates the buffer as needed
         mesh = new Mesh<Vertex2DTexturedRgba>(state.Vk, state.PhysicalDevice, state.Device);
         mesh.AppendQuad(
             new(new(50, 50), new(0, 0), System.Drawing.Color.Red.ToVector4Df()),
