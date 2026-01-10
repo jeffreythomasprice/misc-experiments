@@ -64,6 +64,16 @@ public sealed class Mesh<VertexType> : IDisposable
         );
     }
 
+    public Mesh(Vk vk, PhysicalDeviceWrapper physicalDevice, DeviceWrapper device)
+        : this(
+            vk,
+            physicalDevice,
+            device,
+            // buffers can't be empty, so just allocate the minimum space and we'll auto resize as needed
+            1,
+            1
+        ) { }
+
     public void Dispose()
     {
         vertexBuffer.Dispose();
@@ -78,18 +88,8 @@ public sealed class Mesh<VertexType> : IDisposable
 
     public void Append(Span<VertexType> vertices, Span<UInt16> indices)
     {
-        if (vertexBufferCount + vertices.Length > vertexBuffer.Count)
-        {
-            throw new InvalidOperationException(
-                "not enough space in vertex buffer to append vertices"
-            );
-        }
-        if (indexBufferCount + indices.Length > indexBuffer.Count)
-        {
-            throw new InvalidOperationException(
-                "not enough space in index buffer to append indices"
-            );
-        }
+        vertexBuffer.Count = Math.Max(vertexBuffer.Count, vertexBufferCount + vertices.Length);
+        indexBuffer.Count = Math.Max(indexBuffer.Count, indexBufferCount + indices.Length);
 
         var lastVertex = vertexBufferCount;
         vertexBuffer.CopyDataToBuffer(vertices, lastVertex);

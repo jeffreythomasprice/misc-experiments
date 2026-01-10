@@ -8,11 +8,13 @@ using Silk.NET.Vulkan;
 public sealed unsafe class BufferWrapper<T> : IDisposable
 {
     private readonly Vk vk;
+    private readonly PhysicalDeviceWrapper physicalDevice;
     private readonly DeviceWrapper device;
-    public readonly UInt64 SizeInBytes;
-    public readonly int Count;
-    public readonly Silk.NET.Vulkan.Buffer Buffer;
-    public readonly DeviceMemory BufferMemory;
+
+    private int count;
+
+    public Silk.NET.Vulkan.Buffer Buffer;
+    public DeviceMemory BufferMemory;
 
     /*
     TODO support copying between two buffers
@@ -29,12 +31,12 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
     )
     {
         this.vk = vk;
+        this.physicalDevice = physicalDevice;
         this.device = device;
 
-        SizeInBytes = (UInt64)(data.Length * Marshal.SizeOf<T>());
-        Count = data.Length;
+        count = data.Length;
 
-        (Buffer, BufferMemory) = Init(vk, physicalDevice, device, SizeInBytes, usage);
+        (Buffer, BufferMemory) = Init(vk, physicalDevice, device, (UInt64)SizeInBytes, usage);
 
         CopyDataToBuffer(data);
     }
@@ -53,12 +55,12 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
         }
 
         this.vk = vk;
+        this.physicalDevice = physicalDevice;
         this.device = device;
 
-        SizeInBytes = (UInt64)(count * Marshal.SizeOf<T>());
-        Count = count;
+        this.count = count;
 
-        (Buffer, BufferMemory) = Init(vk, physicalDevice, device, SizeInBytes, usage);
+        (Buffer, BufferMemory) = Init(vk, physicalDevice, device, (UInt64)SizeInBytes, usage);
     }
 
     public BufferWrapper(
@@ -79,6 +81,68 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
         vk.FreeMemory(device.Device, BufferMemory, null);
         vk.DestroyBuffer(device.Device, Buffer, null);
     }
+
+    public static int Stride => Marshal.SizeOf<T>();
+
+    public int Count
+    {
+        get => count;
+        set
+        {
+            if (count == value)
+            {
+                return;
+            }
+            if (value < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(Count), "must be non-negative");
+            }
+
+            var (newBuffer, newDeviceMemory) = Init(
+                vk,
+                physicalDevice,
+                device,
+                (UInt64)(value * Marshal.SizeOf<T>()),
+                BufferUsageFlags.VertexBufferBit | BufferUsageFlags.IndexBufferBit
+            );
+            var newSizeInBytes = (UInt64)(value * Marshal.SizeOf<T>());
+            void* newDataPtr;
+            vk.MapMemory(device.Device, newDeviceMemory, 0, newSizeInBytes, 0, &newDataPtr);
+            try
+            {
+                void* currentDataPtr;
+                vk.MapMemory(
+                    device.Device,
+                    BufferMemory,
+                    0,
+                    (UInt64)SizeInBytes,
+                    0,
+                    &currentDataPtr
+                );
+                try
+                {
+                    var copyCount = Math.Min(Count, value);
+                    new Span<T>(currentDataPtr, copyCount).CopyTo(
+                        new Span<T>(newDataPtr, copyCount)
+                    );
+                }
+                finally
+                {
+                    vk.UnmapMemory(device.Device, BufferMemory);
+                }
+            }
+            finally
+            {
+                vk.UnmapMemory(device.Device, newDeviceMemory);
+            }
+
+            count = value;
+            Buffer = newBuffer;
+            BufferMemory = newDeviceMemory;
+        }
+    }
+
+    public int SizeInBytes => Count * Stride;
 
     public void CopyDataToBuffer(ReadOnlySpan<T> data)
     {
@@ -111,7 +175,7 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
 
     public void GetWritableSpanToBufferData(Action<Span<T>> f)
     {
-        GetWritableSpanToBufferData(f, 0, SizeInBytes);
+        GetWritableSpanToBufferData(f, 0, (UInt64)SizeInBytes);
     }
 
     public void GetWritableSpanToBufferData(Action<Span<T>> f, UInt64 offset, UInt64 sizeInBytes)
