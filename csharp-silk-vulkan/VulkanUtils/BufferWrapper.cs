@@ -76,7 +76,7 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
         vk.DestroyBuffer(device.Device, Buffer, null);
     }
 
-    public static int Stride => Marshal.SizeOf<T>();
+    public static int Stride => Unsafe.SizeOf<T>();
 
     public int Count
     {
@@ -97,10 +97,10 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
                 vk,
                 physicalDevice,
                 device,
-                (UInt64)(value * Marshal.SizeOf<T>()),
+                (UInt64)(value * Stride),
                 BufferUsageFlags.VertexBufferBit | BufferUsageFlags.IndexBufferBit
             );
-            var newSizeInBytes = (UInt64)(value * Marshal.SizeOf<T>());
+            var newSizeInBytes = (UInt64)(value * Stride);
             void* newDataPtr;
             vk.MapMemory(device.Device, newDeviceMemory, 0, newSizeInBytes, 0, &newDataPtr);
             try
@@ -151,13 +151,12 @@ public sealed unsafe class BufferWrapper<T> : IDisposable
     /// <param name="offset">as an index, not a byte offset</param>
     public void CopyDataToBuffer(ReadOnlySpan<T> data, int offset)
     {
-        var stride = (UInt64)Marshal.SizeOf<T>();
         void* dataPtr;
         vk.MapMemory(
             device.Device,
             BufferMemory,
-            (UInt64)offset * stride,
-            (UInt64)data.Length * stride,
+            (UInt64)offset * (UInt64)Stride,
+            (UInt64)data.Length * (UInt64)Stride,
             0,
             &dataPtr
         );

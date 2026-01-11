@@ -60,7 +60,7 @@ public sealed unsafe class DescriptorSetWrapper : IDisposable
         {
             Buffer = buffer.Buffer,
             Offset = 0,
-            Range = (ulong)Unsafe.SizeOf<T>(),
+            Range = (ulong)BufferWrapper<T>.Stride,
         };
 
         var descriptorWrite = new WriteDescriptorSet()

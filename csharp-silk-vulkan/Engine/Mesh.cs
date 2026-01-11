@@ -1,6 +1,5 @@
 namespace Experiment.Engine;
 
-using System.Runtime.CompilerServices;
 using Experiment.VulkanUtils;
 using Silk.NET.Vulkan;
 

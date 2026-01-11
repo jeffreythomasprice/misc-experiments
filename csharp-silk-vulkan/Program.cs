@@ -38,10 +38,9 @@ class Demo : IAppEventHandler
 
     // OnLoad stuff
     private Mesh<Vertex2DTexturedRgba>? mesh;
-    private BufferWrapper<UniformMatrices>? uniformBuffer;
-    private DescriptorSetLayoutWrapper? uniformDescriptorSetLayout;
-    private DescriptorPoolWrapper? uniformDescriptorPool;
-    private DescriptorSetWrapper? uniformDescriptorSet;
+    private Uniforms? uniforms;
+    private Uniforms.BufferBinding<UniformMatrices>? uniformMatricesBinding;
+    private Uniforms.TextureBinding? uniformSamplerBinding;
     private TextureImageWrapper? texture;
 
     // OnSwapchainCreated stuff
@@ -67,18 +66,10 @@ class Demo : IAppEventHandler
             new(new(400, 400), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
             new(new(300, 400), new(0, 1), System.Drawing.Color.White.ToVector4Df())
         );
-        uniformBuffer = new BufferWrapper<UniformMatrices>(
+
+        uniforms = new(
             state.Vk,
             state.PhysicalDevice,
-            state.Device,
-            [
-                // initial blank ortho matrix, we'll set it up to an initial correct value once resize is called
-                new(),
-            ],
-            BufferUsageFlags.UniformBufferBit
-        );
-        uniformDescriptorSetLayout = new DescriptorSetLayoutWrapper(
-            state.Vk,
             state.Device,
             [
                 new()
@@ -99,21 +90,10 @@ class Demo : IAppEventHandler
                 },
             ]
         );
-        uniformDescriptorPool = new DescriptorPoolWrapper(
-            state.Vk,
-            state.Device,
-            [
-                new() { Type = DescriptorType.UniformBuffer, DescriptorCount = 1 },
-                new() { Type = DescriptorType.CombinedImageSampler, DescriptorCount = 1 },
-            ],
-            1
+        uniformMatricesBinding = uniforms.GetBufferBinding<UniformMatrices>(
+            UNIFORM_MATRICES_BINDING
         );
-        uniformDescriptorSet = new DescriptorSetWrapper(
-            state.Vk,
-            state.Device,
-            uniformDescriptorPool,
-            uniformDescriptorSetLayout
-        );
+        uniformSamplerBinding = uniforms.GetTextureBinding(UNIFORM_SAMPLER_BINDING);
 
         using var sourceImage =
             SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
@@ -134,12 +114,12 @@ class Demo : IAppEventHandler
             sourceImage
         );
         log.LogTrace("created texture image");
-        uniformDescriptorSet.UpdateDescriptorSet(texture, UNIFORM_SAMPLER_BINDING);
+        uniformSamplerBinding.Update(texture);
     }
 
     public void OnSwapchainCreated(App.GraphicsReadyState state)
     {
-        if (uniformDescriptorSetLayout is null)
+        if (uniforms is null)
         {
             throw new InvalidOperationException("not initialized");
         }
@@ -199,7 +179,7 @@ class Demo : IAppEventHandler
             state.RenderPass,
             vertexShaderModule,
             fragmentShaderModule,
-            [uniformDescriptorSetLayout]
+            [uniforms.DescriptorSetLayout]
         );
     }
 
@@ -213,14 +193,12 @@ class Demo : IAppEventHandler
     {
         texture?.Dispose();
         texture = null;
-        uniformDescriptorSet?.Dispose();
-        uniformDescriptorSet = null;
-        uniformDescriptorPool?.Dispose();
-        uniformDescriptorPool = null;
-        uniformDescriptorSetLayout?.Dispose();
-        uniformDescriptorSetLayout = null;
-        uniformBuffer?.Dispose();
-        uniformBuffer = null;
+        uniformSamplerBinding?.Dispose();
+        uniformSamplerBinding = null;
+        uniformMatricesBinding?.Dispose();
+        uniformMatricesBinding = null;
+        uniforms?.Dispose();
+        uniforms = null;
         mesh?.Dispose();
         mesh = null;
     }
@@ -231,12 +209,7 @@ class Demo : IAppEventHandler
         TimeSpan deltaTime
     )
     {
-        if (
-            mesh is null
-            || uniformBuffer is null
-            || uniformDescriptorSet is null
-            || graphicsPipeline is null
-        )
+        if (mesh is null || uniforms is null || graphicsPipeline is null)
         {
             throw new InvalidOperationException("not initialized");
         }
@@ -253,7 +226,7 @@ class Demo : IAppEventHandler
             graphicsPipeline.PipelineLayout,
             0,
             1,
-            in uniformDescriptorSet.DescriptorSet,
+            in uniforms.DescriptorSet.DescriptorSet,
             0,
             null
         );
@@ -263,15 +236,14 @@ class Demo : IAppEventHandler
 
     public void OnResize(App.State state)
     {
-        if (uniformBuffer is null || uniformDescriptorSet is null)
+        if (uniformMatricesBinding is null)
         {
             throw new InvalidOperationException("not initialized");
         }
 
         state.Vk.DeviceWaitIdle(state.Device.Device);
 
-        uniformBuffer.CopyDataToBuffer([CreateUniformMatrices(state)]);
-        uniformDescriptorSet.UpdateDescriptorSet(uniformBuffer, UNIFORM_MATRICES_BINDING);
+        uniformMatricesBinding.Update(CreateUniformMatrices(state));
     }
 
     public void OnKeyUp(App.State state, IKeyboard keyboard, Key key, int keyCode)
