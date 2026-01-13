@@ -38,13 +38,11 @@ class Demo : IAppEventHandler
 
     // OnLoad stuff
     private Mesh<Vertex2DTexturedRgba>? mesh;
-    private Uniforms? uniforms;
-    private Uniforms.BufferBinding<UniformMatrices>? uniformMatricesBinding;
-    private Uniforms.TextureBinding? uniformSamplerBinding;
     private TextureImageWrapper? texture;
+    private Renderer2D? renderer2D;
 
     // OnSwapchainCreated stuff
-    private GraphicsPipelineWrapper<Vertex2DTexturedRgba>? graphicsPipeline;
+    // ... nothing here
 
     public Demo()
     {
@@ -67,34 +65,6 @@ class Demo : IAppEventHandler
             new(new(300, 400), new(0, 1), System.Drawing.Color.White.ToVector4Df())
         );
 
-        uniforms = new(
-            state.Vk,
-            state.PhysicalDevice,
-            state.Device,
-            [
-                new()
-                {
-                    Binding = UNIFORM_MATRICES_BINDING,
-                    DescriptorCount = 1,
-                    DescriptorType = DescriptorType.UniformBuffer,
-                    PImmutableSamplers = null,
-                    StageFlags = ShaderStageFlags.VertexBit,
-                },
-                new()
-                {
-                    Binding = UNIFORM_SAMPLER_BINDING,
-                    DescriptorCount = 1,
-                    DescriptorType = DescriptorType.CombinedImageSampler,
-                    PImmutableSamplers = null,
-                    StageFlags = ShaderStageFlags.FragmentBit,
-                },
-            ]
-        );
-        uniformMatricesBinding = uniforms.GetBufferBinding<UniformMatrices>(
-            UNIFORM_MATRICES_BINDING
-        );
-        uniformSamplerBinding = uniforms.GetTextureBinding(UNIFORM_SAMPLER_BINDING);
-
         using var sourceImage =
             SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
                 "Resources/silk.png"
@@ -114,91 +84,29 @@ class Demo : IAppEventHandler
             sourceImage
         );
         log.LogTrace("created texture image");
-        uniformSamplerBinding.Update(texture);
+
+        renderer2D = new Renderer2D(state.Vk, state.Shaderc, state.PhysicalDevice, state.Device)
+        {
+            Texture = texture,
+        };
     }
 
     public void OnSwapchainCreated(App.GraphicsReadyState state)
     {
-        if (uniforms is null)
-        {
-            throw new InvalidOperationException("not initialized");
-        }
-
-        using var vertexShaderModule = ShaderModuleWrapper.FromGlslSource(
-            state.Vk,
-            state.Shaderc,
-            state.Device,
-            ShaderModuleWrapper.ShaderType.Vertex,
-            """
-            #version 450
-
-            layout(binding = 0) uniform UniformMatrices {
-                mat4 model;
-                mat4 view;
-                mat4 projection;
-            } uniformMatrices;
-
-            layout(location = 0) in vec2 inPosition;
-            layout(location = 1) in vec2 inTextureCoordinate;
-            layout(location = 2) in vec4 inColor;
-
-            layout(location = 0) out vec2 fragTextureCoordinate;
-            layout(location = 1) out vec4 fragColor;
-
-            void main() {
-                gl_Position = uniformMatrices.projection * uniformMatrices.view * uniformMatrices.model * vec4(inPosition, 0.0, 1.0);
-                fragTextureCoordinate = inTextureCoordinate;
-                fragColor = inColor;
-            }
-            """
-        );
-        using var fragmentShaderModule = ShaderModuleWrapper.FromGlslSource(
-            state.Vk,
-            state.Shaderc,
-            state.Device,
-            ShaderModuleWrapper.ShaderType.Fragment,
-            """
-            #version 450
-
-            layout(binding = 1) uniform sampler2D uniformSampler;
-
-            layout(location = 0) in vec2 fragTextureCoordinate;
-            layout(location = 1) in vec4 fragColor;
-
-            layout(location = 0) out vec4 outColor;
-
-            void main() {
-                outColor = texture(uniformSampler, fragTextureCoordinate) * fragColor;
-            }
-            """
-        );
-        graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DTexturedRgba>(
-            state.Vk,
-            state.Device,
-            state.Swapchain,
-            state.RenderPass,
-            vertexShaderModule,
-            fragmentShaderModule,
-            [uniforms.DescriptorSetLayout]
-        );
+        // nothing to do
     }
 
     public void OnSwapchainDestroyed(App.GraphicsReadyState state)
     {
-        graphicsPipeline?.Dispose();
-        graphicsPipeline = null;
+        renderer2D?.OnSwapchainDestroyed();
     }
 
     public void OnUnload(App.State state)
     {
+        renderer2D?.Dispose();
+        renderer2D = null;
         texture?.Dispose();
         texture = null;
-        uniformSamplerBinding?.Dispose();
-        uniformSamplerBinding = null;
-        uniformMatricesBinding?.Dispose();
-        uniformMatricesBinding = null;
-        uniforms?.Dispose();
-        uniforms = null;
         mesh?.Dispose();
         mesh = null;
     }
@@ -209,41 +117,26 @@ class Demo : IAppEventHandler
         TimeSpan deltaTime
     )
     {
-        if (mesh is null || uniforms is null || graphicsPipeline is null)
+        if (mesh is null || renderer2D is null)
         {
             throw new InvalidOperationException("not initialized");
         }
 
-        state.Vk.CmdBindPipeline(
-            commandBuffer.CommandBuffer,
-            PipelineBindPoint.Graphics,
-            graphicsPipeline.GraphicsPipeline
-        );
-
-        state.Vk.CmdBindDescriptorSets(
-            commandBuffer.CommandBuffer,
-            PipelineBindPoint.Graphics,
-            graphicsPipeline.PipelineLayout,
-            0,
-            1,
-            in uniforms.DescriptorSet.DescriptorSet,
-            0,
-            null
-        );
+        renderer2D.Bind(state.Swapchain, state.RenderPass, commandBuffer);
 
         mesh.BindAndDraw(commandBuffer);
     }
 
     public void OnResize(App.State state)
     {
-        if (uniformMatricesBinding is null)
+        if (renderer2D is null)
         {
             throw new InvalidOperationException("not initialized");
         }
 
         state.Vk.DeviceWaitIdle(state.Device.Device);
 
-        uniformMatricesBinding.Update(CreateUniformMatrices(state));
+        renderer2D.ProjectionMatrix = CreateOrthoMatrix(state);
     }
 
     public void OnKeyUp(App.State state, IKeyboard keyboard, Key key, int keyCode)
@@ -252,16 +145,6 @@ class Demo : IAppEventHandler
         {
             state.Exit();
         }
-    }
-
-    private static UniformMatrices CreateUniformMatrices(App.State state)
-    {
-        return new UniformMatrices
-        {
-            Model = Matrix4X4<float>.Identity,
-            View = Matrix4X4<float>.Identity,
-            Projection = CreateOrthoMatrix(state),
-        };
     }
 
     private static Matrix4X4<float> CreateOrthoMatrix(App.State state) =>

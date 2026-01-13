@@ -41,10 +41,22 @@ public sealed unsafe class Uniforms : IDisposable
             buffer.Dispose();
         }
 
-        public void Update(T value)
+        public T Value
         {
-            buffer.CopyDataToBuffer([value]);
-            Parent.DescriptorSet.UpdateDescriptorSet<T>(buffer, Binding);
+            get
+            {
+                T? result = default;
+                buffer.GetWritableSpanToBufferData(span =>
+                {
+                    result = span[0];
+                });
+                return result!;
+            }
+            set
+            {
+                buffer.CopyDataToBuffer([value]);
+                Parent.DescriptorSet.UpdateDescriptorSet<T>(buffer, Binding);
+            }
         }
     }
 
@@ -53,9 +65,17 @@ public sealed unsafe class Uniforms : IDisposable
         internal TextureBinding(Uniforms parent, uint binding)
             : base(parent, binding) { }
 
-        public void Update(TextureImageWrapper texture)
+        public TextureImageWrapper? Value
         {
-            Parent.DescriptorSet.UpdateDescriptorSet(texture, Binding);
+            get;
+            set
+            {
+                field = value;
+                if (value is not null)
+                {
+                    Parent.DescriptorSet.UpdateDescriptorSet(value, Binding);
+                }
+            }
         }
     }
 
