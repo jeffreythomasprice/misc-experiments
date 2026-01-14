@@ -39,6 +39,8 @@ class Demo : IAppEventHandler
     // OnLoad stuff
     private Mesh<Vertex2DTexturedRgba>? mesh;
     private TextureImageWrapper? texture;
+    private TextureImageWrapper? texturedStringTexture;
+    private Mesh<Vertex2DTexturedRgba>? texturedStringMesh;
     private Renderer2D? renderer2D;
 
     // OnSwapchainCreated stuff
@@ -85,6 +87,44 @@ class Demo : IAppEventHandler
         );
         log.LogTrace("created texture image");
 
+        var font = new TextureFont("Resources/IntelOneMono-Regular.ttf", 24);
+        texturedStringTexture = font.DrawString(
+            state.Vk,
+            state.PhysicalDevice,
+            state.Device,
+            state.CommandPool,
+            "Hello, World!"
+        );
+        log.LogTrace(
+            "created string texture image, size {Width}x{Height}",
+            texturedStringTexture.Width,
+            texturedStringTexture.Height
+        );
+
+        texturedStringMesh = new Mesh<Vertex2DTexturedRgba>(
+            state.Vk,
+            state.PhysicalDevice,
+            state.Device
+        );
+        texturedStringMesh.AppendQuad(
+            new(new(0, 0), new(0, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(
+                new(texturedStringTexture.Width, 0),
+                new(1, 0),
+                System.Drawing.Color.White.ToVector4Df()
+            ),
+            new(
+                new(texturedStringTexture.Width, texturedStringTexture.Height),
+                new(1, 1),
+                System.Drawing.Color.White.ToVector4Df()
+            ),
+            new(
+                new(0, texturedStringTexture.Height),
+                new(0, 1),
+                System.Drawing.Color.White.ToVector4Df()
+            )
+        );
+
         renderer2D = new Renderer2D(state.Vk, state.Shaderc, state.PhysicalDevice, state.Device)
         {
             Texture = texture,
@@ -105,26 +145,47 @@ class Demo : IAppEventHandler
     {
         renderer2D?.Dispose();
         renderer2D = null;
+        texturedStringMesh?.Dispose();
+        texturedStringMesh = null;
+        texturedStringTexture?.Dispose();
+        texturedStringTexture = null;
         texture?.Dispose();
         texture = null;
         mesh?.Dispose();
         mesh = null;
     }
 
-    public unsafe void OnRender(
+    public void OnRender(
         App.GraphicsReadyState state,
         CommandBufferWrapper commandBuffer,
         TimeSpan deltaTime
     )
     {
-        if (mesh is null || renderer2D is null)
+        if (
+            texture is null
+            || mesh is null
+            || texturedStringTexture is null
+            || texturedStringMesh is null
+            || renderer2D is null
+        )
         {
             throw new InvalidOperationException("not initialized");
         }
 
         renderer2D.Bind(state.Swapchain, state.RenderPass, commandBuffer);
 
+        renderer2D.Texture = texture;
         mesh.BindAndDraw(commandBuffer);
+
+        /*
+        TODO changing texture mid draw doesn't work, need to flush command buffer?
+        
+        this suggests that the best way is actually to allocate enough uniform storage for all unique values through a scene and then switch offsets as we draw
+        https://stackoverflow.com/a/54103895
+        */
+
+        renderer2D.Texture = texturedStringTexture;
+        texturedStringMesh.BindAndDraw(commandBuffer);
     }
 
     public void OnResize(App.State state)

@@ -10,6 +10,9 @@ public sealed unsafe class TextureImageWrapper : IDisposable
     private readonly Vk vk;
     private readonly DeviceWrapper device;
 
+    private readonly SixLabors.ImageSharp.Size size;
+    private readonly int height;
+
     private readonly Image image;
     private readonly DeviceMemory deviceMemory;
     public readonly ImageViewWrapper ImageView;
@@ -27,6 +30,8 @@ public sealed unsafe class TextureImageWrapper : IDisposable
 
         this.vk = vk;
         this.device = device;
+
+        size = source.Size;
 
         using var buffer = new BufferWrapper<byte>(
             vk,
@@ -88,6 +93,10 @@ public sealed unsafe class TextureImageWrapper : IDisposable
         vk.DestroyImage(device.Device, image, null);
         vk.FreeMemory(device.Device, deviceMemory, null);
     }
+
+    public SixLabors.ImageSharp.Size Size => size;
+    public int Width => size.Width;
+    public int Height => size.Height;
 
     private void CreateImage(
         Vk vk,
