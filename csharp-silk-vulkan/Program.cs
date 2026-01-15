@@ -169,25 +169,32 @@ class Demo : IAppEventHandler
             throw new InvalidOperationException("not initialized");
         }
 
-        renderer2D.Bind(state.Swapchain, state.RenderPass, commandBuffer, CreateOrthoMatrix(state));
-
-        renderer2D.NextModelUniforms(
+        renderer2D.Render(
             state.Swapchain,
             state.RenderPass,
             commandBuffer,
-            Matrix4X4<float>.Identity,
-            texture
-        );
-        mesh.BindAndDraw(commandBuffer);
+            CreateOrthoMatrix(state),
+            callback =>
+            {
+                callback(
+                    Matrix4X4<float>.Identity,
+                    texture,
+                    () =>
+                    {
+                        mesh.BindAndDraw(commandBuffer);
+                    }
+                );
 
-        renderer2D.NextModelUniforms(
-            state.Swapchain,
-            state.RenderPass,
-            commandBuffer,
-            Matrix4X4.CreateTranslation<float>(250, 100, 0),
-            texturedStringTexture
+                callback(
+                    Matrix4X4.CreateTranslation<float>(250, 100, 0),
+                    texturedStringTexture,
+                    () =>
+                    {
+                        texturedStringMesh.BindAndDraw(commandBuffer);
+                    }
+                );
+            }
         );
-        texturedStringMesh.BindAndDraw(commandBuffer);
     }
 
     public void OnResize(App.State state)

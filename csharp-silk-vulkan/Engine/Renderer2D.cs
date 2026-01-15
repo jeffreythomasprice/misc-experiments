@@ -149,11 +149,12 @@ public sealed unsafe class Renderer2D : IDisposable
         uniformsScene.Dispose();
     }
 
-    public void Bind(
+    public void Render(
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
         CommandBufferWrapper commandBuffer,
-        Matrix4X4<float> projectionMatrix
+        Matrix4X4<float> projectionMatrix,
+        Action<Action<Matrix4X4<float>, TextureImageWrapper, Action>> callback
     )
     {
         var graphicsPipeline = CreateGraphicsPipelineIfNeeded(swapchain, renderPass);
@@ -177,20 +178,14 @@ public sealed unsafe class Renderer2D : IDisposable
         uniformSceneProjectionMatrixBinding.Value = projectionMatrix;
 
         ResetModelUniforms();
-    }
 
-    // TODO this api is weird, maybe a callback thing in Bind, refactor to BindAndRender
-    public void NextModelUniforms(
-        SwapchainWrapper swapchain,
-        RenderPassWrapper renderPass,
-        CommandBufferWrapper commandBuffer,
-        Matrix4X4<float> modelMatrix,
-        TextureImageWrapper texture
-    )
-    {
-        var graphicsPipeline = CreateGraphicsPipelineIfNeeded(swapchain, renderPass);
-
-        GetNextModelUniforms().Bind(commandBuffer, graphicsPipeline, modelMatrix, texture);
+        callback(
+            (modelMatrix, texture, innerCallback) =>
+            {
+                GetNextModelUniforms().Bind(commandBuffer, graphicsPipeline, modelMatrix, texture);
+                innerCallback();
+            }
+        );
     }
 
     public void OnSwapchainDestroyed()
