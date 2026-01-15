@@ -5,17 +5,11 @@ using Experiment.VulkanUtils;
 using Silk.NET.Maths;
 using Silk.NET.Shaderc;
 using Silk.NET.Vulkan;
+using Vertex = Vertex2DTexturedRgba;
 
 public sealed unsafe class Renderer2D : IDisposable
 {
-    private struct UniformMatrices
-    {
-        public Matrix4X4<float> Model;
-        public Matrix4X4<float> View;
-        public Matrix4X4<float> Projection;
-    }
-
-    private const uint UNIFORM_MATRICES_BINDING = 0;
+    private const uint UNIFORM_SCENE_BINDING = 0;
     private const uint UNIFORM_SAMPLER_BINDING = 1;
 
     private readonly Vk vk;
@@ -23,10 +17,10 @@ public sealed unsafe class Renderer2D : IDisposable
     private readonly DeviceWrapper device;
 
     private readonly Uniforms uniforms;
-    private readonly Uniforms.BufferBinding<UniformMatrices> uniformMatricesBinding;
+    private readonly Uniforms.BufferBinding<Matrix4X4<float>> uniformSceneBinding;
     private readonly Uniforms.TextureBinding uniformSamplerBinding;
 
-    private GraphicsPipelineWrapper<Vertex2DTexturedRgba>? graphicsPipeline;
+    private GraphicsPipelineWrapper<Vertex>? graphicsPipeline;
 
     public Renderer2D(
         Vk vk,
@@ -46,7 +40,7 @@ public sealed unsafe class Renderer2D : IDisposable
             [
                 new()
                 {
-                    Binding = UNIFORM_MATRICES_BINDING,
+                    Binding = UNIFORM_SCENE_BINDING,
                     DescriptorCount = 1,
                     DescriptorType = DescriptorType.UniformBuffer,
                     PImmutableSamplers = null,
@@ -63,14 +57,10 @@ public sealed unsafe class Renderer2D : IDisposable
             ]
         );
 
-        uniformMatricesBinding = uniforms.GetBufferBinding<UniformMatrices>(
-            UNIFORM_MATRICES_BINDING
-        );
+        uniformSceneBinding = uniforms.GetBufferBinding<Matrix4X4<float>>(UNIFORM_SCENE_BINDING);
 
         uniformSamplerBinding = uniforms.GetTextureBinding(UNIFORM_SAMPLER_BINDING);
 
-        ModelMatrix = Matrix4X4<float>.Identity;
-        ViewMatrix = Matrix4X4<float>.Identity;
         ProjectionMatrix = Matrix4X4<float>.Identity;
     }
 
@@ -78,26 +68,14 @@ public sealed unsafe class Renderer2D : IDisposable
     {
         graphicsPipeline?.Dispose();
         uniformSamplerBinding.Dispose();
-        uniformMatricesBinding.Dispose();
+        uniformSceneBinding.Dispose();
         uniforms.Dispose();
-    }
-
-    public Matrix4X4<float> ModelMatrix
-    {
-        get => Matrices.Model;
-        set => Matrices = Matrices with { Model = value };
-    }
-
-    public Matrix4X4<float> ViewMatrix
-    {
-        get => Matrices.View;
-        set => Matrices = Matrices with { View = value };
     }
 
     public Matrix4X4<float> ProjectionMatrix
     {
-        get => Matrices.Projection;
-        set => Matrices = Matrices with { Projection = value };
+        get => uniformSceneBinding.Value;
+        set => uniformSceneBinding.Value = value;
     }
 
     public TextureImageWrapper? Texture
@@ -138,13 +116,7 @@ public sealed unsafe class Renderer2D : IDisposable
         graphicsPipeline = null;
     }
 
-    private UniformMatrices Matrices
-    {
-        get => uniformMatricesBinding.Value;
-        set => uniformMatricesBinding.Value = value;
-    }
-
-    private GraphicsPipelineWrapper<Vertex2DTexturedRgba> CreateGraphicsPipelineIfNeeded(
+    private GraphicsPipelineWrapper<Vertex> CreateGraphicsPipelineIfNeeded(
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass
     )
@@ -159,24 +131,24 @@ public sealed unsafe class Renderer2D : IDisposable
             shaderc,
             device,
             ShaderModuleWrapper.ShaderType.Vertex,
-            """
+            $$"""
             #version 450
 
-            layout(binding = 0) uniform UniformMatrices {
-                mat4 model;
-                mat4 view;
+            layout(binding = {{UNIFORM_SCENE_BINDING}}) uniform UniformScene {
                 mat4 projection;
-            } uniformMatrices;
+            } uniformScene;
 
-            layout(location = 0) in vec2 inPosition;
-            layout(location = 1) in vec2 inTextureCoordinate;
-            layout(location = 2) in vec4 inColor;
+            // TODO uniformModel, with a model matrix
+
+            layout(location = {{Vertex.POSITION_LOCATION}}) in vec2 inPosition;
+            layout(location = {{Vertex.TEXTURE_COORDINATE_LOCATION}}) in vec2 inTextureCoordinate;
+            layout(location = {{Vertex.COLOR_LOCATION}}) in vec4 inColor;
 
             layout(location = 0) out vec2 fragTextureCoordinate;
             layout(location = 1) out vec4 fragColor;
 
             void main() {
-                gl_Position = uniformMatrices.projection * uniformMatrices.view * uniformMatrices.model * vec4(inPosition, 0.0, 1.0);
+                gl_Position = uniformScene.projection * vec4(inPosition, 0.0, 1.0);
                 fragTextureCoordinate = inTextureCoordinate;
                 fragColor = inColor;
             }
@@ -188,10 +160,10 @@ public sealed unsafe class Renderer2D : IDisposable
             shaderc,
             device,
             ShaderModuleWrapper.ShaderType.Fragment,
-            """
+            $$"""
             #version 450
 
-            layout(binding = 1) uniform sampler2D uniformSampler;
+            layout(binding = {{UNIFORM_SAMPLER_BINDING}}) uniform sampler2D uniformSampler;
 
             layout(location = 0) in vec2 fragTextureCoordinate;
             layout(location = 1) in vec4 fragColor;
@@ -205,7 +177,7 @@ public sealed unsafe class Renderer2D : IDisposable
         );
 
         graphicsPipeline?.Dispose();
-        graphicsPipeline = new GraphicsPipelineWrapper<Vertex2DTexturedRgba>(
+        graphicsPipeline = new(
             vk,
             device,
             swapchain,
