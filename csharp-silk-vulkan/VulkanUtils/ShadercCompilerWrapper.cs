@@ -29,7 +29,6 @@ public sealed unsafe class ShadercCompilerWrapper : IDisposable
         ShadercCompilerOptionsWrapper options
     )
     {
-        Console.WriteLine("TODO source:\n" + source);
         var compilationResult = shaderc.CompileIntoSpv(
             compiler,
             source,
