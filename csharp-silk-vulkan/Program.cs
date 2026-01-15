@@ -125,10 +125,7 @@ class Demo : IAppEventHandler
             )
         );
 
-        renderer2D = new Renderer2D(state.Vk, state.Shaderc, state.PhysicalDevice, state.Device)
-        {
-            Texture = texture,
-        };
+        renderer2D = new Renderer2D(state.Vk, state.Shaderc, state.PhysicalDevice, state.Device);
     }
 
     public void OnSwapchainCreated(App.GraphicsReadyState state)
@@ -172,19 +169,17 @@ class Demo : IAppEventHandler
             throw new InvalidOperationException("not initialized");
         }
 
-        renderer2D.Bind(state.Swapchain, state.RenderPass, commandBuffer);
+        renderer2D.Bind(state.Swapchain, state.RenderPass, commandBuffer, CreateOrthoMatrix(state));
 
-        renderer2D.Texture = texture;
+        renderer2D.NextModelUniforms(state.Swapchain, state.RenderPass, commandBuffer, texture);
         mesh.BindAndDraw(commandBuffer);
 
-        /*
-        TODO changing texture mid draw doesn't work, need to flush command buffer?
-        
-        this suggests that the best way is actually to allocate enough uniform storage for all unique values through a scene and then switch offsets as we draw
-        https://stackoverflow.com/a/54103895
-        */
-
-        renderer2D.Texture = texturedStringTexture;
+        renderer2D.NextModelUniforms(
+            state.Swapchain,
+            state.RenderPass,
+            commandBuffer,
+            texturedStringTexture
+        );
         texturedStringMesh.BindAndDraw(commandBuffer);
     }
 
@@ -197,7 +192,7 @@ class Demo : IAppEventHandler
 
         state.Vk.DeviceWaitIdle(state.Device.Device);
 
-        renderer2D.ProjectionMatrix = CreateOrthoMatrix(state);
+        // anything we want to do to vulkan stuff would go here
     }
 
     public void OnKeyUp(App.State state, IKeyboard keyboard, Key key, int keyCode)

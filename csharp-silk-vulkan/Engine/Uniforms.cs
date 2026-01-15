@@ -103,6 +103,12 @@ public sealed unsafe class Uniforms : IDisposable
 
         this.bindings = [.. bindings];
 
+        /*
+        TODO separate the parts of uniforms out into different pieces:
+        - we sometimes need an array of different descriptor sets, these should share a pool
+        - we want the layout to be separate entirely
+        */
+
         descriptorPool = new(
             vk,
             device,
