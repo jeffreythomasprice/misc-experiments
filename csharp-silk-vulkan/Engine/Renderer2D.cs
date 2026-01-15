@@ -270,7 +270,9 @@ public sealed unsafe class Renderer2D : IDisposable
                 // order matters here, see the constants for sets, UNIFORM_SET_INDEX_SCENE and UNIFORM_SET_INDEX_MODEL
                 uniformsScene.DescriptorSetLayout,
                 referenceExampleModelUniforms.DescriptorSetLayout,
-            ]
+            ],
+            // TODO configurable blending
+            true
         );
         return graphicsPipeline;
     }

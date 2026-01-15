@@ -18,7 +18,8 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
         RenderPassWrapper renderPass,
         ShaderModuleWrapper vertexShaderModule,
         ShaderModuleWrapper fragmentShaderModule,
-        DescriptorSetLayoutWrapper[] descriptorSetLayouts
+        DescriptorSetLayoutWrapper[] descriptorSetLayouts,
+        bool blend
     )
     {
         this.vk = vk;
@@ -122,6 +123,19 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
                     | ColorComponentFlags.ABit,
                 BlendEnable = false,
             };
+            if (blend)
+            {
+                colorBlendAttachment = colorBlendAttachment with
+                {
+                    BlendEnable = true,
+                    SrcColorBlendFactor = BlendFactor.SrcAlpha,
+                    DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                    ColorBlendOp = BlendOp.Add,
+                    SrcAlphaBlendFactor = BlendFactor.One,
+                    DstAlphaBlendFactor = BlendFactor.Zero,
+                    AlphaBlendOp = BlendOp.Add,
+                };
+            }
 
             var colorBlending = new PipelineColorBlendStateCreateInfo()
             {
