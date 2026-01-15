@@ -14,6 +14,7 @@ public sealed unsafe class Renderer2D : IDisposable
         private readonly Vk vk;
 
         private readonly Uniforms uniforms;
+        private readonly Uniforms.BufferBinding<Matrix4X4<float>> modelMatrixBinding;
         private readonly Uniforms.TextureBinding samplerBinding;
 
         public ModelUniforms(Vk vk, PhysicalDeviceWrapper physicalDevice, DeviceWrapper device)
@@ -27,13 +28,24 @@ public sealed unsafe class Renderer2D : IDisposable
                 [
                     new()
                     {
+                        Binding = UNIFORM_MODEL_MATRIX_BINDING,
+                        DescriptorCount = UNIFORM_SET_INDEX_MODEL,
+                        DescriptorType = DescriptorType.UniformBuffer,
+                        PImmutableSamplers = null,
+                        StageFlags = ShaderStageFlags.VertexBit,
+                    },
+                    new()
+                    {
                         Binding = UNIFORM_MODEL_SAMPLER_BINDING,
-                        DescriptorCount = 1,
+                        DescriptorCount = UNIFORM_SET_INDEX_MODEL,
                         DescriptorType = DescriptorType.CombinedImageSampler,
                         PImmutableSamplers = null,
                         StageFlags = ShaderStageFlags.FragmentBit,
                     },
                 ]
+            );
+            modelMatrixBinding = uniforms.GetBufferBinding<Matrix4X4<float>>(
+                UNIFORM_MODEL_MATRIX_BINDING
             );
             samplerBinding = uniforms.GetTextureBinding(UNIFORM_MODEL_SAMPLER_BINDING);
         }
@@ -41,6 +53,7 @@ public sealed unsafe class Renderer2D : IDisposable
         public void Dispose()
         {
             samplerBinding.Dispose();
+            modelMatrixBinding.Dispose();
             uniforms.Dispose();
         }
 
@@ -49,6 +62,7 @@ public sealed unsafe class Renderer2D : IDisposable
         public void Bind(
             CommandBufferWrapper commandBuffer,
             GraphicsPipelineWrapper<Vertex> graphicsPipeline,
+            Matrix4X4<float> modelMatrix,
             TextureImageWrapper texture
         )
         {
@@ -56,23 +70,24 @@ public sealed unsafe class Renderer2D : IDisposable
                 commandBuffer.CommandBuffer,
                 PipelineBindPoint.Graphics,
                 graphicsPipeline.PipelineLayout,
-                // TODO the fact that this is set 1 should be a constant?
-                1,
+                UNIFORM_SET_INDEX_MODEL,
                 1,
                 in uniforms.DescriptorSet.DescriptorSet,
                 0,
                 null
             );
+            modelMatrixBinding.Value = modelMatrix;
             samplerBinding.Value = texture;
         }
     }
 
-    // set 0, scene
+    private const uint UNIFORM_SET_INDEX_SCENE = 0;
+    private const uint UNIFORM_SET_INDEX_MODEL = 1;
+
     private const uint UNIFORM_SCENE_PROJECTION_MATRIX_BINDING = 0;
 
-    // set 1, model
-    // TODO UNIFORM_SCENE_MODEL_MATRIX_BINDING
-    private const uint UNIFORM_MODEL_SAMPLER_BINDING = 0;
+    private const uint UNIFORM_MODEL_MATRIX_BINDING = 0;
+    private const uint UNIFORM_MODEL_SAMPLER_BINDING = 1;
 
     private readonly Vk vk;
     private readonly Shaderc shaderc;
@@ -153,8 +168,7 @@ public sealed unsafe class Renderer2D : IDisposable
             commandBuffer.CommandBuffer,
             PipelineBindPoint.Graphics,
             graphicsPipeline.PipelineLayout,
-            // TODO the fact that this is set 0 should be a constant?
-            0,
+            UNIFORM_SET_INDEX_SCENE,
             1,
             in uniformsScene.DescriptorSet.DescriptorSet,
             0,
@@ -170,12 +184,13 @@ public sealed unsafe class Renderer2D : IDisposable
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
         CommandBufferWrapper commandBuffer,
+        Matrix4X4<float> modelMatrix,
         TextureImageWrapper texture
     )
     {
         var graphicsPipeline = CreateGraphicsPipelineIfNeeded(swapchain, renderPass);
 
-        GetNextModelUniforms().Bind(commandBuffer, graphicsPipeline, texture);
+        GetNextModelUniforms().Bind(commandBuffer, graphicsPipeline, modelMatrix, texture);
     }
 
     public void OnSwapchainDestroyed()
@@ -202,12 +217,13 @@ public sealed unsafe class Renderer2D : IDisposable
             $$"""
             #version 450
 
-            // TODO can set = 0 be a constant?
-            layout(set = 0, binding = {{UNIFORM_SCENE_PROJECTION_MATRIX_BINDING}}) uniform UniformScene {
+            layout(set = {{UNIFORM_SET_INDEX_SCENE}}, binding = {{UNIFORM_SCENE_PROJECTION_MATRIX_BINDING}}) uniform UniformScene {
                 mat4 projection;
             } uniformScene;
 
-            // TODO uniformModel, with a model matrix
+            layout(set = {{UNIFORM_SET_INDEX_MODEL}}, binding = {{UNIFORM_MODEL_MATRIX_BINDING}}) uniform UniformModel {
+                mat4 model;
+            } uniformModel;
 
             layout(location = {{Vertex.POSITION_LOCATION}}) in vec2 inPosition;
             layout(location = {{Vertex.TEXTURE_COORDINATE_LOCATION}}) in vec2 inTextureCoordinate;
@@ -217,7 +233,7 @@ public sealed unsafe class Renderer2D : IDisposable
             layout(location = 1) out vec4 fragColor;
 
             void main() {
-                gl_Position = uniformScene.projection * vec4(inPosition, 0.0, 1.0);
+                gl_Position = uniformScene.projection * uniformModel.model * vec4(inPosition, 0.0, 1.0);
                 fragTextureCoordinate = inTextureCoordinate;
                 fragColor = inColor;
             }
@@ -232,8 +248,7 @@ public sealed unsafe class Renderer2D : IDisposable
             $$"""
             #version 450
 
-            // TODO can set = 1 be a constant?
-            layout(set = 1, binding = {{UNIFORM_MODEL_SAMPLER_BINDING}}) uniform sampler2D uniformSampler;
+            layout(set = {{UNIFORM_SET_INDEX_MODEL}}, binding = {{UNIFORM_MODEL_SAMPLER_BINDING}}) uniform sampler2D uniformSampler;
 
             layout(location = 0) in vec2 fragTextureCoordinate;
             layout(location = 1) in vec4 fragColor;
@@ -256,7 +271,11 @@ public sealed unsafe class Renderer2D : IDisposable
             renderPass,
             vertexShaderModule,
             fragmentShaderModule,
-            [uniformsScene.DescriptorSetLayout, referenceExampleModelUniforms.DescriptorSetLayout]
+            [
+                // order matters here, see the constants for sets, UNIFORM_SET_INDEX_SCENE and UNIFORM_SET_INDEX_MODEL
+                uniformsScene.DescriptorSetLayout,
+                referenceExampleModelUniforms.DescriptorSetLayout,
+            ]
         );
         return graphicsPipeline;
     }

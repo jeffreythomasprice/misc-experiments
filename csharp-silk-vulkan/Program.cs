@@ -171,13 +171,20 @@ class Demo : IAppEventHandler
 
         renderer2D.Bind(state.Swapchain, state.RenderPass, commandBuffer, CreateOrthoMatrix(state));
 
-        renderer2D.NextModelUniforms(state.Swapchain, state.RenderPass, commandBuffer, texture);
+        renderer2D.NextModelUniforms(
+            state.Swapchain,
+            state.RenderPass,
+            commandBuffer,
+            Matrix4X4<float>.Identity,
+            texture
+        );
         mesh.BindAndDraw(commandBuffer);
 
         renderer2D.NextModelUniforms(
             state.Swapchain,
             state.RenderPass,
             commandBuffer,
+            Matrix4X4.CreateTranslation<float>(250, 100, 0),
             texturedStringTexture
         );
         texturedStringMesh.BindAndDraw(commandBuffer);
