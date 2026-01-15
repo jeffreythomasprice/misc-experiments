@@ -37,11 +37,17 @@ class Demo : IAppEventHandler
     private readonly ILogger<Demo> log;
 
     // OnLoad stuff
-    private Mesh<Vertex2DTexturedRgba>? mesh;
-    private TextureImageWrapper? texture;
+    private Mesh<Vertex2DTexturedRgba>? mesh2d;
+    private TextureImageWrapper? textureFor2dMesh;
     private TextureImageWrapper? texturedStringTexture;
     private Mesh<Vertex2DTexturedRgba>? texturedStringMesh;
+    private TextureImageWrapper? textureFor3dMesh;
+    private Mesh<Vertex3DTexturedRgba>? mesh3d;
+
     private Renderer2D? renderer2D;
+    private Renderer3D? renderer3D;
+
+    private float rotation;
 
     // OnSwapchainCreated stuff
     // ... nothing here
@@ -53,37 +59,26 @@ class Demo : IAppEventHandler
 
     public void OnLoad(App.State state)
     {
-        mesh = new Mesh<Vertex2DTexturedRgba>(state.Vk, state.PhysicalDevice, state.Device);
-        mesh.AppendQuad(
+        mesh2d = new Mesh<Vertex2DTexturedRgba>(state.Vk, state.PhysicalDevice, state.Device);
+        mesh2d.AppendQuad(
             new(new(50, 50), new(0, 0), System.Drawing.Color.Red.ToVector4Df()),
             new(new(300, 50), new(1, 0), System.Drawing.Color.Green.ToVector4Df()),
             new(new(300, 300), new(1, 1), System.Drawing.Color.Blue.ToVector4Df()),
             new(new(50, 300), new(0, 1), System.Drawing.Color.Purple.ToVector4Df())
         );
-        mesh.AppendQuad(
+        mesh2d.AppendQuad(
             new(new(300, 300), new(0, 0), System.Drawing.Color.White.ToVector4Df()),
             new(new(400, 300), new(1, 0), System.Drawing.Color.White.ToVector4Df()),
             new(new(400, 400), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
             new(new(300, 400), new(0, 1), System.Drawing.Color.White.ToVector4Df())
         );
 
-        using var sourceImage =
-            SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
-                "Resources/silk.png"
-            );
-        log.LogTrace(
-            "loaded image size: {Width}x{Height}, bits per pixel: {BitsPerPixel}, alpha: {Alpha}",
-            sourceImage.Width,
-            sourceImage.Height,
-            sourceImage.PixelType.BitsPerPixel,
-            sourceImage.PixelType.AlphaRepresentation
-        );
-        texture = new TextureImageWrapper(
+        textureFor2dMesh = TextureImageWrapper.LoadFromImageAtPath(
             state.Vk,
             state.PhysicalDevice,
             state.Device,
             state.CommandPool,
-            sourceImage
+            "Resources/silk.png"
         );
         log.LogTrace("created texture image");
 
@@ -125,7 +120,55 @@ class Demo : IAppEventHandler
             )
         );
 
+        textureFor3dMesh = TextureImageWrapper.LoadFromImageAtPath(
+            state.Vk,
+            state.PhysicalDevice,
+            state.Device,
+            state.CommandPool,
+            "Resources/ChatGPT Image Jan 15, 2026, 02_09_46 PM.png"
+        );
+        mesh3d = new Mesh<Vertex3DTexturedRgba>(state.Vk, state.PhysicalDevice, state.Device);
+        mesh3d.AppendQuad(
+            new(new(-1, -1, -1), new(0, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(-1, +1, -1), new(1, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(-1, +1, +1), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(-1, -1, +1), new(0, 1), System.Drawing.Color.White.ToVector4Df())
+        );
+        mesh3d.AppendQuad(
+            new(new(+1, -1, +1), new(0, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, +1, +1), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, +1, -1), new(1, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, -1, -1), new(0, 0), System.Drawing.Color.White.ToVector4Df())
+        );
+        mesh3d.AppendQuad(
+            new(new(-1, -1, +1), new(0, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, -1, +1), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, -1, -1), new(1, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(-1, -1, -1), new(0, 0), System.Drawing.Color.White.ToVector4Df())
+        );
+        mesh3d.AppendQuad(
+            new(new(-1, +1, -1), new(0, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, +1, -1), new(1, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, +1, +1), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(-1, +1, +1), new(0, 1), System.Drawing.Color.White.ToVector4Df())
+        );
+        mesh3d.AppendQuad(
+            new(new(-1, -1, -1), new(0, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, -1, -1), new(1, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, +1, -1), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(-1, +1, -1), new(0, 1), System.Drawing.Color.White.ToVector4Df())
+        );
+        mesh3d.AppendQuad(
+            new(new(-1, +1, +1), new(0, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, +1, +1), new(1, 1), System.Drawing.Color.White.ToVector4Df()),
+            new(new(+1, -1, +1), new(1, 0), System.Drawing.Color.White.ToVector4Df()),
+            new(new(-1, -1, +1), new(0, 0), System.Drawing.Color.White.ToVector4Df())
+        );
+
         renderer2D = new Renderer2D(state.Vk, state.Shaderc, state.PhysicalDevice, state.Device);
+        renderer3D = new Renderer3D(state.Vk, state.Shaderc, state.PhysicalDevice, state.Device);
+
+        rotation = 0;
     }
 
     public void OnSwapchainCreated(App.GraphicsReadyState state)
@@ -136,20 +179,27 @@ class Demo : IAppEventHandler
     public void OnSwapchainDestroyed(App.GraphicsReadyState state)
     {
         renderer2D?.OnSwapchainDestroyed();
+        renderer3D?.OnSwapchainDestroyed();
     }
 
     public void OnUnload(App.State state)
     {
+        renderer3D?.Dispose();
+        renderer3D = null;
         renderer2D?.Dispose();
         renderer2D = null;
+        mesh3d?.Dispose();
+        mesh3d = null;
+        textureFor3dMesh?.Dispose();
+        textureFor3dMesh = null;
         texturedStringMesh?.Dispose();
         texturedStringMesh = null;
         texturedStringTexture?.Dispose();
         texturedStringTexture = null;
-        texture?.Dispose();
-        texture = null;
-        mesh?.Dispose();
-        mesh = null;
+        textureFor2dMesh?.Dispose();
+        textureFor2dMesh = null;
+        mesh2d?.Dispose();
+        mesh2d = null;
     }
 
     public void OnRender(
@@ -159,15 +209,37 @@ class Demo : IAppEventHandler
     )
     {
         if (
-            texture is null
-            || mesh is null
+            textureFor2dMesh is null
+            || mesh2d is null
             || texturedStringTexture is null
             || texturedStringMesh is null
+            || textureFor3dMesh is null
+            || mesh3d is null
             || renderer2D is null
+            || renderer3D is null
         )
         {
             throw new InvalidOperationException("not initialized");
         }
+
+        renderer3D.Render(
+            state.Swapchain,
+            state.RenderPass,
+            commandBuffer,
+            CreatePerspectiveMatrix(state),
+            callback =>
+            {
+                callback(
+                    Matrix4X4.CreateRotationY(rotation)
+                        * Matrix4X4.CreateTranslation<float>(0, 0, -6),
+                    textureFor3dMesh,
+                    () =>
+                    {
+                        mesh3d.BindAndDraw(commandBuffer);
+                    }
+                );
+            }
+        );
 
         renderer2D.Render(
             state.Swapchain,
@@ -178,10 +250,10 @@ class Demo : IAppEventHandler
             {
                 callback(
                     Matrix4X4<float>.Identity,
-                    texture,
+                    textureFor2dMesh,
                     () =>
                     {
-                        mesh.BindAndDraw(commandBuffer);
+                        mesh2d.BindAndDraw(commandBuffer);
                     }
                 );
 
@@ -195,6 +267,18 @@ class Demo : IAppEventHandler
                 );
             }
         );
+    }
+
+    public void OnUpdate(App.State state, TimeSpan deltaTime)
+    {
+        // TODO helper for wrapping
+        rotation =
+            (
+                rotation
+                +
+                // TODO helper for degrees to radians
+                (45.0f * MathF.PI / 180.0f) * (float)deltaTime.TotalSeconds
+            ) % (2.0f * MathF.PI);
     }
 
     public void OnResize(App.State state)
@@ -225,5 +309,14 @@ class Demo : IAppEventHandler
             0,
             -1,
             1
+        );
+
+    private static Matrix4X4<float> CreatePerspectiveMatrix(App.State state) =>
+        Matrix4X4.CreatePerspectiveFieldOfView(
+            // TODO helper for degrees to radians
+            45.0f * (MathF.PI / 180.0f),
+            (float)state.WindowSize.X / (float)state.WindowSize.Y,
+            0.1f,
+            100.0f
         );
 }

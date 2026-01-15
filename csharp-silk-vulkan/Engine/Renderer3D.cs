@@ -5,9 +5,10 @@ using Experiment.VulkanUtils;
 using Silk.NET.Maths;
 using Silk.NET.Shaderc;
 using Silk.NET.Vulkan;
-using Vertex = Vertex2DTexturedRgba;
+using Vertex = Vertex3DTexturedRgba;
 
-public sealed unsafe class Renderer2D : IDisposable
+// TODO this is basically the same as 2D, can we generalize?
+public sealed unsafe class Renderer3D : IDisposable
 {
     private class ModelUniforms : IDisposable
     {
@@ -102,7 +103,7 @@ public sealed unsafe class Renderer2D : IDisposable
 
     private GraphicsPipelineWrapper<Vertex>? graphicsPipeline;
 
-    public Renderer2D(
+    public Renderer3D(
         Vk vk,
         Shaderc shaderc,
         PhysicalDeviceWrapper physicalDevice,
@@ -231,7 +232,7 @@ public sealed unsafe class Renderer2D : IDisposable
                 mat4 model;
             } uniformModel;
 
-            layout(location = {{Vertex.POSITION_LOCATION}}) in vec2 inPosition;
+            layout(location = {{Vertex.POSITION_LOCATION}}) in vec3 inPosition;
             layout(location = {{Vertex.TEXTURE_COORDINATE_LOCATION}}) in vec2 inTextureCoordinate;
             layout(location = {{Vertex.COLOR_LOCATION}}) in vec4 inColor;
 
@@ -239,7 +240,7 @@ public sealed unsafe class Renderer2D : IDisposable
             layout(location = 1) out vec4 fragColor;
 
             void main() {
-                gl_Position = uniformScene.projection * uniformModel.model * vec4(inPosition, 0.0, 1.0);
+                gl_Position = uniformScene.projection * uniformModel.model * vec4(inPosition, 1.0);
                 fragTextureCoordinate = inTextureCoordinate;
                 fragColor = inColor;
             }
@@ -283,7 +284,7 @@ public sealed unsafe class Renderer2D : IDisposable
                 referenceExampleModelUniforms.DescriptorSetLayout,
             ],
             // TODO configurable blending
-            true
+            false
         );
         return graphicsPipeline;
     }

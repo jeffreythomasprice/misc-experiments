@@ -5,7 +5,9 @@ using Silk.NET.Vulkan;
 
 public sealed unsafe class TextureImageWrapper : IDisposable
 {
-    private readonly ILogger log;
+    private static readonly Lazy<ILogger> log = new(() =>
+        LoggerUtils.Factory.Value.CreateLogger<TextureImageWrapper>()
+    );
 
     private readonly Vk vk;
     private readonly DeviceWrapper device;
@@ -18,6 +20,29 @@ public sealed unsafe class TextureImageWrapper : IDisposable
     public readonly ImageViewWrapper ImageView;
     public readonly Sampler Sampler;
 
+    public static TextureImageWrapper LoadFromImageAtPath(
+        Vk vk,
+        PhysicalDeviceWrapper physicalDevice,
+        DeviceWrapper device,
+        CommandPoolWrapper commandPool,
+        string path
+    )
+    {
+        using var source =
+            SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
+                "Resources/silk.png"
+            );
+        log.Value.LogTrace(
+            "loaded texture image from path: {Path}, size: {Width}x{Height}, bits per pixel: {BitsPerPixel}, alpha: {Alpha}",
+            path,
+            source.Width,
+            source.Height,
+            source.PixelType.BitsPerPixel,
+            source.PixelType.AlphaRepresentation
+        );
+        return new TextureImageWrapper(vk, physicalDevice, device, commandPool, source);
+    }
+
     public TextureImageWrapper(
         Vk vk,
         PhysicalDeviceWrapper physicalDevice,
@@ -26,8 +51,6 @@ public sealed unsafe class TextureImageWrapper : IDisposable
         SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32> source
     )
     {
-        log = LoggerUtils.Factory.Value.CreateLogger(GetType());
-
         this.vk = vk;
         this.device = device;
 
@@ -98,7 +121,7 @@ public sealed unsafe class TextureImageWrapper : IDisposable
     public int Width => size.Width;
     public int Height => size.Height;
 
-    private void CreateImage(
+    private static void CreateImage(
         Vk vk,
         PhysicalDeviceWrapper physicalDevice,
         DeviceWrapper device,
@@ -166,7 +189,7 @@ public sealed unsafe class TextureImageWrapper : IDisposable
         vk.BindImageMemory(device.Device, image, imageMemory, 0);
     }
 
-    private void TransitionImageLayout(
+    private static void TransitionImageLayout(
         Vk vk,
         DeviceWrapper device,
         CommandPoolWrapper commandPool,
