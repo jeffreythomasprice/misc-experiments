@@ -26,9 +26,7 @@ public sealed unsafe class TextureImageWrapper : IDisposable
     )
     {
         using var source =
-            SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
-                "Resources/silk.png"
-            );
+            SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(path);
         log.Value.LogTrace(
             "loaded texture image from path: {Path}, size: {Width}x{Height}, bits per pixel: {BitsPerPixel}, alpha: {Alpha}",
             path,

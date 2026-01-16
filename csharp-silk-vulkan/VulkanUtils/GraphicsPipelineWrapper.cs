@@ -102,9 +102,7 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
                 RasterizerDiscardEnable = false,
                 PolygonMode = PolygonMode.Fill,
                 LineWidth = 1,
-                // TODO put culling back
-                CullMode = CullModeFlags.None,
-                // CullMode = CullModeFlags.BackBit,
+                CullMode = CullModeFlags.BackBit,
                 FrontFace = FrontFace.Clockwise,
                 DepthBiasEnable = false,
             };
