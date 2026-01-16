@@ -11,7 +11,7 @@ using Silk.NET.Windowing;
 
 /*
 TODO next tutorial
-https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/27_DepthBuffering/Program.cs
+https://github.com/dfkeenan/SilkVulkanTutorial/blob/main/Source/28_ModelLoading/Program.cs
 */
 
 public sealed partial class App : IDisposable
@@ -272,9 +272,10 @@ public sealed partial class App : IDisposable
         CleanupStuffThatGetsRecreatedAllTheTime();
 
         swapchain = new SwapchainWrapper(window, vk, instance, surface, physicalDevice, device);
-        renderPass = new RenderPassWrapper(vk, device, swapchain);
+        renderPass = new RenderPassWrapper(vk, physicalDevice, device, swapchain);
         synchronizedQueueSubmitterAndPresenter = new SynchronizedQueueSubmitterAndPresenter(
             vk,
+            physicalDevice,
             device,
             swapchain,
             renderPass,

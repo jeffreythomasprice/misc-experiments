@@ -102,7 +102,9 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
                 RasterizerDiscardEnable = false,
                 PolygonMode = PolygonMode.Fill,
                 LineWidth = 1,
-                CullMode = CullModeFlags.BackBit,
+                // TODO put culling back
+                CullMode = CullModeFlags.None,
+                // CullMode = CullModeFlags.BackBit,
                 FrontFace = FrontFace.Clockwise,
                 DepthBiasEnable = false,
             };
@@ -136,6 +138,17 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
                     AlphaBlendOp = BlendOp.Add,
                 };
             }
+
+            // TODO whether depth testing is enabled should be configurable when we make the pipeline
+            var depthStencil = new PipelineDepthStencilStateCreateInfo()
+            {
+                SType = StructureType.PipelineDepthStencilStateCreateInfo,
+                DepthTestEnable = true,
+                DepthWriteEnable = true,
+                DepthCompareOp = CompareOp.Less,
+                DepthBoundsTestEnable = false,
+                StencilTestEnable = false,
+            };
 
             var colorBlending = new PipelineColorBlendStateCreateInfo()
             {
@@ -186,6 +199,7 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
                     PViewportState = &viewportState,
                     PRasterizationState = &rasterizer,
                     PMultisampleState = &multisampling,
+                    PDepthStencilState = &depthStencil,
                     PColorBlendState = &colorBlending,
                     Layout = PipelineLayout,
                     RenderPass = renderPass.RenderPass,

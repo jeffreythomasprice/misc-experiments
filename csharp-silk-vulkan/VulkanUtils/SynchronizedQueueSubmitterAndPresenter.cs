@@ -25,6 +25,7 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
 
     public SynchronizedQueueSubmitterAndPresenter(
         Vk vk,
+        PhysicalDeviceWrapper physicalDevice,
         DeviceWrapper device,
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
@@ -48,6 +49,15 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
             );
         }
 
+        var depthImage = new DepthImageWrapper(
+            vk,
+            physicalDevice,
+            device,
+            commandPool,
+            swapchain.Extent.Width,
+            swapchain.Extent.Height
+        );
+
         framebuffers =
         [
             .. swapchain.Images.Select(image => new FramebufferWrapper(
@@ -55,7 +65,8 @@ public sealed unsafe class SynchronizedQueueSubmitterAndPresenter : IDisposable
                 device,
                 swapchain,
                 renderPass,
-                image
+                image,
+                depthImage
             )),
         ];
 

@@ -108,27 +108,31 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
             flags,
             (commandBuffer) =>
             {
-                var renderPassInfo = new RenderPassBeginInfo()
+                ClearValue[] clearValues =
+                [
+                    new() { Color = System.Drawing.Color.CornflowerBlue.ToClearColorValue() },
+                    new()
+                    {
+                        DepthStencil = new() { Depth = 1, Stencil = 0 },
+                    },
+                ];
+                fixed (ClearValue* clearValuesPtr = clearValues)
                 {
-                    SType = StructureType.RenderPassBeginInfo,
-                    RenderPass = renderPass.RenderPass,
-                    Framebuffer = framebuffer.Framebuffer,
-                    RenderArea = { Offset = { X = 0, Y = 0 }, Extent = swapchain.Extent },
-                };
-
-                var clearColor = new ClearValue()
-                {
-                    Color = System.Drawing.Color.CornflowerBlue.ToClearColorValue(),
-                };
-
-                renderPassInfo.ClearValueCount = 1;
-                renderPassInfo.PClearValues = &clearColor;
-
-                vk.CmdBeginRenderPass(
-                    commandBuffer.CommandBuffer,
-                    &renderPassInfo,
-                    SubpassContents.Inline
-                );
+                    var renderPassInfo = new RenderPassBeginInfo()
+                    {
+                        SType = StructureType.RenderPassBeginInfo,
+                        RenderPass = renderPass.RenderPass,
+                        Framebuffer = framebuffer.Framebuffer,
+                        RenderArea = { Offset = { X = 0, Y = 0 }, Extent = swapchain.Extent },
+                        ClearValueCount = (uint)clearValues.Length,
+                        PClearValues = clearValuesPtr,
+                    };
+                    vk.CmdBeginRenderPass(
+                        commandBuffer.CommandBuffer,
+                        &renderPassInfo,
+                        SubpassContents.Inline
+                    );
+                }
 
                 callback(commandBuffer);
 

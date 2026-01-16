@@ -8,7 +8,9 @@ public sealed unsafe class FramebufferWrapper : IDisposable
     private readonly Vk vk;
     private readonly DeviceWrapper device;
     private readonly ImageViewWrapper imageView;
+    private readonly ImageViewWrapper depthImageView;
     private readonly bool ownsImageView;
+    private readonly bool ownsDepthImageView;
     public readonly Framebuffer Framebuffer;
 
     public FramebufferWrapper(
@@ -17,22 +19,27 @@ public sealed unsafe class FramebufferWrapper : IDisposable
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
         ImageViewWrapper imageView,
-        bool ownsImageView = false
+        ImageViewWrapper depthImageView,
+        bool ownsImageView = false,
+        bool ownsDepthImageView = false
     )
     {
         this.vk = vk;
         this.device = device;
         this.imageView = imageView;
+        this.depthImageView = depthImageView;
         this.ownsImageView = ownsImageView;
+        this.ownsDepthImageView = ownsDepthImageView;
 
-        fixed (ImageView* attachment = &imageView.ImageView)
+        var attachments = new[] { imageView.ImageView, depthImageView.ImageView };
+        fixed (ImageView* attachmentsPtr = attachments)
         {
             var framebufferInfo = new FramebufferCreateInfo()
             {
                 SType = StructureType.FramebufferCreateInfo,
                 RenderPass = renderPass.RenderPass,
-                AttachmentCount = 1,
-                PAttachments = attachment,
+                AttachmentCount = (uint)attachments.Length,
+                PAttachments = attachmentsPtr,
                 Width = swapchain.Extent.Width,
                 Height = swapchain.Extent.Height,
                 Layers = 1,
@@ -53,7 +60,8 @@ public sealed unsafe class FramebufferWrapper : IDisposable
         DeviceWrapper device,
         SwapchainWrapper swapchain,
         RenderPassWrapper renderPass,
-        Image image
+        Image image,
+        DepthImageWrapper depthImage
     )
         : this(
             vk,
@@ -61,6 +69,8 @@ public sealed unsafe class FramebufferWrapper : IDisposable
             swapchain,
             renderPass,
             new ImageViewWrapper(vk, device, swapchain.Format, image),
+            new ImageViewWrapper(vk, device, depthImage.Format, depthImage.Image.Image),
+            true,
             true
         ) { }
 
@@ -70,6 +80,10 @@ public sealed unsafe class FramebufferWrapper : IDisposable
         if (ownsImageView)
         {
             imageView.Dispose();
+        }
+        if (ownsDepthImageView)
+        {
+            depthImageView.Dispose();
         }
     }
 }
