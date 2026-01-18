@@ -128,6 +128,29 @@ class Demo : IAppEventHandler
             state.CommandPool,
             "Resources/ChatGPT Image Jan 15, 2026, 02_09_46 PM.png"
         );
+        {
+            using var image =
+                SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
+                    "Resources/ChatGPT Image Jan 15, 2026, 02_09_46 PM.png"
+                );
+            textureFor3dMesh.CopyImageToTexture(
+                image,
+                new(0, 0, image.Width / 2, image.Height / 2),
+                new(250, 350)
+            );
+        }
+        {
+            using var image =
+                SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(
+                    "Resources/silk.png"
+                );
+            textureFor3dMesh.CopyImageToTexture(
+                image,
+                new(image.Width / 4, image.Height / 4, image.Width / 2, image.Height / 2),
+                // new(0, 0)
+                new(50, 50)
+            );
+        }
         mesh3d = new Mesh<Vertex3DTexturedRgba>(state.Vk, state.PhysicalDevice, state.Device);
         mesh3d.AppendQuad(
             new(new(-1, -1, -1), new(0, 0), System.Drawing.Color.White.ToVector4Df()),

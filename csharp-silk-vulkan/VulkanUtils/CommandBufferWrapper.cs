@@ -142,9 +142,6 @@ public sealed unsafe class CommandBufferWrapper : IDisposable
 
     public void Dispose()
     {
-        fixed (CommandBuffer* commandBufferPtr = &CommandBuffer)
-        {
-            vk.FreeCommandBuffers(device.Device, commandPool.CommandPool, 1, commandBufferPtr);
-        }
+        vk.FreeCommandBuffers(device.Device, commandPool.CommandPool, 1, in CommandBuffer);
     }
 }

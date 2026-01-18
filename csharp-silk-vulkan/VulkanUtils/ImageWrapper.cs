@@ -82,7 +82,7 @@ public sealed unsafe class ImageWrapper : IDisposable
                 != Result.Success
             )
             {
-                // TODO destroy image
+                vk.DestroyImage(device.Device, Image, null);
                 throw new Exception("failed to allocate image memory");
             }
         }
@@ -102,7 +102,20 @@ public sealed unsafe class ImageWrapper : IDisposable
 
     public ImageAspectFlags AspectFlags => aspectFlags;
 
-    public void TransitionLayout(ImageLayout oldLayout, ImageLayout newLayout)
+    /// <param name="buffer"></param>
+    /// <param name="bufferOffset">byte index where the first texel in the image is</param>
+    /// <param name="bufferRowLength">how many texels to skip between rows; i.e. the stride of a row in texels, not bytes</param>
+    /// <param name="bufferImageHeight">how many texels tall is the image in the buffer</param>
+    /// <param name="imageOffset">the corner of the image stored in the buffer to start copying from</param>
+    /// <param name="imageExtent">the width and height of the portion of the image to copy</param>
+    public void CopyBufferToImage(
+        BufferWrapper<byte> buffer,
+        UInt64 bufferOffset,
+        UInt32 bufferRowLength,
+        UInt32 bufferImageHeight,
+        Offset2D imageOffset,
+        Extent2D imageExtent
+    )
     {
         CommandBufferWrapper.OneTimeSubmit(
             vk,
@@ -110,74 +123,18 @@ public sealed unsafe class ImageWrapper : IDisposable
             commandPool,
             (commandBuffer) =>
             {
-                var barrier = new ImageMemoryBarrier()
-                {
-                    SType = StructureType.ImageMemoryBarrier,
-                    OldLayout = oldLayout,
-                    NewLayout = newLayout,
-                    SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
-                    DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
-                    Image = Image,
-                    SubresourceRange =
-                    {
-                        AspectMask = aspectFlags,
-                        BaseMipLevel = 0,
-                        LevelCount = 1,
-                        BaseArrayLayer = 0,
-                        LayerCount = 1,
-                    },
-                };
-
-                PipelineStageFlags sourceStage;
-                PipelineStageFlags destinationStage;
-
-                if (
-                    oldLayout == ImageLayout.Undefined
-                    && newLayout == ImageLayout.TransferDstOptimal
-                )
-                {
-                    barrier.SrcAccessMask = 0;
-                    barrier.DstAccessMask = AccessFlags.TransferWriteBit;
-
-                    sourceStage = PipelineStageFlags.TopOfPipeBit;
-                    destinationStage = PipelineStageFlags.TransferBit;
-                }
-                else if (
-                    oldLayout == ImageLayout.TransferDstOptimal
-                    && newLayout == ImageLayout.ShaderReadOnlyOptimal
-                )
-                {
-                    barrier.SrcAccessMask = AccessFlags.TransferWriteBit;
-                    barrier.DstAccessMask = AccessFlags.ShaderReadBit;
-
-                    sourceStage = PipelineStageFlags.TransferBit;
-                    destinationStage = PipelineStageFlags.FragmentShaderBit;
-                }
-                else
-                {
-                    throw new Exception("unsupported layout transition");
-                }
-
-                vk.CmdPipelineBarrier(
-                    commandBuffer.CommandBuffer,
-                    sourceStage,
-                    destinationStage,
-                    0,
-                    0,
-                    null,
-                    0,
-                    null,
-                    1,
-                    in barrier
+                TransitionLayout(
+                    commandBuffer,
+                    ImageLayout.Undefined,
+                    ImageLayout.TransferDstOptimal,
+                    AccessFlags.None,
+                    AccessFlags.TransferWriteBit,
+                    PipelineStageFlags.TopOfPipeBit,
+                    PipelineStageFlags.TransferBit
                 );
             }
         );
-    }
 
-    // TODO document, assumes that buffer has bytes-per-pixel equal to this image?
-    // TODO more versions, take an arbitrary source and destination rectangles
-    public void CopyBufferToImage(BufferWrapper<byte> buffer)
-    {
         CommandBufferWrapper.OneTimeSubmit(
             vk,
             device,
@@ -186,9 +143,9 @@ public sealed unsafe class ImageWrapper : IDisposable
             {
                 var region = new BufferImageCopy()
                 {
-                    BufferOffset = 0,
-                    BufferRowLength = 0,
-                    BufferImageHeight = 0,
+                    BufferOffset = bufferOffset,
+                    BufferRowLength = bufferRowLength,
+                    BufferImageHeight = bufferImageHeight,
                     ImageSubresource =
                     {
                         AspectMask = aspectFlags,
@@ -196,8 +153,12 @@ public sealed unsafe class ImageWrapper : IDisposable
                         BaseArrayLayer = 0,
                         LayerCount = 1,
                     },
-                    ImageOffset = new Offset3D(0, 0, 0),
-                    ImageExtent = new Extent3D((uint)Width, (uint)Height, 1),
+                    ImageOffset = new Offset3D(imageOffset.X, imageOffset.Y, 0),
+                    ImageExtent = new Extent3D(
+                        (uint)imageExtent.Width,
+                        (uint)imageExtent.Height,
+                        1
+                    ),
                 };
 
                 vk.CmdCopyBufferToImage(
@@ -209,6 +170,68 @@ public sealed unsafe class ImageWrapper : IDisposable
                     in region
                 );
             }
+        );
+
+        CommandBufferWrapper.OneTimeSubmit(
+            vk,
+            device,
+            commandPool,
+            (commandBuffer) =>
+            {
+                TransitionLayout(
+                    commandBuffer,
+                    ImageLayout.TransferDstOptimal,
+                    ImageLayout.ShaderReadOnlyOptimal,
+                    AccessFlags.TransferWriteBit,
+                    AccessFlags.ShaderReadBit,
+                    PipelineStageFlags.TransferBit,
+                    PipelineStageFlags.FragmentShaderBit
+                );
+            }
+        );
+    }
+
+    private void TransitionLayout(
+        CommandBufferWrapper commandBuffer,
+        ImageLayout oldLayout,
+        ImageLayout newLayout,
+        AccessFlags srcAccessMask,
+        AccessFlags dstAccessMask,
+        PipelineStageFlags sourceStage,
+        PipelineStageFlags destinationStage
+    )
+    {
+        var barrier = new ImageMemoryBarrier()
+        {
+            SType = StructureType.ImageMemoryBarrier,
+            OldLayout = oldLayout,
+            NewLayout = newLayout,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            Image = Image,
+            SubresourceRange =
+            {
+                AspectMask = aspectFlags,
+                BaseMipLevel = 0,
+                LevelCount = 1,
+                BaseArrayLayer = 0,
+                LayerCount = 1,
+            },
+            SrcAccessMask = srcAccessMask,
+            DstAccessMask = dstAccessMask,
+        };
+
+        vk.CmdPipelineBarrier(
+            commandBuffer.CommandBuffer,
+            sourceStage,
+            destinationStage,
+            0,
+            0,
+            null,
+            0,
+            null,
+            1,
+            in barrier
         );
     }
 }
