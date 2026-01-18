@@ -6,6 +6,8 @@ using Silk.NET.Vulkan;
 public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
     where TVertex : IBufferBindable
 {
+    public record struct Options(bool DepthTest, bool Blend);
+
     private readonly Vk vk;
     private readonly DeviceWrapper device;
     public readonly PipelineLayout PipelineLayout;
@@ -19,7 +21,7 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
         ShaderModuleWrapper vertexShaderModule,
         ShaderModuleWrapper fragmentShaderModule,
         DescriptorSetLayoutWrapper[] descriptorSetLayouts,
-        bool blend
+        Options options
     )
     {
         this.vk = vk;
@@ -123,7 +125,7 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
                     | ColorComponentFlags.ABit,
                 BlendEnable = false,
             };
-            if (blend)
+            if (options.Blend)
             {
                 colorBlendAttachment = colorBlendAttachment with
                 {
@@ -137,11 +139,10 @@ public sealed unsafe class GraphicsPipelineWrapper<TVertex> : IDisposable
                 };
             }
 
-            // TODO whether depth testing is enabled should be configurable when we make the pipeline
             var depthStencil = new PipelineDepthStencilStateCreateInfo()
             {
                 SType = StructureType.PipelineDepthStencilStateCreateInfo,
-                DepthTestEnable = true,
+                DepthTestEnable = options.DepthTest,
                 DepthWriteEnable = true,
                 DepthCompareOp = CompareOp.Less,
                 DepthBoundsTestEnable = false,

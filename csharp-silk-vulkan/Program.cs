@@ -165,8 +165,20 @@ class Demo : IAppEventHandler
             new(new(-1, -1, +1), new(0, 0), System.Drawing.Color.White.ToVector4Df())
         );
 
-        renderer2D = new Renderer2D(state.Vk, state.Shaderc, state.PhysicalDevice, state.Device);
-        renderer3D = new Renderer3D(state.Vk, state.Shaderc, state.PhysicalDevice, state.Device);
+        renderer2D = new Renderer2D(
+            state.Vk,
+            state.Shaderc,
+            state.PhysicalDevice,
+            state.Device,
+            new() { DepthTest = false, Blend = true }
+        );
+        renderer3D = new Renderer3D(
+            state.Vk,
+            state.Shaderc,
+            state.PhysicalDevice,
+            state.Device,
+            new() { DepthTest = true, Blend = false }
+        );
 
         rotation = 0;
     }
