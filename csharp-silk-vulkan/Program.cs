@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using Experiment;
 using Experiment.Engine;
+using Experiment.MathExtensions;
 using Experiment.VulkanUtils;
 using Microsoft.Extensions.Logging;
 using Silk.NET.Input;
@@ -283,14 +284,10 @@ class Demo : IAppEventHandler
 
     public void OnUpdate(App.State state, TimeSpan deltaTime)
     {
-        // TODO helper for wrapping
-        rotation =
-            (
-                rotation
-                +
-                // TODO helper for degrees to radians
-                (45.0f * MathF.PI / 180.0f) * (float)deltaTime.TotalSeconds
-            ) % (2.0f * MathF.PI);
+        rotation = (rotation + float.DegreesToRadians(45.0f) * (float)deltaTime.TotalSeconds).Wrap(
+            0,
+            MathF.Tau
+        );
     }
 
     public void OnResize(App.State state)
@@ -325,8 +322,7 @@ class Demo : IAppEventHandler
 
     private static Matrix4X4<float> CreatePerspectiveMatrix(App.State state) =>
         Matrix4X4.CreatePerspectiveFieldOfView(
-            // TODO helper for degrees to radians
-            45.0f * (MathF.PI / 180.0f),
+            float.DegreesToRadians(45.0f),
             (float)state.WindowSize.X / (float)state.WindowSize.Y,
             0.1f,
             100.0f
