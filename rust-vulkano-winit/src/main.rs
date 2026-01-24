@@ -3,7 +3,7 @@ use std::{process::exit, sync::Arc};
 use anyhow::{Result, anyhow};
 use tracing::*;
 use vulkano::{
-    Validated, VulkanError, VulkanLibrary,
+    Validated, ValidationError, VulkanError, VulkanLibrary,
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferExecFuture, CommandBufferUsage,
@@ -61,8 +61,6 @@ https://github.com/vulkano-rs/vulkano-book/blob/main/chapter-code/07-windowing/m
 https://docs.rs/winit/latest/winit/
 */
 
-// TODO no unwrap
-
 #[derive(BufferContents, vulkano::pipeline::graphics::vertex_input::Vertex)]
 #[repr(C)]
 struct Vertex {
@@ -76,7 +74,7 @@ struct AppState {
 
     device: Arc<Device>,
     // TODO rename graphics_queue? do we care about other queues?
-    queue: Arc<Queue>,
+    graphics_queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
     render_pass: Arc<RenderPass>,
     viewport: Viewport,
@@ -135,7 +133,7 @@ impl AppState {
         };
         info!("device extensions: {:#?}", device_extensions);
 
-        let (physical_device, queue_family_index) = instance
+        let (physical_device, graphics_queue_family_index) = instance
             .enumerate_physical_devices()?
             .filter(|x| x.supported_extensions().contains(&device_extensions))
             .filter_map(|physical_device| {
@@ -147,11 +145,16 @@ impl AppState {
                         queue_family_properties
                             .queue_flags
                             .contains(QueueFlags::GRAPHICS)
-                            && physical_device
-                                .surface_support(queue_family_index as u32, &surface)
-                                .unwrap_or(false)
+                            && match physical_device
+                                .surface_support(queue_family_index as u32, &surface) {
+                                    Ok(x) => x,
+                                    Err(e) => {
+                                        trace!("failed to check surface support for potential physical device {:#?}: {:?}", physical_device, e);
+                                        false
+                                    }
+                                }
                     })
-                    .map(|queue_family_index| (physical_device, queue_family_index as u32))
+                    .map(|graphics_queue_family_index| (physical_device, graphics_queue_family_index as u32))
             })
             .min_by_key(|(p, _)| match p.properties().device_type {
                 PhysicalDeviceType::DiscreteGpu => 0,
@@ -171,19 +174,22 @@ impl AppState {
             physical_device.supported_extensions()
         );
 
-        let (device, mut queues) = Device::new(
+        let (device, queues) = Device::new(
             physical_device.clone(),
             DeviceCreateInfo {
                 enabled_extensions: device_extensions,
                 queue_create_infos: vec![QueueCreateInfo {
-                    queue_family_index,
+                    queue_family_index: graphics_queue_family_index,
                     ..Default::default()
                 }],
                 ..Default::default()
             },
         )?;
 
-        let queue = queues.next().unwrap();
+        let graphics_queue = match queues.collect::<Vec<_>>().as_slice() {
+            [graphics_queue] => graphics_queue.clone(),
+            _ => Err(anyhow!("mismatched number of queues"))?,
+        };
 
         let (swapchain, images) = {
             let capabilities =
@@ -315,7 +321,7 @@ impl AppState {
 
         let command_buffers = get_command_buffers(
             command_buffer_allocator.clone(),
-            &queue,
+            &graphics_queue,
             &graphics_pipeline,
             &framebuffers,
             &vertex_buffer,
@@ -325,7 +331,7 @@ impl AppState {
             window,
 
             device,
-            queue,
+            graphics_queue,
             swapchain,
             render_pass,
             viewport,
@@ -374,7 +380,7 @@ impl AppState {
                 )?;
                 self.command_buffers = get_command_buffers(
                     self.command_buffer_allocator.clone(),
-                    &self.queue,
+                    &self.graphics_queue,
                     &new_pipeline,
                     &new_framebuffers,
                     &self.vertex_buffer,
@@ -398,7 +404,9 @@ impl AppState {
 
         // wait for the fence related to this image to finish (normally this would be the oldest fence)
         if let Some(image_fence) = &self.fences[image_index as usize] {
-            image_fence.wait(None).unwrap();
+            image_fence
+                .wait(None)
+                .map_err(|e| anyhow!("failed to wait for fence: {e}"))?;
         }
 
         let previous_future = match self.fences[self.previous_fence_index].clone() {
@@ -416,23 +424,27 @@ impl AppState {
         let future = previous_future
             .join(acquire_future)
             .then_execute(
-                self.queue.clone(),
+                self.graphics_queue.clone(),
                 self.command_buffers[image_index as usize].clone(),
             )
-            .unwrap()
+            .map_err(|e| anyhow!("future execute error: {e:?}"))?
             .then_swapchain_present(
-                self.queue.clone(),
+                self.graphics_queue.clone(),
                 SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index),
             )
             .then_signal_fence_and_flush();
 
-        self.fences[image_index as usize] = match future.map_err(Validated::unwrap) {
+        self.fences[image_index as usize] = match future {
             Ok(value) => Some(Arc::new(value)),
-            Err(VulkanError::OutOfDate) => {
+            Err(Validated::Error(VulkanError::OutOfDate)) => {
                 self.recreate_swapchain = true;
                 None
             }
-            Err(e) => {
+            Err(Validated::Error(e)) => {
+                println!("failed to flush future: {e}");
+                None
+            }
+            Err(Validated::ValidationError(e)) => {
                 println!("failed to flush future: {e}");
                 None
             }
@@ -499,15 +511,17 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(state) = &mut self.state
-                    && let Err(e) = state.redraw_requested() {
-                        error!("redraw request failed: {}", e);
-                    }
+                    && let Err(e) = state.redraw_requested()
+                {
+                    error!("redraw request failed: {}", e);
+                }
             }
             WindowEvent::Resized(physical_size) => {
                 if let Some(state) = &mut self.state
-                    && let Err(e) = state.resize(physical_size) {
-                        error!("resize failed: {}", e);
-                    }
+                    && let Err(e) = state.resize(physical_size)
+                {
+                    error!("resize failed: {}", e);
+                }
             }
             _ => (),
         };
@@ -537,15 +551,17 @@ fn get_framebuffers(
 ) -> Result<Vec<Arc<Framebuffer>>> {
     Ok(images
         .iter()
-        .map(|image| {
-            let view = ImageView::new_default(image.clone()).unwrap();
-            Framebuffer::new(
+        .map::<Result<Arc<Framebuffer>>, _>(|image| {
+            let view = ImageView::new_default(image.clone())
+                .map_err(|e| anyhow!("failed to create image view: {}", e))?;
+            Ok(Framebuffer::new(
                 render_pass.clone(),
                 FramebufferCreateInfo {
                     attachments: vec![view],
                     ..Default::default()
                 },
             )
+            .map_err(|e| anyhow!("failed to create framebuffer: {}", e))?)
         })
         .collect::<Result<Vec<_>, _>>()?)
 }
