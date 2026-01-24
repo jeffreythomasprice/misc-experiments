@@ -1,6 +1,7 @@
 use std::{process::exit, sync::Arc};
 
 use anyhow::{Result, anyhow};
+use glam::{Vec2, vec2};
 use tracing::*;
 use vulkano::{
     Validated, ValidationError, VulkanError, VulkanLibrary,
@@ -64,16 +65,14 @@ https://docs.rs/winit/latest/winit/
 #[derive(BufferContents, vulkano::pipeline::graphics::vertex_input::Vertex)]
 #[repr(C)]
 struct Vertex {
-    // TODO use a proper math lib with vector2 type
     #[format(R32G32_SFLOAT)]
-    position: [f32; 2],
+    position: Vec2,
 }
 
 struct AppState {
     window: Arc<Window>,
 
     device: Arc<Device>,
-    // TODO rename graphics_queue? do we care about other queues?
     graphics_queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
     render_pass: Arc<RenderPass>,
@@ -219,22 +218,7 @@ impl AppState {
             .map_err(|e| anyhow!("error creating swapchain: {e:?}"))?
         };
 
-        // TODO unmacro
-        let render_pass = single_pass_renderpass!(
-            device.clone(),
-             attachments: {
-                color: {
-                    format: swapchain.image_format(),
-                    samples: 1,
-                    load_op: Clear,
-                    store_op: Store,
-                },
-            },
-            pass: {
-                color: [color],
-                depth_stencil: {},
-            },
-        )?;
+        let render_pass = create_render_pass(device.clone(), &swapchain)?;
 
         let framebuffers = get_framebuffers(&images, render_pass.clone())?;
 
@@ -264,18 +248,18 @@ impl AppState {
             },
             vec![
                 Vertex {
-                    position: [-0.5, -0.5],
+                    position: Vec2::new(-0.5, -0.5),
                 },
                 Vertex {
-                    position: [0.5, -0.5],
+                    position: Vec2::new(0.5, -0.5),
                 },
                 Vertex {
-                    position: [0.0, 0.5],
+                    position: Vec2::new(0.0, 0.5),
                 },
             ],
         )?;
 
-        // TOOD un-macro?
+        // TODO un-macro?
         mod vertex_shader_source {
             vulkano_shaders::shader! {
                 ty: "vertex",
@@ -292,7 +276,7 @@ impl AppState {
         }
         let vertex_shader = vertex_shader_source::load(device.clone())?;
 
-        // TOOD un-macro?
+        // TODO un-macro?
         mod fragment_shader_source {
             vulkano_shaders::shader! {
                 ty: "fragment",
@@ -316,8 +300,6 @@ impl AppState {
             render_pass.clone(),
             viewport.clone(),
         )?;
-
-        // TODO impl rest of it
 
         let command_buffers = get_command_buffers(
             command_buffer_allocator.clone(),
@@ -545,6 +527,26 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+fn create_render_pass(device: Arc<Device>, swapchain: &Swapchain) -> Result<Arc<RenderPass>> {
+    // TODO unmacro
+    Ok(single_pass_renderpass!(
+        device,
+        attachments: {
+            color: {
+                format: swapchain.image_format(),
+                samples: 1,
+                load_op: Clear,
+                store_op: Store,
+            },
+        },
+        pass: {
+            color: [color],
+            depth_stencil: {},
+        },
+    )
+    .map_err(|e| anyhow!("failed to create render pass: {}", e))?)
+}
+
 fn get_framebuffers(
     images: &[Arc<Image>],
     render_pass: Arc<RenderPass>,
@@ -638,7 +640,6 @@ fn get_command_buffers(
                 CommandBufferUsage::MultipleSubmit,
             )?;
 
-            // TODO draw is unsafe
             unsafe {
                 builder
                     .begin_render_pass(
