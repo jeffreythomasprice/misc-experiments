@@ -3,10 +3,10 @@ mod shaders;
 use std::{process::exit, sync::Arc};
 
 use anyhow::{Result, anyhow};
-use glam::{Vec2, vec2};
+use glam::Vec2;
 use tracing::*;
 use vulkano::{
-    Validated, ValidationError, VulkanError, VulkanLibrary,
+    Validated, VulkanError, VulkanLibrary,
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferExecFuture, CommandBufferUsage,
@@ -28,7 +28,7 @@ use vulkano::{
             input_assembly::InputAssemblyState,
             multisample::MultisampleState,
             rasterization::RasterizationState,
-            vertex_input::VertexDefinition,
+            vertex_input::{Vertex, VertexDefinition},
             viewport::{Viewport, ViewportState},
         },
         layout::PipelineDescriptorSetLayoutCreateInfo,
@@ -36,10 +36,9 @@ use vulkano::{
     render_pass::{
         AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
         Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo, Subpass,
-        SubpassDescription, SubpassDescriptionFlags,
+        SubpassDescription,
     },
-    shader::{ShaderModule, ShaderModuleCreateInfo},
-    single_pass_renderpass,
+    shader::ShaderModule,
     swapchain::{
         self, PresentFuture, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo,
         SwapchainPresentInfo,
@@ -70,9 +69,9 @@ https://github.com/vulkano-rs/vulkano-book/blob/main/chapter-code/07-windowing/m
 https://docs.rs/winit/latest/winit/
 */
 
-#[derive(BufferContents, vulkano::pipeline::graphics::vertex_input::Vertex)]
+#[derive(BufferContents, Vertex)]
 #[repr(C)]
-struct Vertex {
+struct Vertex2d {
     #[format(R32G32_SFLOAT)]
     position: Vec2,
 }
@@ -88,7 +87,7 @@ struct AppState {
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
 
     // TODO refactor so we don't have a command buffer pre-allocated all the time? keep graphics pipeline around?
-    vertex_buffer: Subbuffer<[Vertex]>,
+    vertex_buffer: Subbuffer<[Vertex2d]>,
     vertex_shader: Arc<ShaderModule>,
     fragment_shader: Arc<ShaderModule>,
     command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
@@ -255,13 +254,13 @@ impl AppState {
                 ..Default::default()
             },
             vec![
-                Vertex {
+                Vertex2d {
                     position: Vec2::new(-0.5, -0.5),
                 },
-                Vertex {
+                Vertex2d {
                     position: Vec2::new(0.5, -0.5),
                 },
-                Vertex {
+                Vertex2d {
                     position: Vec2::new(0.0, 0.5),
                 },
             ],
@@ -279,7 +278,7 @@ impl AppState {
             include_str!("shader.frag"),
         )?;
 
-        let graphics_pipeline = create_graphics_pipeline::<Vertex>(
+        let graphics_pipeline = create_graphics_pipeline::<Vertex2d>(
             device.clone(),
             vertex_shader.clone(),
             fragment_shader.clone(),
@@ -339,7 +338,7 @@ impl AppState {
                 self.window_resized = false;
 
                 self.viewport.extent = new_dimensions.into();
-                let new_pipeline = create_graphics_pipeline::<Vertex>(
+                let new_pipeline = create_graphics_pipeline::<Vertex2d>(
                     self.device.clone(),
                     self.vertex_shader.clone(),
                     self.fragment_shader.clone(),
@@ -514,7 +513,7 @@ async fn main() -> Result<()> {
 }
 
 fn create_render_pass(device: Arc<Device>, swapchain: &Swapchain) -> Result<Arc<RenderPass>> {
-    Ok(RenderPass::new(
+    RenderPass::new(
         device,
         RenderPassCreateInfo {
             attachments: vec![AttachmentDescription {
@@ -537,28 +536,28 @@ fn create_render_pass(device: Arc<Device>, swapchain: &Swapchain) -> Result<Arc<
             ..Default::default()
         },
     )
-    .map_err(|e| anyhow!("failed to create render pass: {}", e))?)
+    .map_err(|e| anyhow!("failed to create render pass: {}", e))
 }
 
 fn create_framebuffers(
     images: &[Arc<Image>],
     render_pass: Arc<RenderPass>,
 ) -> Result<Vec<Arc<Framebuffer>>> {
-    Ok(images
+    images
         .iter()
         .map::<Result<Arc<Framebuffer>>, _>(|image| {
             let view = ImageView::new_default(image.clone())
                 .map_err(|e| anyhow!("failed to create image view: {}", e))?;
-            Ok(Framebuffer::new(
+            Framebuffer::new(
                 render_pass.clone(),
                 FramebufferCreateInfo {
                     attachments: vec![view],
                     ..Default::default()
                 },
             )
-            .map_err(|e| anyhow!("failed to create framebuffer: {}", e))?)
+            .map_err(|e| anyhow!("failed to create framebuffer: {}", e))
         })
-        .collect::<Result<Vec<_>, _>>()?)
+        .collect::<Result<Vec<_>, _>>()
 }
 
 fn create_graphics_pipeline<VertexType>(
@@ -569,7 +568,7 @@ fn create_graphics_pipeline<VertexType>(
     viewport: Viewport,
 ) -> Result<Arc<GraphicsPipeline>>
 where
-    VertexType: vulkano::pipeline::graphics::vertex_input::Vertex,
+    VertexType: Vertex,
 {
     let vertex_shader_entry_point = vertex_shader
         .entry_point("main")
@@ -625,7 +624,7 @@ fn create_command_buffers(
     queue: &Arc<Queue>,
     pipeline: &Arc<GraphicsPipeline>,
     framebuffers: &[Arc<Framebuffer>],
-    vertex_buffer: &Subbuffer<[Vertex]>,
+    vertex_buffer: &Subbuffer<[Vertex2d]>,
 ) -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>> {
     framebuffers
         .iter()

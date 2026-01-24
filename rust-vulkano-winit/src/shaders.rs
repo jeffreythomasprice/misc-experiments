@@ -32,11 +32,11 @@ pub fn compile_shader(
             Some(&options),
         )
         .unwrap();
-    Ok(unsafe {
+    unsafe {
         ShaderModule::new(
             device,
             ShaderModuleCreateInfo::new(binary_result.as_binary()),
         )
     }
-    .map_err(|e| anyhow!("failed to compile {:?} shader: {:?}", ty, e))?)
+    .map_err(|e| anyhow!("failed to compile {:?} shader: {:?}", ty, e))
 }
