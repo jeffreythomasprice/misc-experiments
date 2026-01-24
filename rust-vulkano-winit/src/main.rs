@@ -3,7 +3,7 @@ mod shaders;
 use std::{process::exit, sync::Arc};
 
 use anyhow::{Result, anyhow};
-use glam::Vec2;
+use glam::{Vec2, Vec4};
 use tracing::*;
 use vulkano::{
     Validated, VulkanError, VulkanLibrary,
@@ -64,6 +64,8 @@ use crate::shaders::{ShaderType, compile_shader};
 struct Vertex2d {
     #[format(R32G32_SFLOAT)]
     position: Vec2,
+    #[format(R32G32B32A32_SFLOAT)]
+    color: Vec4,
 }
 
 struct AppState {
@@ -246,12 +248,15 @@ impl AppState {
             vec![
                 Vertex2d {
                     position: Vec2::new(-0.5, 0.5),
+                    color: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 },
                 Vertex2d {
                     position: Vec2::new(0.5, 0.5),
+                    color: Vec4::new(0.0, 1.0, 0.0, 1.0),
                 },
                 Vertex2d {
                     position: Vec2::new(0.0, -0.5),
+                    color: Vec4::new(0.0, 0.0, 1.0, 1.0),
                 },
             ],
         )?;
