@@ -1,3 +1,5 @@
+mod shaders;
+
 use std::{process::exit, sync::Arc};
 
 use anyhow::{Result, anyhow};
@@ -36,7 +38,7 @@ use vulkano::{
         Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo, Subpass,
         SubpassDescription, SubpassDescriptionFlags,
     },
-    shader::ShaderModule,
+    shader::{ShaderModule, ShaderModuleCreateInfo},
     single_pass_renderpass,
     swapchain::{
         self, PresentFuture, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo,
@@ -55,6 +57,8 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
+
+use crate::shaders::{ShaderType, compile_shader};
 
 /*
 TODO some references
@@ -224,7 +228,7 @@ impl AppState {
 
         let render_pass = create_render_pass(device.clone(), &swapchain)?;
 
-        let framebuffers = get_framebuffers(&images, render_pass.clone())?;
+        let framebuffers = create_framebuffers(&images, render_pass.clone())?;
 
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
@@ -263,41 +267,19 @@ impl AppState {
             ],
         )?;
 
-        // TODO un-macro?
-        mod vertex_shader_source {
-            vulkano_shaders::shader! {
-                ty: "vertex",
-                src: "
-                    #version 450
+        let vertex_shader = compile_shader(
+            device.clone(),
+            ShaderType::Vertex,
+            include_str!("shader.vert"),
+        )?;
 
-                    layout(location = 0) in vec2 position;
+        let fragment_shader = compile_shader(
+            device.clone(),
+            ShaderType::Fragment,
+            include_str!("shader.frag"),
+        )?;
 
-                    void main() {
-                        gl_Position = vec4(position, 0.0, 1.0);
-                    }
-                "
-            }
-        }
-        let vertex_shader = vertex_shader_source::load(device.clone())?;
-
-        // TODO un-macro?
-        mod fragment_shader_source {
-            vulkano_shaders::shader! {
-                ty: "fragment",
-                src: "
-                    #version 450
-
-                    layout(location = 0) out vec4 f_color;
-
-                    void main() {
-                        f_color = vec4(1.0, 0.5, 0.25, 1.0);
-                    }
-                "
-            }
-        }
-        let fragment_shader = fragment_shader_source::load(device.clone())?;
-
-        let graphics_pipeline = get_pipeline(
+        let graphics_pipeline = create_graphics_pipeline::<Vertex>(
             device.clone(),
             vertex_shader.clone(),
             fragment_shader.clone(),
@@ -305,7 +287,7 @@ impl AppState {
             viewport.clone(),
         )?;
 
-        let command_buffers = get_command_buffers(
+        let command_buffers = create_command_buffers(
             command_buffer_allocator.clone(),
             &graphics_queue,
             &graphics_pipeline,
@@ -351,20 +333,20 @@ impl AppState {
                 .map_err(|e| anyhow!("failed to recreate swapchain: {e:?}"))?;
 
             self.swapchain = new_swapchain;
-            let new_framebuffers = get_framebuffers(&new_images, self.render_pass.clone())?;
+            let new_framebuffers = create_framebuffers(&new_images, self.render_pass.clone())?;
 
             if self.window_resized {
                 self.window_resized = false;
 
                 self.viewport.extent = new_dimensions.into();
-                let new_pipeline = get_pipeline(
+                let new_pipeline = create_graphics_pipeline::<Vertex>(
                     self.device.clone(),
                     self.vertex_shader.clone(),
                     self.fragment_shader.clone(),
                     self.render_pass.clone(),
                     self.viewport.clone(),
                 )?;
-                self.command_buffers = get_command_buffers(
+                self.command_buffers = create_command_buffers(
                     self.command_buffer_allocator.clone(),
                     &self.graphics_queue,
                     &new_pipeline,
@@ -558,7 +540,7 @@ fn create_render_pass(device: Arc<Device>, swapchain: &Swapchain) -> Result<Arc<
     .map_err(|e| anyhow!("failed to create render pass: {}", e))?)
 }
 
-fn get_framebuffers(
+fn create_framebuffers(
     images: &[Arc<Image>],
     render_pass: Arc<RenderPass>,
 ) -> Result<Vec<Arc<Framebuffer>>> {
@@ -579,35 +561,38 @@ fn get_framebuffers(
         .collect::<Result<Vec<_>, _>>()?)
 }
 
-// TODO make generic on vertex type
-fn get_pipeline(
+fn create_graphics_pipeline<VertexType>(
     device: Arc<Device>,
-    vs: Arc<ShaderModule>,
-    fs: Arc<ShaderModule>,
+    vertex_shader: Arc<ShaderModule>,
+    fragment_shader: Arc<ShaderModule>,
     render_pass: Arc<RenderPass>,
     viewport: Viewport,
-) -> Result<Arc<GraphicsPipeline>> {
-    let vs = vs
+) -> Result<Arc<GraphicsPipeline>>
+where
+    VertexType: vulkano::pipeline::graphics::vertex_input::Vertex,
+{
+    let vertex_shader_entry_point = vertex_shader
         .entry_point("main")
         .ok_or(anyhow!("failed to get vertex shader entry point"))?;
-    let fs = fs
+    let fragment_shader_entry_point = fragment_shader
         .entry_point("main")
         .ok_or(anyhow!("failed to get fragment shader entry point"))?;
 
-    let vertex_input_state =
-        <Vertex as vulkano::pipeline::graphics::vertex_input::Vertex>::per_vertex()
-            .definition(&vs)?;
+    let vertex_input_state = VertexType::per_vertex()
+        .definition(&vertex_shader_entry_point)
+        .map_err(|e| anyhow!("failed to get vertex input definition: {e:?}"))?;
 
     let stages = [
-        PipelineShaderStageCreateInfo::new(vs),
-        PipelineShaderStageCreateInfo::new(fs),
+        PipelineShaderStageCreateInfo::new(vertex_shader_entry_point),
+        PipelineShaderStageCreateInfo::new(fragment_shader_entry_point),
     ];
 
     let layout = PipelineLayout::new(
         device.clone(),
         PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
             .into_pipeline_layout_create_info(device.clone())?,
-    )?;
+    )
+    .map_err(|e| anyhow!("failed to create pipeline layout: {e:?}"))?;
 
     let subpass =
         Subpass::from(render_pass.clone(), 0).ok_or(anyhow!("failed to create subpass"))?;
@@ -635,7 +620,7 @@ fn get_pipeline(
     )?)
 }
 
-fn get_command_buffers(
+fn create_command_buffers(
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     queue: &Arc<Queue>,
     pipeline: &Arc<GraphicsPipeline>,
