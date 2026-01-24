@@ -15,7 +15,7 @@ use vulkano::{
         Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
         physical::PhysicalDeviceType,
     },
-    image::{Image, ImageUsage, view::ImageView},
+    image::{Image, ImageLayout, ImageUsage, SampleCount, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
@@ -31,7 +31,11 @@ use vulkano::{
         },
         layout::PipelineDescriptorSetLayoutCreateInfo,
     },
-    render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass, Subpass},
+    render_pass::{
+        AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
+        Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo, Subpass,
+        SubpassDescription, SubpassDescriptionFlags,
+    },
     shader::ShaderModule,
     single_pass_renderpass,
     swapchain::{
@@ -528,20 +532,27 @@ async fn main() -> Result<()> {
 }
 
 fn create_render_pass(device: Arc<Device>, swapchain: &Swapchain) -> Result<Arc<RenderPass>> {
-    // TODO unmacro
-    Ok(single_pass_renderpass!(
+    Ok(RenderPass::new(
         device,
-        attachments: {
-            color: {
+        RenderPassCreateInfo {
+            attachments: vec![AttachmentDescription {
                 format: swapchain.image_format(),
-                samples: 1,
-                load_op: Clear,
-                store_op: Store,
-            },
-        },
-        pass: {
-            color: [color],
-            depth_stencil: {},
+                samples: SampleCount::Sample1,
+                load_op: AttachmentLoadOp::Clear,
+                store_op: AttachmentStoreOp::Store,
+                initial_layout: ImageLayout::Undefined,
+                final_layout: ImageLayout::PresentSrc,
+                ..Default::default()
+            }],
+            subpasses: vec![SubpassDescription {
+                color_attachments: vec![Some(AttachmentReference {
+                    attachment: 0,
+                    layout: ImageLayout::ColorAttachmentOptimal,
+                    ..Default::default()
+                })],
+                ..Default::default()
+            }],
+            ..Default::default()
         },
     )
     .map_err(|e| anyhow!("failed to create render pass: {}", e))?)
