@@ -59,16 +59,6 @@ use winit::{
 
 use crate::shaders::{ShaderType, compile_shader};
 
-/*
-TODO some references
-
-https://vulkano.rs/07-windowing/01-introduction.html
-
-https://github.com/vulkano-rs/vulkano-book/blob/main/chapter-code/07-windowing/main.rs
-
-https://docs.rs/winit/latest/winit/
-*/
-
 #[derive(BufferContents, Vertex)]
 #[repr(C)]
 struct Vertex2d {
@@ -83,14 +73,14 @@ struct AppState {
     graphics_queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
     render_pass: Arc<RenderPass>,
+    framebuffers: Vec<Arc<Framebuffer>>,
     viewport: Viewport,
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
 
-    // TODO refactor so we don't have a command buffer pre-allocated all the time? keep graphics pipeline around?
     vertex_buffer: Subbuffer<[Vertex2d]>,
     vertex_shader: Arc<ShaderModule>,
     fragment_shader: Arc<ShaderModule>,
-    command_buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
+    graphics_pipeline: Arc<GraphicsPipeline>,
 
     window_resized: bool,
     recreate_swapchain: bool,
@@ -255,13 +245,13 @@ impl AppState {
             },
             vec![
                 Vertex2d {
-                    position: Vec2::new(-0.5, -0.5),
+                    position: Vec2::new(-0.5, 0.5),
                 },
                 Vertex2d {
-                    position: Vec2::new(0.5, -0.5),
+                    position: Vec2::new(0.5, 0.5),
                 },
                 Vertex2d {
-                    position: Vec2::new(0.0, 0.5),
+                    position: Vec2::new(0.0, -0.5),
                 },
             ],
         )?;
@@ -286,14 +276,6 @@ impl AppState {
             viewport.clone(),
         )?;
 
-        let command_buffers = create_command_buffers(
-            command_buffer_allocator.clone(),
-            &graphics_queue,
-            &graphics_pipeline,
-            &framebuffers,
-            &vertex_buffer,
-        )?;
-
         Ok(Self {
             window,
 
@@ -301,14 +283,14 @@ impl AppState {
             graphics_queue,
             swapchain,
             render_pass,
+            framebuffers,
             viewport,
             command_buffer_allocator,
 
             vertex_buffer,
             vertex_shader,
             fragment_shader,
-
-            command_buffers,
+            graphics_pipeline,
 
             window_resized: false,
             recreate_swapchain: false,
@@ -332,25 +314,18 @@ impl AppState {
                 .map_err(|e| anyhow!("failed to recreate swapchain: {e:?}"))?;
 
             self.swapchain = new_swapchain;
-            let new_framebuffers = create_framebuffers(&new_images, self.render_pass.clone())?;
+            self.framebuffers = create_framebuffers(&new_images, self.render_pass.clone())?;
 
             if self.window_resized {
                 self.window_resized = false;
 
                 self.viewport.extent = new_dimensions.into();
-                let new_pipeline = create_graphics_pipeline::<Vertex2d>(
+                self.graphics_pipeline = create_graphics_pipeline::<Vertex2d>(
                     self.device.clone(),
                     self.vertex_shader.clone(),
                     self.fragment_shader.clone(),
                     self.render_pass.clone(),
                     self.viewport.clone(),
-                )?;
-                self.command_buffers = create_command_buffers(
-                    self.command_buffer_allocator.clone(),
-                    &self.graphics_queue,
-                    &new_pipeline,
-                    &new_framebuffers,
-                    &self.vertex_buffer,
                 )?;
             }
         }
@@ -369,7 +344,6 @@ impl AppState {
             self.recreate_swapchain = true;
         }
 
-        // wait for the fence related to this image to finish (normally this would be the oldest fence)
         if let Some(image_fence) = &self.fences[image_index as usize] {
             image_fence
                 .wait(None)
@@ -377,14 +351,11 @@ impl AppState {
         }
 
         let previous_future = match self.fences[self.previous_fence_index].clone() {
-            // Create a NowFuture
             None => {
                 let mut now = sync::now(self.device.clone());
                 now.cleanup_finished();
-
                 now.boxed()
             }
-            // Use the existing FenceSignalFuture
             Some(fence) => fence.boxed(),
         };
 
@@ -392,7 +363,13 @@ impl AppState {
             .join(acquire_future)
             .then_execute(
                 self.graphics_queue.clone(),
-                self.command_buffers[image_index as usize].clone(),
+                create_command_buffer(
+                    self.command_buffer_allocator.clone(),
+                    &self.graphics_queue,
+                    self.graphics_pipeline.clone(),
+                    self.framebuffers[image_index as usize].clone(),
+                    &self.vertex_buffer,
+                )?,
             )
             .map_err(|e| anyhow!("future execute error: {e:?}"))?
             .then_swapchain_present(
@@ -619,41 +596,36 @@ where
     )?)
 }
 
-fn create_command_buffers(
+fn create_command_buffer(
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    queue: &Arc<Queue>,
-    pipeline: &Arc<GraphicsPipeline>,
-    framebuffers: &[Arc<Framebuffer>],
+    graphics_queue: &Queue,
+    pipeline: Arc<GraphicsPipeline>,
+    framebuffer: Arc<Framebuffer>,
     vertex_buffer: &Subbuffer<[Vertex2d]>,
-) -> Result<Vec<Arc<PrimaryAutoCommandBuffer>>> {
-    framebuffers
-        .iter()
-        .map(|framebuffer| {
-            let mut builder = AutoCommandBufferBuilder::primary(
-                command_buffer_allocator.clone(),
-                queue.queue_family_index(),
-                CommandBufferUsage::MultipleSubmit,
-            )?;
+) -> Result<Arc<PrimaryAutoCommandBuffer>> {
+    let mut builder = AutoCommandBufferBuilder::primary(
+        command_buffer_allocator,
+        graphics_queue.queue_family_index(),
+        CommandBufferUsage::MultipleSubmit,
+    )?;
 
-            unsafe {
-                builder
-                    .begin_render_pass(
-                        RenderPassBeginInfo {
-                            clear_values: vec![Some([0.25, 0.5, 1.0, 1.0].into())],
-                            ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
-                        },
-                        SubpassBeginInfo {
-                            contents: SubpassContents::Inline,
-                            ..Default::default()
-                        },
-                    )?
-                    .bind_pipeline_graphics(pipeline.clone())?
-                    .bind_vertex_buffers(0, vertex_buffer.clone())?
-                    .draw(vertex_buffer.len() as u32, 1, 0, 0)?
-                    .end_render_pass(Default::default())?;
-            }
+    unsafe {
+        builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![Some([0.25, 0.5, 1.0, 1.0].into())],
+                    ..RenderPassBeginInfo::framebuffer(framebuffer.clone())
+                },
+                SubpassBeginInfo {
+                    contents: SubpassContents::Inline,
+                    ..Default::default()
+                },
+            )?
+            .bind_pipeline_graphics(pipeline)?
+            .bind_vertex_buffers(0, vertex_buffer.clone())?
+            .draw(vertex_buffer.len() as u32, 1, 0, 0)?
+            .end_render_pass(Default::default())?;
+    }
 
-            Ok(builder.build()?)
-        })
-        .collect()
+    Ok(builder.build()?)
 }
