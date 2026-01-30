@@ -5,8 +5,7 @@ use tracing::*;
 use vulkano::{
     Validated, VulkanError, VulkanLibrary,
     command_buffer::{
-        CommandBufferExecFuture,
-        PrimaryAutoCommandBuffer,
+        CommandBufferExecFuture, PrimaryAutoCommandBuffer,
         allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
     },
     device::{
@@ -18,8 +17,7 @@ use vulkano::{
     pipeline::graphics::viewport::Viewport,
     render_pass::{
         AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
-        Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo,
-        SubpassDescription,
+        Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo, SubpassDescription,
     },
     swapchain::{
         self, PresentFuture, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo,
@@ -40,12 +38,6 @@ use winit::{
 };
 
 pub trait EventHandler {
-    fn init(
-        &mut self,
-        device: Arc<Device>,
-        render_pass: Arc<RenderPass>,
-        viewport: Viewport,
-    ) -> Result<()>;
     fn recreate(
         &mut self,
         device: Arc<Device>,
@@ -59,6 +51,9 @@ pub trait EventHandler {
         framebuffer: Arc<Framebuffer>,
     ) -> Result<Arc<PrimaryAutoCommandBuffer>>;
 }
+
+pub type EventHandlerFactory<EH> =
+    Box<dyn FnOnce(Arc<Device>, Arc<RenderPass>, Viewport) -> Result<EH>>;
 
 struct AppState<EH> {
     event_handler: EH,
@@ -95,7 +90,10 @@ impl<EH> AppState<EH>
 where
     EH: EventHandler,
 {
-    fn new(mut event_handler: EH, event_loop: &ActiveEventLoop) -> Result<Self> {
+    fn new(
+        event_handler_factory: EventHandlerFactory<EH>,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<Self> {
         let library = VulkanLibrary::new()?;
 
         let surface_required_extensions = Surface::required_extensions(&event_loop)?;
@@ -224,7 +222,8 @@ where
             Default::default(),
         ));
 
-        event_handler.init(device.clone(), render_pass.clone(), viewport.clone())?;
+        let event_handler =
+            event_handler_factory(device.clone(), render_pass.clone(), viewport.clone())?;
 
         Ok(Self {
             event_handler,
@@ -352,25 +351,21 @@ where
 
 pub struct App<EH> {
     state: Option<AppState<EH>>,
-    event_handler: Option<EH>,
+    event_handler_factory: Option<EventHandlerFactory<EH>>,
 }
 
 impl<EH> App<EH>
 where
     EH: EventHandler,
 {
-    fn new(event_handler: EH) -> Result<Self> {
-        Ok(Self {
-            state: None,
-            event_handler: Some(event_handler),
-        })
-    }
-
-    pub fn run(event_handler: EH) -> Result<()> {
+    pub fn run(event_handler_factory: EventHandlerFactory<EH>) -> Result<()> {
         let event_loop = EventLoop::new()?;
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-        let mut app = Self::new(event_handler)?;
+        let mut app = Self {
+            state: None,
+            event_handler_factory: Some(event_handler_factory),
+        };
         event_loop.run_app(&mut app)?;
 
         Ok(())
@@ -384,14 +379,16 @@ where
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.is_none() {
             info!("initializing vulkan");
-            match self.event_handler.take() {
-                Some(event_handler) => match AppState::new(event_handler, event_loop) {
-                    Ok(state) => self.state = Some(state),
-                    Err(e) => {
-                        error!("failed to initialize vulkan: {}", e);
-                        exit(1);
-                    }
-                },
+            match self.event_handler_factory.take() {
+                Some(event_handler_factory) => {
+                    match AppState::new(event_handler_factory, event_loop) {
+                        Ok(state) => self.state = Some(state),
+                        Err(e) => {
+                            error!("failed to initialize vulkan: {}", e);
+                            exit(1);
+                        }
+                    };
+                }
                 None => {
                     error!(
                         "initialzing window state, but event handler is missing, did we init twice?"

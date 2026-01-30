@@ -8,13 +8,10 @@ use glam::{Vec2, Vec4};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage,
-        PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
-        allocator::CommandBufferAllocator,
+        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
+        RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, allocator::CommandBufferAllocator,
     },
-    device::{
-        Device, Queue,
-    },
+    device::{Device, Queue},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
         GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
@@ -29,9 +26,7 @@ use vulkano::{
         },
         layout::PipelineDescriptorSetLayoutCreateInfo,
     },
-    render_pass::{
-        Framebuffer, RenderPass, Subpass,
-    },
+    render_pass::{Framebuffer, RenderPass, Subpass},
     shader::ShaderModule,
 };
 
@@ -49,14 +44,14 @@ struct Vertex2d {
     color: Vec4,
 }
 
-struct DemoState {
+struct Demo {
     vertex_buffer: Subbuffer<[Vertex2d]>,
     vertex_shader: Arc<ShaderModule>,
     fragment_shader: Arc<ShaderModule>,
     graphics_pipeline: Arc<GraphicsPipeline>,
 }
 
-impl DemoState {
+impl Demo {
     fn new(device: Arc<Device>, render_pass: Arc<RenderPass>, viewport: Viewport) -> Result<Self> {
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
@@ -114,7 +109,9 @@ impl DemoState {
             graphics_pipeline,
         })
     }
+}
 
+impl EventHandler for Demo {
     fn recreate(
         &mut self,
         device: Arc<Device>,
@@ -128,7 +125,6 @@ impl DemoState {
             render_pass.clone(),
             viewport,
         )?;
-
         Ok(())
     }
 
@@ -166,54 +162,6 @@ impl DemoState {
     }
 }
 
-struct Demo {
-    state: Option<DemoState>,
-}
-
-impl Demo {
-    fn new() -> Self {
-        Self { state: None }
-    }
-}
-
-impl EventHandler for Demo {
-    fn init(
-        &mut self,
-        device: Arc<Device>,
-        render_pass: Arc<RenderPass>,
-        viewport: Viewport,
-    ) -> Result<()> {
-        self.state = Some(DemoState::new(device, render_pass, viewport)?);
-        Ok(())
-    }
-
-    fn recreate(
-        &mut self,
-        device: Arc<Device>,
-        render_pass: Arc<RenderPass>,
-        viewport: Viewport,
-    ) -> Result<()> {
-        self.state
-            .as_mut()
-            .ok_or(anyhow!("expected inner state to be initialized"))?
-            .recreate(device, render_pass, viewport)?;
-        Ok(())
-    }
-
-    fn create_command_buffer(
-        &mut self,
-        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-        graphics_queue: &Queue,
-        framebuffer: Arc<Framebuffer>,
-    ) -> Result<Arc<PrimaryAutoCommandBuffer>> {
-        self
-            .state
-            .as_mut()
-            .ok_or(anyhow!("expected inner state to be initialized"))?
-            .create_command_buffer(command_buffer_allocator, graphics_queue, framebuffer)
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let pkg_name = env!("CARGO_PKG_NAME").replace("-", "_");
@@ -222,7 +170,7 @@ async fn main() -> Result<()> {
         .with_env_filter(format!("info,{pkg_name}=trace"))
         .init();
 
-    App::run(Demo::new())?;
+    App::run(Box::new(Demo::new))?;
 
     Ok(())
 }
