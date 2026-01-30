@@ -14,13 +14,13 @@ use vulkano::{
     device::{Device, Queue},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
-        GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+        GraphicsPipeline, PipelineCreateFlags, PipelineLayout, PipelineShaderStageCreateInfo,
         graphics::{
             GraphicsPipelineCreateInfo,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
             input_assembly::InputAssemblyState,
             multisample::MultisampleState,
-            rasterization::RasterizationState,
+            rasterization::{CullMode, FrontFace, RasterizationState},
             vertex_input::{Vertex, VertexDefinition},
             viewport::{Viewport, ViewportState},
         },
@@ -46,6 +46,7 @@ struct Vertex2d {
 
 struct Demo {
     vertex_buffer: Subbuffer<[Vertex2d]>,
+    index_buffer: Subbuffer<[u16]>,
     vertex_shader: Arc<ShaderModule>,
     fragment_shader: Arc<ShaderModule>,
     graphics_pipeline: Arc<GraphicsPipeline>,
@@ -56,7 +57,7 @@ impl Demo {
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
         let vertex_buffer = Buffer::from_iter(
-            memory_allocator,
+            memory_allocator.clone(),
             BufferCreateInfo {
                 usage: BufferUsage::VERTEX_BUFFER,
                 ..Default::default()
@@ -68,18 +69,36 @@ impl Demo {
             },
             vec![
                 Vertex2d {
-                    position: Vec2::new(-0.5, 0.5),
-                    color: Vec4::new(1.0, 0.0, 0.0, 1.0),
+                    position: Vec2::new(0.5, -0.5),
+                    color: Vec4::new(1.0, 0.0, 1.0, 1.0),
                 },
                 Vertex2d {
                     position: Vec2::new(0.5, 0.5),
+                    color: Vec4::new(0.0, 0.0, 1.0, 1.0),
+                },
+                Vertex2d {
+                    position: Vec2::new(-0.5, 0.5),
                     color: Vec4::new(0.0, 1.0, 0.0, 1.0),
                 },
                 Vertex2d {
-                    position: Vec2::new(0.0, -0.5),
-                    color: Vec4::new(0.0, 0.0, 1.0, 1.0),
+                    position: Vec2::new(-0.5, -0.5),
+                    color: Vec4::new(1.0, 0.0, 0.0, 1.0),
                 },
             ],
+        )?;
+
+        let index_buffer = Buffer::from_iter(
+            memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::INDEX_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            vec![0u16, 1, 2, 2, 3, 0],
         )?;
 
         let vertex_shader = compile_shader(
@@ -102,8 +121,19 @@ impl Demo {
             viewport.clone(),
         )?;
 
+        // TODO texture struct
+        let mut image =
+            image::ImageReader::open("assets/ChatGPT Image Jan 15, 2026, 02_09_46 PM.png")?
+                .decode()?;
+        image.convert_color_space(
+            image::metadata::Cicp::SRGB_LINEAR,
+            Default::default(),
+            image::ColorType::Rgba8,
+        )?;
+
         Ok(Self {
             vertex_buffer,
+            index_buffer,
             vertex_shader,
             fragment_shader,
             graphics_pipeline,
@@ -154,7 +184,8 @@ impl EventHandler for Demo {
                 )?
                 .bind_pipeline_graphics(self.graphics_pipeline.clone())?
                 .bind_vertex_buffers(0, self.vertex_buffer.clone())?
-                .draw(self.vertex_buffer.len() as u32, 1, 0, 0)?
+                .bind_index_buffer(self.index_buffer.clone())?
+                .draw_indexed(self.index_buffer.len() as u32, 1, 0, 0, 0)?
                 .end_render_pass(Default::default())?;
         }
 
@@ -222,7 +253,11 @@ where
                 viewports: [viewport].into_iter().collect(),
                 ..Default::default()
             }),
-            rasterization_state: Some(RasterizationState::default()),
+            rasterization_state: Some(RasterizationState {
+                front_face: FrontFace::Clockwise,
+                cull_mode: CullMode::Back,
+                ..Default::default()
+            }),
             multisample_state: Some(MultisampleState::default()),
             color_blend_state: Some(ColorBlendState::with_attachment_states(
                 subpass.num_color_attachments(),
