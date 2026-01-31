@@ -1,7 +1,8 @@
 mod app;
 mod shaders;
+mod texture;
 
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 use anyhow::{Result, anyhow};
 use glam::{Vec2, Vec4};
@@ -9,7 +10,8 @@ use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
-        RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, allocator::CommandBufferAllocator,
+        RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
+        allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
     },
     device::{Device, Queue},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
@@ -31,8 +33,9 @@ use vulkano::{
 };
 
 use crate::{
-    app::{App, EventHandler},
+    app::{App, EventHandler, EventHandlerInitOptions},
     shaders::{ShaderType, compile_shader},
+    texture::Texture,
 };
 
 #[derive(BufferContents, Vertex)]
@@ -53,7 +56,16 @@ struct Demo {
 }
 
 impl Demo {
-    fn new(device: Arc<Device>, render_pass: Arc<RenderPass>, viewport: Viewport) -> Result<Self> {
+    fn new(
+        EventHandlerInitOptions {
+            physical_device,
+            device,
+            graphics_queue,
+            render_pass,
+            viewport,
+            command_buffer_allocator,
+        }: EventHandlerInitOptions,
+    ) -> Result<Self> {
         let memory_allocator = Arc::new(StandardMemoryAllocator::new_default(device.clone()));
 
         let vertex_buffer = Buffer::from_iter(
@@ -121,14 +133,15 @@ impl Demo {
             viewport.clone(),
         )?;
 
-        // TODO texture struct
-        let mut image =
+        // TODO do something with texture
+        let texture = Texture::new_from_image(
+            physical_device.clone(),
+            device.clone(),
+            memory_allocator.clone(),
+            command_buffer_allocator.clone(),
+            graphics_queue.clone(),
             image::ImageReader::open("assets/ChatGPT Image Jan 15, 2026, 02_09_46 PM.png")?
-                .decode()?;
-        image.convert_color_space(
-            image::metadata::Cicp::SRGB_LINEAR,
-            Default::default(),
-            image::ColorType::Rgba8,
+                .decode()?,
         )?;
 
         Ok(Self {

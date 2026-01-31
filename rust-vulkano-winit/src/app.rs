@@ -1,6 +1,7 @@
-use std::{process::exit, sync::Arc};
+use std::{pin::Pin, process::exit, sync::Arc};
 
 use anyhow::{Result, anyhow};
+use tokio::runtime::Runtime;
 use tracing::*;
 use vulkano::{
     Validated, VulkanError, VulkanLibrary,
@@ -10,11 +11,11 @@ use vulkano::{
     },
     device::{
         Device, DeviceCreateInfo, DeviceExtensions, Queue, QueueCreateInfo, QueueFlags,
-        physical::PhysicalDeviceType,
+        physical::{PhysicalDevice, PhysicalDeviceType},
     },
     image::{Image, ImageLayout, ImageUsage, SampleCount, view::ImageView},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
-    pipeline::graphics::viewport::Viewport,
+    pipeline::graphics::{self, viewport::Viewport},
     render_pass::{
         AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
         Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo, SubpassDescription,
@@ -52,8 +53,17 @@ pub trait EventHandler {
     ) -> Result<Arc<PrimaryAutoCommandBuffer>>;
 }
 
-pub type EventHandlerFactory<EH> =
-    Box<dyn FnOnce(Arc<Device>, Arc<RenderPass>, Viewport) -> Result<EH>>;
+#[derive(Clone)]
+pub struct EventHandlerInitOptions {
+    pub physical_device: Arc<PhysicalDevice>,
+    pub device: Arc<Device>,
+    pub graphics_queue: Arc<Queue>,
+    pub render_pass: Arc<RenderPass>,
+    pub viewport: Viewport,
+    pub command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+}
+
+pub type EventHandlerFactory<EH> = Box<dyn FnOnce(EventHandlerInitOptions) -> Result<EH>>;
 
 struct AppState<EH> {
     event_handler: EH,
@@ -222,8 +232,14 @@ where
             Default::default(),
         ));
 
-        let event_handler =
-            event_handler_factory(device.clone(), render_pass.clone(), viewport.clone())?;
+        let event_handler = event_handler_factory(EventHandlerInitOptions {
+            physical_device: physical_device.clone(),
+            device: device.clone(),
+            graphics_queue: graphics_queue.clone(),
+            render_pass: render_pass.clone(),
+            viewport: viewport.clone(),
+            command_buffer_allocator: command_buffer_allocator.clone(),
+        })?;
 
         Ok(Self {
             event_handler,
