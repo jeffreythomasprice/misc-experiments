@@ -2,7 +2,7 @@ mod app;
 mod shaders;
 mod texture;
 
-use std::{pin::Pin, sync::Arc};
+use std::{collections::BTreeMap, pin::Pin, sync::Arc};
 
 use anyhow::{Result, anyhow};
 use glam::{Vec2, Vec4};
@@ -13,10 +13,19 @@ use vulkano::{
         RenderPassBeginInfo, SubpassBeginInfo, SubpassContents,
         allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
     },
+    descriptor_set::{
+        self, DescriptorSet, DescriptorSetWithOffsets, DescriptorSetsCollection,
+        layout::{
+            DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
+            DescriptorSetLayoutCreateFlags, DescriptorSetLayoutCreateInfo, DescriptorType,
+        },
+        pool::{DescriptorPool, DescriptorSetAllocateInfo},
+    },
     device::{Device, Queue},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{
-        GraphicsPipeline, PipelineCreateFlags, PipelineLayout, PipelineShaderStageCreateInfo,
+        GraphicsPipeline, PipelineBindPoint, PipelineCreateFlags, PipelineLayout,
+        PipelineShaderStageCreateInfo,
         graphics::{
             GraphicsPipelineCreateInfo,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
@@ -26,10 +35,10 @@ use vulkano::{
             vertex_input::{Vertex, VertexDefinition},
             viewport::{Viewport, ViewportState},
         },
-        layout::PipelineDescriptorSetLayoutCreateInfo,
+        layout::{PipelineDescriptorSetLayoutCreateInfo, PipelineLayoutCreateInfo},
     },
     render_pass::{Framebuffer, RenderPass, Subpass},
-    shader::ShaderModule,
+    shader::{ShaderModule, ShaderStages},
 };
 
 use crate::{
@@ -43,6 +52,8 @@ use crate::{
 struct Vertex2d {
     #[format(R32G32_SFLOAT)]
     position: Vec2,
+    #[format(R32G32_SFLOAT)]
+    texture_coordinate: Vec2,
     #[format(R32G32B32A32_SFLOAT)]
     color: Vec4,
 }
@@ -53,6 +64,8 @@ struct Demo {
     vertex_shader: Arc<ShaderModule>,
     fragment_shader: Arc<ShaderModule>,
     graphics_pipeline: Arc<GraphicsPipeline>,
+    graphics_pipeline_layout: Arc<PipelineLayout>,
+    descriptor_set_layout: Arc<DescriptorSetLayout>,
 }
 
 impl Demo {
@@ -82,19 +95,23 @@ impl Demo {
             vec![
                 Vertex2d {
                     position: Vec2::new(0.5, -0.5),
-                    color: Vec4::new(1.0, 0.0, 1.0, 1.0),
+                    texture_coordinate: Vec2::new(1.0, 0.0),
+                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
                 },
                 Vertex2d {
                     position: Vec2::new(0.5, 0.5),
-                    color: Vec4::new(0.0, 0.0, 1.0, 1.0),
+                    texture_coordinate: Vec2::new(1.0, 1.0),
+                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
                 },
                 Vertex2d {
                     position: Vec2::new(-0.5, 0.5),
-                    color: Vec4::new(0.0, 1.0, 0.0, 1.0),
+                    texture_coordinate: Vec2::new(0.0, 1.0),
+                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
                 },
                 Vertex2d {
                     position: Vec2::new(-0.5, -0.5),
-                    color: Vec4::new(1.0, 0.0, 0.0, 1.0),
+                    texture_coordinate: Vec2::new(0.0, 0.0),
+                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
                 },
             ],
         )?;
@@ -125,13 +142,36 @@ impl Demo {
             include_str!("shader.frag"),
         )?;
 
-        let graphics_pipeline = create_graphics_pipeline::<Vertex2d>(
-            device.clone(),
-            vertex_shader.clone(),
-            fragment_shader.clone(),
-            render_pass.clone(),
-            viewport.clone(),
-        )?;
+        let (graphics_pipeline, graphics_pipeline_layout, descriptor_set_layout) =
+            create_graphics_pipeline::<Vertex2d>(
+                device.clone(),
+                vertex_shader.clone(),
+                fragment_shader.clone(),
+                render_pass.clone(),
+                viewport.clone(),
+            )?;
+
+        // TODO do I need to make a descriptor set, if so, how?
+
+        // let descriptor_pool = DescriptorPool::new(
+        //     device.clone(),
+        //     descriptor_set::pool::DescriptorPoolCreateInfo {
+        //         max_sets: 1,
+        //         pool_sizes: [(DescriptorType::CombinedImageSampler, 1)]
+        //             .into_iter()
+        //             .collect(),
+        //         ..Default::default()
+        //     },
+        // )
+        // .map_err(|e| anyhow!("failed to create descriptor pool: {e:?}"))?;
+
+        // let descriptor_set = unsafe {
+        //     descriptor_pool
+        //         .allocate_descriptor_sets(vec![DescriptorSetAllocateInfo::new(
+        //             descriptor_set_layout.clone(),
+        //         )])
+        //         .map_err(|e| anyhow!("failed to create descriptor set: {e:?}"))?
+        // };
 
         // TODO do something with texture
         let texture = Texture::new_from_image(
@@ -150,6 +190,8 @@ impl Demo {
             vertex_shader,
             fragment_shader,
             graphics_pipeline,
+            graphics_pipeline_layout,
+            descriptor_set_layout,
         })
     }
 }
@@ -161,7 +203,11 @@ impl EventHandler for Demo {
         render_pass: Arc<RenderPass>,
         viewport: Viewport,
     ) -> Result<()> {
-        self.graphics_pipeline = create_graphics_pipeline::<Vertex2d>(
+        (
+            self.graphics_pipeline,
+            self.graphics_pipeline_layout,
+            self.descriptor_set_layout,
+        ) = create_graphics_pipeline::<Vertex2d>(
             device.clone(),
             self.vertex_shader.clone(),
             self.fragment_shader.clone(),
@@ -196,6 +242,16 @@ impl EventHandler for Demo {
                     },
                 )?
                 .bind_pipeline_graphics(self.graphics_pipeline.clone())?
+                // TODO bind descriptor set?
+                // .bind_descriptor_sets(
+                //     PipelineBindPoint::Graphics,
+                //     self.graphics_pipeline_layout.clone(),
+                //     0,
+                //     vec![DescriptorSetWithOffsets {
+                //         descriptor_set: self.descriptor_set_layout,
+                //         ..Default::default()
+                //     }],
+                // )?
                 .bind_vertex_buffers(0, self.vertex_buffer.clone())?
                 .bind_index_buffer(self.index_buffer.clone())?
                 .draw_indexed(self.index_buffer.len() as u32, 1, 0, 0, 0)?
@@ -225,7 +281,11 @@ fn create_graphics_pipeline<VertexType>(
     fragment_shader: Arc<ShaderModule>,
     render_pass: Arc<RenderPass>,
     viewport: Viewport,
-) -> Result<Arc<GraphicsPipeline>>
+) -> Result<(
+    Arc<GraphicsPipeline>,
+    Arc<PipelineLayout>,
+    Arc<DescriptorSetLayout>,
+)>
 where
     VertexType: Vertex,
 {
@@ -245,17 +305,38 @@ where
         PipelineShaderStageCreateInfo::new(fragment_shader_entry_point),
     ];
 
+    let descriptor_set_layout = DescriptorSetLayout::new(
+        device.clone(),
+        DescriptorSetLayoutCreateInfo {
+            bindings: [(
+                0,
+                DescriptorSetLayoutBinding {
+                    stages: ShaderStages::FRAGMENT,
+                    ..DescriptorSetLayoutBinding::descriptor_type(
+                        DescriptorType::CombinedImageSampler,
+                    )
+                },
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        },
+    )
+    .map_err(|e| anyhow!("failed to create descriptor set layout: {e:?}"))?;
+
     let layout = PipelineLayout::new(
         device.clone(),
-        PipelineDescriptorSetLayoutCreateInfo::from_stages(&stages)
-            .into_pipeline_layout_create_info(device.clone())?,
+        PipelineLayoutCreateInfo {
+            set_layouts: vec![descriptor_set_layout.clone()],
+            ..Default::default()
+        },
     )
     .map_err(|e| anyhow!("failed to create pipeline layout: {e:?}"))?;
 
     let subpass =
         Subpass::from(render_pass.clone(), 0).ok_or(anyhow!("failed to create subpass"))?;
 
-    Ok(GraphicsPipeline::new(
+    let graphics_pipeline = GraphicsPipeline::new(
         device.clone(),
         None,
         GraphicsPipelineCreateInfo {
@@ -277,7 +358,10 @@ where
                 ColorBlendAttachmentState::default(),
             )),
             subpass: Some(subpass.into()),
-            ..GraphicsPipelineCreateInfo::layout(layout)
+            ..GraphicsPipelineCreateInfo::layout(layout.clone())
         },
-    )?)
+    )
+    .map_err(|e| anyhow!("error creating graphics pipeline: {e:?}"))?;
+
+    Ok((graphics_pipeline, layout, descriptor_set_layout))
 }
