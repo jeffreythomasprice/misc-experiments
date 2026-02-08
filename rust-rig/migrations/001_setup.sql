@@ -2,6 +2,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE documents (
     id uuid DEFAULT gen_random_uuid(),
+    "path" text NOT NULL,
     "key" text NOT NULL,
     first_page int NOT NULL,
     last_page int NOT NULL,

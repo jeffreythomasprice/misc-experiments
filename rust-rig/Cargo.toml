@@ -5,13 +5,15 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.101"
+clap = { version = "4.5.57", features = ["derive"] }
+clap_derive = "4.5.55"
 dotenvy = "0.15.7"
 regex = "1.12.3"
 rig-core = "0.30.0"
-rig-postgres = "0.1.31"
 serde = { version = "1.0.228", features = ["derive"] }
-sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio"] }
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "uuid"] }
 tempdir = "0.3.7"
 tokio = { version = "1.49.0", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+uuid = { version = "1.20.0", features = ["v4", "serde"] }
