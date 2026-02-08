@@ -22,7 +22,9 @@ use rig::{
     message::Message,
     providers::openai,
     streaming::StreamingChat,
-    vector_store::{self, InsertDocuments, VectorSearchRequest, VectorStoreIndex},
+    vector_store::{
+        self, InsertDocuments, VectorSearchRequest, VectorStoreIndex, VectorStoreIndexDyn,
+    },
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -51,6 +53,7 @@ where
     CompletionModelT: CompletionModel,
 {
     embeddings_model: EmbeddingModelT,
+    vector_store: VectorStore<EmbeddingModelT>,
     agent: Agent<CompletionModelT>,
     postgres_pool: sqlx::Pool<sqlx::Postgres>,
     temp_dir: PathBuf,
@@ -137,20 +140,12 @@ async fn main() -> Result<()> {
     let pkg_name = env!("CARGO_PKG_NAME").replace("-", "_");
     tracing_subscriber::fmt::fmt()
         .with_writer(std::io::stderr)
-        .with_env_filter(format!("info,{pkg_name}=trace"))
+        // .with_env_filter(format!("info,{pkg_name}=trace"))
+        .with_env_filter("debug")
         .init();
 
     let temp_dir = TempDir::new("experiment")?;
     info!("temp dir: {:?}", temp_dir.path());
-
-    let openai_client = openai::Client::from_env();
-
-    let embeddings_model = openai_client.embedding_model("text-embedding-3-small");
-
-    let agent = openai_client
-        .agent("gpt-5-nano-2025-08-07")
-        .preamble("You're an agent for helping run a table-top gaming session.")
-        .build();
 
     let postgres_pool = PgPoolOptions::new()
         .max_connections(50)
@@ -158,10 +153,29 @@ async fn main() -> Result<()> {
         .connect(&assert_env_var("DATABASE_URL")?)
         .await?;
 
+    let openai_client = openai::Client::from_env();
+
+    let embeddings_model = openai_client.embedding_model("text-embedding-3-small");
+
+    let vector_store = VectorStore::new(embeddings_model.clone(), postgres_pool.clone());
+
+    let agent = openai_client
+        .agent("gpt-5-nano-2025-08-07")
+        .preamble(
+            r#"
+        You're an agent for helping run a table-top gaming session.
+
+        You have access to a document store containing the rule book for the game we're playing.
+        "#,
+        )
+        .dynamic_context(5, vector_store.clone())
+        .build();
+
     sqlx::migrate!("./migrations").run(&postgres_pool).await?;
 
     let app_state = AppState {
         embeddings_model,
+        vector_store,
         agent,
         postgres_pool,
         temp_dir: temp_dir.into_path(),
@@ -323,19 +337,15 @@ where
     EmbeddingModelT: EmbeddingModel + Clone,
     CompletionModelT: CompletionModel,
 {
-    let vector_store = VectorStore::new(
-        app_state.embeddings_model.clone(),
-        app_state.postgres_pool.clone(),
-    );
     let search_request = VectorSearchRequest::builder()
         .query(query)
         .samples(5)
         .build()
         .map_err(|e| anyhow!("failed to build vector search request: {e:?}"))?;
-    let results = vector_store.top_n::<SearchResult>(search_request).await?;
+    let results = app_state.vector_store.top_n(search_request).await?;
     info!("found {} search results", results.len());
-    for result in results.iter() {
-        info!("search result: {result:#?}");
+    for (distance, text, _) in results.iter() {
+        info!("search result, distance: {}, text: {}", distance, text);
     }
     Ok(())
 }

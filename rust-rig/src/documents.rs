@@ -7,7 +7,7 @@ use rig::{
     completion::{Chat, Prompt},
     embeddings::{EmbeddingModel, EmbeddingsBuilder, embed},
     providers::openai,
-    vector_store::{self, InsertDocuments, VectorStoreIndex},
+    vector_store::{self, InsertDocuments, VectorStoreIndex, VectorStoreIndexDyn},
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{
@@ -213,42 +213,86 @@ impl rig::vector_store::request::SearchFilter for VectorStoreSearchFilter {
     }
 }
 
-impl<EmbeddingModelT> VectorStoreIndex for VectorStore<EmbeddingModelT>
+// TODO no?
+// impl<EmbeddingModelT> VectorStoreIndex for VectorStore<EmbeddingModelT>
+// where
+//     EmbeddingModelT: EmbeddingModel,
+// {
+//     type Filter = VectorStoreSearchFilter;
+
+//     async fn top_n<T: for<'a> serde::Deserialize<'a> + rig::wasm_compat::WasmCompatSend>(
+//         &self,
+//         req: vector_store::VectorSearchRequest<Self::Filter>,
+//     ) -> std::result::Result<Vec<(f64, String, T)>, vector_store::VectorStoreError> {
+//         let results = top_n_documents(
+//             &self.model,
+//             self.pool.clone(),
+//             req.query().to_string(),
+//             req.samples() as u32,
+//         )
+//         .await
+//         .map_err(|e| vector_store::VectorStoreError::DatastoreError(e.into()))?;
+//         Ok(results
+//             .into_iter()
+//             .map(
+//                 |r| -> std::result::Result<(f64, String, T), vector_store::VectorStoreError> {
+//                     // TODO can we omit the serialize and deserialize when we know T = SearchResult?
+//                     let x = serde_json::to_string(&r)?;
+//                     let t: T = serde_json::from_str(&x)?;
+//                     Ok((r.distance, r.text, t))
+//                 },
+//             )
+//             .collect::<Result<Vec<_>, _>>()?)
+//     }
+
+//     async fn top_n_ids(
+//         &self,
+//         req: vector_store::VectorSearchRequest<Self::Filter>,
+//     ) -> std::result::Result<Vec<(f64, String)>, vector_store::VectorStoreError> {
+//         // TODO only return distance and id
+//         todo!();
+//     }
+// }
+
+impl<EmbeddingModelT> VectorStoreIndexDyn for VectorStore<EmbeddingModelT>
 where
     EmbeddingModelT: EmbeddingModel,
 {
-    type Filter = VectorStoreSearchFilter;
-
-    async fn top_n<T: for<'a> serde::Deserialize<'a> + rig::wasm_compat::WasmCompatSend>(
-        &self,
-        req: vector_store::VectorSearchRequest<Self::Filter>,
-    ) -> std::result::Result<Vec<(f64, String, T)>, vector_store::VectorStoreError> {
-        let results = top_n_documents(
-            &self.model,
-            self.pool.clone(),
-            req.query().to_string(),
-            req.samples() as u32,
-        )
-        .await
-        .map_err(|e| vector_store::VectorStoreError::DatastoreError(e.into()))?;
-        Ok(results
-            .into_iter()
-            .map(
-                |r| -> std::result::Result<(f64, String, T), vector_store::VectorStoreError> {
-                    // TODO can we omit the serialize and deserialize when we know T = SearchResult?
-                    let x = serde_json::to_string(&r)?;
-                    let t: T = serde_json::from_str(&x)?;
-                    Ok((r.distance, r.text, t))
-                },
+    fn top_n<'a>(
+        &'a self,
+        req: vector_store::VectorSearchRequest<vector_store::request::Filter<serde_json::Value>>,
+    ) -> rig::wasm_compat::WasmBoxedFuture<'a, vector_store::TopNResults> {
+        debug!("top_n, req: {:?}", req);
+        Box::pin(async move {
+            let results = top_n_documents(
+                &self.model,
+                self.pool.clone(),
+                req.query().to_string(),
+                req.samples() as u32,
             )
-            .collect::<Result<Vec<_>, _>>()?)
+            .await
+            .map_err(|e| vector_store::VectorStoreError::DatastoreError(e.into()))?;
+            Ok(results
+                .into_iter()
+                .map(
+                    |r| -> std::result::Result<
+                        (f64, String, serde_json::value::Value),
+                        vector_store::VectorStoreError,
+                    > {
+                        Ok((r.distance, r.text.clone(), serde_json::to_value(&r)?))
+                    },
+                )
+                .collect::<Result<Vec<_>, _>>()?)
+        })
     }
 
-    async fn top_n_ids(
-        &self,
-        req: vector_store::VectorSearchRequest<Self::Filter>,
-    ) -> std::result::Result<Vec<(f64, String)>, vector_store::VectorStoreError> {
-        // TODO only return distance and id
-        todo!();
+    fn top_n_ids<'a>(
+        &'a self,
+        req: vector_store::VectorSearchRequest<vector_store::request::Filter<serde_json::Value>>,
+    ) -> rig::wasm_compat::WasmBoxedFuture<
+        'a,
+        std::result::Result<Vec<(f64, String)>, vector_store::VectorStoreError>,
+    > {
+        todo!()
     }
 }
