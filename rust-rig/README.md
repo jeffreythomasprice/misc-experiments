@@ -25,4 +25,8 @@ cargo run -- insert-document --path ~/scratch/games/source_material/free_or_stol
 cargo run -- search-documents --query "thaumaturgy 4 dot power rules" --count 5
 ```
 
+```
+cargo run -- chat
+```
+
 TODO if this works delete rust-llm, that's just a different shittier way of doing this?

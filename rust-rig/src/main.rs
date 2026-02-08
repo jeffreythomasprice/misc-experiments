@@ -4,18 +4,24 @@ mod pdf;
 mod process;
 
 use std::{
+    io::{self, Write},
+    ops::Deref,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
+use futures::{TryStreamExt, stream};
 use rig::{
     Embed,
+    agent::Agent,
     client::{CompletionClient, EmbeddingsClient, ProviderClient},
-    completion::{Chat, Prompt},
+    completion::{Chat, CompletionModel, Prompt},
     embeddings::{EmbeddingModel, EmbeddingsBuilder, embed},
+    message::Message,
     providers::openai,
+    streaming::StreamingChat,
     vector_store::{self, InsertDocuments, VectorSearchRequest, VectorStoreIndex},
 };
 use serde::Serialize;
@@ -39,11 +45,13 @@ https://docs.rig.rs/docs
 */
 
 #[derive(Clone)]
-struct AppState<EmbeddingModelT>
+struct AppState<EmbeddingModelT, CompletionModelT>
 where
     EmbeddingModelT: EmbeddingModel,
+    CompletionModelT: CompletionModel,
 {
     embeddings_model: EmbeddingModelT,
+    agent: Agent<CompletionModelT>,
     postgres_pool: sqlx::Pool<sqlx::Postgres>,
     temp_dir: PathBuf,
 }
@@ -76,13 +84,17 @@ enum Commands {
         #[arg(long)]
         count: u32,
     },
-    // TODO start a chat session
+    Chat,
 }
 
 impl Commands {
-    async fn exec<EmbeddingModelT>(&self, app_state: AppState<EmbeddingModelT>) -> Result<()>
+    async fn exec<EmbeddingModelT, CompletionModelT>(
+        &self,
+        app_state: AppState<EmbeddingModelT, CompletionModelT>,
+    ) -> Result<()>
     where
         EmbeddingModelT: EmbeddingModel + Clone,
+        CompletionModelT: CompletionModel + 'static,
     {
         match self {
             Commands::ListDocuments => {
@@ -108,6 +120,10 @@ impl Commands {
             }
             Commands::SearchDocuments { query, count } => {
                 search_documents_command(&app_state, query.clone(), *count).await?;
+                Ok(())
+            }
+            Commands::Chat => {
+                chat_command(&app_state).await?;
                 Ok(())
             }
         }
@@ -146,6 +162,7 @@ async fn main() -> Result<()> {
 
     let app_state = AppState {
         embeddings_model,
+        agent,
         postgres_pool,
         temp_dir: temp_dir.into_path(),
     };
@@ -156,11 +173,12 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn list_all_documents_command<EmbeddingModelT>(
-    app_state: &AppState<EmbeddingModelT>,
+async fn list_all_documents_command<EmbeddingModelT, CompletionModelT>(
+    app_state: &AppState<EmbeddingModelT, CompletionModelT>,
 ) -> Result<()>
 where
     EmbeddingModelT: EmbeddingModel,
+    CompletionModelT: CompletionModel,
 {
     info!("listing all documents");
     let documents = list_all_documents(&app_state.postgres_pool).await?;
@@ -171,48 +189,52 @@ where
     Ok(())
 }
 
-async fn delete_all_documents_command<EmbeddingModelT>(
-    app_state: &AppState<EmbeddingModelT>,
+async fn delete_all_documents_command<EmbeddingModelT, CompletionModelT>(
+    app_state: &AppState<EmbeddingModelT, CompletionModelT>,
 ) -> Result<()>
 where
     EmbeddingModelT: EmbeddingModel,
+    CompletionModelT: CompletionModel,
 {
     info!("deleting all documents");
     delete_all_documents(&app_state.postgres_pool).await?;
     Ok(())
 }
 
-async fn delete_documents_by_path_command<EmbeddingModelT>(
-    app_state: &AppState<EmbeddingModelT>,
+async fn delete_documents_by_path_command<EmbeddingModelT, CompletionModelT>(
+    app_state: &AppState<EmbeddingModelT, CompletionModelT>,
     path: String,
 ) -> Result<()>
 where
     EmbeddingModelT: EmbeddingModel,
+    CompletionModelT: CompletionModel,
 {
     info!("deleting documents with path: {}", path);
     delete_documents_by_path(&app_state.postgres_pool, path).await?;
     Ok(())
 }
 
-async fn delete_documents_by_key_command<EmbeddingModelT>(
-    app_state: &AppState<EmbeddingModelT>,
+async fn delete_documents_by_key_command<EmbeddingModelT, CompletionModelT>(
+    app_state: &AppState<EmbeddingModelT, CompletionModelT>,
     key: String,
 ) -> Result<()>
 where
     EmbeddingModelT: EmbeddingModel,
+    CompletionModelT: CompletionModel,
 {
     info!("deleting documents with key: {}", key);
     delete_documents_by_key(&app_state.postgres_pool, key).await?;
     Ok(())
 }
 
-async fn insert_document_command<EmbeddingModelT>(
-    app_state: &AppState<EmbeddingModelT>,
+async fn insert_document_command<EmbeddingModelT, CompletionModelT>(
+    app_state: &AppState<EmbeddingModelT, CompletionModelT>,
     input_path: &Path,
     chunk_page_count: u32,
 ) -> Result<()>
 where
     EmbeddingModelT: EmbeddingModel,
+    CompletionModelT: CompletionModel,
 {
     info!(
         "chunking pdf, input_path: {:?}, temp_dir: {:?}, chunk_page_count: {}",
@@ -292,13 +314,14 @@ where
     Ok(())
 }
 
-async fn search_documents_command<EmbeddingModelT>(
-    app_state: &AppState<EmbeddingModelT>,
+async fn search_documents_command<EmbeddingModelT, CompletionModelT>(
+    app_state: &AppState<EmbeddingModelT, CompletionModelT>,
     query: String,
     n: u32,
 ) -> Result<()>
 where
     EmbeddingModelT: EmbeddingModel + Clone,
+    CompletionModelT: CompletionModel,
 {
     let vector_store = VectorStore::new(
         app_state.embeddings_model.clone(),
@@ -315,4 +338,71 @@ where
         info!("search result: {result:#?}");
     }
     Ok(())
+}
+
+async fn chat_command<EmbeddingModelT, CompletionModelT>(
+    app_state: &AppState<EmbeddingModelT, CompletionModelT>,
+) -> Result<()>
+where
+    EmbeddingModelT: EmbeddingModel,
+    CompletionModelT: CompletionModel + 'static,
+{
+    let mut chat_history = Vec::new();
+    loop {
+        let mut input = String::new();
+        let input = loop {
+            print!("> ");
+            io::stdout()
+                .flush()
+                .map_err(|e| anyhow!("failed to flush stdout: {e:?}"))?;
+
+            io::stdin()
+                .read_line(&mut input)
+                .map_err(|e| anyhow!("failed to read line: {e:?}"))?;
+            let input = input.trim();
+            if input.is_empty() {
+                continue;
+            }
+            break input;
+        };
+
+        let mut response_stream = app_state
+            .agent
+            .stream_chat(Message::user(input), chat_history.clone())
+            .await;
+
+        chat_history.push(Message::user(input.to_string()));
+
+        while let Some(stream_message) = response_stream.try_next().await? {
+            match stream_message {
+                rig::agent::MultiTurnStreamItem::StreamAssistantItem(
+                    streamed_assistant_content,
+                ) => {
+                    match streamed_assistant_content {
+                        // TODO is this actually how tool call results are going to come to us?
+                        rig::streaming::StreamedAssistantContent::ToolCall {
+                            tool_call,
+                            internal_call_id,
+                        } => {
+                            let m = Message::tool_result_with_call_id(
+                                internal_call_id,
+                                Some(tool_call.id.clone()),
+                                format!("{:?}", tool_call),
+                            );
+                            trace!("tool call result: {:?}", m);
+                            chat_history.push(m);
+                        }
+                        _ => (),
+                    };
+                }
+                rig::agent::MultiTurnStreamItem::FinalResponse(final_response) => {
+                    debug!("final response: {:?}", final_response);
+                    chat_history.push(Message::assistant(final_response.response()));
+                    println!("AI response: {}", final_response.response());
+                }
+                // type we're matching over is marked as non-exhaustive, and we don't handle all cases anyway
+                _ => (),
+            }
+        }
+    }
 }

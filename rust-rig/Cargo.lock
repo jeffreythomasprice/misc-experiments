@@ -1676,6 +1676,7 @@ dependencies = [
  "clap",
  "clap_derive",
  "dotenvy",
+ "futures",
  "regex",
  "rig-core",
  "serde",
