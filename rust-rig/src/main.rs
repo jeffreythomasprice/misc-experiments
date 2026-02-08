@@ -75,6 +75,8 @@ enum Commands {
     SearchDocuments {
         #[arg(long)]
         query: String,
+        #[arg(long)]
+        count: u32,
     },
     // TODO start a chat session
 }
@@ -106,8 +108,8 @@ impl Commands {
                 insert_document_command(&app_state, Path::new(path), *chunk_page_count).await?;
                 Ok(())
             }
-            Commands::SearchDocuments { query } => {
-                search_documents_command(&app_state, query.clone()).await?;
+            Commands::SearchDocuments { query, count } => {
+                search_documents_command(&app_state, query.clone(), *count).await?;
                 Ok(())
             }
         }
@@ -295,6 +297,7 @@ where
 async fn search_documents_command<EmbeddingModelT>(
     app_state: &AppState<EmbeddingModelT>,
     query: String,
+    n: u32,
 ) -> Result<()>
 where
     EmbeddingModelT: EmbeddingModel,
@@ -303,8 +306,12 @@ where
         &app_state.embeddings_model,
         app_state.postgres_pool.clone(),
         "thaumaturgy cauldren of blood rules".to_string(),
+        n,
     )
     .await?;
-    info!("search result: {search_result:#?}");
+    info!("found {} search results", search_result.len());
+    for result in search_result.iter() {
+        info!("search result: {result:#?}");
+    }
     Ok(())
 }

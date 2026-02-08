@@ -32,12 +32,24 @@ pub struct DocumentListResult {
     pub last_page: i32,
 }
 
+#[derive(Debug)]
 pub struct InsertEmbedding {
     pub path: String,
     pub key: String,
     pub first_page: i32,
     pub last_page: i32,
     pub text: String,
+}
+
+#[derive(Debug, FromRow)]
+pub struct SearchResult {
+    pub id: Uuid,
+    pub path: String,
+    pub key: String,
+    pub first_page: i32,
+    pub last_page: i32,
+    pub text: String,
+    pub distance: f64,
 }
 
 pub async fn list_all_documents(
@@ -112,10 +124,6 @@ where
         .embed_text(&document.text)
         .await
         .map_err(|e| anyhow!("failed to create embedding: {e:?}"))?;
-    info!(
-        "TODO document, first_page: {}, last_page: {}",
-        document.first_page, document.last_page
-    );
     let result = sqlx::query_scalar(
                 r#"
                 INSERT INTO documents (path, key, first_page, last_page, text, embedding) VALUES ($1, $2, $3, $4, $5, $6)
@@ -137,55 +145,27 @@ pub async fn top_n_documents<Model>(
     model: &Model,
     postgres_pool: sqlx::Pool<sqlx::Postgres>,
     search_text: String,
-) -> Result<()>
+    n: u32,
+) -> Result<Vec<SearchResult>>
 where
     Model: EmbeddingModel,
 {
-    // async fn top_n<T: for<'a> Deserialize<'a> + Send>(
-    //     &self,
-    //     req: VectorSearchRequest<PgSearchFilter>,
-    // ) -> Result<Vec<(f64, String, T)>, VectorStoreError> {
-    //     if req.samples() > i64::MAX as u64 {
-    //         return Err(VectorStoreError::DatastoreError(
-    //             format!(
-    //                 "The maximum amount of samples to return with the `rig` Postgres integration cannot be larger than {}",
-    //                 i64::MAX
-    //             )
-    //             .into(),
-    //         ));
-    //     }
-
-    //     let embedded_query: pgvector::Vector = self
-    //         .model
-    //         .embed_text(req.query())
-    //         .await?
-    //         .vec
-    //         .iter()
-    //         .map(|&x| x as f32)
-    //         .collect::<Vec<f32>>()
-    //         .into();
-
-    //     let (search_query, params) = self.search_query_full(&req);
-    //     let builder = sqlx::query_as(search_query.as_str())
-    //         .bind(embedded_query)
-    //         .bind(req.samples() as i64);
-
-    //     let builder = params.iter().cloned().fold(builder, bind_value);
-
-    //     let rows = builder
-    //         .fetch_all(&self.pg_pool)
-    //         .await
-    //         .map_err(|e| VectorStoreError::DatastoreError(Box::new(e)))?;
-
-    //     let rows: Vec<(f64, String, T)> = rows
-    //         .into_iter()
-    //         .flat_map(SearchResult::into_result)
-    //         .collect();
-
-    //     Ok(rows)
-    // }
-
-    todo!()
+    let search_embedding = model
+        .embed_text(&search_text)
+        .await
+        .map_err(|e| anyhow!("failed to create embedding: {e:?}"))?;
+    Ok(sqlx::query_as::<_, SearchResult>(
+        r#"
+        SELECT id, path, key, first_page, last_page, text, embedding <-> $1::vector AS distance
+        FROM documents
+        ORDER BY distance
+        LIMIT $2;
+        "#,
+    )
+    .bind(&search_embedding.vec)
+    .bind(n as i32)
+    .fetch_all(&postgres_pool)
+    .await?)
 }
 
 // TODO also implement the VectorStoreIndex trait?

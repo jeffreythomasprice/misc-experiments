@@ -18,7 +18,11 @@ select id, path, key, first_page, last_page from documents;
 ```
 
 ```
-cargo run
+cargo run -- insert-document --path ~/scratch/games/source_material/free_or_stolen/World\ of\ Darkness\ \(Classic\)/v20\ Vampire\ The\ Masquerade\ -\ 20th\ Anniversary\ Edition.pdf --chunk-page-count 3
+```
+
+```
+cargo run -- search-documents --query "thaumaturgy 4 dot power rules" --count 5
 ```
 
 TODO if this works delete rust-llm, that's just a different shittier way of doing this?
