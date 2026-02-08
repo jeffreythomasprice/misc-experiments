@@ -16,7 +16,7 @@ use rig::{
     completion::{Chat, Prompt},
     embeddings::{EmbeddingModel, EmbeddingsBuilder, embed},
     providers::openai,
-    vector_store::{self, InsertDocuments},
+    vector_store::{self, InsertDocuments, VectorSearchRequest, VectorStoreIndex},
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -25,17 +25,15 @@ use tracing::*;
 
 use crate::{
     documents::{
-        InsertEmbedding, delete_all_documents, delete_documents_by_key, delete_documents_by_path,
-        get_document_by_path_and_pages, insert_document, list_all_documents, top_n_documents,
+        InsertEmbedding, SearchResult, VectorStore, delete_all_documents, delete_documents_by_key,
+        delete_documents_by_path, get_document_by_path_and_pages, insert_document,
+        list_all_documents, top_n_documents,
     },
     env::assert_env_var,
     pdf::extract_pdf_text,
 };
 
 /*
-TODO figure out embeddings
-https://github.com/0xPlaygrounds/rig/blob/main/rig-integrations/rig-postgres/examples/vector_search_postgres.rs
-
 TODO figure out rig in general
 https://docs.rig.rs/docs
 */
@@ -300,17 +298,20 @@ async fn search_documents_command<EmbeddingModelT>(
     n: u32,
 ) -> Result<()>
 where
-    EmbeddingModelT: EmbeddingModel,
+    EmbeddingModelT: EmbeddingModel + Clone,
 {
-    let search_result = top_n_documents(
-        &app_state.embeddings_model,
+    let vector_store = VectorStore::new(
+        app_state.embeddings_model.clone(),
         app_state.postgres_pool.clone(),
-        "thaumaturgy cauldren of blood rules".to_string(),
-        n,
-    )
-    .await?;
-    info!("found {} search results", search_result.len());
-    for result in search_result.iter() {
+    );
+    let search_request = VectorSearchRequest::builder()
+        .query(query)
+        .samples(5)
+        .build()
+        .map_err(|e| anyhow!("failed to build vector search request: {e:?}"))?;
+    let results = vector_store.top_n::<SearchResult>(search_request).await?;
+    info!("found {} search results", results.len());
+    for result in results.iter() {
         info!("search result: {result:#?}");
     }
     Ok(())

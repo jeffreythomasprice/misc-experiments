@@ -11,6 +11,7 @@ dotenvy = "0.15.7"
 regex = "1.12.3"
 rig-core = "0.30.0"
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "uuid"] }
 tempdir = "0.3.7"
 tokio = { version = "1.49.0", features = ["full"] }

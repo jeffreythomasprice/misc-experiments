@@ -7,9 +7,9 @@ use rig::{
     completion::{Chat, Prompt},
     embeddings::{EmbeddingModel, EmbeddingsBuilder, embed},
     providers::openai,
-    vector_store::{self, InsertDocuments},
+    vector_store::{self, InsertDocuments, VectorStoreIndex},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{
     FromRow,
     postgres::{self, PgPoolOptions},
@@ -41,7 +41,7 @@ pub struct InsertEmbedding {
     pub text: String,
 }
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, FromRow, Serialize, Deserialize)]
 pub struct SearchResult {
     pub id: Uuid,
     pub path: String,
@@ -51,6 +51,18 @@ pub struct SearchResult {
     pub text: String,
     pub distance: f64,
 }
+
+#[derive(Clone)]
+pub struct VectorStore<EmbeddingModelT>
+where
+    EmbeddingModelT: EmbeddingModel,
+{
+    model: EmbeddingModelT,
+    pool: sqlx::Pool<sqlx::Postgres>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VectorStoreSearchFilter {}
 
 pub async fn list_all_documents(
     postgres_pool: &sqlx::Pool<sqlx::Postgres>,
@@ -168,101 +180,75 @@ where
     .await?)
 }
 
-// TODO also implement the VectorStoreIndex trait?
+impl<EmbeddingModelT> VectorStore<EmbeddingModelT>
+where
+    EmbeddingModelT: EmbeddingModel,
+{
+    pub fn new(model: EmbeddingModelT, pool: sqlx::Pool<sqlx::Postgres>) -> Self {
+        Self { model, pool }
+    }
+}
 
-// impl<Model> VectorStoreIndex for PostgresVectorStore<Model>
-// where
-//     Model: EmbeddingModel,
-// {
-//     type Filter = PgSearchFilter;
+impl rig::vector_store::request::SearchFilter for VectorStoreSearchFilter {
+    type Value = VectorStoreSearchFilter;
 
-//     /// Get the top n documents based on the distance to the given query.
-//     /// The result is a list of tuples of the form (score, id, document)
-//     async fn top_n<T: for<'a> Deserialize<'a> + Send>(
-//         &self,
-//         req: VectorSearchRequest<PgSearchFilter>,
-//     ) -> Result<Vec<(f64, String, T)>, VectorStoreError> {
-//         if req.samples() > i64::MAX as u64 {
-//             return Err(VectorStoreError::DatastoreError(
-//                 format!(
-//                     "The maximum amount of samples to return with the `rig` Postgres integration cannot be larger than {}",
-//                     i64::MAX
-//                 )
-//                 .into(),
-//             ));
-//         }
+    fn eq(key: impl AsRef<str>, value: Self::Value) -> Self {
+        todo!()
+    }
 
-//         let embedded_query: pgvector::Vector = self
-//             .model
-//             .embed_text(req.query())
-//             .await?
-//             .vec
-//             .iter()
-//             .map(|&x| x as f32)
-//             .collect::<Vec<f32>>()
-//             .into();
+    fn gt(key: impl AsRef<str>, value: Self::Value) -> Self {
+        todo!()
+    }
 
-//         let (search_query, params) = self.search_query_full(&req);
-//         let builder = sqlx::query_as(search_query.as_str())
-//             .bind(embedded_query)
-//             .bind(req.samples() as i64);
+    fn lt(key: impl AsRef<str>, value: Self::Value) -> Self {
+        todo!()
+    }
 
-//         let builder = params.iter().cloned().fold(builder, bind_value);
+    fn and(self, rhs: Self) -> Self {
+        todo!()
+    }
 
-//         let rows = builder
-//             .fetch_all(&self.pg_pool)
-//             .await
-//             .map_err(|e| VectorStoreError::DatastoreError(Box::new(e)))?;
+    fn or(self, rhs: Self) -> Self {
+        todo!()
+    }
+}
 
-//         let rows: Vec<(f64, String, T)> = rows
-//             .into_iter()
-//             .flat_map(SearchResult::into_result)
-//             .collect();
+impl<EmbeddingModelT> VectorStoreIndex for VectorStore<EmbeddingModelT>
+where
+    EmbeddingModelT: EmbeddingModel,
+{
+    type Filter = VectorStoreSearchFilter;
 
-//         Ok(rows)
-//     }
+    async fn top_n<T: for<'a> serde::Deserialize<'a> + rig::wasm_compat::WasmCompatSend>(
+        &self,
+        req: vector_store::VectorSearchRequest<Self::Filter>,
+    ) -> std::result::Result<Vec<(f64, String, T)>, vector_store::VectorStoreError> {
+        let results = top_n_documents(
+            &self.model,
+            self.pool.clone(),
+            req.query().to_string(),
+            req.samples() as u32,
+        )
+        .await
+        .map_err(|e| vector_store::VectorStoreError::DatastoreError(e.into()))?;
+        Ok(results
+            .into_iter()
+            .map(
+                |r| -> std::result::Result<(f64, String, T), vector_store::VectorStoreError> {
+                    // TODO can we omit the serialize and deserialize when we know T = SearchResult?
+                    let x = serde_json::to_string(&r)?;
+                    let t: T = serde_json::from_str(&x)?;
+                    Ok((r.distance, r.text, t))
+                },
+            )
+            .collect::<Result<Vec<_>, _>>()?)
+    }
 
-//     /// Same as `top_n` but returns the document ids only.
-//     async fn top_n_ids(
-//         &self,
-//         req: VectorSearchRequest<PgSearchFilter>,
-//     ) -> Result<Vec<(f64, String)>, VectorStoreError> {
-//         if req.samples() > i64::MAX as u64 {
-//             return Err(VectorStoreError::DatastoreError(
-//                 format!(
-//                     "The maximum amount of samples to return with the `rig` Postgres integration cannot be larger than {}",
-//                     i64::MAX
-//                 )
-//                 .into(),
-//             ));
-//         }
-//         let embedded_query: pgvector::Vector = self
-//             .model
-//             .embed_text(req.query())
-//             .await?
-//             .vec
-//             .iter()
-//             .map(|&x| x as f32)
-//             .collect::<Vec<f32>>()
-//             .into();
-
-//         let (search_query, params) = self.search_query_only_ids(&req);
-//         let builder = sqlx::query_as(search_query.as_str())
-//             .bind(embedded_query)
-//             .bind(req.samples() as i64);
-
-//         let builder = params.iter().cloned().fold(builder, bind_value);
-
-//         let rows: Vec<SearchResultOnlyId> = builder
-//             .fetch_all(&self.pg_pool)
-//             .await
-//             .map_err(|e| VectorStoreError::DatastoreError(Box::new(e)))?;
-
-//         let rows: Vec<(f64, String)> = rows
-//             .into_iter()
-//             .map(|row| (row.distance, row.id.to_string()))
-//             .collect();
-
-//         Ok(rows)
-//     }
-// }
+    async fn top_n_ids(
+        &self,
+        req: vector_store::VectorSearchRequest<Self::Filter>,
+    ) -> std::result::Result<Vec<(f64, String)>, vector_store::VectorStoreError> {
+        // TODO only return distance and id
+        todo!();
+    }
+}
