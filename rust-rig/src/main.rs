@@ -140,8 +140,8 @@ async fn main() -> Result<()> {
     let pkg_name = env!("CARGO_PKG_NAME").replace("-", "_");
     tracing_subscriber::fmt::fmt()
         .with_writer(std::io::stderr)
-        // .with_env_filter(format!("info,{pkg_name}=trace"))
-        .with_env_filter("debug")
+        // TODO env filter not working? debug logging out of sub module not working
+        .with_env_filter(format!("info,{pkg_name}=trace,{pkg_name}::*=trace"))
         .init();
 
     let temp_dir = TempDir::new("experiment")?;
@@ -160,7 +160,9 @@ async fn main() -> Result<()> {
     let vector_store = VectorStore::new(embeddings_model.clone(), postgres_pool.clone());
 
     let agent = openai_client
-        .agent("gpt-5-nano-2025-08-07")
+        // TODO what kind of model does RAG correctly?
+        // .agent("gpt-5-nano-2025-08-07")
+        .agent("gpt-5")
         .preamble(
             r#"
         You're an agent for helping run a table-top gaming session.
